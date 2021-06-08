@@ -1,3 +1,7 @@
 # misterio.me
 
-My personal website. For now just a static water.css (with some cool interactive js). SSR with rocket and tera coming soon.
+My personal website.
+
+Water.css + Jekyll
+
+See [my blog post](https://misterio.me/2021/06/08/hello-world.html) for more information.
