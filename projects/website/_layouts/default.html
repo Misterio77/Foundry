@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gabriel Fontes | {{ page.title }}</title>
+    <link rel="canonical" href="https://misterio.me{{ page.url }}" />
+    <meta name="description" content="My personal website and projects" />
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link rel="preload" href="//code.iconify.design/1/1.0.6/iconify.min.js" as="script" />
+    <link rel="preload" href="/assets/schemes/list.js" as="script" />
+    <link rel="preload" href="/assets/main.js" as="script" />
+    <link rel="preload" href="/assets/imports/prism.js" as="script" />
+    <link
+      rel="preload"
+      href="/assets/imports/polyfills/dialog.js"
+      as="script"
+    />
+
+    <link
+      rel="preload"
+      href="/assets/imports/polyfills/dialog.css"
+      as="style"
+    />
+    <link rel="preload" href="/assets/prism.css" as="style" />
+    <link rel="preload" href="/assets/imports/water.css" as="style" />
+    <link rel="preload" href="/assets/style.css" as="style" />
+
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&family=Fira+Sans:ital,wght@0,400;0,700;1,400;1,700&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/imports/polyfills/dialog.css" />
+    <link rel="stylesheet" href="/assets/prism.css" />
+    <link rel="stylesheet" href="/assets/imports/water.css" />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="stylesheet" id="chosen-scheme" />
+    <script>
+      let chosen_scheme_css = document.getElementById("chosen-scheme");
+
+      // Set a given scheme
+      function setTheme(scheme) {
+        chosen_scheme_css.setAttribute(
+          "href",
+          "/assets/schemes/" + scheme + ".css"
+        );
+        localStorage.setItem("current-scheme", scheme);
+      }
+      // Reset scheme to defaults (rose-pine moon or dawn, depending on preference)
+      function resetTheme() {
+        chosen_scheme_css.removeAttribute("href");
+        localStorage.removeItem("current-scheme");
+      }
+
+      // Get stored scheme from localStorage and reapply it
+      let stored_scheme = localStorage.getItem("current-scheme");
+      if (stored_scheme) {
+        setTheme(stored_scheme);
+      }
+    </script>
+    <script src="//code.iconify.design/1/1.0.6/iconify.min.js"></script>
+  </head>
+  <body>
+    <header></header>
+    {% include nav.html %} {% include scheme-dialog.html %}
+    <main>{{ content }}</main>
+    {% include footer.html %}
+    <script defer src="/assets/schemes/list.js"></script>
+    <script defer src="/assets/main.js"></script>
+    <script defer src="/assets/imports/polyfills/dialog.js"></script>
+    <script defer src="/assets/imports/prism.js"></script>
+  </body>
+</html>

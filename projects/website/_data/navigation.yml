@@ -1,0 +1,4 @@
+- name: about
+  link: /
+- name: blog
+  link: /blog.html

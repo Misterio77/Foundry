@@ -1,0 +1,64 @@
+<dialog id="scheme-dialog" aria-label="Color Scheme">
+  <header>
+    <button aria-label="Close dialog" class="close-button" id="scheme-close">
+      <span class="iconify medium" data-icon="mdi-close"></span>
+    </button>
+    <h2>Color scheme</h2>
+  </header>
+  <form autocomplete="off" method="dialog" name="scheme">
+    <div class="row">
+      <label
+        >Scheme name:
+        <input id="scheme-input" list="scheme-list" size="18" placeholder="" />
+      </label>
+      <button
+        aria-label="Random Scheme"
+        id="scheme-random"
+        type="button"
+        class="small-button"
+        style="margin-top: 1.8em"
+      >
+        <span class="iconify medium" data-icon="mdi-shuffle"></span>
+      </button>
+      <button
+        aria-label="Default Scheme"
+        id="scheme-default"
+        type="button"
+        class="small-button hidden"
+        style="margin-top: 1.8em"
+      >
+        <span class="iconify medium" data-icon="mdi-restore"></span>
+      </button>
+      {% include scheme-datalist.html %}
+    </div>
+    <div class="row">
+      <p style="color: var(--base00)">█</p>
+      <p style="color: var(--base01)">█</p>
+      <p style="color: var(--base02)">█</p>
+      <p style="color: var(--base03)">█</p>
+      <p style="color: var(--base04)">█</p>
+      <p style="color: var(--base05)">█</p>
+      <p style="color: var(--base06)">█</p>
+      <p style="color: var(--base07)">█</p>
+      <p style="color: var(--base08)">█</p>
+      <p style="color: var(--base09)">█</p>
+      <p style="color: var(--base0A)">█</p>
+      <p style="color: var(--base0B)">█</p>
+      <p style="color: var(--base0C)">█</p>
+      <p style="color: var(--base0D)">█</p>
+      <p style="color: var(--base0E)">█</p>
+      <p style="color: var(--base0F)">█</p>
+    </div>
+    <p>
+      <small
+        >Powered by
+        <a
+          target="_blank"
+          rel="noreferrer noopener"
+          href="https://github.com/misterio77/flavours"
+          >flavours <span class="iconify" data-icon="mdi-open-in-new"></span></a
+      ></small>
+    </p>
+    <button type="submit" id="scheme-ok">Ok</button>
+  </form>
+</dialog>

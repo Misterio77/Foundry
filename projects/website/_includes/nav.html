@@ -1,0 +1,29 @@
+<nav>
+  <div class="row extremes">
+    <span class="title">{ <a href="/">Gabriel Fontes</a> }</span>
+    <button type="button" aria-label="Change color scheme" id="scheme-button">
+      <span class="iconify medium" data-icon="mdi-palette"></span>
+    </button>
+  </div>
+  <ul>
+    {% for item in site.data.navigation %}
+    <li>
+      <a {% if page.url == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
+        {{ item.name }}
+      </a>
+    </li>
+    {% endfor %}
+    <li>
+      <a href="https://github.com/misterio77/">
+        <span class="iconify" data-icon="mdi-github"></span>
+        projects
+      </a>
+    </li>
+    <li>
+      <a href="https://linkedin.com/in/misterio7">
+        <span class="iconify" data-icon="mdi-linkedin"></span>
+        work
+      </a>
+    </li>
+  </ul>
+</nav>
