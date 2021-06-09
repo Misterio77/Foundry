@@ -24,7 +24,7 @@ Second, although they might be useful (specially when CSS did not support variab
 
 My reason for this is my aim of using [base16](https://github.com/chriskempson/base16) schemes to dynamically theme my website (170+ themes!) in a lazy way. That is, only loading any specific scheme on demand. Using a preprocessor would end up in generating full CSS sheets for each scheme option, which is not very bandwidth effective.
 
-There's a plethora of different ways to offer schemes to a user. I did by factoring out all colors on my base CSS sheet to variables, and using [flavours](https://github.com/misterio77/flavours) to generate a CSS sheet (with just the 16 color variables) for each scheme. These can be selected using a `input` field, and will set the `link` tag's `href` value to the scheme, overwriting the default two schemes (one light and one dark, for `prefers-color-scheme: dark`) i specified on the base sheet.
+There's a plethora of different ways to offer schemes to a user. I did it by factoring out all colors on my base CSS sheet to variables, and using [flavours](https://github.com/misterio77/flavours) to generate a CSS sheet (with just the 16 color variables) for each existing scheme. These can be selected using a `input` field (check the palette button at the top), and will set a `link` tag's `href` value to the scheme, taking precedence over the default two schemes (one light and one dark, for `prefers-color-scheme: dark`) i specified on the base sheet.
 
 With that done, i also set a tiny `localStorage` key to the browser, so the scheme preference can be persisted across visits.
 
@@ -68,13 +68,13 @@ All i had to do get my theming working was three `link` elements, which import, 
 
 ## Code reuse and markdown pages
 
-Okay, that's good enough for a personal website with a single page. But what if i want other pages with the same common elements, such as the navbar, the scheme dialog, footer... We would have to duplicate everything, ending up in (a lot of) duplicated HTML code, and a lot of pain to make changes in all of them at once.
+Okay, that's good enough for a personal website with a single page. But what if i want other pages with the same common elements, such as the navbar, the scheme dialog, footer... We would have to duplicate everything, ending up in a huge amount of duplicated HTML code, and a lot of pain to make changes everywhere at once.
 
-Fetching content at runtime from a full fledged server little overkill for a blog that i update once in a blue moon. When we don't need user generated data, manipulating the website at compile time makes a lot more sense. Enter Static Site Generation, or SSG.
+Fetching content at runtime from a full fledged server and database is little overkill for a blog that i update once in a blue moon. When we don't need user generated data, adding content to the website at compile time makes a lot more sense. Enter Static Site Generation, or SSG.
 
 Again, another problem of complete solutions is flexibility. I already have my styling and structure set, i just wanted a simple tool to factor out duplicated code. I stumbled upon [Jekyll](https://jekyllrb.com/) and its simplistic and modular goodness.
 
-Jekyll is very straightforward and doesn't force you to change everything to support it. It works with templating (liquid) and markdown rendering. You can factor out common stuff from your website into includes (that work kinda like componentes) or layouts. All of this gets built into static assets, it doesn't get in your way and works great.
+Jekyll is very straightforward and doesn't force you to change everything to support it. It works with templating (liquid) and markdown rendering. You can factor out common stuff from your website into includes (that work kinda like componentes) or layouts. All of this gets built into static assets, it doesn't get in your way and works great. It's also worth mentioning that most of the features are opt-in, you don't have to change absolutely nothing from your static assets if you don't want to.
 
 ## Automating style building
 
