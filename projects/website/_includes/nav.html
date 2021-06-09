@@ -13,17 +13,13 @@
       </a>
     </li>
     {% endfor %}
+    {% for item in site.data.external %}
     <li>
-      <a href="https://github.com/misterio77/">
-        <span class="iconify" data-icon="mdi-github"></span>
-        projects
+      <a href="{{ item.link }}">
+        <span class="iconify" data-icon="{{ item.icon }}"></span>
+        {{ item.name }}
       </a>
     </li>
-    <li>
-      <a href="https://linkedin.com/in/misterio7">
-        <span class="iconify" data-icon="mdi-linkedin"></span>
-        work
-      </a>
-    </li>
+    {% endfor %}
   </ul>
 </nav>

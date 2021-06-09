@@ -1,0 +1,6 @@
+- name: projects
+  link: https://github.com/misterio77
+  icon: mdi-github
+- name: work
+  link: https://linkedin.com/in/misterio7
+  icon: mdi-linkedin
