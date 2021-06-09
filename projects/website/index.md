@@ -7,7 +7,7 @@ title: About
 
 Hey 👋, my name is Gabriel. I'm a brazillian programmer, designer, and activist.
 
-I'm currently working on my Bachelor of Information Systems degree at [University of São Paulo](https://usp.br), as a developer at [UGet](https://br.linkedin.com/company/u-get), and on a couple personal projects.
+I'm currently working on my Bachelor of Information Systems degree at [University of São Paulo](https://usp.br)'s [Institute of Mathematics and Computer Sciences](https://www.icmc.usp.br/en/), as a developer at [UGet](https://br.linkedin.com/company/u-get), and on a couple personal projects.
 
 I mainly work with Linux, Rust, Python, Go, C/C++, HTML+CSS, and Docker.
 
