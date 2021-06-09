@@ -1,6 +1,7 @@
 ---
 layout: post
 author: Gabriel Fontes
+description: About my new website, featuring 170+ color schemes
 ---
 
 Here's a writeup on how i made this website
