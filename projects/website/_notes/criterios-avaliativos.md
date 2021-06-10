@@ -1,6 +1,6 @@
 ---
 layout: default
-categories: "bsi"
+categories: "bsi 2021 1"
 noindex: true
 ---
 # BSI 020 - 2021/1 - Critérios avaliativos
