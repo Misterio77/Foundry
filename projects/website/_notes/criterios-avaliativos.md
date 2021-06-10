@@ -13,7 +13,7 @@ noindex: true
 
 P.S: obrigatório que NT, NP e NE sejam todas maiores ou iguais a 3, caso contrário o aluno é REPROVADO.
 
-## Cálculo Numérico 
+## Cálculo Numérico
 - **Nota Final**: média aritmética entre as notas dos 8 trabalhos do semestre.
 
 P.S: obrigatório mínimo de 70% de presença, caso contrário o aluno é REPROVADO.
