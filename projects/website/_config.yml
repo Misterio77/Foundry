@@ -1,3 +1,8 @@
 include: [".well-known"]
 
 description: "My personal website and projects"
+
+collections:
+  notes:
+    output: true
+    permalink: /:collection/:categories/:name

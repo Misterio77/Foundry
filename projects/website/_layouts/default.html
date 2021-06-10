@@ -9,6 +9,7 @@
       name="description"
       content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}"
     />
+    {% if page.noindex == true %} <meta name="robots" content="noindex"> {% endif %}
 
     <link rel="preconnect" href="https://fonts.gstatic.com" />
     <link
@@ -70,7 +71,8 @@
   </head>
   <body>
     <header>
-    {% include nav.html %} {% include scheme-dialog.html %}
+    {% include nav.html %}
+    {% include scheme-dialog.html %}
     </header>
     <main>{{ content }}</main>
     {% include footer.html %}
