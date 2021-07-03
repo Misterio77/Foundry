@@ -17,7 +17,7 @@ I've been into computers, science and math since i was little. I love Linux (FOS
 
 I enjoy modern and egornomical languagens, strong typing and high performance are nice to have. My favorite languagens are Rust, Go and Haskell.
 
-I favor minimalism and composability in tools. I currently use [Arch Linux](https://archlinux.org), [SwayWM](https://swaywm.org/), [Neovim](https://neovim.io), [Qutebrowser](https://qutebrowser.org), [NeoMutt](https://neomutt.org/), and a few more.
+I favor minimalism and composability in tools. I currently use [NixOS](https://nixos.org), [SwayWM](https://swaywm.org/), [Neovim](https://neovim.io), [Qutebrowser](https://qutebrowser.org), [NeoMutt](https://neomutt.org/) as daily drivers.
 
 ## Other stuff
 
