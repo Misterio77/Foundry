@@ -1,4 +1,5 @@
 // ==== Handles ====
+let scheme_options = document.getElementById("scheme-list").getElementsByTagName("option");
 let scheme_button = document.getElementById("scheme-button");
 let scheme_dialog = document.getElementById("scheme-dialog");
 let scheme_dialog_close = document.getElementById("scheme-close");
@@ -54,7 +55,7 @@ scheme_random_button.addEventListener("click", function () {
   // Unhide clear button
   scheme_default_button.classList.remove("hidden");
   // Get random scheme
-  let scheme = schemes[Math.floor(Math.random() * schemes.length)];
+  let scheme = scheme_options.item(Math.floor(Math.random() * scheme_options.length)).textContent;
   // Apply it
   setTheme(scheme);
   // Set input
