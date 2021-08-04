@@ -20,7 +20,6 @@ darkviolet: https://github.com/ruler501/base16-darkviolet-scheme
 default: https://github.com/chriskempson/base16-default-schemes
 dirtysea: https://github.com/tartansandal/base16-dirtysea-scheme
 dracula: https://github.com/dracula/base16-dracula-scheme
-edge: https://github.com/cjayross/base16-edge-schemes
 equilibrium: https://github.com/carloabelli/base16-equilibrium-scheme
 espresso: https://github.com/alexmirrington/base16-espresso-scheme
 eva: https://github.com/kjakapat/base16-eva-scheme
@@ -63,7 +62,6 @@ rose-pine: https://github.com/edunfelt/base16-rose-pine-scheme
 sagelight: https://github.com/cveldy/base16-sagelight-scheme
 sakura: https://github.com/Misterio77/base16-sakura-scheme
 sandcastle: https://github.com/gessig/base16-sandcastle-scheme
-shades-of-purple: https://github.com/ahmadawais/base16-shades-of-purple
 silk: https://github.com/misterio77/base16-silk-scheme
 snazzy: https://github.com/h404bi/base16-snazzy-scheme
 solarflare: https://github.com/mnussbaum/base16-solarflare-scheme
@@ -73,7 +71,6 @@ stella: https://github.com/Shrimpram/base16-stella-scheme
 summercamp: https://github.com/zoefiri/base16-summercamp
 summerfruit: https://github.com/cscorley/base16-summerfruit-scheme
 synth-midnight: https://github.com/michael-ball/base16-synth-midnight-scheme
-tango: https://github.com/Schnouki/base16-tango-scheme
 tender: https://github.com/DanManN/base16-tender-scheme
 tomorrow: https://github.com/chriskempson/base16-tomorrow-scheme
 twilight: https://github.com/hartbit/base16-twilight-scheme
