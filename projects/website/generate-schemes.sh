@@ -7,7 +7,6 @@ atelier: https://github.com/atelierbram/base16-atelier-schemes
 atlas: https://github.com/ajlende/base16-atlas-scheme
 black-metal: https://github.com/metalelf0/base16-black-metal-scheme
 blueish: https://github.com/TheMayoras/base16-blueish-scheme
-brogrammer: https://github.com/piggyslasher/base16-brogrammer-scheme
 brushtrees: https://github.com/WhiteAbeLincoln/base16-brushtrees-scheme
 circus: https://github.com/stepchowfun/base16-circus-scheme
 classic: https://github.com/detly/base16-classic-scheme
@@ -90,6 +89,7 @@ zenburn: https://github.com/elnawe/base16-zenburn-scheme
 unclaimed: https://github.com/chriskempson/base16-unclaimed-schemes
 END
 
+rm ~/.local/share/flavours/base16/schemes -r
 mkdir -p ~/.local/share/flavours/base16/sources/schemes
 echo "$schemes_source" > ~/.local/share/flavours/base16/sources/schemes/list.yaml
 flavours -v update schemes
