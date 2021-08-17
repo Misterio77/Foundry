@@ -32,7 +32,7 @@ noindex: true
 ### Sobre
 - Professor: Vanderlei Bonato ([vbonato@icmc.usp.br](mailto:vbonato@icmc.usp.br))
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=92707)
-- Aula: [Google Meet](https://meet.google.com/xui-qhni-ryt)
+- Aula: [Google Meet](https://edisciplinas.usp.br/mod/url/view.php?id=3778926)
 
 - Cobra presença? [Sim, lista](https://edisciplinas.usp.br/mod/url/view.php?id=3778925)
 
