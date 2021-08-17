@@ -33,8 +33,13 @@ noindex: true
 - Aula: [Google Meet](https://meet.google.com/xui-qhni-ryt)
 
 ### Avaliações
-- 1 Prova Teórica (PT)
-- 4 Provinhas + trabalho (PV)
+- Prova: 6/12
+- Provinhas:
+  - Provinha 1: 25/08 - Gerenciamento de Processos
+  - Provinha 2: 15/09 - Sincronização de Processos
+  - Provinha 3: 25/10 - Restante (armazenamento, I/O, e arquivos)
 
 ### Critérios
+- Nota da prova (PT)
+- Nota das provinhas (PV): média aritmética entre elas
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
