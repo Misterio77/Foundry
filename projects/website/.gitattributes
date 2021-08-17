@@ -1,1 +1,5 @@
+gemset.nix linguist-generated
 assets/schemes/* linguist-generated
+_includes/scheme-datalist.html linguist-generated
+
+assets/imports/* liguist-vendored
