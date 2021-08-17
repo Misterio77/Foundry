@@ -2,7 +2,7 @@
   description = "My personal website, blog, and digital garden";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -10,7 +10,6 @@
     flake-utils.lib.eachDefaultSystem (system:
       let 
         pkgs = import nixpkgs { inherit system; };
-        jekyll = "${pkgs.jekyll}/bin/jekyll";
         package = "misterio-me";
       in {
         packages.${package} = pkgs.stdenv.mkDerivation {
@@ -18,7 +17,7 @@
           version = "1.0";
           src = ./.;
           buildPhase = ''
-            JEKYLL_ENV=production ${jekyll} build --destination $out
+            JEKYLL_ENV=production ${pkgs.jekyll}/bin/jekyll build --destination $out
           '';
           installPhase = "true";
         };
@@ -35,6 +34,6 @@
         defaultApp = self.apps.${system}.${package};
 
         devShell =
-          pkgs.mkShell { buildInputs = with pkgs; [ jekyll prettier ]; };
+          pkgs.mkShell { buildInputs = with pkgs; [ jekyll nodePackages.prettier sass scss-lint ]; };
       });
 }
