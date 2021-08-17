@@ -70,10 +70,10 @@ noindex: true
 ### Sobre
 - Professor: Eduardo Simões ([simoes@icmc.usp.br](mailto:simoes@icmc.usp.br))
 - Plataforma: [Gitlab](https://gitlab.com/simoesusp/disciplinas/-/tree/master/SSC0510-Arquitetura-de-Computadores)
-
 - Aula: [Google Meet](https://meet.google.com/nwn-osys-cgu)
 
 - Cobra presença? [Sim, lista](https://docs.google.com/spreadsheets/d/1xinFOyZHZA7YXygnpgPlY14TlVbwzIto6mpL_naHPNQ/edit?usp=sharing)
+
 ### Avaliações
 - Prova teórica (data?)
 - Trabalho
