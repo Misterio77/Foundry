@@ -5,6 +5,23 @@ noindex: true
 ---
 # BSI 020 - 2021/2 - Disciplinas
 
+## Horários
+- Segunda
+  - 19:00 | [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
+  - 21:00 | [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
+- Terça
+  - 19:00 | [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
+  - 21:00 | Análise e Projeto Orientado à Objetos
+- Quarta
+  - 19:00 | Bases de Dados
+  - 21:00 | [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
+- Quinta
+  - 19:00 | [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
+  - 21:00 | Contabilidade para Computação
+- Sexta
+  - 19:00 | Análise e Projeto Orientado à Objetos
+  - 21:00 | Bases de Dados
+
 ## SME0510 - Introdução à Pesquisa Operacional
 
 ### Sobre
@@ -47,3 +64,21 @@ noindex: true
 - Nota da prova teórica (PT)
 - Nota das provinhas (PV): média aritmética entre elas
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
+
+
+## SSC0510 - Arquitetura de Computadores
+### Sobre
+- Professor: Eduardo Simões ([simoes@icmc.usp.br](mailto:simoes@icmc.usp.br))
+- Plataforma: [Gitlab](https://gitlab.com/simoesusp/disciplinas/-/tree/master/SSC0510-Arquitetura-de-Computadores)
+
+- Aula: [Google Meet](https://meet.google.com/nwn-osys-cgu)
+
+- Cobra presença? [Sim, lista](https://docs.google.com/spreadsheets/d/1xinFOyZHZA7YXygnpgPlY14TlVbwzIto6mpL_naHPNQ/edit?usp=sharing)
+### Avaliações
+- Prova teórica (data?)
+- Trabalho
+
+### Critérios
+- Nota da prova (NP)
+- Nota do trabalho (NT)
+- **Nota Final**: média ponderada entre NP (70%) e NT (30%)
