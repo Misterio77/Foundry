@@ -34,7 +34,7 @@ noindex: true
 
 ### Avaliações
 - 1 Prova Teórica (PT)
-- 4 Provinhas + trabalhos práticos (PV)
+- 4 Provinhas + trabalho (PV)
 
 ### Critérios
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
