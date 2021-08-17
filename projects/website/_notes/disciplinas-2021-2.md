@@ -7,20 +7,20 @@ noindex: true
 
 ## Horários
 - Segunda
-  - 19:00 | [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 | [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
+  - 19:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
+  - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
 - Terça
-  - 19:00 | [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 | Análise e Projeto Orientado à Objetos
+  - 19:00 - [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
+  - 21:00 - Análise e Projeto Orientado à Objetos
 - Quarta
-  - 19:00 | Bases de Dados
-  - 21:00 | [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
+  - 19:00 - Bases de Dados
+  - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
 - Quinta
-  - 19:00 | [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
-  - 21:00 | Contabilidade para Computação
+  - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
+  - 21:00 - Contabilidade para Computação
 - Sexta
-  - 19:00 | Análise e Projeto Orientado à Objetos
-  - 21:00 | Bases de Dados
+  - 19:00 - Análise e Projeto Orientado à Objetos
+  - 21:00 - Bases de Dados
 
 ## SME0510 - Introdução à Pesquisa Operacional
 
