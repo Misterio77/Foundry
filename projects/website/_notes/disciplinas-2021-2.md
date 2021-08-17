@@ -6,6 +6,8 @@ noindex: true
 # BSI 020 - 2021/2
 
 ## Horários
+[Arquivo de calendário](https://misterio.me/files/2021/classes.ics)
+
 - Segunda
   - 19:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
   - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
@@ -77,7 +79,7 @@ noindex: true
 - Cobra presença? [Sim, lista](https://docs.google.com/spreadsheets/d/1xinFOyZHZA7YXygnpgPlY14TlVbwzIto6mpL_naHPNQ/edit?usp=sharing)
 
 #### Avaliações
-- Prova teórica (data?)
+- Prova (data?)
 - Trabalho
 
 #### Critérios
