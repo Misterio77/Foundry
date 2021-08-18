@@ -13,7 +13,7 @@ noindex: true
   - 19:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
   - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
 - Terça
-  - 19:00 - [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
+  - 19:00 - [Arquitetura de Computadores](#ssc0510---arquitetura-de-computadores)
   - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
 - Quarta
   - 19:00 - Bases de Dados
@@ -25,18 +25,17 @@ noindex: true
   - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
   - 21:00 - Bases de Dados
 
-## Disciplinas
+--- 
+## SME0510 - Introdução à Pesquisa Operacional
 
-### SME0510 - Introdução à Pesquisa Operacional
-
-#### Sobre
+### Sobre
 - Professora: Maristela Oliveira dos Santos ([mari@icmc.usp.br](mailto:mari@icmc.usp.br))
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91809)
 - Aula: [Google Meet](https://meet.google.com/cbg-kpuw-duw)
 
 - Cobra presença? Não
 
-#### Avaliações
+### Avaliações
 - Provas:
   - Prova 1: 22/09 - Modelagem e solução gráfica
   - Prova 2: 27/10 - Teoria básica e método simples
@@ -44,52 +43,60 @@ noindex: true
 - Atividades:
   - Atividade semanal com correção automática
 
-#### Critérios
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#sme0510---introdução-à-pesquisa-operacional)
 - Notas das provas (NP): média aritmética entre as 3 provas
 - Notas das atividades (NA): média aritmética de todas as atividades
 - **Nota Final**: média ponderada entre NP (peso 80%) e NA (peso 20%)
 
-### SSC0541 - Sistemas Operacionais I
+--- 
+## SSC0541 - Sistemas Operacionais I
 
-#### Sobre
+### Sobre
 - Professor: Vanderlei Bonato ([vbonato@icmc.usp.br](mailto:vbonato@icmc.usp.br))
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=92707)
 - Aula: [Google Meet](https://edisciplinas.usp.br/mod/url/view.php?id=3778926)
 
 - Cobra presença? [Sim, lista](https://edisciplinas.usp.br/mod/url/view.php?id=3778925)
 
-#### Avaliações
+### Avaliações
 - Provinhas:
   - Provinha 1: 26/08 - Gerenciamento de Processos
   - Provinha 2: 16/09 - Sincronização de Processos
   - Provinha 3: 25/10 - Restante (armazenamento, I/O, e arquivos)
 - Prova teórica única: 6/12
 
-#### Critérios
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#ssc0541---sistemas-operacionais-i)
 - Nota da prova teórica (PT)
 - Nota das provinhas (PV): média aritmética entre elas
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
 
 
-### SSC0510 - Arquitetura de Computadores
-#### Sobre
+--- 
+## SSC0510 - Arquitetura de Computadores
+
+### Sobre
 - Professor: Eduardo Simões ([simoes@icmc.usp.br](mailto:simoes@icmc.usp.br))
 - Plataforma: [Gitlab](https://gitlab.com/simoesusp/disciplinas/-/tree/master/SSC0510-Arquitetura-de-Computadores)
 - Aula: [Google Meet](https://meet.google.com/nwn-osys-cgu)
 
 - Cobra presença? [Sim, lista](https://docs.google.com/spreadsheets/d/1xinFOyZHZA7YXygnpgPlY14TlVbwzIto6mpL_naHPNQ/edit?usp=sharing)
 
-#### Avaliações
+### Avaliações
 - Prova (data?)
 - Trabalho: grupo de 3 ou 4
 
-#### Critérios
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#ssc0510---arquitetura-de-computadores)
 - Nota da prova (NP)
 - Nota do trabalho (NT)
 - **Nota Final**: média ponderada entre NP (70%) e NT (30%)
 
-### SSC0526 - Análise e Projeto Orientados à Objetos
-#### Sobre
+--- 
+## SSC0526 - Análise e Projeto Orientados à Objetos
+
+### Sobre
 - Professora: Rosana Braga ([rtvb@icmc.usp.br](mailto:rtvb@icmc.usp.br))
 - PAE: Fabíola Malta ([fabiolamf@usp.br](mailto:fabiolamf@usp.br)), [grupo no whatsapp](https://chat.whatsapp.com/Dj7GkYUBPM04mcqbofK6HY)
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91587)
@@ -97,7 +104,7 @@ noindex: true
 
 - Cobra presença? Sim, relatório do meets
 
-#### Avaliações
+### Avaliações
 - Provas:
   - Prova 1: 15/10
   - Prova 2: 10/12
@@ -107,7 +114,8 @@ noindex: true
   - Trabalho 2: 19/11
 - Exercícios: em grupo, feito em horário de aula (10-11 ao longo do semestre)
 
-#### Critérios
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#ssc0526---análise-e-projeto-orientados-à-objetos)
 - Média de trabalhos (MT): média simples entre Trabalho 1 e 2
 - Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
 - Média 2 (M2): ponderada entre MT (70%) e Exercícios (8 melhores) (30%)
