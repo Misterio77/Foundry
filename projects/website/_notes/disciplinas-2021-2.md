@@ -111,4 +111,4 @@ noindex: true
 - Média de trabalhos (MT): média simples entre Trabalho 1 e 2
 - Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
 - Média 2 (M2): ponderada entre MT (70%) e Exercícios (8 melhores) (30%)
-- **Média final**: ponderada entre M1 (60%) e M2 (40%) - **Os dois ≥ 5**
+- **Média final**: ponderada entre M1 (60%) e M2 (40%) - **Os dois ≥ 5**, se não o menor deles
