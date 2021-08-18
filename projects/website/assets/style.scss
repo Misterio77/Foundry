@@ -270,7 +270,7 @@ fieldset {
   div {
     display: block;
 
-    &.subtotal {
+    &.total {
       align-self: center;
       margin-bottom: 3%;
       margin-left: 5%;
@@ -293,5 +293,5 @@ input:invalid {
 }
 
 form {
-  padding: 20px;
+  padding: 15px;
 }
