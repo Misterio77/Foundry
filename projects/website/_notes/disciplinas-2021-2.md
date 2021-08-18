@@ -13,7 +13,7 @@ noindex: true
   - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
 - Terça
   - 19:00 - [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 - [Análise e Projeto Orientado à Objetos](#ssc0526---análise-e-projeto-orientados-a-objectos)
+  - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-a-objectos)
 - Quarta
   - 19:00 - Bases de Dados
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
@@ -21,7 +21,7 @@ noindex: true
   - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
   - 21:00 - Contabilidade para Computação
 - Sexta
-  - 19:00 - [Análise e Projeto Orientado à Objetos](#ssc0526---análise-e-projeto-orientados-a-objectos)
+  - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objectos)
   - 21:00 - Bases de Dados
 
 ## Disciplinas
