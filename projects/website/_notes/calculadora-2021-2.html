@@ -266,7 +266,6 @@ noindex: true
     <legend>Provas</legend>
     {% include grade.html name="Prova 1" course="SSC0526" %}
     {% include grade.html name="Prova 2" course="SSC0526" %}
-    {% include grade.html name="Prova 3" course="SSC0526" %}
     <hr />
     <div class="total">
       Média: <strong>5.0</strong>
@@ -314,7 +313,6 @@ noindex: true
       "provas": {
         "prova-1": 5.0,
         "prova-2": 5.0,
-        "prova-3": 5.0,
       },
       "trabalhos": {
         "trabalho-1": 5.0,
@@ -335,7 +333,7 @@ noindex: true
     };
 
     init_form(ssc0526, (subject) => {
-      subject["trabalhos"]["final"] = mean([subject["trabalhos"]["trabalho-1"], subject["trabalhos"]["trabalho-2"], subject["trabalhos"]["trabalho-3"]]);
+      subject["trabalhos"]["final"] = mean([subject["trabalhos"]["trabalho-1"], subject["trabalhos"]["trabalho-2"]]);
       subject["exercicios"]["final"] = mean([subject["exercicios"]["exercicio-1"], subject["exercicios"]["exercicio-2"], subject["exercicios"]["exercicio-3"], subject["exercicios"]["exercicio-4"], subject["exercicios"]["exercicio-6"], subject["exercicios"]["exercicio-6"], subject["exercicios"]["exercicio-7"], subject["exercicios"]["exercicio-8"], subject["exercicios"]["exercicio-9"], subject["exercicios"]["exercicio-10"]], 2);
       subject["provas"]["final"] = 0.4*subject["provas"]["prova-1"] + 0.6*subject["provas"]["prova-2"];
 
