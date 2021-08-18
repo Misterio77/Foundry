@@ -59,8 +59,8 @@ noindex: true
 
 #### Avaliações
 - Provinhas:
-  - Provinha 1: 25/08 - Gerenciamento de Processos
-  - Provinha 2: 15/09 - Sincronização de Processos
+  - Provinha 1: 26/08 - Gerenciamento de Processos
+  - Provinha 2: 16/09 - Sincronização de Processos
   - Provinha 3: 25/10 - Restante (armazenamento, I/O, e arquivos)
 - Prova teórica única: 6/12
 
@@ -104,10 +104,10 @@ noindex: true
 - Trabalhos: grupo de 3-5
   - Trabalho 1: 01/10
   - Trabalho 2: 19/11
-- Exercícios: feitos em grupo em horário de aula (melhores 8 notas de um total de 10 exercícios)
+- Exercícios: em grupo, feito em horário de aula (10-11 ao longo do semestre)
 
 #### Critérios
 - Média de trabalhos (MT): média simples entre Trabalho 1 e 2
 - Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
-- Média 2 (M2): ponderada entre MT (70%) e Exercícios (30%)
+- Média 2 (M2): ponderada entre MT (70%) e Exercícios (8 melhores) (30%)
 - **Média final**: ponderada entre M1 (60%) e M2 (40%) - **Os dois ≥ 5**
