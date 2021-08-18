@@ -3,7 +3,8 @@ layout: default
 categories: "bsi"
 noindex: true
 ---
-# BSI 020 - 2021/2
+# Disciplinas BSI 020 - 2021/2
+[Calculadora de notas](/notes/bsi/calculadora-2021-2)
 
 ## Horários
 [Arquivo de calendário](https://misterio.me/files/2021/classes.ics)

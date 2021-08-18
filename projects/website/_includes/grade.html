@@ -1,0 +1,16 @@
+<div class="grade">
+  <label for="{{ include.course | slugify: "latin" }}-{{ include.name | slugify: "latin" }}"
+    >{{ include.name }}</label
+  >
+  <input
+    id="{{ include.course | slugify: "latin" }}-{{ include.name | slugify: "latin" }}"
+    class="{{ include.name | slugify: "latin" }}"
+    {% if include.disabled %} disabled {% endif %}
+    type="number"
+    step="0.1"
+    value="5.0"
+    placeholder="0.0"
+    max="10.0"
+    min="0.0"
+  />
+</div>

@@ -1,0 +1,349 @@
+---
+layout: default
+categories: "bsi"
+noindex: true
+---
+<script>
+  // Retira o menor elemento de um array
+  function remove_smallest(arr) {
+    arr = arr.slice();
+    arr.splice(arr.indexOf(Math.min.apply(null, arr)), 1);
+    return arr;
+  }
+
+  // Tira média dos valores de um array de números
+  // Opcionalmente você pode passar quantos serão eliminados
+  function mean(values, remove) {
+    if (remove) {
+      for (var i = 0; i < remove; i++) {
+        values = remove_smallest(values);
+      }
+    } else {
+      remove = 0;
+    }
+    console.log(values);
+
+    var sum = 0.0;
+    for (const index in values) {
+      sum += values[index];
+    }
+
+    return (sum/(values.length));
+  }
+
+  // Inicializa o form de uma disciplina, dado sua info (subject) e seu criterio (subjectCriteria)
+  function init_form(subject, subjectCriteria) {
+    // Passa os dados pelo criterio
+    var subject = subjectCriteria(subject);
+    // Seleciona o form da disciplina
+    const form = document.querySelector(`form.${subject['name']}`);
+    // Para cada elemento de input nesse form
+    form.querySelectorAll("input").forEach(element => {
+      // Adicionar um evento quando o input for alterado
+      element.addEventListener("input", () => {
+        // Pegar os dados inseridos no form, e depois atualizar eles usando o criterio
+        subject = subjectCriteria(update_values(subject, form));
+        // Atualizar o que aparece no form
+        update_form(subject, form);
+      });
+    });
+
+  }
+
+  // Atualiza informações de média e de aprovação no form
+  function update_form(subject, form) {
+    // Para cada grupo de nota
+    for (const group in subject) {
+      // Caso seja um dos campos especiais, ignorar
+      if (group == "name" || group == "allFive" || group == "final") continue;
+      // Pegar fieldset correspondente ao grupo
+      const fieldset = form.querySelector(`fieldset.${group}`);
+      // Atualizar subtotal daquele fieldset
+      fieldset.querySelector(".total strong").innerText = subject[group]['final'].toFixed(1);
+    }
+    // Lugar que exibe a nota total
+    const subjectTotal = form.querySelector("fieldset.final");
+    // Alterar valor da nota total
+    subjectTotal.querySelector(".total strong").innerText = subject['final'].toFixed(1);
+
+    // Status de aprovado/reprovado
+    const subjectStatus = subjectTotal.querySelector(".total em");
+
+    // Caso > 5.0
+    if (parseFloat(subject["final"].toFixed(1)) < 5.0) {
+      subjectStatus.innerText = "Não passou ✗";
+      subjectStatus.classList.add("failed");
+      subjectStatus.classList.remove("succeeded");
+    // Caso < 5.0
+    } else {
+      subjectStatus.innerText = "Passou ✓";
+      subjectStatus.classList.add("succeeded");
+      subjectStatus.classList.remove("failed");
+    }
+  }
+
+  // Puxa os dados do form
+  function update_values(subject, form) {
+    // Para cada grupo de nota
+    for (const group in subject) {
+      // Se for um dos campos especiais, ignorar
+      if (group == "name" || group == "allFive" || group == "final") continue;
+      // Pegar fieldset do grupo
+      const fieldset = form.querySelector(`fieldset.${group}`);
+      // Para cada nota do fieldset
+      for (const grade in subject[group]) {
+        // Caso seja o campo especial, ignorar
+        if (grade == "final") continue;
+        // Puxar nota do input correspondente
+        subject[group][grade] = parseFloat(fieldset.querySelector(`input.${grade}`).value) || 0.0;
+      }
+    }
+    return subject;
+  }
+</script>
+<h1>Calculadora BSI - 2021/2</h1>
+<nav><a href="/notes/bsi/disciplinas-2021-2">Informações das disciplinas</a></nav>
+
+<h2>SME0510 - Introdução à Pesquisa Operacional</h2>
+<form class="sme0510">
+  <fieldset class="provas">
+    <legend>Provas</legend>
+    {% include grade.html name="Prova 1" course="SME0510" %}
+    {% include grade.html name="Prova 2" course="SME0510" %}
+    {% include grade.html name="Prova 3" course="SME0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="atividades">
+    <legend>Atividades</legend>
+      {% include grade.html name="Média" course="SME0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="final">
+    <legend>Total</legend>
+    <hr />
+    <div class="total">
+      Média Final: <strong>5.0</strong>
+      <hr />
+      <em class="succeeded">Passou ✓</em>
+    </div>
+  </fieldset>
+
+  <script>
+    const sme0510 = {
+      "name": "sme0510",
+      "provas": {
+        "prova-1": 5.0,
+        "prova-2": 5.0,
+        "prova-3": 5.0,
+      },
+      "atividades": {
+        "media": 5.0,
+      },
+    };
+
+    init_form(sme0510, (subject) => {
+      subject["provas"]["final"] = mean([subject["provas"]["prova-1"], subject["provas"]["prova-2"], subject["provas"]["prova-3"]]);
+      subject["atividades"]["final"] = subject["atividades"]["media"];
+      subject["final"] = 0.8*subject["provas"]["final"] + 0.2*subject["atividades"]["final"];
+      return subject;
+    });
+  </script>
+</form>
+<hr />
+
+<h2>SSC0541 - Sistemas Operacionais I</h2>
+<form class="ssc0541">
+  <fieldset class="provinhas">
+    <legend>Provinhas</legend>
+    {% include grade.html name="Provinha 1" course="SSC0510" %}
+    {% include grade.html name="Provinha 2" course="SSC0510" %}
+    {% include grade.html name="Provinha 3" course="SSC0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="prova">
+    <legend>Prova Teórica</legend>
+      {% include grade.html name="Prova" course="SME0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="final">
+    <legend>Total</legend>
+    <hr />
+    <div class="total">
+      Média Final: <strong>5.0</strong>
+      <hr />
+      <em class="succeeded">Passou ✓</em>
+    </div>
+  </fieldset>
+
+  <script>
+    const ssc0541 = {
+      "name": "ssc0541",
+      "provinhas": {
+        "provinha-1": 5.0,
+        "provinha-2": 5.0,
+        "provinha-3": 5.0,
+      },
+      "prova": {
+        "prova": 5.0,
+      },
+    };
+
+    init_form(ssc0541, (subject) => {
+      subject["provinhas"]["final"] = mean([subject["provinhas"]["provinha-1"], subject["provinhas"]["provinha-2"], subject["provinhas"]["provinha-3"]]);
+      subject["prova"]["final"] = subject["prova"]["prova"];
+      subject["final"] = 0.4*subject["prova"]["final"] + 0.6*subject["provinhas"]["final"];
+      return subject;
+    });
+  </script>
+</form>
+<hr />
+<h2>SSC0510 - Arquitetura de Computadores</h2>
+<form class="ssc0510">
+  <fieldset class="prova">
+    <legend>Prova</legend>
+    {% include grade.html name="Prova" course="SSC0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="trabalho">
+    <legend>Trabalho em Grupo</legend>
+      {% include grade.html name="Trabalho" course="SSC0510" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="final">
+    <legend>Total</legend>
+    <hr />
+    <div class="total">
+      Média Final: <strong>5.0</strong>
+      <hr />
+      <em class="succeeded">Passou ✓</em>
+    </div>
+  </fieldset>
+
+  <script>
+    const ssc0510 = {
+      "name": "ssc0510",
+      "prova": {
+        "prova": 5.0,
+      },
+      "trabalho": {
+        "trabalho": 5.0,
+      },
+    };
+
+    init_form(ssc0510, (subject) => {
+      subject["prova"]["final"] = subject["prova"]["prova"];
+      subject["trabalho"]["final"] = subject["trabalho"]["trabalho"];
+      subject["final"] = 0.7*subject["prova"]["final"] + 0.3*subject["trabalho"]["final"];
+      return subject;
+    });
+  </script>
+</form>
+<hr />
+<h2>SSC0526 - Análise e Projeto Orientados à Objetos</h2>
+<form class="ssc0526">
+  <fieldset class="provas">
+    <legend>Provas</legend>
+    {% include grade.html name="Prova 1" course="SSC0526" %}
+    {% include grade.html name="Prova 2" course="SSC0526" %}
+    {% include grade.html name="Prova 3" course="SSC0526" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="trabalhos">
+    <legend>Trabalhos</legend>
+      {% include grade.html name="Trabalho 1" course="SSC0526" %}
+      {% include grade.html name="Trabalho 2" course="SSC0526" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="exercicios">
+    <legend>Exercícios em Sala</legend>
+      {% include grade.html name="Exercicio 1" course="SSC0526" %}
+      {% include grade.html name="Exercicio 2" course="SSC0526" %}
+      {% include grade.html name="Exercicio 3" course="SSC0526" %}
+      {% include grade.html name="Exercicio 4" course="SSC0526" %}
+      {% include grade.html name="Exercicio 5" course="SSC0526" %}
+      {% include grade.html name="Exercicio 6" course="SSC0526" %}
+      {% include grade.html name="Exercicio 7" course="SSC0526" %}
+      {% include grade.html name="Exercicio 8" course="SSC0526" %}
+      {% include grade.html name="Exercicio 9" course="SSC0526" %}
+      {% include grade.html name="Exercicio 10" course="SSC0526" %}
+    <hr />
+    <div class="total">
+      Média: <strong>5.0</strong>
+    </div>
+  </fieldset>
+  <fieldset class="final">
+    <legend>Total</legend>
+    <hr />
+    <div class="total">
+      Média Final: <strong>5.0</strong>
+      <hr />
+      <em class="succeeded">Passou ✓</em>
+    </div>
+  </fieldset>
+
+  <script>
+    const ssc0526 = {
+      "name": "ssc0526",
+      "provas": {
+        "prova-1": 5.0,
+        "prova-2": 5.0,
+      },
+      "trabalhos": {
+        "trabalho-1": 5.0,
+        "trabalho-2": 5.0,
+      },
+      "exercicios": {
+        "exercicio-1": 5.0,
+        "exercicio-2": 5.0,
+        "exercicio-3": 5.0,
+        "exercicio-4": 5.0,
+        "exercicio-5": 5.0,
+        "exercicio-6": 5.0,
+        "exercicio-7": 5.0,
+        "exercicio-8": 5.0,
+        "exercicio-9": 5.0,
+        "exercicio-10": 5.0,
+      },
+    };
+
+    init_form(ssc0526, (subject) => {
+      subject["trabalhos"]["final"] = mean([subject["trabalhos"]["trabalho-1"], subject["trabalhos"]["trabalho-2"]]);
+      subject["exercicios"]["final"] = mean([subject["exercicios"]["exercicio-1"], subject["exercicios"]["exercicio-2"], subject["exercicios"]["exercicio-3"], subject["exercicios"]["exercicio-4"], subject["exercicios"]["exercicio-6"], subject["exercicios"]["exercicio-6"], subject["exercicios"]["exercicio-7"], subject["exercicios"]["exercicio-8"], subject["exercicios"]["exercicio-9"], subject["exercicios"]["exercicio-10"]], 2);
+      subject["provas"]["final"] = 0.4*subject["provas"]["prova-1"] + 0.6*subject["provas"]["prova-2"];
+
+      const m1 = subject["provas"]["final"];
+      const m2 = 0.7*subject["trabalhos"]["final"] + 0.3*subject["exercicios"]["final"];
+      if (m1 >= 5.0 && m2 >= 5.0) {
+        subject["final"] = 0.6*m1 + 0.4*m2;
+      } else {
+        subject["final"] = Math.min(m1, m2);
+      }
+      return subject;
+    });
+  </script>
+</form>
+<hr />
