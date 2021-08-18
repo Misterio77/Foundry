@@ -94,7 +94,7 @@ noindex: true
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91587)
 - Aula: [Google Meet](https://meet.google.com/fug-ccrg-jii)
 
-- Cobra presença? Sim
+- Cobra presença? Sim, exercícios em sala
 
 #### Avaliações
 - Provas:
