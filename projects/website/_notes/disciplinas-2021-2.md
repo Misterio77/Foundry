@@ -13,7 +13,7 @@ noindex: true
   - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
 - Terça
   - 19:00 - [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 - Análise e Projeto Orientado à Objetos
+  - 21:00 - [Análise e Projeto Orientado à Objetos](#ssc0526---análise-e-projeto-orientados-a-objectos)
 - Quarta
   - 19:00 - Bases de Dados
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
@@ -21,7 +21,7 @@ noindex: true
   - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
   - 21:00 - Contabilidade para Computação
 - Sexta
-  - 19:00 - Análise e Projeto Orientado à Objetos
+  - 19:00 - [Análise e Projeto Orientado à Objetos](#ssc0526---análise-e-projeto-orientados-a-objectos)
   - 21:00 - Bases de Dados
 
 ## Disciplinas
@@ -80,9 +80,34 @@ noindex: true
 
 #### Avaliações
 - Prova (data?)
-- Trabalho
+- Trabalho: grupo de 3 ou 4
 
 #### Critérios
 - Nota da prova (NP)
 - Nota do trabalho (NT)
 - **Nota Final**: média ponderada entre NP (70%) e NT (30%)
+
+### SSC0526 - Análise e Projeto Orientados a Objetos
+#### Sobre
+- Professora: Rosana Braga ([rtvb@icmc.usp.br](mailto:rtvb@icmc.usp.br))
+- PAE: Fabíola Malta ([fabiolamf@usp.br](mailto:fabiolamf@usp.br)), [grupo no whatsapp](https://chat.whatsapp.com/Dj7GkYUBPM04mcqbofK6HY)
+- Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91587)
+- Aula: [Google Meet](https://meet.google.com/fug-ccrg-jii)
+
+- Cobra presença? Sim
+
+#### Avaliações
+- Provas:
+  - Prova 1: 15/10
+  - Prova 2: 10/12
+  - Sub (possivelmente): 17/12
+- Trabalhos: grupo de 3-5
+  - Trabalho 1: 01/10
+  - Trabalho 2: 19/11
+- Exercícios: feitos em grupo em horário de aula (melhores 8 notas de um total de 10 exercícios)
+
+#### Critérios
+- Média de trabalhos (MT): média simples entre Trabalho 1 e 2
+- Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
+- Média 2 (M2): ponderada entre MT (70%) e Exercícios (30%)
+- **Média final**: ponderada entre M1 (60%) e M2 (40%) - **Os dois ≥ 5**
