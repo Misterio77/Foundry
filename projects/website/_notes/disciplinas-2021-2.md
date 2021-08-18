@@ -13,7 +13,7 @@ noindex: true
   - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
 - Terça
   - 19:00 - [Arquitetura de Computadores](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objectos)
+  - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
 - Quarta
   - 19:00 - Bases de Dados
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
@@ -21,7 +21,7 @@ noindex: true
   - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
   - 21:00 - Contabilidade para Computação
 - Sexta
-  - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objectos)
+  - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
   - 21:00 - Bases de Dados
 
 ## Disciplinas
@@ -87,7 +87,7 @@ noindex: true
 - Nota do trabalho (NT)
 - **Nota Final**: média ponderada entre NP (70%) e NT (30%)
 
-### SSC0526 - Análise e Projeto Orientados a Objetos
+### SSC0526 - Análise e Projeto Orientados à Objetos
 #### Sobre
 - Professora: Rosana Braga ([rtvb@icmc.usp.br](mailto:rtvb@icmc.usp.br))
 - PAE: Fabíola Malta ([fabiolamf@usp.br](mailto:fabiolamf@usp.br)), [grupo no whatsapp](https://chat.whatsapp.com/Dj7GkYUBPM04mcqbofK6HY)
