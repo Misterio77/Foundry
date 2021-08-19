@@ -16,6 +16,7 @@ noindex: true
   - 19:00 - [Arquitetura de Computadores](#ssc0510---arquitetura-de-computadores)
   - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
 - Quarta
+  - 18:00 - [Seminários em Computação II](#ssc0577---seminários-em-computação-ii)
   - 19:00 - Bases de Dados
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
 - Quinta
@@ -31,7 +32,7 @@ noindex: true
 ### Sobre
 - Professora: Maristela Oliveira dos Santos ([mari@icmc.usp.br](mailto:mari@icmc.usp.br))
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91809)
-- Aula: [Google Meet](https://meet.google.com/cbg-kpuw-duw)
+- Aula: Google Meet (Agendado, muda a cada aula)
 
 - Cobra presença? Não
 
@@ -120,3 +121,19 @@ noindex: true
 - Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
 - Média 2 (M2): ponderada entre MT (70%) e Exercícios (8 melhores) (30%)
 - **Média final**: ponderada entre M1 (60%) e M2 (40%) - **Os dois ≥ 5**, se não o menor deles
+
+---
+## SSC0577 - Seminários em Computação II
+
+### Sobre
+- Professora: Simone de Souza ([srocio@icmc.usp.br](mailto:srocio@icmc.usp.br))
+- Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91734)
+- Aula: [Google Meet](https://meet.google.com/igq-jcam-mhd)
+
+- Cobra presença? [Sim, formulário](https://edisciplinas.usp.br/mod/url/view.php?id=3817317)
+### Avaliações
+- Resumo semanal do seminário: nota 0, 5, 7.5 ou 10.
+
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#ssc0577---seminários-em-computação-ii)
+- **Média dos resumos**: média das 70% melhores notas

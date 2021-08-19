@@ -249,8 +249,9 @@ nav ul {
 }
 
 // Increase bottom margin label
-input {
-  margin-top: 10px;
+input,
+select {
+  margin: .8em;
 }
 
 // Increase icon size
