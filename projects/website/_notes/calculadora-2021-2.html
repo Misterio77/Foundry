@@ -33,10 +33,19 @@ noindex: true
 
   // Inicializa o form de uma disciplina, dado sua info (subject) e seu criterio (subjectCriteria)
   function init_form(name, subjectCriteria) {
-    // Dados da disciplina
-    var data = {};
     // Seleciona o form da disciplina
     const form = document.querySelector(`form#${name}`);
+
+    // Carregar notas da disciplina da localstorage, caso exista
+    const loadedData = JSON.parse(localStorage.getItem(`data-${name}`));
+
+    var data;
+    if (loadedData) {
+      data = loadedData;
+      pushSubjectData(data, form);
+    } else {
+      data = {};
+    }
 
     // Para cada elemento de input ou select nesse form
     form.querySelectorAll("select, input").forEach((element) => {
@@ -44,12 +53,13 @@ noindex: true
       element.addEventListener("input", () => {
         // Pegar os dados inseridos no form
         data = getSubjectData(data, form);
-        console.log(data);
         // Processar eles usando o criterio
         data = subjectCriteria(data);
         console.log(data);
         // Atualizar o que aparece no form
         pushSubjectData(data, form);
+        // Salvar no localstorage
+        localStorage.setItem(`data-${name}`, JSON.stringify(data));
       });
     });
   }
@@ -58,8 +68,14 @@ noindex: true
   function pushSubjectData(data, form) {
     // Para cada grupo de nota
     form.querySelectorAll("fieldset").forEach(group => {
-      // Caso seja um grupo de nota final, ignorar
+      // Caso seja um grupo de nota final, ignorar (atualizaremos mais pra frente)
       if (group.className == "final") return;
+      group.querySelectorAll("input, select").forEach(grade => {
+        // Caso seja o campo de nota final, ignorar
+        if (grade.className == "final") return;
+        grade.value = data[group.className][grade.className];
+      });
+
       // Atualizar subtotal daquele grupo
       group.querySelector(".total strong").innerText = data[group.className]["final"].toFixed(1);
     });
