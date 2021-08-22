@@ -1,15 +1,14 @@
 <div class="grade">
-  <label for="{{ include.course | slugify: "latin" }}-{{ include.name | slugify: "latin" }}"
-    >{{ include.name }}</label
-  >
-  <select
-    id="{{ include.course | slugify: "latin" }}-{{ include.name | slugify: "latin" }}"
-    class="{{ include.name | slugify: "latin" }}"
-    name="{{ include.name | slugify: "latin" }}"
-  >
-    <option value="0">0</option>
-    <option value="5" selected>5</option>
-    <option value="7.5">7.5</option>
-    <option value="10">10</option>
-  </select>
+  <label>
+    {{ include.name }}
+    <select
+      class="{{ include.name | slugify: "latin" }}"
+      name="{{ include.name | slugify: "latin" }}"
+    >
+      <option value="0">0</option>
+      <option value="5" selected>5</option>
+      <option value="7.5">7.5</option>
+      <option value="10">10</option>
+    </select>
+  </label>
 </div>
