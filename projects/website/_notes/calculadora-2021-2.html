@@ -4,7 +4,69 @@ categories: "bsi"
 noindex: true
 ---
 
+
 <script>
+  function importData() {
+      // Create temporary input element
+      const uploadInput = document.createElement("input");
+      uploadInput.setAttribute("type", "file");
+      uploadInput.setAttribute("accept", "application/json");
+      document.body.appendChild(uploadInput);
+      // Trigger it
+      uploadInput.click();
+      // When the user selects a file
+      uploadInput.addEventListener('change', event => {
+        // Create a file reader
+        const reader = new FileReader();
+        // When the reader loads
+        reader.onload = event => {
+          // Parse file json contents
+          const data = JSON.parse(event.target.result);
+          // Load it into localStorage
+          Object.entries(data).forEach(([key, value]) => {
+            localStorage.setItem(`data-${key}`, JSON.stringify(value));
+          });
+        }
+        // Trigger file loading
+        reader.readAsText(event.target.files[0]);
+        // Remove temporary input element
+        event.target.remove();
+        // Reload page
+        location.reload();
+      });
+  }
+  function exportData() {
+    const data = {};
+    // Iterate over values in local storage
+    Object.keys(localStorage).forEach(key => {
+      // If it's about some course
+      if (key.startsWith("data-")) {
+        data[key.replace(/^data-/, "")] = JSON.parse(localStorage.getItem(key));
+      }
+    });
+    // Encode as JSON
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+    // Create a temporary anchor element to download it
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "notas.json");
+    document.body.appendChild(downloadAnchor);
+    // Trigger the download
+    downloadAnchor.click();
+    // Remove the anchor
+    downloadAnchor.remove();
+  }
+  function resetData() {
+    // Remove all grade keys on localstorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith("data-")) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Reload page
+    location.reload();
+  }
+
   // Retira o menor elemento de um array
   function removeSmallest(arr) {
     arr = arr.slice();
@@ -42,7 +104,7 @@ noindex: true
     var data;
     if (loadedData) {
       data = loadedData;
-      pushSubjectData(data, form);
+      pushSubjectData(data, form, true);
     } else {
       data = {};
     }
@@ -57,7 +119,7 @@ noindex: true
         data = subjectCriteria(data);
         console.log(data);
         // Atualizar o que aparece no form
-        pushSubjectData(data, form);
+        pushSubjectData(data, form, false);
         // Salvar no localstorage
         localStorage.setItem(`data-${name}`, JSON.stringify(data));
       });
@@ -65,7 +127,7 @@ noindex: true
   }
 
   // Atualiza informações de média e de aprovação no form
-  function pushSubjectData(data, form) {
+  function pushSubjectData(data, form, updateFields) {
     // Para cada grupo de nota
     form.querySelectorAll("fieldset").forEach(group => {
       // Caso seja um grupo de nota final, ignorar (atualizaremos mais pra frente)
@@ -73,7 +135,7 @@ noindex: true
       group.querySelectorAll("input, select").forEach(grade => {
         // Caso seja o campo de nota final, ignorar
         if (grade.className == "final") return;
-        grade.value = data[group.className][grade.className];
+        if (updateFields) grade.value = data[group.className][grade.className].toFixed(1);
       });
 
       // Atualizar subtotal daquele grupo
@@ -120,6 +182,7 @@ noindex: true
   }
 </script>
 <h1>Calculadora BSI - 2021/2</h1>
+  <button onClick="importData()">Importar</button><button onClick="exportData()">Exportar</button><button onClick="resetData()">Resetar</button>
 <nav>
   <a href="/notes/bsi/disciplinas-2021-2">Informações das disciplinas</a>
 </nav>
