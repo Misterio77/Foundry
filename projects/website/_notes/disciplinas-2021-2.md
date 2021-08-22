@@ -17,14 +17,14 @@ noindex: true
   - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
 - Quarta
   - 18:00 - [Seminários em Computação II](#ssc0577---seminários-em-computação-ii)
-  - 19:00 - Bases de Dados
+  - 19:00 - [Bases de Dados](#scc0540---bases-de-dados)
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
 - Quinta
   - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
   - 21:00 - Contabilidade para Computação
 - Sexta
   - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
-  - 21:00 - Bases de Dados
+  - 21:00 - [Bases de Dados](#scc0540---bases-de-dados)
 
 --- 
 ## SME0510 - Introdução à Pesquisa Operacional
@@ -137,3 +137,23 @@ noindex: true
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2#ssc0577---seminários-em-computação-ii)
 - **Média dos resumos**: média das 70% melhores notas
+
+---
+## SCC0540 - Bases de Dados
+
+### Sobre
+- Professor: Jose Rodrigues Júnior ([junio@icmc.usp.br](mailto:junio@icmc.usp.br))
+- Plataforma: [Tidia](https://ae4.tidia-ae.usp.br/portal/site/b82c61bd-1e05-4877-9366-f6ffc2babce7/)
+- Aula: [Google Meet](https://meet.google.com/bhr-zuoa-zvz)
+
+- Cobra presença? Sim, exercícios
+
+### Avaliações
+- Atividades quinzenais
+- Projeto (a ser definido, 3 alunos)
+
+### Critérios
+[Calculadora](/notes/bsi/calculadora-2021-2#scc0540---bases-de-dados)
+- Média de atividades (MA) (quantas?)
+- Média do projeto (MP)
+- **Média final**: Média simples entre MA e MP - **Os dois ≥**, se não o menor deles

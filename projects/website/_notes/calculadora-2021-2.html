@@ -471,7 +471,99 @@ noindex: true
         3
       );
       subject["final"] = subject["resumos"]["final"];
-      console.log(subject);
+      return subject;
+    });
+  </script>
+</form>
+
+<hr />
+
+<h2 id="scc0540---bases-de-dados">
+  SCC0540 - Bases de Dados
+</h2>
+<a href="/notes/bsi/disciplinas-2021-2#scc0540---bases-de-dados"
+  >Informações</a
+>
+<form class="scc0540">
+  <fieldset class="projetos">
+    <legend>Projeto</legend>
+    {% include grade.html name="Projeto 1" course="SSC0540" %}
+    {% include grade.html name="Projeto 2" course="SSC0540" %}
+    <hr />
+    <div class="total">Média: <strong>5.0</strong></div>
+  </fieldset>
+  <fieldset class="atividades">
+    <legend>Projeto</legend>
+    {% include grade.html name="Atividade 1" course="SSC0540" %}
+    {% include grade.html name="Atividade 2" course="SSC0540" %}
+    {% include grade.html name="Atividade 3" course="SSC0540" %}
+    {% include grade.html name="Atividade 4" course="SSC0540" %}
+    {% include grade.html name="Atividade 5" course="SSC0540" %}
+    {% include grade.html name="Atividade 6" course="SSC0540" %}
+    {% include grade.html name="Atividade 7" course="SSC0540" %}
+    {% include grade.html name="Atividade 8" course="SSC0540" %}
+    {% include grade.html name="Atividade 9" course="SSC0540" %}
+    {% include grade.html name="Atividade 10" course="SSC0540" %}
+    <hr />
+    <div class="total">Média: <strong>5.0</strong></div>
+  </fieldset>
+  <fieldset class="final">
+    <legend>Total</legend>
+    <hr />
+    <div class="total">
+      Média Final: <strong>5.0</strong>
+      <hr />
+      <em class="succeeded">Passou ✓</em>
+    </div>
+  </fieldset>
+
+  <script>
+    const scc0540 = {
+      name: "scc0540",
+      projetos: {
+        "projeto-1": 5.0,
+        "projeto-2": 5.0,
+      },
+      atividades: {
+        "atividade-1": 5.0,
+        "atividade-2": 5.0,
+        "atividade-3": 5.0,
+        "atividade-4": 5.0,
+        "atividade-5": 5.0,
+        "atividade-6": 5.0,
+        "atividade-7": 5.0,
+        "atividade-8": 5.0,
+        "atividade-9": 5.0,
+        "atividade-10": 5.0,
+      },
+    };
+
+    init_form(scc0540, (subject) => {
+      subject["atividades"]["final"] = mean(
+        [
+          subject["atividades"]["atividade-1"],
+          subject["atividades"]["atividade-2"],
+          subject["atividades"]["atividade-3"],
+          subject["atividades"]["atividade-4"],
+          subject["atividades"]["atividade-5"],
+          subject["atividades"]["atividade-6"],
+          subject["atividades"]["atividade-7"],
+          subject["atividades"]["atividade-8"],
+          subject["atividades"]["atividade-9"],
+          subject["atividades"]["atividade-10"],
+        ]
+      );
+      subject["projetos"]["final"] = mean(
+        [
+          subject["projetos"]["projeto-1"],
+          subject["projetos"]["projeto-2"],
+        ]
+      );
+      if (subject["projetos"]["final"] >= 5.0 && subject["atividades"]["final"] >= 5.0) {
+        subject["final"] = mean([subject["atividades"]["final"], subject["projetos"]["final"]]);
+      } else {
+        subject["final"] = Math.min(subject["projetos"]["final"], subject["atividades"]["final"]);
+      }
       return subject;
     });
   </script>
