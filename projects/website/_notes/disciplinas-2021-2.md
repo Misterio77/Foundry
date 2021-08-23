@@ -32,7 +32,7 @@ noindex: true
 ### Sobre
 - Professora: Maristela Oliveira dos Santos ([mari@icmc.usp.br](mailto:mari@icmc.usp.br))
 - Plataforma: [E-Disciplinas](https://edisciplinas.usp.br/course/view.php?id=91809)
-- Aula: Google Meet (Agendado, muda a cada aula)
+- Aula: [Google Meet (Agendado, muda a cada aula)](https://meet.google.com/)
 
 - Cobra presença? Não
 
