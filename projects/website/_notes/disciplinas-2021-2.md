@@ -21,7 +21,7 @@ noindex: true
   - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
 - Quinta
   - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
-  - 21:00 - Contabilidade para Computação
+  - 21:00 - [Contabilidade para Computação](#sep0584---contabilidade-para-computação)
 - Sexta
   - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
   - 21:00 - [Bases de Dados](#scc0540---bases-de-dados)
