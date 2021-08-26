@@ -157,3 +157,19 @@ noindex: true
 - Média de atividades (MA) (quantas?)
 - Média do projeto (MP)
 - **Média final**: Média simples entre MA e MP - **Os dois ≥**, se não o menor deles
+
+---
+## SEP0584 - Contabilidade para Computação
+
+### Sobre
+- Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
+- Plataforma: ???
+- Aula: [Google Meet Oficial-Não-Oficial-Do-Diógenes](https://meet.google.com/rku-xnuu-kjr)
+
+- Cobra presença? Sim, aleatoriamente (q?)
+
+### Avaliações
+???
+
+### Critérios
+???
