@@ -163,7 +163,7 @@ noindex: true
 
 ### Sobre
 - Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
-- Plataforma: ???
+- Plataforma: Não há, pra economizar dados do ciber espaço [_sic_]
 - Aula: [Google Meet ~~Extra~~oficial do Diógenes](https://meet.google.com/rku-xnuu-kjr)
 
 - Cobra presença? Sim, aleatoriamente (q?)
