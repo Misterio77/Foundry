@@ -164,7 +164,7 @@ noindex: true
 ### Sobre
 - Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
 - Plataforma: ???
-- Aula: [Google Meet ~Extra~oficial do Diógenes](https://meet.google.com/rku-xnuu-kjr)
+- Aula: [Google Meet ~~Extra~~oficial do Diógenes](https://meet.google.com/rku-xnuu-kjr)
 
 - Cobra presença? Sim, aleatoriamente (q?)
 
