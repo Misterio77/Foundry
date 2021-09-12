@@ -1,5 +1,7 @@
 # misterio.me
 
+This site is developed on [sr.ht](https://sr.ht/~misterio/misterio.me/), but feel free to use [github](https://github.com/misterio77/misterio-me) if you want.
+
 ## About
 
 My personal website.
