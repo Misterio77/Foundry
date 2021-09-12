@@ -29,6 +29,3 @@ I love animals (i've got five cats and a dog), the planet, and the people who li
 
 Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think. I'm an environmental, animal rights, free software, privacy, queer, social, and education activist.
 
-```haskell
-==<
-```

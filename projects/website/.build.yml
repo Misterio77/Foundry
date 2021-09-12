@@ -8,7 +8,7 @@ oauth: pages.sr.ht/PAGES:RW
 tasks:
 - package: |
     cd $site
-    nix build
+    nix build --quiet
     tar -C result -cvz . > ../site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
