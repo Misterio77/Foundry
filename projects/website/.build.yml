@@ -6,9 +6,10 @@ environment:
   site: misterio.me
 oauth: pages.sr.ht/PAGES:RW
 tasks:
-- package: |
+- build: |
     cd $site
     nix build --quiet
-    tar -C result -cvz . > ../site.tar.gz
+- package: |
+    tar -C $site/result -cvz . > site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
