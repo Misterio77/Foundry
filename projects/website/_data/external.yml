@@ -1,6 +1,9 @@
-- name: projects
+- name: sourcehut
+  link: https://sr.ht/~misterio
+  icon: mdi-circle-outline
+- name: github
   link: https://github.com/misterio77
   icon: mdi-github
-- name: work
+- name: linkedin
   link: https://linkedin.com/in/misterio7
   icon: mdi-linkedin
