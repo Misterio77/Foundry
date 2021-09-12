@@ -1,0 +1,13 @@
+image: alpine/latest
+packages:
+  - jekyll
+oauth: pages.sr.ht/PAGES:RW
+environment:
+  site: misterio.me
+tasks:
+- package: |
+    cd $site
+    jekyll build
+    tar -C _site -cvz . > ../site.tar.gz
+- upload: |
+    acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
