@@ -1,13 +1,15 @@
-image: alpine/latest
-packages:
-  - jekyll
+image: nixos/unstable
 oauth: pages.sr.ht/PAGES:RW
+packages:
+  - nixos.nixUnstable
 environment:
   site: misterio.me
 tasks:
+- set-experimental: |
+    echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
 - package: |
     cd $site
-    jekyll build
-    tar -C _site -cvz . > ../site.tar.gz
+    nix build
+    tar -C result -cvz . > ../site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
