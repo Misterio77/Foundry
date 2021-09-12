@@ -5,11 +5,9 @@ packages:
 environment:
   site: misterio.me
 tasks:
-- set-experimental: |
-    echo "experimental-features = nix-command flakes" > /etc/nix/nix.conf
 - package: |
     cd $site
-    nix build
+    nix --experimental-features "nix-command flakes" build
     tar -C result -cvz . > ../site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
