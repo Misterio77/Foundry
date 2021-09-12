@@ -57,31 +57,11 @@
              url('/assets/FiraCode/Regular.woff') format('woff');
       }
     </style>
-    <link rel="preconnect" href="https://fonts.gstatic.com" />
-    <link rel="preload" href="/assets/main.js" as="script" />
-    <link rel="preload" href="/assets/imports/prism.js" as="script" />
-    <link
-      rel="preload"
-      href="/assets/imports/polyfills/dialog.js"
-      as="script"
-    />
-
-    <link
-      rel="preload"
-      href="/assets/imports/polyfills/dialog.css"
-      as="style"
-    />
-    <link rel="preload" href="/assets/imports/normalize.css" as="style" />
-    <link rel="preload" href="/assets/prism.css" as="style" />
-    <link rel="preload" href="/assets/imports/water.css" as="style" />
-    <link rel="preload" href="/assets/style.css" as="style" />
-
-    <link rel="stylesheet" href="/assets/imports/normalize.css" />
-    <link rel="stylesheet" href="/assets/imports/polyfills/dialog.css" />
-    <link rel="stylesheet" href="/assets/prism.css" />
     <link rel="stylesheet" href="/assets/imports/water.css" />
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" id="chosen-scheme" />
+    <link rel="stylesheet" href="/assets/imports/polyfills/dialog.css" />
+    <link rel="stylesheet" href="/assets/prism.css" />
     <script>
       let chosen_scheme_css = document.getElementById("chosen-scheme");
 
@@ -113,8 +93,8 @@
     </header>
     <main>{{ content }}</main>
     {% include footer.html %}
-    <script defer src="/assets/main.js"></script>
-    <script defer src="/assets/imports/polyfills/dialog.js"></script>
-    <script defer src="/assets/imports/prism.js"></script>
+    <script defer async src="/assets/main.js"></script>
+    <script defer async src="/assets/imports/polyfills/dialog.js"></script>
+    <script defer async src="/assets/imports/prism.js"></script>
   </body>
 </html>
