@@ -1,7 +1,7 @@
 <dialog id="scheme-dialog" aria-label="Color Scheme">
   <header>
     <button aria-label="Close dialog" class="close-button" id="scheme-close">
-      <span class="iconify medium" data-icon="mdi-close"></span>
+      {% include icons/close.svg %}
     </button>
     <h2>Color scheme</h2>
   </header>
@@ -18,7 +18,7 @@
         class="small-button"
         style="margin-top: 1.8em"
       >
-        <span class="iconify medium" data-icon="mdi-shuffle"></span>
+        {% include icons/shuffle.svg %}
       </button>
       <button
         aria-label="Default Scheme"
@@ -27,7 +27,7 @@
         class="small-button hidden"
         style="margin-top: 1.8em"
       >
-        <span class="iconify medium" data-icon="mdi-restore"></span>
+        {% include icons/restore.svg %}
       </button>
       {% include scheme-datalist.html %}
     </div>
@@ -49,16 +49,6 @@
       <p style="color: var(--base0E)">█</p>
       <p style="color: var(--base0F)">█</p>
     </div>
-    <p>
-      <small
-        >Powered by
-        <a
-          target="_blank"
-          rel="noreferrer noopener"
-          href="https://github.com/misterio77/flavours"
-          >flavours <span class="iconify" data-icon="mdi-open-in-new"></span></a
-      ></small>
-    </p>
     <button type="submit" id="scheme-ok">Ok</button>
   </form>
 </dialog>

@@ -2,7 +2,7 @@
   <div class="row extremes">
     <span class="title">{ <a href="/">Gabriel Fontes</a> }</span>
     <button type="button" aria-label="Change color scheme" id="scheme-button">
-      <span class="iconify medium" data-icon="mdi-palette"></span>
+      {% include icons/palette.svg %}
     </button>
   </div>
   <ul>
@@ -16,7 +16,7 @@
     {% for item in site.data.external %}
     <li>
       <a href="{{ item.link }}">
-        <span class="iconify" data-icon="{{ item.icon }}"></span>
+        {% include icons/{{ item.icon }}.svg %}
         {{ item.name }}
       </a>
     </li>
