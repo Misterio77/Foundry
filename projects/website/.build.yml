@@ -1,13 +1,14 @@
 image: nixos/unstable
-oauth: pages.sr.ht/PAGES:RW
 packages:
   - nixos.nixUnstable
 environment:
+  NIX_CONFIG: "experimental-features = nix-command flakes"
   site: misterio.me
+oauth: pages.sr.ht/PAGES:RW
 tasks:
 - package: |
     cd $site
-    nix --experimental-features "nix-command flakes" build
+    nix build
     tar -C result -cvz . > ../site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
