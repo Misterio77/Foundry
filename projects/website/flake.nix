@@ -25,7 +25,7 @@
 
         apps.${package} = let
           serve = pkgs.writeShellScriptBin "serve" ''
-            ${pkgs.webfs}/bin/webfsd -f index.html -F -p 8000 -r ${self.packages.${system}.${package}}
+            ${pkgs.webfs}/bin/webfsd -f index.html -F -p 4000 -r ${self.packages.${system}.${package}}
           '';
         in {
           type = "app";
