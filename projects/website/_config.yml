@@ -5,4 +5,4 @@ description: "My personal website and projects"
 collections:
   notes:
     output: true
-    permalink: /:collection/:categories/:name
+    permalink: /:collection/:categories/:name:output_ext
