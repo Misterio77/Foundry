@@ -71,7 +71,7 @@ image: nixos/unstable
 packages:
 - nixos.nixUnstable
 environment:
-  NIX_CONFIG: experimental-features = nix-command flakes
+  NIX_CONFIG: "experimental-features = nix-command flakes"
 ```
 This baby will install `nixUnstable` using `nix-env`, and add the required experimental features to your environment (so you don't have to edit a file or use cli arguments for that).
 
@@ -83,7 +83,7 @@ image: nixos/unstable
 packages:
 - nixos.nixUnstable
 environment:
-  NIX_CONFIG: experimental-features = nix-command flakes
+  NIX_CONFIG: "experimental-features = nix-command flakes"
 
 oauth: pages.sr.ht/PAGES:RW
 
