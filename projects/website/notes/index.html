@@ -1,0 +1,15 @@
+---
+layout: default
+title: Notes
+description: My in-progress work, stuff i'm learning, or random guides and schedules that don't quite fit a blog
+---
+
+<h1>Latest Notes</h1>
+
+<ul class="notes">
+  {% for note in site.notes %}
+  <li>
+    <h2>({{ note.categories }}) <a href="{{ note.url }}">{{ note.title }}</a></h2>
+  </li>
+  {% endfor %}
+</ul>

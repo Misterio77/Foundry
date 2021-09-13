@@ -11,6 +11,33 @@
       content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}"
     />
     {% if page.noindex == true %} <meta name="robots" content="noindex"> {% endif %}
+    <link rel="stylesheet" href="/assets/imports/polyfills/dialog.css" />
+    <link rel="stylesheet" href="/assets/imports/water.css" />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="stylesheet" id="chosen-scheme" />
+    <script>
+      let chosen_scheme_css = document.getElementById("chosen-scheme");
+
+      // Set a given scheme
+      function setTheme(scheme) {
+        chosen_scheme_css.setAttribute(
+          "href",
+          "/assets/schemes/" + scheme + ".css"
+        );
+        localStorage.setItem("current-scheme", scheme);
+      }
+      // Reset scheme to defaults (rose-pine moon or dawn, depending on preference)
+      function resetTheme() {
+        chosen_scheme_css.removeAttribute("href");
+        localStorage.removeItem("current-scheme");
+      }
+
+      // Get stored scheme from localStorage and reapply it
+      let stored_scheme = localStorage.getItem("current-scheme");
+      if (stored_scheme) {
+        setTheme(stored_scheme);
+      }
+    </script>
     <link rel="preload" href="/assets/FiraSans/Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/FiraSans/Italic.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/FiraSans/Bold.woff2" as="font" type="font/woff2" crossorigin>
@@ -52,33 +79,6 @@
         src: url('/assets/FiraCode/Regular.woff2') format('woff2');
       }
     </style>
-    <link rel="stylesheet" href="/assets/imports/polyfills/dialog.css" />
-    <link rel="stylesheet" href="/assets/imports/water.css" />
-    <link rel="stylesheet" href="/assets/style.css" />
-    <link rel="stylesheet" id="chosen-scheme" />
-    <script>
-      let chosen_scheme_css = document.getElementById("chosen-scheme");
-
-      // Set a given scheme
-      function setTheme(scheme) {
-        chosen_scheme_css.setAttribute(
-          "href",
-          "/assets/schemes/" + scheme + ".css"
-        );
-        localStorage.setItem("current-scheme", scheme);
-      }
-      // Reset scheme to defaults (rose-pine moon or dawn, depending on preference)
-      function resetTheme() {
-        chosen_scheme_css.removeAttribute("href");
-        localStorage.removeItem("current-scheme");
-      }
-
-      // Get stored scheme from localStorage and reapply it
-      let stored_scheme = localStorage.getItem("current-scheme");
-      if (stored_scheme) {
-        setTheme(stored_scheme);
-      }
-    </script>
   </head>
   <body>
     <header>

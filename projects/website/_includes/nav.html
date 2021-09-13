@@ -2,21 +2,13 @@
   <div class="row extremes">
     <span class="title">{ <a href="/">Gabriel Fontes</a> }</span>
     <button type="button" aria-label="Change color scheme" id="scheme-button">
-      {% include icons/palette.svg class="icon medium" %}
+      {% include icons/mdi/palette.svg class="icon medium" %}
     </button>
   </div>
   <ul>
     {% for item in site.data.navigation %}
     <li>
       <a {% if page.url == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
-        {{ item.name }}
-      </a>
-    </li>
-    {% endfor %}
-    {% for item in site.data.external %}
-    <li>
-      <a href="{{ item.link }}">
-        {% include icons/{{ item.icon }}.svg %}
         {{ item.name }}
       </a>
     </li>

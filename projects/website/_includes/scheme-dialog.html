@@ -1,7 +1,7 @@
 <dialog id="scheme-dialog" aria-label="Color Scheme">
   <header>
     <button aria-label="Close dialog" class="close-button" id="scheme-close">
-      {% include icons/close.svg %}
+      {% include icons/mdi/close.svg %}
     </button>
     <h2>Color scheme</h2>
   </header>
@@ -18,7 +18,7 @@
         class="small-button"
         style="margin-top: 1.8em"
       >
-        {% include icons/shuffle.svg %}
+        {% include icons/mdi/shuffle.svg class="icon medium" %}
       </button>
       <button
         aria-label="Default Scheme"
@@ -27,7 +27,7 @@
         class="small-button hidden"
         style="margin-top: 1.8em"
       >
-        {% include icons/restore.svg %}
+        {% include icons/mdi/restore.svg class="icon medium" %}
       </button>
       {% include scheme-datalist.html %}
     </div>
