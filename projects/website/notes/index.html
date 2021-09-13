@@ -7,7 +7,8 @@ description: My in-progress work, stuff i'm learning, or random guides and sched
 <h1>Latest Notes</h1>
 
 <ul class="notes">
-  {% for note in site.notes %}
+  {% assign notes = site.notes | reverse %}
+  {% for note in notes %}
   <li>
     <h2 class="item-title">
       <small>{% include icons/languages/{{ note.language }}.svg %}</small>
@@ -16,8 +17,9 @@ description: My in-progress work, stuff i'm learning, or random guides and sched
         {{ note.title }}
       </a>
     </h2>
+    <small>{{ note.date | date: "%d/%m/%y" }}</small>
     {% if note.tags.size > 0 %}
-      <p class="tags">Tags: <small>{% for tag in note.tags %} {{ tag }},  {% endfor %}</small></p>
+      <p>Tags: <small>{% for tag in note.tags %} {{ tag }},  {% endfor %}</small></p>
     {% endif %}
   </li>
   {% endfor %}
