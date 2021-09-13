@@ -261,9 +261,19 @@ select {
 }
 
 // Remove bullets from post list
-.posts {
+.posts,
+.notes {
   list-style: none;
+
+  .item-title {
+    margin-bottom: 0;
+  }
+
+  .tags {
+    margin-top: 0;
+  }
 }
+
 // Flex fieldset
 fieldset {
   display: flex;

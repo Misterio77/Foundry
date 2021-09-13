@@ -1,8 +1,10 @@
 ---
 layout: default
-categories: "bsi"
+category: bsi
+language: pt-br
 noindex: true
 ---
+
 # Disciplinas BSI 020 - 2021/2
 [Calculadora de notas](/notes/bsi/calculadora-2021-2.html)
 

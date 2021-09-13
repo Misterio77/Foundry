@@ -9,7 +9,16 @@ description: My in-progress work, stuff i'm learning, or random guides and sched
 <ul class="notes">
   {% for note in site.notes %}
   <li>
-    <h2>({{ note.categories }}) <a href="{{ note.url }}">{{ note.title }}</a></h2>
+    <h2 class="item-title">
+      <small>{% include icons/languages/{{ note.language }}.svg %}</small>
+      {% if note.category.size > 0 %}({{ note.category }}){% endif %}
+      <a href="{{ note.url }}">
+        {{ note.title }}
+      </a>
+    </h2>
+    {% if note.tags.size > 0 %}
+      <p class="tags">Tags: <small>{% for tag in note.tags %} {{ tag }},  {% endfor %}</small></p>
+    {% endif %}
   </li>
   {% endfor %}
 </ul>

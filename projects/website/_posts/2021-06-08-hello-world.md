@@ -2,6 +2,8 @@
 layout: post
 author: Gabriel Fontes
 description: About my new website, featuring 170+ color schemes
+language: en
+tags: web
 ---
 
 Here's a writeup on how i made this website
