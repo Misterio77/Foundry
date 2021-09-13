@@ -1,11 +1,12 @@
 ---
+title: Disciplinas BSI 020 - 2021/2
 layout: default
 category: bsi
 language: pt-br
 noindex: true
 ---
 
-# Disciplinas BSI 020 - 2021/2
+# {{ title }}
 [Calculadora de notas](/notes/bsi/calculadora-2021-2.html)
 
 ## Horários
