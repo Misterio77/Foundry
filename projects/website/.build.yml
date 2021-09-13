@@ -8,7 +8,7 @@ oauth: pages.sr.ht/PAGES:RW
 tasks:
 - build: |
     cd $site
-    nix build --quiet
+    nix --quiet build
 - package: |
     tar -C $site/result -cvz . > site.tar.gz
 - upload: |
