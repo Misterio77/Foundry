@@ -9,6 +9,7 @@ description: My in-progress work, stuff i'm learning, or random guides and sched
 <ul class="notes">
   {% assign notes = site.notes | reverse %}
   {% for note in notes %}
+  {% if note.draft == false %}
   <li>
     <h2 class="item-title">
       <small>{% include icons/languages/{{ note.language }}.svg %}</small>
@@ -22,5 +23,6 @@ description: My in-progress work, stuff i'm learning, or random guides and sched
       <p>Tags: <small>{% for tag in note.tags %} {{ tag }},  {% endfor %}</small></p>
     {% endif %}
   </li>
+  {% endif %}
   {% endfor %}
 </ul>
