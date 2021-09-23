@@ -168,7 +168,7 @@ date: 2021-08-16
 ### Sobre
 - Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
 - Plataforma: Não há, pra economizar dados do ciber espaço [_sic_]
-- Aula: ~~[Google Meet do Diógenes](https://meet.google.com/rku-xnuu-kjr)~~ [Hoje é esse aqui](https://meet.google.com/nus-nvuv-ejn)
+- Aula: [Google Meet do Diógenes](https://meet.google.com/rku-xnuu-kjr)
 
 - Cobra presença? Sim, aleatoriamente (q?)
 
