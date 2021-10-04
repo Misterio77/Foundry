@@ -65,16 +65,17 @@ date: 2021-08-16
 - Cobra presença? [Sim, lista](https://edisciplinas.usp.br/mod/url/view.php?id=3778925)
 
 ### Avaliações
-- Provinhas:
+- Provinhas e trabalhos práticos:
   - Provinha 1: 26/08 - Gerenciamento de Processos
   - Provinha 2: 16/09 - Sincronização de Processos
   - Provinha 3: 25/10 - Restante (armazenamento, I/O, e arquivos)
+  - Trabalho 1: 11/10 - [Jantar dos filósofos](https://edisciplinas.usp.br/mod/assign/view.php?id=3778946)
 - Prova teórica única: 6/12
 
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2.html#ssc0541---sistemas-operacionais-i)
 - Nota da prova teórica (PT)
-- Nota das provinhas (PV): média aritmética entre elas
+- Nota das provinhas + trabalhos práticos (PV): média aritmética entre eles
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
 
 
