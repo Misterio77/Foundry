@@ -14,21 +14,21 @@ date: 2021-08-16
 [Arquivo de calendário](https://misterio.me/files/2021/classes.ics)
 
 - Segunda
-  - 19:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
-  - 21:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
+  - 19:00 - [Introdução à Pesquisa Operacional](#SME0510)
+  - 21:00 - [Sistemas Operacionais I](#SSC0541)
 - Terça
-  - 19:00 - [Arquitetura de Computadores](#ssc0510---arquitetura-de-computadores)
-  - 21:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
+  - 19:00 - [Arquitetura de Computadores](#SSC0510)
+  - 21:00 - [Análise e Projeto Orientados à Objetos](#SSC0526)
 - Quarta
-  - 18:00 - [Seminários em Computação II](#ssc0577---seminários-em-computação-ii)
-  - 19:00 - [Bases de Dados](#scc0540---bases-de-dados)
-  - 21:00 - [Introdução à Pesquisa Operacional](#sme0510---introdução-à-pesquisa-operacional)
+  - 18:00 - [Seminários em Computação II](#SSC0577)
+  - 19:00 - [Bases de Dados](#SCC0540)
+  - 21:00 - [Introdução à Pesquisa Operacional](#SME0510)
 - Quinta
-  - 19:00 - [Sistemas Operacionais I](#ssc0541---sistemas-operacionais-i)
-  - 21:00 - [Contabilidade para Computação](#sep0584---contabilidade-para-computação)
+  - 19:00 - [Sistemas Operacionais I](#SSC0541)
+  - 21:00 - [Contabilidade para Computação](#SEP0584)
 - Sexta
-  - 19:00 - [Análise e Projeto Orientados à Objetos](#ssc0526---análise-e-projeto-orientados-à-objetos)
-  - 21:00 - [Bases de Dados](#scc0540---bases-de-dados)
+  - 19:00 - [Análise e Projeto Orientados à Objetos](#SSC0526)
+  - 21:00 - [Bases de Dados](#SCC0540)
 
 --- 
 ## SME0510 - Introdução à Pesquisa Operacional
@@ -50,7 +50,7 @@ date: 2021-08-16
   - Atividade semanal com correção automática
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#sme0510---introdução-à-pesquisa-operacional)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SME0510)
 - Notas das provas (NP): média aritmética entre as 3 provas
 - Notas das atividades (NA): média aritmética de todas as atividades
 - **Nota Final**: média ponderada entre NP (peso 80%) e NA (peso 20%)
@@ -77,7 +77,7 @@ date: 2021-08-16
 - Prova teórica única: 6/12
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#ssc0541---sistemas-operacionais-i)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0541)
 - Nota da prova teórica (PT)
 - Nota das provinhas + trabalhos práticos (PV): média aritmética entre eles
 - **Nota Final**: média ponderada entre PT (40%) e PV (60%)
@@ -99,7 +99,7 @@ date: 2021-08-16
 - Trabalho: grupo de 3 ou 4
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#ssc0510---arquitetura-de-computadores)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0510)
 - Nota da prova (NP)
 - Nota do trabalho (NT)
 - **Nota Final**: média ponderada entre NP (70%) e NT (30%)
@@ -127,7 +127,7 @@ date: 2021-08-16
 - Exercícios: em grupo, feito em horário de aula (10-11 ao longo do semestre)
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#ssc0526---análise-e-projeto-orientados-à-objetos)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0526)
 - Média de trabalhos (MT): média simples entre Trabalho 1 e 2
 - Média 1 (M1): ponderada entre Prova 1 (40%) e Prova 2 (60%)
 - Média 2 (M2): ponderada entre MT (70%) e Exercícios (8 melhores) (30%)
@@ -147,7 +147,7 @@ date: 2021-08-16
 - Resumo semanal do seminário: nota 0, 5, 7.5 ou 10.
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#ssc0577---seminários-em-computação-ii)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0577)
 - **Média dos resumos**: média das 70% melhores notas
 
 ---
@@ -166,7 +166,7 @@ date: 2021-08-16
 - Projeto (a ser definido, 3 alunos)
 
 ### Critérios
-[Calculadora](/notes/bsi/calculadora-2021-2.html#scc0540---bases-de-dados)
+[Calculadora](/notes/bsi/calculadora-2021-2.html#SCC0540)
 - Média de atividades (MA) (quantas?)
 - Média do projeto (MP)
 - **Média final**: Média simples entre MA e MP - **Os dois ≥**, se não o menor deles

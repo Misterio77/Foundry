@@ -189,14 +189,14 @@ date: 2021-08-18
   <a href="/notes/bsi/disciplinas-2021-2.html">Informações das disciplinas</a>
 </nav>
 
-<h2 id="sme0510---introdução-à-pesquisa-operacional">
+<h2 id="SME0510">
   SME0510 - Introdução à Pesquisa Operacional
 </h2>
 <a
-  href="/notes/bsi/disciplinas-2021-2.html#sme0510---introdução-à-pesquisa-operacional"
+  href="/notes/bsi/disciplinas-2021-2.html#SME0510"
   >Informações</a
 >
-<form id="sme0510">
+<form id="SME0510">
   <fieldset class="provas">
     <legend>Provas</legend>
     {% include grade.html name="Prova 1" %}
@@ -222,7 +222,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("sme0510", (subject) => {
+    init_form("SME0510", (subject) => {
       subject["provas"]["final"] = mean(Object.values(subject["provas"]));
       subject["atividades"]["final"] = subject["atividades"]["media"];
       subject["final"] =
@@ -234,13 +234,13 @@ date: 2021-08-18
 
 <hr />
 
-<h2 id="ssc0541---sistemas-operacionais-i">
+<h2 id="SSC0541">
   SSC0541 - Sistemas Operacionais I
 </h2>
-<a href="/notes/bsi/disciplinas-2021-2.html#ssc0541---sistemas-operacionais-i"
+<a href="/notes/bsi/disciplinas-2021-2.html#SSC0541"
   >Informações</a
 >
-<form id="ssc0541">
+<form id="SSC0541">
   <fieldset class="provinhas">
     <legend>Provinhas e Trabalhos</legend>
     {% include grade.html name="Provinha 1" %}
@@ -268,7 +268,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("ssc0541", (subject) => {
+    init_form("SSC0541", (subject) => {
       subject["provinhas"]["final"] = mean(Object.values(subject["provinhas"]));
       subject["prova"]["final"] = subject["prova"]["prova"];
       subject["final"] =
@@ -280,13 +280,13 @@ date: 2021-08-18
 
 <hr />
 
-<h2 id="ssc0510---arquitetura-de-computadores">
+<h2 id="SSC0510">
   SSC0510 - Arquitetura de Computadores
 </h2>
-<a href="/notes/bsi/disciplinas-2021-2.html#ssc0510---arquitetura-de-computadores"
+<a href="/notes/bsi/disciplinas-2021-2.html#SSC0510"
   >Informações</a
 >
-<form id="ssc0510">
+<form id="SSC0510">
   <fieldset class="prova">
     <legend>Prova</legend>
     {% include grade.html name="Prova" %}
@@ -310,7 +310,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("ssc0510", (subject) => {
+    init_form("SSC0510", (subject) => {
       subject["prova"]["final"] = subject["prova"]["prova"];
       subject["trabalho"]["final"] = subject["trabalho"]["trabalho"];
       subject["final"] =
@@ -322,14 +322,14 @@ date: 2021-08-18
 
 <hr />
 
-<h2 id="ssc0526---análise-e-projeto-orientados-à-objetos">
+<h2 id="SSC0526">
   SSC0526 - Análise e Projeto Orientados à Objetos
 </h2>
 <a
-  href="/notes/bsi/disciplinas-2021-2.html#ssc0526---análise-e-projeto-orientados-à-objetos"
+  href="/notes/bsi/disciplinas-2021-2.html#SSC0526"
   >Informações</a
 >
-<form id="ssc0526">
+<form id="SSC0526">
   <fieldset class="provas">
     <legend>Provas</legend>
     {% include grade.html name="Prova 1" %}
@@ -370,7 +370,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("ssc0526", (subject) => {
+    init_form("SSC0526", (subject) => {
       subject["trabalhos"]["final"] = mean(Object.values(subject["trabalhos"]));
       subject["exercicios"]["final"] = mean(Object.values(subject["exercicios"]), 2);
 
@@ -393,13 +393,13 @@ date: 2021-08-18
 
 <hr />
 
-<h2 id="ssc0577---seminários-em-computação-ii">
+<h2 id="SSC0577">
   SSC0577 - Seminários em Computação II
 </h2>
-<a href="/notes/bsi/disciplinas-2021-2.html#ssc0577---seminários-em-computação-ii"
+<a href="/notes/bsi/disciplinas-2021-2.html#SSC0577"
   >Informações</a
 >
-<form id="ssc0577">
+<form id="SSC0577">
   <fieldset class="resumos">
     <legend>Resumos</legend>
     {% include grade-seminarios.html name="Resumo 1" %}
@@ -429,7 +429,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("ssc0577", (subject) => {
+    init_form("SSC0577", (subject) => {
       subject["resumos"]["final"] = mean(Object.values(subject["resumos"]), 3);
       subject["final"] = subject["resumos"]["final"];
       return subject;
@@ -439,13 +439,13 @@ date: 2021-08-18
 
 <hr />
 
-<h2 id="scc0540---bases-de-dados">
+<h2 id="SCC0540">
   SCC0540 - Bases de Dados
 </h2>
-<a href="/notes/bsi/disciplinas-2021-2.html#scc0540---bases-de-dados"
+<a href="/notes/bsi/disciplinas-2021-2.html#SCC0540"
   >Informações</a
 >
-<form id="scc0540">
+<form id="SCC0540">
   <fieldset class="projetos">
     <legend>Projeto</legend>
     {% include grade.html name="Projeto 1" %}
@@ -479,7 +479,7 @@ date: 2021-08-18
   </fieldset>
 
   <script>
-    init_form("scc0540", (subject) => {
+    init_form("SCC0540", (subject) => {
       subject["atividades"]["final"] = mean(Object.values(subject["atividades"]));
       subject["projetos"]["final"] = mean(Object.values(subject["projetos"]));
 
