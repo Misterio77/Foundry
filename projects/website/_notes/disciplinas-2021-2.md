@@ -96,7 +96,7 @@ date: 2021-08-16
 
 ### Avaliações
 - Prova (data?)
-- Trabalho: grupo de 3 ou 4
+- Trabalho: em grupo, [planilha](https://docs.google.com/spreadsheets/d/18pFcYwvV9XkGrhZkdOhIoINsWKuKjthUsu5GGkf1xwM/edit?usp=sharing)
 
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0510)
