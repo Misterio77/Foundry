@@ -32,6 +32,7 @@ date: 2021-08-16
 
 --- 
 ## SME0510 - Introdução à Pesquisa Operacional
+{: #SME0510}
 
 ### Sobre
 - Professora: Maristela Oliveira dos Santos ([mari@icmc.usp.br](mailto:mari@icmc.usp.br))
@@ -56,6 +57,7 @@ date: 2021-08-16
 
 --- 
 ## SSC0541 - Sistemas Operacionais I
+{: #SSC0541}
 
 ### Sobre
 - Professor: Vanderlei Bonato ([vbonato@icmc.usp.br](mailto:vbonato@icmc.usp.br))
@@ -83,6 +85,7 @@ date: 2021-08-16
 
 --- 
 ## SSC0510 - Arquitetura de Computadores
+{: #SSC0510}
 
 ### Sobre
 - Professor: Eduardo Simões ([simoes@icmc.usp.br](mailto:simoes@icmc.usp.br))
@@ -103,6 +106,7 @@ date: 2021-08-16
 
 --- 
 ## SSC0526 - Análise e Projeto Orientados à Objetos
+{: #SSC0526}
 
 ### Sobre
 - Professora: Rosana Braga ([rtvb@icmc.usp.br](mailto:rtvb@icmc.usp.br))
@@ -131,6 +135,7 @@ date: 2021-08-16
 
 ---
 ## SSC0577 - Seminários em Computação II
+{: #SSC0577}
 
 ### Sobre
 - Professora: Simone de Souza ([srocio@icmc.usp.br](mailto:srocio@icmc.usp.br))
@@ -147,6 +152,7 @@ date: 2021-08-16
 
 ---
 ## SCC0540 - Bases de Dados
+{: #SCC0540}
 
 ### Sobre
 - Professor: Jose Rodrigues Júnior ([junio@icmc.usp.br](mailto:junio@icmc.usp.br))
@@ -167,6 +173,7 @@ date: 2021-08-16
 
 ---
 ## SEP0584 - Contabilidade para Computação
+{: #SEP0584}
 
 ### Sobre
 - Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
