@@ -14,21 +14,21 @@ date: 2021-08-16
 [Arquivo de calendário](https://misterio.me/files/2021/classes.ics)
 
 - Segunda
-  - 19:00 - [Introdução à Pesquisa Operacional](#SME0510)
-  - 21:00 - [Sistemas Operacionais I](#SSC0541)
+  - 19:00 - 20:40: [Introdução à Pesquisa Operacional](#SME0510)
+  - 21:00 - 22:40: [Sistemas Operacionais I](#SSC0541)
 - Terça
-  - 19:00 - [Arquitetura de Computadores](#SSC0510)
-  - 21:00 - [Análise e Projeto Orientados à Objetos](#SSC0526)
+  - 19:00 - 20:40: [Arquitetura de Computadores](#SSC0510)
+  - 21:00 - 22:40: [Análise e Projeto Orientados à Objetos](#SSC0526)
 - Quarta
-  - 18:00 - [Seminários em Computação II](#SSC0577)
-  - 19:00 - [Bases de Dados](#SCC0540)
-  - 21:00 - [Introdução à Pesquisa Operacional](#SME0510)
+  - 18:00 - 19:00: [Seminários em Computação II](#SSC0577)
+  - 19:00 - 20:40: [Bases de Dados](#SCC0540)
+  - 21:00 - 22:40: [Introdução à Pesquisa Operacional](#SME0510)
 - Quinta
-  - 19:00 - [Sistemas Operacionais I](#SSC0541)
-  - 21:00 - [Contabilidade para Computação](#SEP0584)
+  - 19:00 - 20:40: [Sistemas Operacionais I](#SSC0541)
+  - 21:00 - 22:40: [Contabilidade para Computação](#SEP0584)
 - Sexta
-  - 19:00 - [Análise e Projeto Orientados à Objetos](#SSC0526)
-  - 21:00 - [Bases de Dados](#SCC0540)
+  - 19:00 - 20:40: [Análise e Projeto Orientados à Objetos](#SSC0526)
+  - 21:00 - 22:40: [Bases de Dados](#SCC0540)
 
 --- 
 ## SME0510 - Introdução à Pesquisa Operacional
