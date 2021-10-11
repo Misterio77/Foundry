@@ -68,7 +68,7 @@ date: 2021-08-16
 
 ### Avaliações
 - Trabalhos práticos:
-  - Trabalho 1: 11/10 - [Jantar dos filósofos](https://edisciplinas.usp.br/mod/assign/view.php?id=3778946)
+  - Trabalho 1: 17/10 - [Jantar dos filósofos](https://edisciplinas.usp.br/mod/assign/view.php?id=3778946)
 - Provinhas:
   - Provinha 1: 26/08 - Gerenciamento de Processos
   - Provinha 2: 16/09 - Sincronização de Processos
