@@ -73,7 +73,7 @@ date: 2021-08-16
   - Provinha 1: 26/08 - Gerenciamento de Processos
   - Provinha 2: 16/09 - Sincronização de Processos
   - Provinha 3: 14/10 - Gerenciamento de Memória
-  - Provinha 4: 08/10 - Restante (armazenamento, I/O, e arquivos)
+  - Provinha 4: 08/11 - Restante (armazenamento, I/O, e arquivos)
 - Prova teórica única: 6/12
 
 ### Critérios
