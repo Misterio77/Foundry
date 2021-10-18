@@ -44,7 +44,7 @@ date: 2021-08-16
 ### Avaliações
 - Provas:
   - Prova 1: 22/09 - Modelagem e solução gráfica
-  - Prova 2: 27/10 - Teoria básica e método simples
+  - Prova 2: 27/10 - Teoria básica e método simplex
   - Prova 3: 08/12 - Método de programação inteira e heurísticas
 - Atividades:
   - Atividade semanal com correção automática
