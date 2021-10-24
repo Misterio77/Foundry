@@ -6,7 +6,7 @@ variables:
 
 pages:
   before_script:
-    - nix-env -iA nixpkgs.nix_2_4
+    - nix-env -iA nixpkgs.nixUnstable
     - nix-env -iA nixpkgs.git
   script:
     - nix build
