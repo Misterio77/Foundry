@@ -17,22 +17,11 @@
           version = "1.0";
           src = ./.;
           buildPhase = ''
-            JEKYLL_ENV=production ${pkgs.jekyll}/bin/jekyll build --destination $out
+            JEKYLL_ENV=production ${pkgs.jekyll}/bin/jekyll build --destination $out/public
           '';
           installPhase = "true";
         };
         defaultPackage = self.packages.${system}."${package}";
-
-        apps.${package} = let
-          serve = pkgs.writeShellScriptBin "serve" ''
-            echo "Serving on: http://127.0.0.1:4000"
-            ${pkgs.webfs}/bin/webfsd -f index.html -F -p 4000 -r ${self.packages.${system}.${package}}
-          '';
-        in {
-          type = "app";
-          program = "${serve}/bin/serve";
-        };
-        defaultApp = self.apps.${system}.${package};
 
         devShell =
           pkgs.mkShell { buildInputs = with pkgs; [ jekyll nodePackages.prettier sass scss-lint ]; };

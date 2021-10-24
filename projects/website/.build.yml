@@ -10,6 +10,6 @@ tasks:
     cd $site
     nix --quiet build
 - package: |
-    tar -C $site/result -cvz . > site.tar.gz
+    tar -C $site/result/public -cvz . > site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
