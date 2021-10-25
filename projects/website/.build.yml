@@ -3,13 +3,14 @@ packages:
   - nixos.nixUnstable
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
-  site: misterio.me
+  # site: misterio.me
+  site: misterio.srht.site
 oauth: pages.sr.ht/PAGES:RW
 tasks:
 - build: |
-    cd $site
+    cd misterio.me
     nix --quiet build
 - package: |
-    tar -C $site/result/public -cvz . > site.tar.gz
+    tar -C misterio.me/result/public -cvz . > site.tar.gz
 - upload: |
     acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
