@@ -163,11 +163,11 @@ date: 2021-08-16
 
 ### Avaliações
 - Atividades quinzenais
-- Projeto (a ser definido, 3 alunos)
+- Projeto: 23/11
 
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2.html#SCC0540)
-- Média de atividades (MA) (quantas?)
+- Média de atividades (MA)
 - Média do projeto (MP)
 - **Média final**: Média simples entre MA e MP - **Os dois ≥**, se não o menor deles
 
