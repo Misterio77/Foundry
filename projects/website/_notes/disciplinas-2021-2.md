@@ -180,12 +180,13 @@ date: 2021-08-16
 - Plataforma: Não há, pra economizar dados do ciber espaço [_sic_]
 - Aula: [Google Meet do Diógenes](https://meet.google.com/rku-xnuu-kjr) ([gravações](https://drive.google.com/folderview?id=1JckHfflmn7fx-PPAYQmuKDIpGg2KGEiB))
 
-- Cobra presença? Sim, aleatoriamente (q?)
+- Cobra presença? Sim, chamada em aulas aleatórias
 
 ### Avaliações
-???
+- Prova 1: 11/11, objetiva, aberta das 21h até 21h do dia seguinte
+- Prova 2: a definir
 
 ### Critérios
-???
+- Média simples entre as duas provas (provavelmente)
 
 ---
