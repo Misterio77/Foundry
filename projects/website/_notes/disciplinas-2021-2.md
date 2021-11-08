@@ -176,7 +176,7 @@ date: 2021-08-16
 {: #SEP0584 .acessorio}
 
 ### Sobre
-- Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br))
+- Professor: Humberto Bettini ([humberto@sc.usp.br](mailto:humberto@sc.usp.br)/[humberto.bettini.acessorio@gmail.com](mailto:humberto.bettini.acessorio@gmail.com))
 - Plataforma: Não há, pra economizar dados do ciber espaço [_sic_]
 - Aula: [Google Meet do Diógenes](https://meet.google.com/rku-xnuu-kjr) ([gravações](https://drive.google.com/folderview?id=1JckHfflmn7fx-PPAYQmuKDIpGg2KGEiB))
 
