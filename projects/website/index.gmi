@@ -2,7 +2,7 @@
 layout: null
 ---
 
-# Gabriel Fontes geminispace
+# Gabriel Fontes' geminispace
 
 ## About me
 
@@ -38,4 +38,4 @@ Studying at one of the big public universities of Brazil, meeting all sort of am
 
 ### Chat
 => tg://resolve?domain=misterio7x Telegram: @misterio7x
-=> matrix:u/misterio%3Amatrix.org?action=chat Matrix: @misterio:matrix.org
+=> matrix://u/misterio:matrix.org Matrix: @misterio:matrix.org
