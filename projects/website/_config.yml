@@ -6,3 +6,21 @@ collections:
   notes:
     output: true
     permalink: /:collection/:categories/:name:output_ext
+
+defaults:
+  -
+    scope:
+      path: ""
+    values:
+      layout: "default"
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+  -
+    scope:
+      path: "*.gmi"
+    values:
+      layout: "default-gemini"

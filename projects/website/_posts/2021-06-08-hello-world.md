@@ -1,5 +1,4 @@
 ---
-layout: post
 author: Gabriel Fontes
 description: About my new website, featuring 170+ color schemes
 language: en

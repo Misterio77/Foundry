@@ -1,6 +1,5 @@
 ---
 title: "Use build.sr.ht with nix flakes"
-layout: default
 category: nix
 language: en
 date: 2021-09-13

@@ -1,41 +1,59 @@
 ---
-layout: null
 ---
-
-# Gabriel Fontes' geminispace
-
-## About me
+# About me
 
 Hey! My name is Gabriel. I’m a brazillian programmer, designer, and activist.
 
-I’m currently working on my Bachelor of Information Systems degree at University of São Paulo’s Institute of Mathematics and Computer Sciences, as a developer at UGet, and on a couple personal projects.
+I’m currently working on my Bachelor of Information Systems degree at University of São Paulo’s Institute of Mathematics and Computer Sciences, as a developer at U-Get, and on a couple personal projects.
+
+=> https://usp.br/ University of São Paulo
+=> https://icmc.usp.br/ Institute of Mathematics and Computer Sciences
+=> https://uget.express U-Get
 
 I mainly work with Linux, Rust, Python, Go, C/C++, and Docker.
 
-### Tech and design
+## Tech and design
 
-I’ve been into computers, science and math since i was little. I love Linux (FOSS in general), CLI programs (vim keys!), customization, and graphic design (specially color theory).
+I’ve been into computers, science and math since i was little. I love Linux (FOSS in general), CLI programs, customization, and graphic design.
 
 I enjoy modern and egornomical languagens, strong typing and high performance are nice to have. My favorite languagens are Rust, Go and Haskell.
 
 I favor minimalism and composability in tools. I currently use NixOS, SwayWM, Neovim, Qutebrowser, NeoMutt as daily drivers.
 
-### Other stuff
+=> https://nixos.org NixOS
+=> https://swaywm.org SwayWM
+=> https://neovim.io Neovim
+=> https://qutebrowser.org Qutebrowser
+=> https://neomutt.org NeoMutt
+
+## Other stuff
 
 I’m a huge fan of space and science fiction genres (games, books, artwork).
 
 I love animals (i’ve got five cats and a dog), the planet, and the people who live in it.
 
-### Causes
+## Causes
 
-Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think. I’m an environmental, animal rights, free software, privacy, queer, social, and education activist.
+Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think.
 
-## Reach out
-### Email
-=> mailto:eu@misterio.me Personal: eu@misterio.me
-=> mailto:g.fontes@usp.br School: g.fontes@usp.br
+I'm an free software, environmental, queer, anti-capitalist, and education activist.
+
+You'll probably see me avoiding proprietary software and walled gardens at all costs.
+
+# Reach out
+## Email
+=> mailto:eu@misterio.me eu@misterio.me
+=> mailto:g.fontes@usp.br g.fontes@usp.br
 => 7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc PGP: 245C AB70 B4C2 25E9
 
-### Chat
-=> tg://resolve?domain=misterio7x Telegram: @misterio7x
-=> https://matrix.to/#/@misterio:matrix.org Matrix: @misterio:matrix.org
+## Chat
+=> tg://resolve?domain=misterio7x telegram: @misterio7x
+=> https://matrix.to/#/@misterio:matrix.org matrix: @misterio:matrix.org
+
+## Forges
+=> https://sr.ht/~misterio sourcehut: ~misterio7x
+=> https://github.com/misterio77 github: misterio77
+
+```
+This site's code is available under MIT, while its content is CC BY-SA 4.0
+```

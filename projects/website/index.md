@@ -1,5 +1,4 @@
 ---
-layout: default
 title: About
 ---
 
@@ -13,7 +12,7 @@ I mainly work with Linux, Rust, Python, Go, C/C++, and Docker.
 
 ## Tech and design
 
-I've been into computers, science and math since i was little. I love Linux (FOSS in general), CLI programs (vim keys!), customization, and graphic design (specially color theory).
+I've been into computers, science and math since i was little. I love Linux (FOSS in general), CLI programs, customization, and graphic design.
 
 I enjoy modern and egornomical languagens, strong typing and high performance are nice to have. My favorite languagens are Rust, Go and Haskell.
 
@@ -27,5 +26,8 @@ I love animals (i've got five cats and a dog), the planet, and the people who li
 
 ## Causes
 
-Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think. I'm an environmental, animal rights, free software, privacy, queer, social, and education activist.
+Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think.
 
+I'm an free software, environmental, queer, anti-capitalist, and education activist.
+
+You'll probably see me avoiding proprietary software and walled gardens at all costs.

@@ -1,6 +1,5 @@
 ---
 title: "Disciplinas BSI 020 - 2021/2"
-layout: default
 category: bsi
 language: pt-br
 noindex: true

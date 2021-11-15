@@ -1,6 +1,5 @@
 ---
 title: "C Nix boilerplate"
-layout: default
 category: nix
 language: en
 date: 2021-09-14
