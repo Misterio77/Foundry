@@ -3,8 +3,7 @@ packages:
   - nixos.nixUnstable
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
-  # site: misterio.me
-  site: misterio.srht.site
+  site: misterio.me
 oauth: pages.sr.ht/PAGES:RW
 tasks:
 - build: |
