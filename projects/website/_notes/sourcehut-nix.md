@@ -5,8 +5,6 @@ language: en
 date: 2021-09-13
 ---
 
-# {{ page.title }}
-
 I've recently started migrating from github to sourcehut, and i've been having a blast.
 
 Here's a quick write up on how to use the awesome [build.sr.ht](https://build.sr.ht) CI with your shiny [nix flake](https://nixos.wiki/wiki/Flakes)-based project.

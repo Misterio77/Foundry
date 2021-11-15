@@ -5,8 +5,6 @@ language: en
 date: 2021-09-14
 ---
 
-# {{ page.title }}
-
 Looking to start out a C (or C++) project and wanna some cool and nifty commands to manage it through both `make` and `nix`? As a plus, you'll also get nice out of tree builds.
 
 Then look no further, here's all the boilerplate you need. 

@@ -53,7 +53,3 @@ You'll probably see me avoiding proprietary software and walled gardens at all c
 ## Forges
 => https://sr.ht/~misterio sourcehut: ~misterio7x
 => https://github.com/misterio77 github: misterio77
-
-```
-This site's code is available under MIT, while its content is CC BY-SA 4.0
-```

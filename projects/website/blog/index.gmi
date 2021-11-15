@@ -1,0 +1,15 @@
+---
+title: Latest Posts
+description: My personal thoughts, rants, and occasional guide
+---
+
+{% assign gmi_posts = site.posts | where: "gemini", true %}
+
+{% for post in gmi_posts %}
+=> {{ post.url }} {{ post.title }}
+{{ post.date | date: "%d/%m/%y" }}
+{% if post.category.size > 0 %}({{ post.category }}){% endif %}
+{% if post.tags.size > 0 %}Tags: {% for tag in post.tags %} {{ tag }}, {% endfor %}{% endif %}
+{{ post.excerpt }}
+
+{% endfor %}

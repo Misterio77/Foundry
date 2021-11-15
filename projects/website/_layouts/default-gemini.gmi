@@ -1,6 +1,7 @@
-# { Gabriel Fontes }
+### Gabriel Fontes
 => / About
 => /blog Blog
 => /notes Notes
 
+# {{ page.title }}
 {{ content }}

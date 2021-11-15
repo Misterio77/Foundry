@@ -5,22 +5,36 @@ description: "My personal website and projects"
 collections:
   notes:
     output: true
-    permalink: /:collection/:categories/:name:output_ext
+    permalink: /notes/:categories/:name:output_ext
+  posts:
+    output: true
+    permalink: /blog/:name:output_ext
 
 defaults:
+  # Set default layout and gemini false
   -
     scope:
       path: ""
     values:
       layout: "default"
+      gemini: false
+  # Use post layouts
   -
     scope:
       path: ""
       type: "posts"
     values:
       layout: "post"
+  # Set gemini layouts
   -
     scope:
-      path: "*.gmi"
+      path: "**/*.gmi"
     values:
       layout: "default-gemini"
+      gemini: true
+  -
+    scope:
+      path: "**/*.gmi"
+      type: "posts"
+    values:
+      layout: "post-gemini"

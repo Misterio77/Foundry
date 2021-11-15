@@ -6,7 +6,6 @@ noindex: true
 date: 2021-08-16
 ---
 
-# {{ page.title }}
 [Calculadora de notas](/notes/bsi/calculadora-2021-2.html)
 
 ## Horários

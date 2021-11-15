@@ -1,0 +1,11 @@
+---
+title: Latest Notes
+description: My in-progress work, stuff i'm learning, or random guides and schedules that don't quite fit a blog
+---
+{%- assign notes = site.notes | reverse | where: "draft", false | where: "gemini", true -%}
+
+{%- for note in notes -%}
+=> {{ note.url }} [{{ note.language }}] {{ note.title }}
+{% if note.category.size > 0 %}{{ note.category }}{% endif %}
+{{ note.date | date: "%d/%m/%y" }}
+{%- endfor -%}

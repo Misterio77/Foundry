@@ -1,8 +1,6 @@
 ---
-title: About
+title: About me
 ---
-
-# About me
 
 Hey 👋, my name is Gabriel. I'm a brazillian programmer, designer, and activist.
 
