@@ -9,7 +9,7 @@ description: My personal thoughts, rants, and occasional guide
 => {{ post.url }} {{ post.title }}
 {{ post.date | date: "%d/%m/%y" }}
 {% if post.category.size > 0 %}({{ post.category }}){% endif %}
-{% for tag in post.tags %}#{{ tag }} {% endfor %}
+ {% for tag in post.tags %}#{{ tag }} {% endfor %}
 {{ post.excerpt }}
 
 {% endfor %}
