@@ -1,0 +1,41 @@
+---
+layout: null
+---
+
+# Gabriel Fontes geminispace
+
+## About me
+
+Hey! My name is Gabriel. I’m a brazillian programmer, designer, and activist.
+
+I’m currently working on my Bachelor of Information Systems degree at University of São Paulo’s Institute of Mathematics and Computer Sciences, as a developer at UGet, and on a couple personal projects.
+
+I mainly work with Linux, Rust, Python, Go, C/C++, and Docker.
+
+### Tech and design
+
+I’ve been into computers, science and math since i was little. I love Linux (FOSS in general), CLI programs (vim keys!), customization, and graphic design (specially color theory).
+
+I enjoy modern and egornomical languagens, strong typing and high performance are nice to have. My favorite languagens are Rust, Go and Haskell.
+
+I favor minimalism and composability in tools. I currently use NixOS, SwayWM, Neovim, Qutebrowser, NeoMutt as daily drivers.
+
+### Other stuff
+
+I’m a huge fan of space and science fiction genres (games, books, artwork).
+
+I love animals (i’ve got five cats and a dog), the planet, and the people who live in it.
+
+### Causes
+
+Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think. I’m an environmental, animal rights, free software, privacy, queer, social, and education activist.
+
+## Reach out
+### Email
+=> mailto:eu@misterio.me Personal: eu@misterio.me
+=> mailto:g.fontes@usp.br School: g.fontes@usp.br
+=> 7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc PGP: 
+
+### Chat
+=> tg://resolve?domain=misterio7x Telegram: @misterio7x
+=> matrix:u/misterio%3Amatrix.org?action=chat Matrix: @misterio:matrix.org
