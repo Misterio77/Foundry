@@ -40,16 +40,16 @@ I'm an free software, environmental, queer, anti-capitalist, and education activ
 
 You'll probably see me avoiding proprietary software and walled gardens at all costs.
 
-# Reach out
-## Email
+## Reach out
+### Email
 => mailto:eu@misterio.me eu@misterio.me
 => mailto:g.fontes@usp.br g.fontes@usp.br
 => 7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc PGP: 245C AB70 B4C2 25E9
 
-## Chat
+### Chat
 => tg://resolve?domain=misterio7x telegram: @misterio7x
 => https://matrix.to/#/@misterio:matrix.org matrix: @misterio:matrix.org
 
-## Forges
+### Forges
 => https://sr.ht/~misterio sourcehut: ~misterio7x
 => https://github.com/misterio77 github: misterio77
