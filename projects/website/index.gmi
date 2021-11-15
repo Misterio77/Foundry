@@ -34,7 +34,7 @@ Studying at one of the big public universities of Brazil, meeting all sort of am
 ### Email
 => mailto:eu@misterio.me Personal: eu@misterio.me
 => mailto:g.fontes@usp.br School: g.fontes@usp.br
-=> 7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc PGP: 
+=> 7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc PGP: 245C AB70 B4C2 25E9
 
 ### Chat
 => tg://resolve?domain=misterio7x Telegram: @misterio7x
