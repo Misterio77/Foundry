@@ -38,4 +38,4 @@ Studying at one of the big public universities of Brazil, meeting all sort of am
 
 ### Chat
 => tg://resolve?domain=misterio7x Telegram: @misterio7x
-=> matrix://u/misterio:matrix.org Matrix: @misterio:matrix.org
+=> https://matrix.to/#/@misterio:matrix.org Matrix: @misterio:matrix.org
