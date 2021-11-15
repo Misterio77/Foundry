@@ -12,11 +12,8 @@ description: My personal thoughts, rants, and occasional guide
         {{ post.title }}
       </a>
     </h2>
-    <small>{{ post.date | date: "%d/%m/%y" }}</small>
-    <small>{% if post.category.size > 0 %}({{ post.category }}){% endif %}</small>
-    {% if post.tags.size > 0 %}
-      <p>Tags: <small>{% for tag in post.tags %} {{ tag }},  {% endfor %}</small></p>
-    {% endif %}
+    <small>{{ post.date | date: "%d/%m/%y" }} {% if post.category.size > 0 %}({{ post.category }}){% endif %}</small>
+    <p><small>{% for tag in post.tags %}#{{ tag }} {% endfor %}</small></p>
     {{ post.excerpt }}
   </li>
   {% endfor %}
