@@ -11,24 +11,24 @@ date: 2021-08-16
 ## Horários
 => https://misterio.me/files/2021/classes.ics Arquivo de calendário
 
-###Segunda
+### Segunda
 * 19:00 - 20:40: Introdução à Pesquisa Operacional
 * 21:00 - 22:40: Sistemas Operacionais I
 
-###Terça
+### Terça
 * 19:00 - 20:40: Arquitetura de Computadores
 * 21:00 - 22:40: Análise e Projeto Orientados à Objetos
 
-###Quarta
+### Quarta
 * 18:00 - 19:00: Seminários em Computação II
 * 19:00 - 20:40: Bases de Dados
 * 21:00 - 22:40: Introdução à Pesquisa Operacional
 
-###Quinta
+### Quinta
 * 19:00 - 20:40: Sistemas Operacionais I
 * 21:00 - 22:40: Contabilidade para Computação
 
-###Sexta
+### Sexta
 * 19:00 - 20:40: Análise e Projeto Orientados à Objetos
 * 21:00 - 22:40: Bases de Dados
 
