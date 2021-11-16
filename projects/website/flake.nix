@@ -24,6 +24,6 @@
         defaultPackage = self.packages.${system}."${package}";
 
         devShell =
-          pkgs.mkShell { buildInputs = with pkgs; [ jekyll nodePackages.prettier sass scss-lint ]; };
+          pkgs.mkShell { buildInputs = with pkgs; [ jekyll nodePackages.prettier sass scss-lint python39Packages.md2gemini ]; };
       });
 }
