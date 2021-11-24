@@ -167,7 +167,7 @@ date: 2021-08-16
 [Calculadora](/notes/bsi/calculadora-2021-2.html#SCC0540)
 - Média de atividades (MA)
 - Média do projeto (MP)
-- **Média final**: Média simples entre MA e MP - **Os dois ≥**, se não o menor deles
+- **Média final**: Média simples entre MA e MP - **Os dois ≥ 5**, se não o menor deles
 
 ---
 ## SEP0584 - Contabilidade para Computação
