@@ -121,7 +121,7 @@ date: 2021-08-16
   - Sub (possivelmente): 17/12
 - Trabalhos: grupo de 3-5
   - Trabalho 1: 01/10
-  - Trabalho 2: 19/11
+  - Trabalho 2: 24/11
 - Exercícios: em grupo, feito em horário de aula (10-11 ao longo do semestre)
 
 ### Critérios
@@ -161,7 +161,7 @@ date: 2021-08-16
 
 ### Avaliações
 - Atividades quinzenais
-- Projeto: 23/11
+- Projeto: 24/11
 
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2.html#SCC0540)

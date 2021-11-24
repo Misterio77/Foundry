@@ -115,7 +115,7 @@ Provas:
 
 Trabalhos: grupo de 3-5
 * Trabalho 1: 01/10
-* Trabalho 2: 23/11
+* Trabalho 2: 24/11
 
 Exercícios: em grupo, feito em horário de aula (10-11 ao longo do semestre)
 
@@ -149,7 +149,7 @@ Cobra presença? Sim, exercícios
 
 ### Avaliações
 * Atividades quinzenais
-* Projeto: 23/11
+* Projeto: 24/11
 
 ### Critérios
 => /notes/bsi/calculadora-2021-2.html#SCC0540 Calculadora
