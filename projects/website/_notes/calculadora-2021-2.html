@@ -372,7 +372,7 @@ date: 2021-08-18
   <script>
     init_form("SSC0526", (subject) => {
       subject["trabalhos"]["final"] = mean(Object.values(subject["trabalhos"]));
-      subject["exercicios"]["final"] = mean(Object.values(subject["exercicios"]), 2);
+      subject["exercicios"]["final"] = mean(Object.values(subject["exercicios"]), 3);
 
       subject["provas"]["final"] =
         0.4 * subject["provas"]["prova-1"] + 0.6 * subject["provas"]["prova-2"];
