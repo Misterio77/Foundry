@@ -1,0 +1,99 @@
+---
+title: "Disciplinas BSI 020 - 2022/1"
+category: bsi
+language: pt-br
+noindex: true
+date: 2021-11-29
+draft: true
+---
+
+=> /notes/bsi/calculadora-2022-1.html Calculadora de notas 
+
+## Horários
+=> https://misterio.me/files/2022/classes.ics Arquivo de calendário
+
+### Segunda
+* 19:00 - 20:40: Engenharia de Software
+* 21:00 - 22:40: Modelagem da Produção
+### Terça
+* 19:00 - 20:40: Inteligência Artificial
+* 21:00 - 22:40: Redes de Computadores
+### Quarta
+* 19:00 - 20:40: Laboratório de Bases de Dados
+* 21:00 - 22:40: Laboratório de Bases de Dados
+### Quinta
+* 19:00 - 20:40: Modelagem da Produção
+* 21:00 - 22:40: Engenharia de Software
+### Sexta
+* 19:00 - 20:40: Redes de Computadores
+* 21:00 - 22:40: Inteligência Artificial
+
+## SSC0527 - Engenharia de Software
+### Sobre
+=> mailto:elisa@icmc.usp.br Professora: Elisa Nakagawa (elisa@icmc.usp.br)
+Plataforma: TBD
+Aula: TBD
+Cobra presença? TBD
+
+### Avaliações
+TBD
+
+### Critérios
+=> /notes/bsi/calculadora-2022-1.html#SSC0527 Calculadora
+TBD
+
+## SEP0301 - Modelagem da Produção
+### Sobre
+Professor: TBD
+Plataforma: TBD
+Aula: TBD
+Cobra presença? TBD
+
+### Avaliações
+TBD
+
+### Critérios
+=> /notes/bsi/calculadora-2022-1.html#SEP0301 Calculadora
+TBD
+
+## SCC0530 - Inteligência Artificial
+### Sobre
+=> mailto:alneu@icmc.usp.br Professor: Alneu de Andrade Lopes (alneu@icmc.usp.br)
+Plataforma: TBD
+Aula: TBD
+Cobra presença? TBD
+
+### Avaliações
+TBD
+
+### Critérios
+=> /notes/bsi/calculadora-2022-1.html#SCC0530 Calculadora
+TBD
+
+## SSC0540 - Redes de Computadores
+### Sobre
+=> mailto:joueyama@icmc.usp.br Professor: Jó Ueyama (joueyama@icmc.usp.br)
+Plataforma: TBD
+Aula: TBD
+Cobra presença? TBD
+
+### Avaliações
+TBD
+
+### Critérios
+=> /notes/bsi/calculadora-2022-1.html#SSC0540 Calculadora
+TBD
+
+## SCC0541 - Laboratório de Bases de Dados
+### Sobre
+=> mailto:caetano@icmc.usp.br Professor: Caetano Traina Junior (caetano@icmc.usp.br)
+Plataforma: TBD
+Aula: TBD
+Cobra presença? TBD
+
+### Avaliações
+TBD
+
+### Critérios
+=> /notes/bsi/calculadora-2022-1.html#SCC0541 Calculadora
+TBD
