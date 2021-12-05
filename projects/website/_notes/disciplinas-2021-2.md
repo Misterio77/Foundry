@@ -72,7 +72,7 @@ date: 2021-08-16
   - Provinha 2: 16/09 - Sincronização de Processos
   - Provinha 3: 14/10 - Gerenciamento de Memória
   - Provinha 4: 08/11 - Restante (armazenamento, I/O, e arquivos)
-- Prova teórica única: 6/12
+- Prova teórica única: 13/12
 
 ### Critérios
 [Calculadora](/notes/bsi/calculadora-2021-2.html#SSC0541)
