@@ -339,6 +339,7 @@ date: 2021-08-18
     <legend>Trabalhos</legend>
     {% include grade.html name="Trabalho 1" %}
     {% include grade.html name="Trabalho 2" %}
+    {% include grade.html name="Bonus" %}
     <hr />
     <div class="total">Média: <strong>5.0</strong></div>
   </fieldset>
@@ -370,16 +371,22 @@ date: 2021-08-18
 
   <script>
     init_form("SSC0526", (subject) => {
-      subject["trabalhos"]["final"] = mean(Object.values(subject["trabalhos"]));
       subject["exercicios"]["final"] = mean(Object.values(subject["exercicios"]), 3);
 
       subject["provas"]["final"] =
         0.4 * subject["provas"]["prova-1"] + 0.6 * subject["provas"]["prova-2"];
 
+      subject["trabalhos"]["final"] =
+        0.5 * subject["trabalhos"]["trabalho-1"] +
+        0.5 * subject["trabalhos"]["trabalho-2"] +
+        0.1 * subject["trabalhos"]["bonus"];
+
       const m1 = subject["provas"]["final"];
       const m2 =
         0.7 * subject["trabalhos"]["final"] +
         0.3 * subject["exercicios"]["final"];
+
+      // TODO: Tirar se a Rosana fizer a boa
       if (m1 >= 5.0 && m2 >= 5.0) {
         subject["final"] = 0.6 * m1 + 0.4 * m2;
       } else {
