@@ -7,6 +7,9 @@ url: "https://misterio.me"
 sass:
   style: compact
 
+kramdown:
+  syntx_highlighter: coderay
+
 # Permalink dos posts
 permalink: /:year/:month/:day/:title:output_ext
 

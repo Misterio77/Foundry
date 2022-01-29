@@ -16,7 +16,7 @@ Then look no further, here's all the boilerplate you need.
 You can just run `nix flake init -t github:misterio77/nix-config#templates.c`, to quickly init a flake with this template.
 
 We're gonna start by building a flexible (yet simple) Makefile:
-```Makefile
+```make
 # Set default prefix and bin dirs, for non-nixos
 PREFIX ?= /usr/local
 BIN_DIR ?= $(PREFIX)/bin
