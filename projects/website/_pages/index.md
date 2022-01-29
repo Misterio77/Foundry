@@ -21,7 +21,7 @@ I favor minimalism and composability in tools. I currently use [NixOS](https://n
 
 I'm a huge fan of space and science fiction genres (games, books, artwork).
 
-I love animals (i've got five cats and a dog), the planet, and the people who live in it.
+I love animals (I have five cats and a dog), the planet, and the people who live in it.
 
 ## Causes
 
