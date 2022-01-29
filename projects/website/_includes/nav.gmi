@@ -1,0 +1,4 @@
+Gabriel Fontes
+{% for item in site.data.navigation %}
+=> {{ item.link }} {{ item.name }}
+{%- endfor %}

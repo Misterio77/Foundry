@@ -1,20 +1,17 @@
 <nav>
   <div class="row extremes">
     <span class="title">{ <a href="/">Gabriel Fontes</a> }</span>
-    <button type="button" aria-label="Change color scheme" id="scheme-button">
-      {% include icons/mdi/palette.svg class="icon medium" %}
-    </button>
   </div>
   <ul>
     {% for item in site.data.navigation %}
     <li>
       <a {% if page.url == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
-        {{ item.name }}
+        {{ item.name | downcase }}
       </a>
     </li>
     {% endfor %}
   </ul>
 </nav>
 <nav>
-  <small>Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a> (<a href="https://www.youtube.com/watch?v=Iq1k_FCWPXk">what is gemini</a>?)</small>
+  <small>Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a></small>
 </nav>

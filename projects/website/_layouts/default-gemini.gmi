@@ -1,7 +1,3 @@
-Gabriel Fontes
-=> / About
-=> /blog Blog
-=> /notes Notes
-
+{% include nav.gmi %}
 # {{ page.title }}
 {{ content }}

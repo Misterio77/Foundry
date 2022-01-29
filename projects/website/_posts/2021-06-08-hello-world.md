@@ -7,6 +7,8 @@ tags: web
 
 Here's a writeup on how i made this website
 
+**Notice: this website has evolved quite a lot since this post, this might not be up to date**
+
 I've been wanting to get into blogging random tech rants, maybe something useful too. Guides, maybe?
 
 Well, i kept putting this off for quite a while, as i just couldn't decide which way to build it. I've considered the big frameworks, server side rendering, handwritting static assets, all the stuff.

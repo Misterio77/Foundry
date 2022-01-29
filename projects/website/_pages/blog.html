@@ -1,0 +1,21 @@
+---
+title: Latest Posts
+description: My personal thoughts, rants, and occasional guide
+permalink: /blog/
+---
+{% assign html_posts = site.posts | where: "gemini", false %}
+<ul class="posts">
+  {% for post in html_posts %}
+  <li>
+    <h2 class="item-title">
+      <small>{% include icons/languages/{{ post.language }}.svg %}</small>
+      <a href="{{ post.url }}">
+        {{ post.title }}
+      </a>
+    </h2>
+    <small>{{ post.date | date: "%d/%m/%y" }} {% if post.category.size > 0 %}({{ post.category }}){% endif %}</small>
+    <p><small>{% for tag in post.tags %}#{{ tag }} {% endfor %}</small></p>
+    {{ post.excerpt }}
+  </li>
+  {% endfor %}
+</ul>

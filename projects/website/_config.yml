@@ -1,20 +1,26 @@
 include: [".well-known"]
 
+name: "Gabriel Fontes"
 description: "My personal website and projects"
+url: "https://misterio.me"
+
+sass:
+  style: compact
+
+# Permalink dos posts
+permalink: /:year/:month/:day/:title:output_ext
 
 collections:
-  notes:
+  pages:
     output: true
-    permalink: /notes/:categories/:name:output_ext
-  posts:
-    output: true
-    permalink: /blog/:name:output_ext
+    permalink: /:path
 
 defaults:
-  # Set default layout and gemini false
+  # Set pages layout
   -
     scope:
       path: ""
+      type: "pages"
     values:
       layout: "default"
       gemini: false
@@ -25,10 +31,12 @@ defaults:
       type: "posts"
     values:
       layout: "post"
+      gemini: false
   # Set gemini layouts
   -
     scope:
       path: "**/*.gmi"
+      type: "pages"
     values:
       layout: "default-gemini"
       gemini: true
@@ -38,3 +46,4 @@ defaults:
       type: "posts"
     values:
       layout: "post-gemini"
+      gemini: true

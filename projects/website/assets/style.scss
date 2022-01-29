@@ -1,6 +1,43 @@
 ---
 ---
 
+@import "normalize.css";
+@import "water.css";
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: bold;
+  src: url('/assets/FiraSans/Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: bold;
+  src: url('/assets/FiraSans/BoldItalic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraCode/Regular.woff2') format('woff2');
+}
 
 // Default theme (rose-pine)
 :root {
@@ -65,10 +102,6 @@
   --text-main: var(--base05);
   --text-muted: var(--base04);
   --variable: var(--base0B);
-}
-
-* {
-  transition: all var(--animation-duration) ease;
 }
 
 // Buttons and inputs color

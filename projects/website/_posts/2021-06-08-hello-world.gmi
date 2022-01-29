@@ -5,7 +5,10 @@ language: en
 tags: web
 ---
 
+
 Here's a writeup on how i made this website
+
+**Notice: this website has evolved quite a lot since this post, this might not be up to date**
 
 I've been wanting to get into blogging random tech rants, maybe something useful too. Guides, maybe?
 

@@ -2,28 +2,27 @@
   description = "My personal website, blog, and digital garden";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let 
-        pkgs = import nixpkgs { inherit system; };
-        package = "misterio-me";
-      in {
-        packages.${package} = pkgs.stdenv.mkDerivation {
-          pname = package;
-          version = "1.0";
-          src = ./.;
-          buildPhase = ''
-            JEKYLL_ENV=production ${pkgs.jekyll}/bin/jekyll build --destination $out/public
-          '';
-          installPhase = "true";
-        };
-        defaultPackage = self.packages.${system}."${package}";
+  outputs = { self, nixpkgs, utils }: {
+    # Exportar como overlay
+    overlay = final: prev: {
+      misterio-me = final.callPackage ./default.nix { };
+    };
+  } //
+  utils.lib.eachDefaultSystem (system:
+    # Importar overlay
+    let pkgs = import nixpkgs { inherit system; overlays = [ self.overlay ]; };
+    in rec {
+      # Exportar como package
+      packages.misterio-me = pkgs.misterio-me;
+      defaultPackage = packages.misterio-me;
 
-        devShell =
-          pkgs.mkShell { buildInputs = with pkgs; [ jekyll nodePackages.prettier sass scss-lint python39Packages.md2gemini ]; };
-      });
+      devShell = pkgs.mkShell {
+        inputsFrom = [ defaultPackage ];
+      };
+    }
+  );
 }
