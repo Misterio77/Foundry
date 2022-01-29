@@ -14,20 +14,16 @@ layout: none
 		<sy:updatePeriod>{{ site.feed_update_period | default: "daily" | xml_escape }}</sy:updatePeriod>
 		<sy:updateFrequency>{{ site.feed_update_frequency | default: 1 | xml_escape }}</sy:updateFrequency>
 		<link>{{ site.url }}</link>
-		<atom:link href="{{ site.url }}/{{ page.path }}" rel="self" type="application/rss+xml" />
+		<atom:link href="{{ site.url }}{{ page.url }}" rel="self" type="application/rss+xml" />
 		<lastBuildDate>{% for post in site.posts limit:1 %}{{ post.date | date_to_rfc822 }}{% endfor %}</lastBuildDate>
 		{% assign feed_items = site.feed_items | default: 10 %}
 		{% for post in site.posts limit:feed_items %}
 			<item>
 				<title>{{ post.title | xml_escape }}</title>
 				{% if post.author.name %}
-					<dc:creator>{{ post.author.name | xml_escape }}</dc:creator>
+                <dc:creator>{{ post.author.name | xml_escape }}</dc:creator>
 				{% endif %}
-				{% if post.excerpt %}
-					<description>{{ post.excerpt | xml_escape }}</description>
-				{% else %}
-					<description>{{ post.content | xml_escape }}</description>
-				{% endif %}
+                <description>{{ post.content | xml_escape }}</description>
 				<pubDate>{{ post.date | date_to_rfc822 }}</pubDate>
 				<link>{{ site.url }}{{ post.url }}</link>
 				<guid isPermaLink="true">{{ site.url }}{{ post.url }}</guid>

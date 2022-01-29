@@ -16,7 +16,7 @@ permalink: /:year/:month/:day/:title:output_ext
 collections:
   pages:
     output: true
-    permalink: /:path
+    permalink: /:path:output_ext
 
 defaults:
   # Set pages layout
