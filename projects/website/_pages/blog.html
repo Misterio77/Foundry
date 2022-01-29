@@ -13,7 +13,7 @@ permalink: /blog/
         {{ post.title }}
       </a>
     </h2>
-    <small>{{ post.date | date: "%d/%m/%y" }} {% if post.category.size > 0 %}({{ post.category }}){% endif %}</small>
+    <small>{{ post.date | date: "%d/%m/%y" }} {% if post.category.size %}({{ post.category }}){% endif %}</small>
     <br />
     <small>{% for tag in post.tags %}#{{ tag }} {% endfor %}</small>
     {{ post.excerpt }}

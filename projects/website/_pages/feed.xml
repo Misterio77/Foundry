@@ -3,21 +3,15 @@ layout: none
 ---
 
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"
-    xmlns:atom="http://www.w3.org/2005/Atom"
-    xmlns:dc="http://purl.org/dc/elements/1.1/"
-    xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
     <channel>
         <title>{{ site.name | xml_escape }}</title>
-        <description>{% if site.description %}{{ site.description | xml_escape }}{% endif %}</description>        
-        <sy:updatePeriod>{{ site.feed_update_period | default: "daily" | xml_escape }}</sy:updatePeriod>
-        <sy:updateFrequency>{{ site.feed_update_frequency | default: 1 | xml_escape }}</sy:updateFrequency>
+        <description>{{ site.description | xml_escape }}</description>        
         <link>{{ site.url }}</link>
         <atom:link href="{{ site.url }}{{ page.url }}" rel="self" type="application/rss+xml" />
         <lastBuildDate>{% for post in site.posts limit:1 %}{{ post.date | date_to_rfc822 }}{% endfor %}</lastBuildDate>
-        {% assign feed_items = site.feed_items | default: 10 %}
-        {% for post in site.posts limit:feed_items %}
+        {% assign html_posts = site.posts | where: "gemini", false %}
+        {% for post in html_posts limit:10 %}
             <item>
                 <title>{{ post.title | xml_escape }}</title>
                 {% if post.author.name %}
