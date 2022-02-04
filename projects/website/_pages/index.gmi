@@ -10,7 +10,7 @@ I’m currently working on my Bachelor of Information Systems degree at Universi
 => https://icmc.usp.br/ Institute of Mathematics and Computer Sciences
 => https://uget.express U-Get
 
-I'm interested in FLOSS, Distributed Systems, Software Engineering, and Functional Programming. Mainly working with Linux, Rust, Postgres, Nix, Python, Go, and C/C++.
+I'm interested in FLOSS, Distributed Systems, Software Engineering, and Functional Programming. Mainly working with Linux, Rust, Postgres, Nix, Python, and C/C++.
 
 ## Tech and design
 
