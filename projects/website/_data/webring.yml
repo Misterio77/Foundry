@@ -36,3 +36,46 @@ sometimes referred to …"
   sourcelink: "https://elis.nu/"
   sourcetitle: "~elis/blog/"
 
+- title: "NixOS on the Framework"
+  link: "http://grahamc.com/blog/nixos-on-framework"
+  date: "2021-07-26 00:00:00 &#43;0000 &#43;0000"
+  summary: "
+
+What a treat it is to review the Framework laptop a few months before I’ll be buying my own.
+
+The Framework promises to be an powerful, high-end ultra thin laptop with the stand-out feature of easy repairs and upgrades. I think they’ve done it.
+
+Let’s install…"
+  sourcelink: "http://grahamc.com/"
+  sourcetitle: "Graham Christensen"
+
+- title: "NixOS: The Ultimate Dev Environment?"
+  link: "https://myme.no/posts/2022-01-16-nixos-the-ultimate-dev-environment.html"
+  date: "0001-01-01 00:00:00 &#43;0000 UTC"
+  summary: "
+  NixOS: The Ultimate Dev Environment?
+  
+    Posted on 2022-01-16
+    
+  
+  
+    Contents
+
+The elevator pitch
+Nix Flakes
+
+Dependency pinning
+Anatomy of a flake
+
+Top-level attributes
+Output schema:
+Home-grown utilities
+Flake utils
+
+Overlay
+File structure
+
+Application component…"
+  sourcelink: "https://myme.no"
+  sourcetitle: "myme.no tech blog"
+
