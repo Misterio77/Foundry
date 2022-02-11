@@ -37,6 +37,7 @@
 
       devShell = pkgs.mkShell {
         inputsFrom = [ defaultPackage ];
+        buildInputs = with pkgs; [ yq openring ];
       };
     }
   );

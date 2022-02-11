@@ -1,0 +1,8 @@
+{{range .Articles}}
+- title: "{{.Title}}"
+  link: "{{.Link}}"
+  date: "{{.Date}}"
+  summary: "{{.Summary}}"
+  sourcelink: "{{.SourceLink}}"
+  sourcetitle: "{{.SourceTitle}}"
+{{end}}

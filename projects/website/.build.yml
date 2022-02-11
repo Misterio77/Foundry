@@ -1,6 +1,4 @@
 image: nixos/unstable
-packages:
-  - nixos.nixUnstable
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
   site: misterio.me

@@ -1,0 +1,15 @@
+- title: Drew DeVault's blog
+  link: https://drewdevault.com
+  feed: https://drewdevault.com/blog/index.xml
+- title: myme.no tech blog
+  link: https://myme.no
+  feed: https://myme.no/feed.xml
+- title: ~elis/blog
+  link: https://elis.nu
+  feed: https://elis.nu/blog/rss.xml
+- title: Graham Christensen
+  link: https://grahamc.com
+  feed: https://grahamc.com/feed/
+- title: Sumner Evans
+  link: https://sumnerevans.com
+  feed: https://sumnerevans.com/index.xml

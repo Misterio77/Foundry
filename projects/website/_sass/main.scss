@@ -121,17 +121,6 @@ code {
   font-size: .95em;
 }
 
-// Flex ro
-.row {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-
-  &.extremes {
-    justify-content: space-between;
-  }
-}
-
 // Dialog styling
 dialog {
   background-color: var(--background-body);
@@ -161,25 +150,6 @@ dialog {
   }
 }
 
-// Top right close butto
-.close-button {
-  background-color: inherit;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  display: inline-block;
-  margin-right: 0;
-  overflow: hidden;
-  padding: 8px 16px;
-  position: absolute;
-  right: 0;
-  text-align: center;
-  text-decoration: none;
-  top: 0;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
 // Nav bar
 nav ul {
   list-style: none;
@@ -199,8 +169,8 @@ nav ul {
   color: var(--text-muted);
   font-size: 2.2em;
   font-weight: 600;
-  margin-bottom: 12px;
-  margin-top: 8px;
+  margin-bottom: 0.8em;
+  margin-top: 1em;
 
   a {
     color: var(--variable);
@@ -232,20 +202,6 @@ nav ul {
   // scss-lint:disable ImportantRule
   content: '' !important;
 }
-
-// Smaller buttons
-.small-button {
-  &[type="button"],
-  &[type="submit"] {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-}
-
-// Hide button without jumping around
-.hidden {
-  visibility: hidden;
-}
 // Expanding PGP
 .pgp {
   vertical-align: bottom;
@@ -258,12 +214,12 @@ nav ul {
     vertical-align: bottom;
     white-space: nowrap;
   }
+  &:hover span {
+    max-width: 200px;
+    text-decoration: underline;
+  }
 }
 
-.pgp:hover span {
-  max-width: 200px;
-  text-decoration: underline;
-}
 // Current item in navigation
 [aria-current="page"] {
   color: var(--text-main);
@@ -280,61 +236,17 @@ nav ul {
   }
 }
 
-// Increase bottom margin label
-input,
-select {
-  margin: .8em;
-}
-
-// Increase icon size
-.icon.medium {
-  font-size: 1.4em;
-}
-
-// Remove bullets from post list
-.posts,
-.notes {
-  list-style: none;
-
-  .item-title {
-    margin-bottom: 0;
-  }
-
-  .tags {
-    margin-top: 0;
-  }
-}
-
-// Flex fieldset
-fieldset {
-  display: flex;
-  flex-flow: wrap;
-
-  div {
-    display: block;
-
-    &.total {
-      align-self: center;
-      margin-bottom: 3%;
-      margin-left: 5%;
-      margin-right: 5%;
-      margin-top: 3%;
+// Posts listing
+h1 + ul,
+h2 + ul {
+  li {
+    list-style: none;
+    h2,
+    h3 {
+      margin-bottom: 0;
+      & + p {
+        margin-top: 0;
+      }
     }
   }
-}
-
-.failed {
-  color: var(--error);
-}
-
-.succeeded {
-  color: var(--variable);
-}
-
-input:invalid {
-  box-shadow: 0 0 0 2px var(--error);
-}
-
-form {
-  padding: 15px;
 }
