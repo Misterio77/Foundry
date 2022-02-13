@@ -25,7 +25,7 @@ defaults:
       path: ""
       type: "pages"
     values:
-      layout: "default"
+      layout: "default.html"
       gemini: false
   # Use post layouts
   -
@@ -33,7 +33,7 @@ defaults:
       path: ""
       type: "posts"
     values:
-      layout: "post"
+      layout: "post.html"
       gemini: false
   # Set gemini layouts
   -
@@ -41,12 +41,12 @@ defaults:
       path: "**/*.gmi"
       type: "pages"
     values:
-      layout: "default-gemini"
+      layout: "default.gmi"
       gemini: true
   -
     scope:
       path: "**/*.gmi"
       type: "posts"
     values:
-      layout: "post-gemini"
+      layout: "post.gmi"
       gemini: true

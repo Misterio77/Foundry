@@ -164,24 +164,28 @@ nav ul {
   }
 }
 
-// Title
-.title {
-  color: var(--text-muted);
-  font-size: 2.2em;
-  font-weight: 600;
-  margin-bottom: 0.8em;
-  margin-top: 1em;
+header > nav > nav {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2em;
+  margin-top: 2em;
 
-  a {
-    color: var(--variable);
-    text-decoration: none;
-  }
 
-  &:hover {
-    color: var(--focus);
-
+  .title {
+    color: var(--text-muted);
+    font-size: 2.2em;
+    font-weight: 600;
     a {
+      color: var(--variable);
       text-decoration: none;
+    }
+
+    &:hover {
+      color: var(--focus);
+
+      a {
+        text-decoration: none;
+      }
     }
   }
 }

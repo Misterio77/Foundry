@@ -37,7 +37,7 @@
 
       devShell = pkgs.mkShell {
         inputsFrom = [ defaultPackage ];
-        buildInputs = with pkgs; [ yq openring ];
+        buildInputs = with pkgs; [ yq openring nodePackages.vscode-langservers-extracted ];
       };
     }
   );
