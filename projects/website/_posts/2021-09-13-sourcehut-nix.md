@@ -1,13 +1,13 @@
 ---
 author: Gabriel Fontes
-title: "Use build.sr.ht with nix flakes"
+title: "Use builds.sr.ht with nix flakes"
 language: en
 tags: nix srht
 ---
 
 I've recently started migrating from github to sourcehut, and i've been having a blast.
 
-Here's a quick write up on how to use the awesome [build.sr.ht](https://build.sr.ht) CI with your shiny [nix flake](https://nixos.wiki/wiki/Flakes)-based project.
+Here's a quick write up on how to use the awesome [builds.sr.ht](https://builds.sr.ht) CI with your shiny [nix flake](https://nixos.wiki/wiki/Flakes)-based project.
 
 ## flake.nix
 First of all, of course, your project needs a `flake.nix`. More specifically, your flake needs a `outputs.packages.xxx` to be built with `nix build xxx` (as a plus, set your preferred packaged to `outputs.defaultPackage`, so you can build with `nix build`). Here's how this [website](https://sr.ht/~misterio/misterio.me)'s looks like:
@@ -62,7 +62,7 @@ I've included it all as a reference, but you can safely ignore `apps` and `devSh
 ## Build manifest
 
 ### Minimal example
-Here's what you're probably looking for. This is a minimal `.build.yml` manifest is how you can easily get some sweet nix flakes support on your `build.sr.ht` runner:
+Here's what you're probably looking for. This is a minimal `.build.yml` manifest is how you can easily get some sweet nix flakes support on your `builds.sr.ht` runner:
 ```yml
 image: nixos/unstable
 packages:
