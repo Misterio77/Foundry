@@ -42,8 +42,9 @@ scheme_input.addEventListener("input", function () {
 });
 
 // Check browser color scheme
-let isDark = window.matchMedia('(prefers-color-scheme: dark)').media === 'not all';
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 updatePlaceholder(isDark);
+
 window.matchMedia("(prefers-color-scheme: dark)").addListener(
   e => {
       let isDark = e.matches;
