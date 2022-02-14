@@ -1,6 +1,11 @@
+{% include scheme-datalist.html %}
 <nav>
   <nav>
     <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
+    <div class="scheme">
+      <input id="scheme-input" list="scheme-list" />
+      {% include icons/mdi/palette.svg %}
+    </div>
   </nav>
   <ul>
     {% for item in site.data.navigation %}
@@ -11,7 +16,5 @@
     </li>
     {% endfor %}
   </ul>
-</nav>
-<nav>
   <small>Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a></small>
 </nav>

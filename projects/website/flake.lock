@@ -1,5 +1,20 @@
 {
   "nodes": {
+    "nix-colors": {
+      "locked": {
+        "lastModified": 1644753863,
+        "narHash": "sha256-Mc+EIc8p4x3wqAcR7JL2njgv5St9t0booUYvS9z5Jf8=",
+        "owner": "misterio77",
+        "repo": "nix-colors",
+        "rev": "95a55cd97d7920211d5e2e8d154c65c36c92a50f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "misterio77",
+        "repo": "nix-colors",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1644420267,
@@ -18,6 +33,7 @@
     },
     "root": {
       "inputs": {
+        "nix-colors": "nix-colors",
         "nixpkgs": "nixpkgs",
         "utils": "utils"
       }

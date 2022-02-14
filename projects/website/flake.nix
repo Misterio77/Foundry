@@ -4,11 +4,13 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     utils.url = "github:numtide/flake-utils";
+    nix-colors.url = "github:misterio77/nix-colors";
   };
 
-  outputs = { self, nixpkgs, utils }: {
+  outputs = { self, nixpkgs, utils, nix-colors }: {
     overlay = final: prev: {
       misterio-me = final.callPackage ./default.nix { };
+      css-themes = final.callPackage ./themes.nix { inherit nix-colors; };
     };
   } //
   utils.lib.eachDefaultSystem (system:
@@ -24,11 +26,12 @@
       '';
     in
     rec {
-      # Export package
+      # Export packages
       packages.misterio-me = pkgs.misterio-me;
+      packages.css-themes = pkgs.css-themes;
       defaultPackage = packages.misterio-me;
 
-      # Serve website on devserver
+      # Serve website
       apps.misterio-me = {
         type = "app";
         program = "${serve}/bin/serve";
@@ -38,6 +41,13 @@
       devShell = pkgs.mkShell {
         inputsFrom = [ defaultPackage ];
         buildInputs = with pkgs; [ yq openring nodePackages.vscode-langservers-extracted ];
+        shellHook = ''
+          rm assets/themes -rf 2> /dev/null
+          rm _includes/scheme-datalist.html -f 2> /dev/null
+          mkdir assets/themes -p
+          cp ${packages.css-themes}/list.html $PWD/_includes/scheme-datalist.html
+          cp ${packages.css-themes}/*.css $PWD/assets/themes/
+        '';
       };
     }
   );
