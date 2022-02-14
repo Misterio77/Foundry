@@ -138,6 +138,7 @@ nav ul {
 header > nav {
   & > nav {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     margin-bottom: 2em;
     margin-top: 2em;
