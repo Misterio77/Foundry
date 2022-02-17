@@ -1,7 +1,5 @@
 ---
-author: Gabriel Fontes
 title: "C Nix boilerplate"
-language: en
 tags: nix
 ---
 

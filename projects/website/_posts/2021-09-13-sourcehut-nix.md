@@ -1,7 +1,5 @@
 ---
-author: Gabriel Fontes
 title: "Use builds.sr.ht with nix flakes"
-language: en
 tags: nix srht
 ---
 

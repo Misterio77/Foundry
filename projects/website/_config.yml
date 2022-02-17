@@ -50,3 +50,11 @@ defaults:
     values:
       layout: "post.gmi"
       gemini: true
+  # Post default metadata
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      language: "en"
+      author: "Gabriel Fontes"
