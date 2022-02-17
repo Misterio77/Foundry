@@ -1,11 +1,11 @@
 
-- title: "Free software licenses explained: MIT"
-  link: "https://drewdevault.com/2022/02/07/Free-software-licenses-MIT.html"
-  date: "2022-02-07 00:00:00 &#43;0000 &#43;0000"
-  summary: "This is the first in a series of posts I intend to write explaining how various
-free and open source software licenses work, and what that means for you as a
-user or developer of that software. Today we’ll look at the MIT license, also
-sometimes referred to …"
+- title: "Status update, February 2022"
+  link: "https://drewdevault.com/2022/02/15/Status-update-February-2022.html"
+  date: "2022-02-15 00:00:00 &#43;0000 &#43;0000"
+  summary: "Hello once again! Another month of free software development goes by with lots
+of progress in all respects.
+I will open with some news about godocs.io: version 1.0 of our fork of gddo
+has been released! Big thanks to Adnan Maolood for his work on this. I’m v…"
   sourcelink: "https://drewdevault.com"
   sourcetitle: "Drew DeVault&#39;s blog"
 
