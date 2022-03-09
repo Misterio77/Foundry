@@ -1,0 +1,36 @@
+---
+title: Contagem regressiva pro presencial
+description: BORA CARALHOOO
+permalink: /countdown/
+has_gemini: false
+---
+<p id="contador">Calculando rapidão perae...</p>
+
+<script>
+var countDownDate = new Date("2022-03-14T19:00-03:00").getTime();
+
+var x = setInterval(function() {
+  var now = new Date().getTime();
+  var distance = countDownDate - now;
+
+  var days = Math.floor(distance / (1000 * 60 * 60 * 24));
+  var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+  var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+  document.getElementById("contador").innerHTML = days + "d " + hours + "h "
+  + minutes + "m " + seconds + "s ";
+
+  if (distance < 0) {
+    clearInterval(x);
+    document.getElementById("contador").innerHTML = "UHUUUL";
+  }
+}, 1000);
+</script>
+
+<style>
+#contador {
+  text-align: center;
+  font-size: xx-large;
+}
+</style>

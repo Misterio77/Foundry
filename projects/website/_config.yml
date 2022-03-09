@@ -27,7 +27,7 @@ defaults:
     values:
       layout: "default.html"
       gemini: false
-  # Use post layouts
+      has_gemini: true
   -
     scope:
       path: ""
@@ -35,6 +35,8 @@ defaults:
     values:
       layout: "post.html"
       gemini: false
+      has_gemini: true
+
   # Set gemini layouts
   -
     scope:
@@ -50,6 +52,7 @@ defaults:
     values:
       layout: "post.gmi"
       gemini: true
+
   # Post default metadata
   -
     scope:

@@ -16,5 +16,10 @@
     </li>
     {% endfor %}
   </ul>
-  <small>Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a></small>
+  {% if page.has_gemini %}
+    <small>
+      Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
+    </small>
+  {% endif %}
+  
 </nav>
