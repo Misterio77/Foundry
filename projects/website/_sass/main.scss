@@ -102,6 +102,10 @@
   --variable: var(--base0B);
 }
 
+:target {
+  background: var(--base02);
+}
+
 // Buttons and inputs color
 button,
 input,
