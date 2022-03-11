@@ -1,0 +1,73 @@
+# Exemplo de formato:
+# - codigo: SCC0666
+#   nome: Disciplina muito pika
+#   professor:
+#     nome: Gabriel, o brabo
+#     email: g.fontes@usp.br
+#   plataforma: # se omitido, mostra TBD
+#     info: Rick Astley
+#     url: https://www.youtube.com/watch?v=dQw4w9WgXcQ # opcional
+#   presenca: # se omitido, mostra TBD
+#     info: Não cobra
+#     url: https://www.youtube.com/watch?v=cRpdIrq7Rbo # opcional
+#   avaliacoes: # pode ser omitido se não houver
+#     provas: # pode ser omitido se não houver
+#       - data: 25/12/2022
+#         assunto: Hohoho
+#       - data: 31/12/2022
+#         assunto: Adeusss ano velhooo
+#     atividades: # pode ser omitido se não houver
+#       - data: 03/10/2019
+#         assunto: Infelizmente vivemos em uma sociedade
+#   aulas: # usado para listar no topo da página
+#     segunda: 06:00 - 23:00
+#     terca: 08:00 - 20:00
+#
+- codigo: SSC0527
+  nome: Engenharia de Software
+  professor: 
+    nome: Elisa Nakagawa
+    email: elisa@icmc.usp.br
+  plataforma:
+    info: E-Disciplinas
+    url: https://edisciplinas.usp.br/course/view.php?id=96357
+  aulas:
+    segunda: 19:00 - 20:40
+    quinta: 21:00 - 22:40
+
+- codigo: SEP0301
+  nome: Modelagem da Produção
+  professor: 
+    nome: Fabio Muller Guerrini
+    email: guerrini@sc.usp.br
+  plataforma: 
+    info: E-Disciplinas
+    url: https://edisciplinas.usp.br/course/view.php?id=95934
+  aulas:
+    segunda: 21:00 - 22:40
+    quinta: 19:00 - 20:40
+
+- codigo: SCC0530
+  nome: Inteligência Artificial
+  professor:
+    nome: Alneu de Andrade Lopes
+    email: alneu@icmc.usp.br
+  aulas:
+    terca: 19:00 - 20:40
+    sexta: 21:00 - 22:40
+- codigo: SSC0540
+  nome: Redes de Computadores
+  professor:
+    nome: Jó Ueyama
+    email: joueyama@icmc.usp.br
+  aulas:
+    terca: 21:00 - 22:40
+    sexta: 19:00 - 20:40
+
+- codigo: SCC0541
+  nome: Laboratório de Bases de Dados
+  professor:
+    nome: Caetano Traina Junior
+    email: caetano@icmc.usp.br
+  aulas:
+    quarta: 19:00 - 20:40, 21:00 - 22:40
