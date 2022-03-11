@@ -91,7 +91,7 @@ bsi021:
     nome: Verificação, Validação e Teste de Software
     professor: 
       nome: Simone do Rocio Senger de Souza
-      email: 
+      email: srocio@icmc.usp.br
     plataforma: 
       info:
       url:
@@ -102,9 +102,20 @@ bsi021:
     nome: Requisitos de Software
     professor: 
       nome: Elisa Yumi Nakagawa
-      email: 
+      email: elisa@icmc.usp.br
     plataforma: 
       info:
       url:
     aulas:
       quarta: 19:00 - 20:40
+      
+  - codigo: SCC0505
+    nome: Introdução à Teoria da Computação
+    professor: 
+      nome: João Luis Garcia Rosa
+      email: joaoluis@icmc.usp.br
+    plataforma: 
+      info:
+      url:
+    aulas:
+      quarta: 21:00 - 22:40
