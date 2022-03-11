@@ -61,3 +61,19 @@ defaults:
     values:
       language: "en"
       author: "Gabriel Fontes"
+
+  # Set disciplinas layout
+  -
+    scope:
+      path: "_pages/disciplinas/*.html"
+      type: "pages"
+    values:
+      layout: "disciplinas.html"
+      has_gemini: false
+  -
+    scope:
+      path: "_pages/disciplinas/*.json"
+      type: "pages"
+    values:
+      layout: "disciplinas.json"
+      has_gemini: false
