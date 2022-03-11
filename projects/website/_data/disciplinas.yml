@@ -72,3 +72,39 @@ bsi020:
       email: caetano@icmc.usp.br
     aulas:
       quarta: 19:00 - 20:40, 21:00 - 22:40
+
+#-----------------------------------------------
+
+bsi021:
+  - codigo: SSC0532
+    nome: Metodologias de Desenvolvimento de Software
+    professor: 
+      nome: Ellen Francine
+      email: francine@icmc.usp.br
+    plataforma:
+      info:
+      url:
+    aulas:
+      terca: 17:00 - 18:40
+
+  - codigo: SSC0524
+    nome: Verificação, Validação e Teste de Software
+    professor: 
+      nome: Simone do Rocio Senger de Souza
+      email: 
+    plataforma: 
+      info:
+      url:
+    aulas:
+      segunda: 21:00 - 22:40
+      
+  - codigo: SSC0533
+    nome: Requisitos de Software
+    professor: 
+      nome: Elisa Yumi Nakagawa
+      email: 
+    plataforma: 
+      info:
+      url:
+    aulas:
+      quarta: 19:00 - 20:40
