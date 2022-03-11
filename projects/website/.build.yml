@@ -6,9 +6,9 @@ oauth: pages.sr.ht/PAGES:RW
 tasks:
 - build: |
     cd misterio.me
-    nix --quiet build
+    time nix --quiet build
 - package: |
-    tar -C misterio.me/result/public -cvz . > site.tar.gz
+    time tar -C misterio.me/result/public -cvz . > site.tar.gz
 - upload: |
-    acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
-    acurl -f https://pages.sr.ht/publish/$site -Fprotocol=GEMINI -Fcontent=@site.tar.gz
+    time acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
+    time acurl -f https://pages.sr.ht/publish/$site -Fprotocol=GEMINI -Fcontent=@site.tar.gz
