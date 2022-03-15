@@ -26,22 +26,24 @@
 bsi020:
   - codigo: SSC0527
     nome: Engenharia de Software
-    professor: 
+    professor:
       nome: Elisa Nakagawa
       email: elisa@icmc.usp.br
     plataforma:
       info: E-Disciplinas
       url: https://edisciplinas.usp.br/course/view.php?id=96357
+    presenca:
+      info: Sim
     aulas:
       segunda: 19:00 - 20:40
       quinta: 21:00 - 22:40
 
   - codigo: SEP0301
     nome: Modelagem da Produção
-    professor: 
+    professor:
       nome: Fabio Muller Guerrini
       email: guerrini@sc.usp.br
-    plataforma: 
+    plataforma:
       info: E-Disciplinas
       url: https://edisciplinas.usp.br/course/view.php?id=95934
     aulas:
@@ -56,6 +58,7 @@ bsi020:
     aulas:
       terca: 19:00 - 20:40
       sexta: 21:00 - 22:40
+
   - codigo: SSC0540
     nome: Redes de Computadores
     professor:
@@ -78,7 +81,7 @@ bsi020:
 bsi021:
   - codigo: SSC0532
     nome: Metodologias de Desenvolvimento de Software
-    professor: 
+    professor:
       nome: Ellen Francine
       email: francine@icmc.usp.br
     plataforma:
@@ -89,32 +92,32 @@ bsi021:
 
   - codigo: SSC0524
     nome: Verificação, Validação e Teste de Software
-    professor: 
+    professor:
       nome: Simone do Rocio Senger de Souza
       email: srocio@icmc.usp.br
-    plataforma: 
+    plataforma:
       info:
       url:
     aulas:
       segunda: 21:00 - 22:40
-      
+
   - codigo: SSC0533
     nome: Requisitos de Software
-    professor: 
+    professor:
       nome: Elisa Yumi Nakagawa
       email: elisa@icmc.usp.br
-    plataforma: 
+    plataforma:
       info:
       url:
     aulas:
       quarta: 19:00 - 20:40
-      
+
   - codigo: SCC0505
     nome: Introdução à Teoria da Computação
-    professor: 
+    professor:
       nome: João Luis Garcia Rosa
       email: joaoluis@icmc.usp.br
-    plataforma: 
+    plataforma:
       info:
       url:
     aulas:
