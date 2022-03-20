@@ -10,6 +10,9 @@
 #   presenca: # se omitido, mostra TBD
 #     info: Não cobra
 #     url: https://www.youtube.com/watch?v=cRpdIrq7Rbo # opcional
+#   sala: # se omitido, mostra TBD
+#     info: 4-005
+#     url: https://www.youtube.com/watch?v=cRpdIrq7Rbo # opcional
 #   avaliacoes: # pode ser omitido se não houver
 #     provas: # pode ser omitido se não houver
 #       - data: 25/12/2022
@@ -32,6 +35,8 @@ bsi020:
     plataforma:
       info: E-Disciplinas
       url: https://edisciplinas.usp.br/course/view.php?id=96357
+    sala:
+      info: 5-004
     presenca:
       info: Sim
     aulas:
@@ -46,6 +51,8 @@ bsi020:
     plataforma:
       info: E-Disciplinas
       url: https://edisciplinas.usp.br/course/view.php?id=95934
+    sala:
+      info: 5-004
     aulas:
       segunda: 21:00 - 22:40
       quinta: 19:00 - 20:40
@@ -55,6 +62,11 @@ bsi020:
     professor:
       nome: Alneu de Andrade Lopes
       email: alneu@icmc.usp.br
+    plataforma:
+      info: Tidia
+      url: https://ae4.tidia-ae.usp.br/portal/site/431dbfe9-d82f-4a09-87df-595709ffe521
+    sala:
+      info: 5-004
     aulas:
       terca: 19:00 - 20:40
       sexta: 21:00 - 22:40
@@ -64,6 +76,8 @@ bsi020:
     professor:
       nome: Jó Ueyama
       email: joueyama@icmc.usp.br
+    sala:
+      info: 5-004
     aulas:
       terca: 21:00 - 22:40
       sexta: 19:00 - 20:40
@@ -73,6 +87,11 @@ bsi020:
     professor:
       nome: Caetano Traina Junior
       email: caetano@icmc.usp.br
+    plataforma:
+      info: Tidia
+      url: https://ae4.tidia-ae.usp.br/portal/site/5afc1f35-244f-41d3-9e52-3bd3c0274ffb
+    sala:
+      info: 6-303/6-304
     aulas:
       quarta: 19:00 - 20:40, 21:00 - 22:40
 

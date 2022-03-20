@@ -83,6 +83,16 @@ layout: default.html
     {% if d.plataforma.url %}</a>{% endif %}
   </p>
   <p>
+    <b>Sala</b>:
+    {% if d.sala.url %}<a href="{{ d.sala.url }}">{% endif %}
+      {% if d.sala.info %}
+        {{ d.sala.info }}
+      {% else %}
+        TBD
+      {% endif %}
+    {% if d.sala.url %}</a>{% endif %}
+  </p>
+  <p>
     <b>Presença</b>:
     {% if d.presenca.url %}<a href="{{ d.presenca.url }}">{% endif %}
       {% if d.presenca.info %}
