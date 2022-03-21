@@ -12,7 +12,8 @@ layout: default.html
     {% for d in d_segunda %}
       <li>
         <b>{{ d.aulas.segunda }}</b>: 
-        <a href="#{{ d.codigo }}">{{ d.nome }}</a>
+        <a href="#{{ d.codigo }}">{{ d.nome }}</a> 
+        {% if d.optativa %}(optativa){% endif %}
       </li>
     {% endfor %}
     </ul>
@@ -22,7 +23,8 @@ layout: default.html
     {% for d in d_terca %}
       <li>
         <b>{{ d.aulas.terca }}</b>: 
-        <a href="#{{ d.codigo }}">{{ d.nome }}</a>
+        <a href="#{{ d.codigo }}">{{ d.nome }}</a> 
+        {% if d.optativa %}(optativa){% endif %}
       </li>
     {% endfor %}
     </ul>
@@ -32,7 +34,8 @@ layout: default.html
     {% for d in d_quarta %}
       <li>
         <b>{{ d.aulas.quarta }}</b>: 
-        <a href="#{{ d.codigo }}">{{ d.nome }}</a>
+        <a href="#{{ d.codigo }}">{{ d.nome }}</a> 
+        {% if d.optativa %}(optativa){% endif %}
       </li>
     {% endfor %}
     </ul>
@@ -42,7 +45,8 @@ layout: default.html
     {% for d in d_quinta %}
       <li>
         <b>{{ d.aulas.quinta }}</b>: 
-        <a href="#{{ d.codigo }}">{{ d.nome }}</a>
+        <a href="#{{ d.codigo }}">{{ d.nome }}</a> 
+        {% if d.optativa %}(optativa){% endif %}
       </li>
     {% endfor %}
     </ul>
@@ -52,7 +56,8 @@ layout: default.html
     {% for d in d_sexta %}
       <li>
         <b>{{ d.aulas.sexta }}</b>: 
-        <a href="#{{ d.codigo }}">{{ d.nome }}</a>
+        <a href="#{{ d.codigo }}">{{ d.nome }}</a> 
+        {% if d.optativa %}(optativa){% endif %}
       </li>
     {% endfor %}
     </ul>
@@ -67,6 +72,14 @@ layout: default.html
     - {{ d.nome }}
     <a href="#{{ d.codigo }}"><small>{% include icons/mdi/anchor.svg %}</small></a>
   </h2>
+  <p>
+    <b>Tipo</b>:
+    {% if d.optativa %}
+      Optativa
+    {% else %}
+      Obrigatória
+    {% endif %}
+  </p>
   <p>
     <b>Prof</b>:
     {{ d.professor.nome }}

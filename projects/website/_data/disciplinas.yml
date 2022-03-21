@@ -1,6 +1,7 @@
 # Exemplo de formato:
 # - codigo: SCC0666
 #   nome: Disciplina muito pika
+#   optativa: false # padrão é false
 #   professor:
 #     nome: Gabriel, o brabo
 #     email: g.fontes@usp.br
@@ -95,6 +96,24 @@ bsi020:
     aulas:
       quarta: 19:00 - 20:40, 21:00 - 22:40
 
+  - codigo: RAD2401
+    nome: Comércio Eletrônico
+    optativa: true
+    professor:
+      nome: Ildeberto Rodello
+      email: rodello@usp.br
+    plataforma:
+      info: E-Disciplinas
+      url: https://edisciplinas.usp.br/course/view.php?id=98277
+    sala:
+      info: Virtual (BigBlueButton)
+      url: https://edisciplinas.usp.br/mod/bigbluebuttonbn/view.php?id=4125657
+    presenca:
+      info: Assinar lista virtual
+      url: https://edisciplinas.usp.br/mod/attendance/view.php?id=4125658
+    aulas:
+      quinta: 10:00 - 11:40
+
 #-----------------------------------------------
 
 bsi021:
@@ -141,3 +160,13 @@ bsi021:
       url:
     aulas:
       quarta: 21:00 - 22:40
+
+  - codigo: SSC0576
+    nome: Seminários em Computação I
+    professor:
+      nome: Danilo Spatti
+      email: spatti@icmc.usp.br
+    aulas:
+      quarta: 18:00 - 18:50
+   sala:
+     info: 4-005
