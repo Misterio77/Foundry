@@ -7,7 +7,7 @@ layout: default.html
 
 <h2>Horários</h2>
   <h3>Segunda</h3>
-    {% assign d_segunda = disciplinas | where_exp: "disciplina", "disciplina.aulas.segunda" %}
+    {% assign d_segunda = disciplinas | where_exp: "disciplina", "disciplina.aulas.segunda" | nested_sort: "aulas.segunda" %}
     <ul>
     {% for d in d_segunda %}
       <li>
@@ -18,7 +18,7 @@ layout: default.html
     {% endfor %}
     </ul>
   <h3>Terça</h3>
-    {% assign d_terca = disciplinas | where_exp: "disciplina", "disciplina.aulas.terca" %}
+    {% assign d_terca = disciplinas | where_exp: "disciplina", "disciplina.aulas.terca" | nested_sort: "aulas.terca" %}
     <ul>
     {% for d in d_terca %}
       <li>
@@ -29,7 +29,7 @@ layout: default.html
     {% endfor %}
     </ul>
   <h3>Quarta</h3>
-    {% assign d_quarta = disciplinas | where_exp: "disciplina", "disciplina.aulas.quarta" %}
+    {% assign d_quarta = disciplinas | where_exp: "disciplina", "disciplina.aulas.quarta" | nested_sort: "aulas.quarta" %}
     <ul>
     {% for d in d_quarta %}
       <li>
@@ -40,7 +40,7 @@ layout: default.html
     {% endfor %}
     </ul>
   <h3>Quinta</h3>
-    {% assign d_quinta = disciplinas | where_exp: "disciplina", "disciplina.aulas.quinta" %}
+    {% assign d_quinta = disciplinas | where_exp: "disciplina", "disciplina.aulas.quinta" | nested_sort: "aulas.quinta" %}
     <ul>
     {% for d in d_quinta %}
       <li>
@@ -51,7 +51,7 @@ layout: default.html
     {% endfor %}
     </ul>
   <h3>Sexta</h3>
-    {% assign d_sexta = disciplinas | where_exp: "disciplina", "disciplina.aulas.sexta" %}
+    {% assign d_sexta = disciplinas | where_exp: "disciplina", "disciplina.aulas.sexta" | nested_sort: "aulas.sexta" %}
     <ul>
     {% for d in d_sexta %}
       <li>

@@ -1,2 +1,4 @@
 _sass/normalize.scss liguist-vendored
 _sass/water.scss liguist-vendored
+gemset.nix liguist-generated
+Gemfile.lock liguist-generated

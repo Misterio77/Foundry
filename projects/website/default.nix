@@ -1,18 +1,25 @@
-{ stdenv, jekyll, css-themes }:
+{ stdenv, ruby, bundlerEnv, css-themes }:
 
+let
+  gems = bundlerEnv {
+    name = "misterio-me-env";
+    inherit ruby;
+    gemdir = ./.;
+  };
+in
 stdenv.mkDerivation {
   name = "misterio-me";
   src = ./.;
 
-  JEKYLL_ENV = "production" ;
+  JEKYLL_ENV = "production";
 
-  buildInputs = [ jekyll ];
+  buildInputs = [ gems ruby ];
 
   buildPhase = ''
     mkdir assets/themes -p
     cp ${css-themes}/list.html _includes/scheme-datalist.html
     cp -r ${css-themes}/*.css assets/themes/
-    jekyll build
+    ${gems}/bin/bundle exec jekyll build
   '';
 
   installPhase = ''

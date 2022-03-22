@@ -4,6 +4,9 @@ name: "Gabriel Fontes"
 description: "My personal website and projects"
 url: "https://misterio.me"
 
+plugins:
+  - liquid-nested-sort
+
 sass:
   style: compact
 
