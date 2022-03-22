@@ -66,6 +66,19 @@ bsi020:
     aulas:
       segunda: 21:00 - 22:40
       quinta: 19:00 - 20:40
+    avaliacoes:
+      provas:
+        - data: Cada aula
+          assunto: Prova de múltipla escolha
+        - data: 18/04
+          assunto: Plano de recursos, Previsão de vendas, Fundamentos do PCP
+        - data: 06/06
+          assunto: Produção enxuta, MRP, MRPII, ERP, Programação de atividades, Administração de estoques
+      atividades:
+        - data: 23/06
+          assunto: Apresentação do projeto de engenharia software
+        - data: Cada aula
+          assunto: Assistir vídeo antes
 
   - codigo: SCC0530
     nome: Inteligência Artificial
@@ -80,6 +93,10 @@ bsi020:
     aulas:
       terca: 19:00 - 20:40
       sexta: 21:00 - 22:40
+    avaliacoes:
+      provas:
+        - data: 26/04
+          assunto: P1
 
   - codigo: SSC0540
     nome: Redes de Computadores
