@@ -44,6 +44,7 @@ bsi020:
       segunda: 19:00 - 20:40
       quinta: 21:00 - 22:40
     avaliacoes:
+      crterio: M = 0,4*P1 + 0,2*Exercicios + 0,4*Projetos
       provas:
         - data: 07/07
           assunto: Prova única, vale 40% da nota final
@@ -75,10 +76,10 @@ bsi020:
         - data: 06/06
           assunto: Produção enxuta, MRP, MRPII, ERP, Programação de atividades, Administração de estoques
       atividades:
-        - data: 23/06
-          assunto: Apresentação do projeto de engenharia software
         - data: Cada aula
           assunto: Assistir vídeo antes
+        - data: 23/06
+          assunto: Apresentação do projeto de engenharia software
 
   - codigo: SCC0530
     nome: Inteligência Artificial
@@ -94,9 +95,15 @@ bsi020:
       terca: 19:00 - 20:40
       sexta: 21:00 - 22:40
     avaliacoes:
+      criterio: Média = 0,25*T1 + 0,35*T2 + 0,4*P1
       provas:
         - data: 26/04
           assunto: P1
+      atividades:
+        - data: 29/04, 03/05, 06/05, 10/05
+          assunto: T1 - Apresentação sobre tópico de IA
+        - data: 
+          assunto: T2 - Monografia + Apresentação
 
   - codigo: SSC0540
     nome: Redes de Computadores
