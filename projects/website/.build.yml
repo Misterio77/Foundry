@@ -13,13 +13,12 @@ tasks:
 - setup_cachix: |
     cat ~/.cachix_token | cachix authtoken --stdin
     cachix use misterio
+    cachix watch-store misterio
 - build: |
     cd misterio.me
     time nix --quiet build
 - package: |
     time tar -C misterio.me/result/public -cvz . > site.tar.gz
-- upload_cachix: |
-    nix path-info misterio.me/result/ -r | cachix push misterio
 - upload: |
     time acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
     time acurl -f https://pages.sr.ht/publish/$site -Fprotocol=GEMINI -Fcontent=@site.tar.gz
