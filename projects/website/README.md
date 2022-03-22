@@ -12,11 +12,9 @@ See [my blog post](https://misterio.me/2021/06/08/hello-world.html) for more inf
 
 ## Developing
 
-Just [install jekyll](https://jekyllrb.com/docs/) and hack away.
+First install ruby and bundler, then run `bundle install`.
 
-Use `jekyll build` to build, and `jekyll serve` to serve locally.
-
-I recommend using [prettier](https://prettier.io/) to format your code.
+Now you can use `bundle exec jekyll build` to build, and `bundle exec jekyll serve` to serve locally.
 
 ### Nix
 

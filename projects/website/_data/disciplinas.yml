@@ -43,6 +43,15 @@ bsi020:
     aulas:
       segunda: 19:00 - 20:40
       quinta: 21:00 - 22:40
+    avaliacoes:
+      provas:
+        - data: 07/07
+          assunto: Prova única, vale 40% da nota final
+      atividades:
+        - data: Semanalmanete
+          assunto: 14 exercícios, os 70% maiores valem 20% da nota final
+        - data: TBD
+          assunto: 3 projetos em grupos de 4 alunos, valem 40% da nota final
 
   - codigo: SEP0301
     nome: Modelagem da Produção
