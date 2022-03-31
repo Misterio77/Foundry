@@ -121,7 +121,7 @@ layout: default.html
         <h4>Provas</h4>
           <ul>
             {% for p in d.avaliacoes.provas %}
-              <li>{{ p.data }}: {{ p.assunto }}</li>
+              <li>{{ p.nome }}: {{ p.data }} - {{ p.assunto }}</li>
             {% endfor %}
           </ul>
       {% endif %}
@@ -129,7 +129,7 @@ layout: default.html
         <h4>Atividades</h4>
           <ul>
             {% for a in d.avaliacoes.atividades %}
-              <li>{{ a.data }}: {{ a.assunto }}</li>
+              <li>{{ a.nome }}: {{ a.data }} - {{ a.assunto }}</li>
             {% endfor %}
           </ul>
       {% endif %}

@@ -17,11 +17,14 @@
 #   avaliacoes: # pode ser omitido se não houver
 #     provas: # pode ser omitido se não houver
 #       - data: 25/12/2022
+#         nome: P1
 #         assunto: Hohoho
 #       - data: 31/12/2022
+#         nome: P2
 #         assunto: Adeusss ano velhooo
 #     atividades: # pode ser omitido se não houver
 #       - data: 03/10/2019
+#         nome: Atividade 1
 #         assunto: Infelizmente vivemos em uma sociedade
 #   aulas: # usado para listar no topo da página
 #     segunda:
@@ -55,12 +58,10 @@ bsi020:
       crterio: M = 0,4*P1 + 0,2*Exercicios + 0,4*Projetos
       provas:
         - data: 07/07
-          assunto: Prova única, vale 40% da nota final
+          nome: P1
       atividades:
-        - data: Semanalmanete
-          assunto: 14 exercícios, os 70% maiores valem 20% da nota final
-        - data: TBD
-          assunto: 3 projetos em grupos de 4 alunos, valem 40% da nota final
+        - nome: Atividade semanal
+        - nome: 3 Projetos em grupos de 4 alunos
 
   - codigo: SEP0301
     nome: Modelagem da Produção
@@ -84,16 +85,19 @@ bsi020:
     avaliacoes:
       provas:
         - data: Cada aula
-          assunto: Prova de múltipla escolha
+          nome: Prova de múltipla escolha
         - data: 18/04
+          nome: P1
           assunto: Plano de recursos, Previsão de vendas, Fundamentos do PCP
         - data: 06/06
+          nome: P2
           assunto: Produção enxuta, MRP, MRPII, ERP, Programação de atividades, Administração de estoques
       atividades:
         - data: Cada aula
-          assunto: Assistir vídeo antes
+          nome: Vídeos
         - data: 23/06
-          assunto: Apresentação do projeto de engenharia software
+          nome: Projeto com Eng Soft
+          assunto: Apresentação
 
   - codigo: SCC0530
     nome: Inteligência Artificial
@@ -119,9 +123,11 @@ bsi020:
           assunto: P1
       atividades:
         - data: 29/04, 03/05, 06/05, 10/05
-          assunto: T1 - Apresentação sobre tópico de IA
+          nome: T1
+          assunto: Apresentação sobre tópico de IA
         - data: 14/06, 17/06, 21/06, 24/06
-          assunto: T2 - Monografia + Apresentação
+          nome: T2
+          assunto: Monografia + Apresentação
 
   - codigo: SSC0540
     nome: Redes de Computadores
