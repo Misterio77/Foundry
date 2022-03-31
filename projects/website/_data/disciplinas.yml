@@ -24,8 +24,12 @@
 #       - data: 03/10/2019
 #         assunto: Infelizmente vivemos em uma sociedade
 #   aulas: # usado para listar no topo da página
-#     segunda: 06:00 - 23:00
-#     terca: 08:00 - 20:00
+#     segunda:
+#       inicio: "06:00"
+#       fim: "23:00"
+#     terca:
+#       inicio: "08:00"
+#       fim: "20:00"
 
 bsi020:
   - codigo: SSC0527
@@ -41,8 +45,12 @@ bsi020:
     presenca:
       info: Sim
     aulas:
-      segunda: 19:00 - 20:40
-      quinta: 21:00 - 22:40
+      segunda:
+        inicio: "19:00"
+        fim: "20:40"
+      quinta:
+        inicio: "21:00"
+        fim: "22:40"
     avaliacoes:
       crterio: M = 0,4*P1 + 0,2*Exercicios + 0,4*Projetos
       provas:
@@ -67,8 +75,12 @@ bsi020:
     sala:
       info: 5-004
     aulas:
-      segunda: 21:00 - 22:40
-      quinta: 19:00 - 20:40
+      segunda:
+        inicio: "21:00"
+        fim: "22:40"
+      quinta:
+        inicio: "19:00"
+        fim: "20:40"
     avaliacoes:
       provas:
         - data: Cada aula
@@ -94,8 +106,12 @@ bsi020:
     sala:
       info: 5-004
     aulas:
-      terca: 19:00 - 20:40
-      sexta: 21:00 - 22:40
+      terca:
+        inicio: "19:00"
+        fim: "20:40"
+      sexta:
+        inicio: "21:00"
+        fim: "22:40"
     avaliacoes:
       criterio: Média = 0,25*T1 + 0,35*T2 + 0,4*P1
       provas:
@@ -115,8 +131,12 @@ bsi020:
     sala:
       info: 5-004
     aulas:
-      terca: 21:00 - 22:40
-      sexta: 19:00 - 20:40
+      terca:
+        inicio: "21:00"
+        fim: "22:40"
+      sexta:
+        inicio: "19:00"
+        fim: "20:40"
 
   - codigo: SCC0541
     nome: Laboratório de Bases de Dados
@@ -129,7 +149,9 @@ bsi020:
     sala:
       info: 6-303/6-304
     aulas:
-      quarta: 19:00 - 20:40, 21:00 - 22:40
+      quarta:
+        inicio: "19:00"
+        fim: "22:40"
 
   - codigo: RAD2401
     nome: Comércio Eletrônico
@@ -147,7 +169,9 @@ bsi020:
       info: Assinar lista virtual
       url: https://edisciplinas.usp.br/mod/attendance/view.php?id=4125658
     aulas:
-      quinta: 10:00 - 11:40
+      quinta:
+        inicio: "10:00"
+        fim: "11:40"
 
 #-----------------------------------------------
 
@@ -161,7 +185,9 @@ bsi021:
       info:
       url:
     aulas:
-      terca: 17:00 - 18:40
+      terca:
+        inicio: "17:00"
+        fim: "18:40"
 
   - codigo: SSC0524
     nome: Verificação, Validação e Teste de Software
@@ -172,7 +198,9 @@ bsi021:
       info:
       url:
     aulas:
-      segunda: 21:00 - 22:40
+      segunda:
+        inicio: "21:00"
+        fim: "22:40"
 
   - codigo: SSC0533
     nome: Requisitos de Software
@@ -183,7 +211,9 @@ bsi021:
       info:
       url:
     aulas:
-      quarta: 19:00 - 20:40
+      quarta:
+        inicio: "19:00"
+        fim: "20:40"
 
   - codigo: SCC0505
     nome: Introdução à Teoria da Computação
@@ -194,7 +224,9 @@ bsi021:
       info:
       url:
     aulas:
-      quarta: 21:00 - 22:40
+      quarta:
+        inicio: "21:00"
+        fim: "22:40"
 
   - codigo: SSC0576
     nome: Seminários em Computação I
@@ -202,6 +234,8 @@ bsi021:
       nome: Danilo Spatti
       email: spatti@icmc.usp.br
     aulas:
-      quarta: 18:00 - 18:50
+      quarta:
+        inicio: "18:00"
+        fim: "18:50"
     sala:
       info: 4-005
