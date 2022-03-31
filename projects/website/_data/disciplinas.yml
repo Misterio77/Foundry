@@ -134,6 +134,11 @@ bsi020:
     professor:
       nome: Jó Ueyama
       email: joueyama@icmc.usp.br
+    presenca:
+      info: Se passar direto não precisa
+    plataforma:
+      info: E-Disciplinas
+      url: https://edisciplinas.usp.br/course/view.php?id=98195
     sala:
       info: 5-004
     aulas:
@@ -143,6 +148,15 @@ bsi020:
       sexta:
         inicio: "19:00"
         fim: "20:40"
+    avaliacoes:
+      criterio: Media = 0,4*P1 + 0,4*P2 + 0,2*Labs
+      atividades:
+        - assunto: Projeto 1 (simulador de rede, 3 pessoas)
+          data: 17/05 - 20/05
+        - assunto: Projeto 2 (simulador de rede, 3 pessoas)
+          data: 05/07 - 08/07
+        - assunto: 6 Labs pro final da aula (duplas)
+          data: A cada aula de lab
 
   - codigo: SCC0541
     nome: Laboratório de Bases de Dados
