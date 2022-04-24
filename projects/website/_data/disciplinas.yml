@@ -120,7 +120,7 @@ bsi020:
       criterio: Média = 0,25*T1 + 0,35*T2 + 0,4*P1
       provas:
         - data: 26/04
-          assunto: P1
+          nome: P1
       atividades:
         - data: 29/04, 03/05, 06/05, 10/05
           nome: T1
