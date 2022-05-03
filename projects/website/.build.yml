@@ -5,7 +5,6 @@ packages:
 
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
-  site: misterio.me
 
 oauth: pages.sr.ht/PAGES:RW
 
@@ -20,7 +19,7 @@ tasks:
     cd misterio.me
     cachix watch-exec misterio nix build
 - package: |
-    time tar -C misterio.me/result/public -cvz . > site.tar.gz
+    tar -C misterio.me/result/public -cvz . > site.tar.gz
 - upload: |
-    time acurl -f https://pages.sr.ht/publish/$site -Fcontent=@site.tar.gz
-    time acurl -f https://pages.sr.ht/publish/$site -Fprotocol=GEMINI -Fcontent=@site.tar.gz
+    hut pages publish -d misterio.me -p HTTPS  --not-found "/404" site.tar.gz
+    hut pages publish -d misterio.me -p GEMINI --not-found "/404" site.tar.gz
