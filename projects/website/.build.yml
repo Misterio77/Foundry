@@ -2,6 +2,7 @@ image: nixos/unstable
 
 packages:
   - nixos.cachix
+  - nixos.hut
 
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
