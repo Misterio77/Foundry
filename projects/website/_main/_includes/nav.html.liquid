@@ -1,13 +1,13 @@
-{% include scheme-datalist.html %}
 <nav>
   <nav>
     <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
-    <label class="left-icon">
-      {% include icons/mdi/palette.svg %}
-      <input id="scheme-input" list="scheme-list" />
-    </label>
   </nav>
   <ul>
+    <li class="colorscheme">
+      <a aria-label="Change color scheme" href="/colorscheme">
+        {% include icons/mdi/palette.svg class="icon medium" %}
+      </a>
+    </li>
     {% for item in site.data.navigation %}
     <li>
       <a {% if page.url == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">

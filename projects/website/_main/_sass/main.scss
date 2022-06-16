@@ -233,7 +233,7 @@ h2 + ul {
   }
 }
 
-label.left-icon {
+.left-icon {
   display:flex;
   align-items:center;
   justify-content:center;
@@ -245,5 +245,29 @@ label.left-icon {
   }
   input {
     padding-left: 2.2rem;
+  }
+}
+
+button.icon {
+  padding-left: 0.8rem;
+  padding-right: 0.8rem;
+}
+
+label.colorscheme {
+  display: flex;
+}
+
+.colors {
+  display: flex;
+}
+
+nav ul li.colorscheme {
+  &::after {
+    margin-left: 0.6rem;
+    content: "-";
+    color: var(--text-muted);
+  }
+  a svg {
+    vertical-align: middle;
   }
 }

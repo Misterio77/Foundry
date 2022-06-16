@@ -1,0 +1,103 @@
+---
+has_gemini: false
+title: Change colorscheme
+description: Set your colorscheme on the website
+---
+
+<small>Powered by <a href="https://github.com/base16-project/base16">base16</a> + <a href="https://github.com/misterio77/nix-colors">nix-colors</a></small>.
+
+{% include scheme-datalist.html %}
+
+<div class="colors">
+  <p style="color: var(--base00)">█</p>
+  <p style="color: var(--base01)">█</p>
+  <p style="color: var(--base02)">█</p>
+  <p style="color: var(--base03)">█</p>
+  <p style="color: var(--base04)">█</p>
+  <p style="color: var(--base05)">█</p>
+  <p style="color: var(--base06)">█</p>
+  <p style="color: var(--base07)">█</p>
+  <p style="color: var(--base08)">█</p>
+  <p style="color: var(--base09)">█</p>
+  <p style="color: var(--base0A)">█</p>
+  <p style="color: var(--base0B)">█</p>
+  <p style="color: var(--base0C)">█</p>
+  <p style="color: var(--base0D)">█</p>
+  <p style="color: var(--base0E)">█</p>
+  <p style="color: var(--base0F)">█</p>
+</div>
+
+<label class="colorscheme">
+  <div class="left-icon">
+    {% include icons/mdi/palette.svg %}
+    <input id="scheme-input" list="scheme-list" />
+  </div>
+</label>
+
+<button id="scheme-random" class="icon">
+  {% include icons/mdi/shuffle.svg %}
+</button>
+
+<button id="scheme-default" class="icon" hidden>
+  {% include icons/mdi/restore.svg %}
+</button>
+
+<script>
+let scheme_input = document.getElementById("scheme-input");
+let scheme_options = document.getElementById("scheme-list").getElementsByTagName("option");
+let scheme_random_button = document.getElementById("scheme-random");
+let scheme_default_button = document.getElementById("scheme-default");
+
+function updatePlaceholder(dark) {
+    if (dark) {
+        scheme_input.setAttribute("placeholder", "rose-pine-moon");
+    } else {
+        scheme_input.setAttribute("placeholder", "rose-pine-dawn");
+    }
+}
+
+// Add listener on input to change theme
+scheme_input.addEventListener("input", function () {
+  let input = scheme_input.value;
+  if (input) {
+    setTheme(input);
+    scheme_default_button.hidden = false;
+  } else {
+    resetTheme();
+    scheme_default_button.hidden = true;
+  }
+});
+
+// Add click event to random button
+scheme_random_button.addEventListener("click", function () {
+  // Get random scheme
+  let scheme = scheme_options.item(Math.floor(Math.random() * scheme_options.length)).textContent;
+  setTheme(scheme);
+  scheme_input.value = scheme;
+  scheme_default_button.hidden = false;
+});
+
+// Add click event for clear button
+scheme_default_button.addEventListener("click", function () {
+  scheme_default_button.hidden = true;
+  resetTheme();
+  scheme_input.value = "";
+});
+
+// Automatically set placeholder based on dark or light preference
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+updatePlaceholder(isDark);
+window.matchMedia("(prefers-color-scheme: dark)").addListener(
+  e => {
+      let isDark = e.matches;
+      updatePlaceholder(isDark);
+  }
+);
+
+// Set first value based on current theme
+let current = getTheme();
+if (current) {
+  scheme_input.value = current;
+  scheme_default_button.hidden = false;
+}
+</script>
