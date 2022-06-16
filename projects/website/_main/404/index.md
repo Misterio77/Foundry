@@ -1,6 +1,5 @@
 ---
 title: 404 - Not Found
 description: Page not found
-permalink: /404/
 ---
 Page not found. Try the [home](/).

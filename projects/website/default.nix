@@ -16,9 +16,9 @@ stdenv.mkDerivation {
   buildInputs = [ gems ruby ];
 
   buildPhase = ''
-    mkdir assets/themes -p
-    cp ${css-themes}/list.html _includes/scheme-datalist.html
-    cp -r ${css-themes}/*.css assets/themes/
+    mkdir _main/assets/themes -p
+    cp ${css-themes}/list.html _main/_includes/scheme-datalist.html
+    cp -r ${css-themes}/*.css _main/assets/themes/
     ${gems}/bin/bundle exec jekyll build
   '';
 

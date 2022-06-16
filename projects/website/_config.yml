@@ -1,11 +1,10 @@
-include: [".well-known"]
-
 name: "Gabriel Fontes"
 description: "My personal website and projects"
 url: "https://misterio.me"
 
-plugins:
-  - liquid-nested-sort
+include: [".well-known"]
+
+source: _main
 
 sass:
   style: compact
@@ -13,24 +12,14 @@ sass:
 kramdown:
   syntx_highlighter: coderay
 
-# Permalink dos posts
-permalink: /:year/:month/:day/:title:output_ext
-
 collections:
-  pages:
+  posts:
     output: true
-    permalink: /:path:output_ext
+    permalink: /:year/:month/:day/:title:output_ext
+    name: Posts
 
 defaults:
-  # Set pages layout
-  -
-    scope:
-      path: ""
-      type: "pages"
-    values:
-      layout: "default.html"
-      gemini: false
-      has_gemini: true
+  # Set HTML layouts
   -
     scope:
       path: ""
@@ -39,21 +28,27 @@ defaults:
       layout: "post.html"
       gemini: false
       has_gemini: true
-
-  # Set gemini layouts
   -
     scope:
-      path: "**/*.gmi"
-      type: "pages"
+      path: ""
     values:
-      layout: "default.gmi"
-      gemini: true
+      layout: "default.html"
+      gemini: false
+      has_gemini: true
+
+  # Set gemini layouts
   -
     scope:
       path: "**/*.gmi"
       type: "posts"
     values:
       layout: "post.gmi"
+      gemini: true
+  -
+    scope:
+      path: "**/*.gmi"
+    values:
+      layout: "default.gmi"
       gemini: true
 
   # Post default metadata
@@ -64,19 +59,3 @@ defaults:
     values:
       language: "en"
       author: "Gabriel Fontes"
-
-  # Set disciplinas layout
-  -
-    scope:
-      path: "_pages/disciplinas/*.html"
-      type: "pages"
-    values:
-      layout: "disciplinas.html"
-      has_gemini: false
-  -
-    scope:
-      path: "_pages/disciplinas/*.json"
-      type: "pages"
-    values:
-      layout: "disciplinas.json"
-      has_gemini: false

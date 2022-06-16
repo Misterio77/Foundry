@@ -16,14 +16,6 @@
   utils.lib.eachDefaultSystem (system:
     let
       pkgs = import nixpkgs { inherit system; overlays = [ self.overlays.default ]; };
-      serve = package: pkgs.writeShellScriptBin "serve" ''
-        echo "Serving on: http://localhost:8080 and gemini://localhost:1965"
-        ${pkgs.webfs}/bin/webfsd -f index.html -F -p 8080 -r ${package}/public & \
-        ${pkgs.agate}/bin/agate --content ${package}/public --hostname localhost --certs /tmp/agate-certs & \
-
-        trap 'kill $(jobs -p)' EXIT
-        wait
-      '';
     in
     rec {
       # Export packages
@@ -34,22 +26,30 @@
 
       # Serve website
       apps = rec {
-        misterio-me = {
+        serve = {
           type = "app";
-          program = "${serve packages.misterio-me}/bin/serve";
+          program = "${pkgs.writeShellScriptBin "serve" ''
+            echo "Serving on: http://localhost:8080 and gemini://localhost:1965"
+            ${pkgs.webfs}/bin/webfsd -f index.html -d -F -p 8080 -r ${packages.default}/public & \
+            ${pkgs.agate}/bin/agate --content ${packages.default}/public --hostname localhost --certs /tmp/agate-certs & \
+
+            jobs=$(jobs -p)
+            trap 'kill $jobs' EXIT
+            wait
+          ''}/bin/serve";
         };
-        default = misterio-me;
+        default = serve;
       };
 
       devShells.default = pkgs.mkShell {
         inputsFrom = [ packages.misterio-me ];
-        buildInputs = with pkgs; [ yq openring nodePackages.vscode-langservers-extracted ];
+        buildInputs = with pkgs; [ yq openring ];
         shellHook = ''
-          rm _includes/scheme-datalist.html 2>/dev/null
-          rm assets/themes/*.css 2>/dev/null
+          rm _main/_includes/scheme-datalist.html 2>/dev/null
+          rm _main/assets/themes/*.css 2>/dev/null
           mkdir assets/themes -p
-          ln -s ${packages.css-themes}/list.html -T $PWD/_includes/scheme-datalist.html
-          ln -s ${packages.css-themes}/*.css -t $PWD/assets/themes/
+          ln -s ${packages.css-themes}/list.html -T $PWD/_main/_includes/scheme-datalist.html
+          ln -s ${packages.css-themes}/*.css -t $PWD/_main/assets/themes/
         '';
       };
     }

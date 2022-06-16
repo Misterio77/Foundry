@@ -1,18 +1,19 @@
 
-- title: "Status update, February 2022"
-  link: "https://drewdevault.com/2022/02/15/Status-update-February-2022.html"
-  date: "2022-02-15 00:00:00 &#43;0000 &#43;0000"
-  summary: "Hello once again! Another month of free software development goes by with lots
-of progress in all respects.
-I will open with some news about godocs.io: version 1.0 of our fork of gddo
-has been released! Big thanks to Adnan Maolood for his work on this. I’m v…"
+- title: "Status update, June 2022"
+  link: "https://drewdevault.com/2022/06/15/Status-update-June-2022.html"
+  date: "2022-06-15 00:00:00 &#43;0000 &#43;0000"
+  summary: "Hello again! I would like to open this post by acknowledging the response to my
+earlier post, “bleh”. Since it was published, I have received several hundred
+emails expressing support and kindness. I initially tried to provide these with
+thoughtful replies, …"
   sourcelink: "https://drewdevault.com"
   sourcetitle: "Drew DeVault&#39;s blog"
 
-- title: "Advent of Code 2021"
-  link: "https://sumnerevans.com/posts/programming/2021-advent-of-code/"
-  date: "2021-12-01 09:00:00 -0600 -0600"
-  summary: "Every year since 2015, Eric Wastl creates a two-part programming problem for each of the 25 days of Advent. He publishes a new problem every day at adventofcode.com at exactly midnight EST which is 22:00 the day before for me in MST. Last year, I decided …"
+- title: "Denver to Lisbon, Portugal"
+  link: "https://sumnerevans.com/posts/travel/2022-lisbon-and-paris/denver-to-lisbon/"
+  date: "2022-06-05 12:00:00 -0600 -0600"
+  summary: "Today I ventured across the Atlantic for the first time since 2019. The reason: a work retreat in Ericeira, Portugal, a small town about 40 minutes from Lisbon. My flight path was from DEN -&gt; IAD (Washington Dulles) -&gt; LIS.
+Both flights were uneventf…"
   sourcelink: "https://sumnerevans.com/"
   sourcetitle: "Sumner Evans"
 
@@ -49,33 +50,41 @@ Let’s install…"
   sourcelink: "http://grahamc.com/"
   sourcetitle: "Graham Christensen"
 
-- title: "NixOS: The Ultimate Dev Environment?"
-  link: "https://myme.no/posts/2022-01-16-nixos-the-ultimate-dev-environment.html"
+- title: "NixOS: Confederation"
+  link: "https://myme.no/posts/2022-06-14-nixos-confederation.html"
   date: "0001-01-01 00:00:00 &#43;0000 UTC"
   summary: "
-  NixOS: The Ultimate Dev Environment?
+  NixOS: Confederation
   
-    Posted on 2022-01-16
+    Posted on 2022-06-14
     
   
   
     Contents
 
-The elevator pitch
-Nix Flakes
+The flake
 
-Dependency pinning
-Anatomy of a flake
+Inputs
+Outputs
+Nixpkgs and overlays
+NixOS &amp; Home Manager
+Development shell
 
-Top-level attributes
-Output schema:
-Home-grown utilities
-Flake utils
+Machines
 
-Overlay
-File structure
+Generic config
+On hardware
+VMWare
+WSL
+QEmu
+Raspberry PI
 
-Application component…"
+Configuration
+
+Secrets
+In the repl
+
+Controlled upda…"
   sourcelink: "https://myme.no"
   sourcetitle: "myme.no tech blog"
 

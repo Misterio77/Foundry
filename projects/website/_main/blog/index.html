@@ -1,9 +1,8 @@
 ---
 title: Latest Posts
 description: My personal thoughts, rants, and occasional guide
-permalink: /blog/
 ---
-{% assign html_posts = site.posts | where: "gemini", false %}
+{% assign html_posts = site.posts | where: "gemini", false | where: "draft", false %}
 <ul>
   <a href="/feed.xml">Feed <small>{% include icons/simple-icons/rss.svg %}</small></a>
   {% for post in html_posts %}

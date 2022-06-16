@@ -1,10 +1,9 @@
 ---
 title: Latest Posts
 description: My personal thoughts, rants, and occasional guide
-permalink: /blog/index.gmi
 ---
 
-{%- assign gmi_posts = site.posts | where: "gemini", true -%}
+{%- assign gmi_posts = site.posts | where: "gemini", true | where: "draft", false -%}
 {% for post in gmi_posts %}
 => {{ post.url }} {{ post.title }}
 {{ post.date | date: "%d/%m/%y" }}
