@@ -2,10 +2,10 @@
 <nav>
   <nav>
     <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
-    <div class="scheme">
-      <input id="scheme-input" list="scheme-list" />
+    <label class="left-icon">
       {% include icons/mdi/palette.svg %}
-    </div>
+      <input id="scheme-input" list="scheme-list" />
+    </label>
   </nav>
   <ul>
     {% for item in site.data.navigation %}
@@ -21,5 +21,4 @@
       Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
     </small>
   {% endif %}
-  
 </nav>

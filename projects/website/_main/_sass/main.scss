@@ -165,11 +165,6 @@ header > nav {
         }
       }
     }
-    .scheme {
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
   }
 }
 
@@ -235,5 +230,20 @@ h2 + ul {
         margin-top: 0;
       }
     }
+  }
+}
+
+label.left-icon {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position: relative;
+  svg {
+    position: absolute;
+    left: 0.6rem;
+    top: 0.7rem;
+  }
+  input {
+    padding-left: 2.2rem;
   }
 }
