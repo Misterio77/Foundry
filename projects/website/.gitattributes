@@ -1,5 +1,5 @@
-_sass/normalize.scss liguist-vendored
-_sass/highlight.scss liguist-vendored
-_sass/water.scss liguist-vendored
+_main/_sass/normalize.scss liguist-vendored
+_main/_sass/highlight.scss liguist-vendored
+_main/_sass/water.scss liguist-vendored
 gemset.nix liguist-generated
 Gemfile.lock liguist-generated
