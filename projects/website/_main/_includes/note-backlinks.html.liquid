@@ -1,0 +1,29 @@
+{% comment %} We'll be searching for links to this note {% endcomment %}
+{%- assign desired_link = '/' | append: page.slug -%}
+
+{% comment %} Collect referees {% endcomment %}
+{%- assign documents = site.documents %}
+{%- assign referees = '' -%}
+{% for document in documents %}
+    {% if document.url != page.url %}
+        {% if document.content contains desired_link %}
+            {% assign slug = document.slug | split: "," %}
+            {% assign referees = referees | concat: slug %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+
+{% comment %} Display collected referees {% endcomment %}
+{% if referees.size > 0 %}
+    <hr />
+    <h2>Links to this note:</h2>
+    <ul class="posts">
+    {% for referee in referees %}
+        {% assign document = site.documents | where: "slug", referee | first %}
+        <li>
+            <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
+            <p><small>{{ document.excerpt }}</small></p>
+        </li>
+    {% endfor %}
+    </ul>
+{% endif %}

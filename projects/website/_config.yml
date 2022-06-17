@@ -1,6 +1,13 @@
 name: "Gabriel Fontes"
 description: "My personal website and projects"
-url: "https://misterio.me"
+domain: "misterio.me"
+
+plugins:
+  - jekyll-last-modified-at
+
+last-modified-at:
+  date-format: "%F %z" # ISO 8601
+
 
 include: [".well-known"]
 
@@ -71,7 +78,6 @@ defaults:
   -
     scope:
       path: ""
-      type: "posts"
     values:
       language: "en"
       author: "Gabriel Fontes"

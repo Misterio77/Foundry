@@ -1,0 +1,42 @@
+---
+title: Personal notes
+description: Personal wiki and digital garden
+permalink: /notes/index.html
+has_gemini: true
+---
+
+{% assign tags = site.notes | map: 'tags' | uniq %}
+{% for tag in tags %}
+<h2 id="{{ tag }}">
+  <a href="#{{ tag }}">
+    {% if site.data.tags[tag] %}
+      {{ site.data.tags[tag] }}
+    {% else %}
+      {{ tag }}
+    {% endif %}
+  </a>
+</h2>
+<ul class="posts">
+  {% assign notes = site.notes | where: "gemini", false %}
+  {% for note in notes %}
+  {% if note.tags contains tag %}
+  <li>
+    <h2>
+      <a href="{{ note.url }}">
+        {{ note.title }}
+      </a>
+    </h2>
+    <p><small>
+      {{ note.last_modified_at | date: "%d/%m/%y" }}
+      {% if note.tags.size > 0 %}
+      | {% for tag in note.tags %}
+      <a href="#{{ tag }}">#{{ tag }}</a>
+      {% endfor %}
+      {% endif %}
+    </small></p>
+    <p>{{ note.excerpt }}</p>
+  </li>
+  {% endif %}
+  {% endfor %}
+</ul>
+{% endfor %}

@@ -1,0 +1,11 @@
+---
+title: Latest Posts
+description: My personal thoughts, rants, and occasional guide
+permalink: /blog/index.gmi
+---
+{%- assign posts = site.posts | where: "gemini", true | where: "draft", false -%}
+{%- for post in posts %}
+=> {{ post.url }} {{ post.title }} ({{ post.language }})
+{{ post.date | date: "%d/%m/%y" }}
+{{ post.excerpt }}
+{% endfor %}

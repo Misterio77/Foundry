@@ -156,6 +156,7 @@ echo "</datalist>" >> $datalist_file
 
 This script basically uses `flavours list` to get a list of all installed schemes and iterates over them. For each scheme, we build the `css-variables` template with it, outputting to the assets directory, and add its slug to the file with `<datalist>`.
 
+[miau](/notes/miau)
 
 ## Wrapping up
 

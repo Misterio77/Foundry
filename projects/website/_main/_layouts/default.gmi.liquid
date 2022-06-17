@@ -3,7 +3,12 @@
 ---
 
 # {{ page.title }}
+{%- if page.description %}
+{{ page.description }}
+{%- endif %}
+
 {{ content }}
+
 ---
 
 {% include footer.gmi.liquid %}

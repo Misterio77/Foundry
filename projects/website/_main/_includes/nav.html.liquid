@@ -2,15 +2,16 @@
   <nav>
     <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
   </nav>
+  {% assign current = page.url | remove: "index.html" %}
   <ul>
     <li class="colorscheme">
-      <a {% if page.url == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme">
+      <a {% if current == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme">
         {% include icons/mdi/palette.svg class="icon medium" %}
       </a>
     </li>
     {% for item in site.data.navigation %}
     <li>
-      <a {% if page.url == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
+      <a {% if current == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
         {{ item.name | downcase }}
       </a>
     </li>
@@ -18,7 +19,7 @@
   </ul>
   {% if page.has_gemini %}
     <small>
-      Also available <a href="gemini://misterio.me{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
+      Also available <a href="gemini://{{ site.domain }}{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
     </small>
   {% endif %}
 </nav>

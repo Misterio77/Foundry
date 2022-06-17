@@ -32,6 +32,8 @@ stdenv.mkDerivation {
         --frontmatter --links copy --plain --md-links >> "$gmifile"
       # Fix CRLF
       dos2unix "$gmifile"
+      # Strip SVGs
+      sed -ri 's@\{% include icons/.*\.svg %\}@@g' "$gmifile"
     done
 
     ${gems}/bin/bundle exec jekyll build

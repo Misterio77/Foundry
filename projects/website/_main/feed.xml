@@ -6,9 +6,9 @@ layout: none
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
     <channel>
         <title>{{ site.name | xml_escape }}</title>
-        <description>{{ site.description | xml_escape }}</description>        
-        <link>{{ site.url }}</link>
-        <atom:link href="{{ site.url }}{{ page.url }}" rel="self" type="application/rss+xml" />
+        <description>{{ site.description | xml_escape }}</description>
+        <link>https://{{ site.domain }}</link>
+        <atom:link href="https://{{ site.domain }}{{ page.url }}" rel="self" type="application/rss+xml" />
         <lastBuildDate>{% for post in site.posts limit:1 %}{{ post.date | date_to_rfc822 }}{% endfor %}</lastBuildDate>
         {% assign html_posts = site.posts | where: "gemini", false %}
         {% for post in html_posts limit:10 %}
@@ -19,8 +19,8 @@ layout: none
                 {% endif %}
                 <description>{{ post.content | xml_escape }}</description>
                 <pubDate>{{ post.date | date_to_rfc822 }}</pubDate>
-                <link>{{ site.url }}{{ post.url }}</link>
-                <guid isPermaLink="true">{{ site.url }}{{ post.url }}</guid>
+                <link>https://{{ site.domain }}{{ post.url }}</link>
+                <guid isPermaLink="true">https://{{ site.domain }}{{ post.url }}</guid>
             </item>
         {% endfor %}
     </channel>

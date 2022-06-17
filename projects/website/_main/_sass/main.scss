@@ -219,8 +219,7 @@ header > nav {
 }
 
 // Posts listing
-h1 + ul,
-h2 + ul {
+ul.posts {
   li {
     list-style: none;
     h2,
