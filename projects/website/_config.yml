@@ -5,13 +5,17 @@ domain: "misterio.me"
 plugins:
   - jekyll-last-modified-at
   - jekyll-extlinks
+  - jekyll-relative-links
 
 last-modified-at:
   date-format: "%F %z" # ISO 8601
 
 extlinks:
-  attributes:
-    class: external
+  attributes: {class: external}
+
+relative_links:
+  enabled: true
+  collections: true
 
 
 include: [".well-known"]

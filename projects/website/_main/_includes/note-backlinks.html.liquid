@@ -1,30 +1,17 @@
-{% comment %} We'll be searching for links to this note {% endcomment %}
-{%- assign desired_link1 = '../' | append: page.slug | append: '"' -%}
-{%- assign desired_link2 = '/notes/' | append: page.slug | append: '"' -%}
+{%- include fetch-backlinks.liquid -%}
 
-{% comment %} Collect referees {% endcomment %}
-{%- assign documents = site.documents %}
-{%- assign referees = '' -%}
-{% for document in documents %}
-    {% if document.url != page.url %}
-        {% if document.content contains desired_link1 || document.content contains desired_link2 %}
-            {% assign slug = document.slug | split: "," %}
-            {% assign referees = referees | concat: slug | uniq %}
-        {% endif %}
-    {% endif %}
-{% endfor %}
-
-{% comment %} Display collected referees {% endcomment %}
 {% if referees.size > 0 %}
     <hr />
     <h2>Links to this note:</h2>
     <ul class="posts">
     {% for referee in referees %}
-        {% assign document = site.documents | where: "slug", referee | where: "gemini", false | first %}
-        <li>
-            <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
-            <p><small>{{ document.excerpt }}</small></p>
-        </li>
+        {% if referee != '' %}
+            {% assign document = site.documents | where: "slug", referee | where: "gemini", false | first %}
+            <li>
+                <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
+                <p><small>{{ document.excerpt }}</small></p>
+            </li>
+        {% endif %}
     {% endfor %}
     </ul>
 {% endif %}

@@ -127,6 +127,19 @@
     };
     version = "1.3.0";
   };
+  jekyll-relative-links = {
+    dependencies = ["jekyll"];
+    groups = ["jekyll_plugins"];
+    platforms = [];
+    source = {
+      fetchSubmodules = false;
+      rev = "d14c17f6f3cdc54149a65c97d1a97c11b6118a2d";
+      sha256 = "0vbd5k0vsc47bkbdnqz4w4q1jg01ycdkvfm23s2yk7z0sxw6pqlv";
+      type = "git";
+      url = "https://github.com/misterio77/jekyll-relative-links";
+    };
+    version = "0.6.1";
+  };
   jekyll-sass-converter = {
     dependencies = ["sassc"];
     groups = ["default" "jekyll_plugins"];

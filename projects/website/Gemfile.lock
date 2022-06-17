@@ -6,6 +6,14 @@ GIT
       jekyll (~> 4.0)
       nokogiri (~> 1)
 
+GIT
+  remote: https://github.com/misterio77/jekyll-relative-links
+  revision: d14c17f6f3cdc54149a65c97d1a97c11b6118a2d
+  branch: main
+  specs:
+    jekyll-relative-links (0.6.1)
+      jekyll (>= 3.3, < 5.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -81,6 +89,7 @@ DEPENDENCIES
   jekyll (~> 4.2)
   jekyll-extlinks!
   jekyll-last-modified-at
+  jekyll-relative-links!
 
 BUNDLED WITH
    2.1.4
