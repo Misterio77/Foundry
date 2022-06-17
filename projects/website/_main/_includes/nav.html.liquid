@@ -4,7 +4,7 @@
   </nav>
   <ul>
     <li class="colorscheme">
-      <a aria-label="Change color scheme" href="/colorscheme">
+      <a {% if page.url == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme">
         {% include icons/mdi/palette.svg class="icon medium" %}
       </a>
     </li>
