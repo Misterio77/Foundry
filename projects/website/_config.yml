@@ -22,11 +22,11 @@ kramdown:
 collections:
   posts:
     output: true
-    permalink: /blog/:title/index:output_ext
+    permalink: /blog/:path/index:output_ext
     name: Posts
   notes:
     output: true
-    permalink: /notes/:title/index:output_ext
+    permalink: /notes/:path/index:output_ext
     name: Notes
 
 defaults:

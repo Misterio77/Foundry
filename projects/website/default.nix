@@ -25,6 +25,12 @@ stdenv.mkDerivation {
     shopt -s globstar
     for mdfile in _main/**/*.md; do
       gmifile="''${mdfile/%.md/.gmi}"
+
+      # Skip creating if gmi version already exists or if md does not have front matter
+      if [ -f "$gmifile" ] || ! grep "\-\-\-" "$mdfile"; then
+        continue
+      fi
+
       # Grab front matter
       sed -n '/---/,/---/p' "$mdfile" > "$gmifile"
       # Convert
