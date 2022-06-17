@@ -21,7 +21,7 @@
       <h1>{{ page.title }}</h1>
         <p><em>{{ page.description }}</em></p>
       <hr />
-      {{ content }}
+      {{ content | extlinks }}
     </main>
     {% include footer.html.liquid %}
   </body>

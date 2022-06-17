@@ -1,3 +1,11 @@
+GIT
+  remote: https://github.com/misterio77/jekyll-extlinks
+  revision: 9703101dc09b53892b09a4a0a241deef3085e066
+  specs:
+    jekyll-extlinks (0.0.5)
+      jekyll (~> 4.0)
+      nokogiri (~> 1)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -45,10 +53,15 @@ GEM
       rb-fsevent (~> 0.10, >= 0.10.3)
       rb-inotify (~> 0.9, >= 0.9.10)
     mercenary (0.4.0)
+    mini_portile2 (2.8.0)
+    nokogiri (1.13.6)
+      mini_portile2 (~> 2.8.0)
+      racc (~> 1.4)
     pathutil (0.16.2)
       forwardable-extended (~> 2.6)
     posix-spawn (0.3.15)
     public_suffix (4.0.7)
+    racc (1.6.0)
     rb-fsevent (0.11.1)
     rb-inotify (0.10.1)
       ffi (~> 1.0)
@@ -65,7 +78,8 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  jekyll
+  jekyll (~> 4.2)
+  jekyll-extlinks!
   jekyll-last-modified-at
 
 BUNDLED WITH

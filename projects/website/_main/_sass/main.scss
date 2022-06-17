@@ -270,3 +270,20 @@ nav ul li.colorscheme {
     vertical-align: middle;
   }
 }
+
+$external-link: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' title='External link' aria-label='External link' aria-hidden='true' role='img' width='1em' height='1em' preserveAspectRatio='xMidYMid meet' viewBox='0 0 24 24'%3E%3Cpath d='M14 3v2h3.59l-9.83 9.83l1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7z' fill='black' %3E%3C/path%3E%3C/svg%3E%0A");
+
+a.external {
+  &:after {
+    background-color: currentColor;
+    margin-left: 0.2rem;
+    width: 0.8rem;
+    height: 0.8rem;
+    display: inline-block;
+    content: '';
+    mask: $external-link no-repeat;
+    -webkit-mask: $external-link no-repeat;
+    mask-size: cover;
+    -webkit-mask-size: cover;
+  }
+}
