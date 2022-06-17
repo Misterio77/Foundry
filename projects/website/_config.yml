@@ -15,8 +15,12 @@ kramdown:
 collections:
   posts:
     output: true
-    permalink: /:year/:month/:day/:title:output_ext
+    permalink: /blog/:title/index:output_ext
     name: Posts
+  notes:
+    output: true
+    permalink: /notes/:title/index:output_ext
+    name: Notes
 
 defaults:
   # Set HTML layouts
@@ -27,14 +31,19 @@ defaults:
     values:
       layout: "post.html"
       gemini: false
-      has_gemini: true
+  -
+    scope:
+      path: ""
+      type: "notes"
+    values:
+      layout: "note.html"
+      gemini: false
   -
     scope:
       path: ""
     values:
       layout: "default.html"
       gemini: false
-      has_gemini: true
 
   # Set gemini layouts
   -
@@ -43,6 +52,13 @@ defaults:
       type: "posts"
     values:
       layout: "post.gmi"
+      gemini: true
+  -
+    scope:
+      path: "**/*.gmi"
+      type: notes
+    values:
+      layout: "note.gmi"
       gemini: true
   -
     scope:
@@ -59,3 +75,9 @@ defaults:
     values:
       language: "en"
       author: "Gabriel Fontes"
+  # All markdown pages have a gemini version, by default
+  -
+    scope:
+      path: "**/*.md"
+    values:
+      has_gemini: true

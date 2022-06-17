@@ -5,9 +5,9 @@ tags: nix
 
 Looking to start out a C (or C++) project and wanna some cool and nifty commands to manage it through both `make` and `nix`? As a plus, you'll also get nice out of tree builds.
 
-Then look no further, here's all the boilerplate you need. 
+Then look no further, here's all the boilerplate you need.
 
-**If you just want it fast without an explanation, it's all available [on my repository](https://github.com/Misterio77/nix-config/tree/6be94519831d2723a09e03352bad5c21adced399/templates/c).**
+**If you just want it fast without an explanation, it's all available on my [repository](https://github.com/Misterio77/nix-config/tree/6be94519831d2723a09e03352bad5c21adced399/templates/c).**
 
 You can just run `nix flake init -t github:misterio77/nix-config#templates.c`, to quickly init a flake with this template.
 
