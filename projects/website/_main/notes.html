@@ -63,10 +63,13 @@ has_gemini: true
   {% for note in notes %}
     <li>
       <p>
-      {{ note.last_modified_at | date: "%d/%m/%y" }}
-      -
-      <a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a> <br />
-      Tags: {% for tag in note.tags %}<a href="#{{ tag }}">{{ tag }}</a>; {% else %}<small>None yet!</small>{% endfor %}
+        <a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a> <br />
+        {{ note.last_modified_at | date: "%d/%m/%y" }}
+        {% if note.tags.size > 0 %} |
+          {% for tag in note.tags %}
+            <a href="#{{ tag }}">{{ tag }}</a>;
+          {% endfor %}
+        {% endif %}
       </p>
     </li>
   {% endfor %}

@@ -7,12 +7,8 @@ default_themes:
   light: sakura
 
 plugins:
-  - jekyll-last-modified-at
   - jekyll-extlinks
   - jekyll-relative-links
-
-last-modified-at:
-  date-format: "%F %z" # ISO 8601
 
 extlinks:
   attributes: {class: external}

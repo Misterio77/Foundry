@@ -1,6 +1,7 @@
 ---
 title: "C Nix boilerplate"
 tags: nix
+last_modified_at: 2022-06-17 03:23
 ---
 
 Looking to start out a C (or C++) project and wanna some cool and nifty commands to manage it through both `make` and `nix`? As a plus, you'll also get nice out of tree builds.
