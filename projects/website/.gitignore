@@ -1,5 +1,8 @@
 _site/
 result
+_main/_includes/scheme-datalist.html
+_main/_sass/themes
+_main/assets/themes
 
 .certificates
 .sass-cache/
