@@ -51,13 +51,11 @@
           done
 
           rm _main/_includes/scheme-datalist.html 2> /dev/null
-          rm _main/{assets,_sass}/themes/* 2> /dev/null
-          rm -r _site 2> /dev/null
+          rm _main/assets/themes/* 2> /dev/null
 
-          mkdir _main/{assets,_sass}/themes -p
+          mkdir _main/assets/themes -p
           ln -s ${packages.css-themes}/list.html -T _main/_includes/scheme-datalist.html
-          ln -s ${packages.css-themes}/partials/*.scss -t _main/_sass/themes/
-          ln -s ${packages.css-themes}/themes/*.scss -t _main/assets/themes/
+          ln -s ${packages.css-themes}/*.css -t _main/assets/themes/
         '';
       };
     }

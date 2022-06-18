@@ -12,13 +12,12 @@ stdenv.mkDerivation {
   buildInputs = [ jq ];
   buildPhase = /* bash */ ''
     build_css() {
-      mkdir -p partials themes
       scheme_name="$1"
       scheme=$(jq -r --arg scheme_name "$scheme_name" '.[$scheme_name]' $src)
 
       jq -r '"
     /* \(.name) by \(.author) */
-    @mixin theme_\(.slug) {
+    :root {
       --scheme-name: \"\(.name)\";
       --scheme-author: \"\(.author)\";
       --base00: #\(.colors.base00);
@@ -38,16 +37,7 @@ stdenv.mkDerivation {
       --base0E: #\(.colors.base0E);
       --base0F: #\(.colors.base0F);
     }
-      "' <<< "$scheme" > "partials/$scheme_name.scss"
-
-      jq -r '"---
-    ---
-
-    @import \"themes/\(.slug)\";
-    :root {
-      @include theme_\(.slug);
-    }
-      "' <<< "$scheme" > "themes/$scheme_name.scss"
+      "' <<< "$scheme" > "$scheme_name.css"
     }
 
     echo '<datalist id="scheme-list">' > list.html
@@ -63,6 +53,6 @@ stdenv.mkDerivation {
   '';
   installPhase = ''
     mkdir $out
-    cp -r * $out
+    cp * $out
   '';
 }

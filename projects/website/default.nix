@@ -17,10 +17,9 @@ stdenv.mkDerivation {
 
   buildPhase = ''
     # Add themes
-    mkdir _main/{assets,_sass}/themes -p
+    mkdir _main/assets/themes -p
     ln -s ${css-themes}/list.html -T _main/_includes/scheme-datalist.html
-    ln -s ${css-themes}/partials/*.scss -t _main/_sass/themes/
-    ln -s ${css-themes}/themes/*.scss -t _main/assets/themes/
+    ln -s ${css-themes}/*.css -t _main/assets/themes/
 
     # Convert markdown to gemtext, if needed
     shopt -s globstar

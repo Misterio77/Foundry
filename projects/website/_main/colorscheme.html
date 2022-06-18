@@ -40,7 +40,7 @@ permalink: /colorscheme/
   </p>
 
   <label class="colorscheme">
-    <input class="colorscheme" id="scheme-input" list="scheme-list" />
+    <input class="colorscheme" id="scheme-input" list="scheme-list" placeholder="{{ site.default_theme }}" />
   </label>
 
   <button id="scheme-random" class="random">
@@ -113,14 +113,6 @@ let scheme_options = document.getElementById("scheme-list").getElementsByTagName
 let scheme_random_button = document.getElementById("scheme-random");
 let scheme_default_button = document.getElementById("scheme-default");
 
-function updatePlaceholder(dark) {
-    if (dark) {
-        scheme_input.setAttribute("placeholder", "{{ site.default_themes.dark }}");
-    } else {
-        scheme_input.setAttribute("placeholder", "{{ site.default_themes.light }}");
-    }
-}
-
 // Add listener on input to change theme
 scheme_input.addEventListener("input", function () {
   let input = scheme_input.value;
@@ -148,16 +140,6 @@ scheme_default_button.addEventListener("click", function () {
   resetTheme();
   scheme_input.value = "";
 });
-
-// Automatically set placeholder based on dark or light preference
-let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-updatePlaceholder(isDark);
-window.matchMedia("(prefers-color-scheme: dark)").addListener(
-  e => {
-      let isDark = e.matches;
-      updatePlaceholder(isDark);
-  }
-);
 
 // Set first value based on current theme
 let current = getTheme();

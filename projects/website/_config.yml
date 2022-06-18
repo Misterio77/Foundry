@@ -2,9 +2,7 @@ name: "Gabriel Fontes"
 description: "My personal website and projects"
 domain: "misterio.me"
 
-default_themes:
-  dark: catppuccin
-  light: sakura
+default_theme: catppuccin
 
 plugins:
   - jekyll-extlinks
@@ -17,16 +15,16 @@ relative_links:
   enabled: true
   collections: true
 
-
-include: [".well-known"]
-
-source: _main
-
 sass:
   style: compact
 
 kramdown:
   syntx_highlighter: coderay
+
+
+include: [".well-known"]
+
+source: _main
 
 collections:
   posts:
