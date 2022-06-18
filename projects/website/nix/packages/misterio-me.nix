@@ -4,12 +4,12 @@ let
   gems = bundlerEnv {
     name = "misterio-me-env";
     inherit ruby;
-    gemdir = ./.;
+    gemdir = ../..;
   };
 in
 stdenv.mkDerivation {
   name = "misterio-me";
-  src = ./.;
+  src = ../..;
 
   JEKYLL_ENV = "production";
 
