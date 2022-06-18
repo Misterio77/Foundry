@@ -31,7 +31,13 @@
             rm _main/_includes/scheme-datalist.html 2> /dev/null
             rm _main/{assets,_sass}/themes/* 2> /dev/null
             rm -r _site 2> /dev/null
+
           }
+
+          while [ ! -f flake.nix ]; do
+            echo "Looking for flake.nix, going one directory up"
+            cd ..
+          done
 
           cleanup
 

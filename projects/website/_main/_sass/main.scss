@@ -6,6 +6,13 @@
 @import "typography";
 @import "utils";
 
+#scheme-name:after {
+  content: var(--scheme-name);
+}
+#scheme-author:after {
+  content: var(--scheme-author);
+}
+
 // =============
 // General stuff
 // =============
@@ -104,12 +111,6 @@ fieldset {
     color: var(--text-muted);
   }
   border: 2px dashed var(--background);
-  &:hover {
-    border-color: var(--background-alt);
-    legend {
-      color: var(--text-main);
-    }
-  }
 }
 // Make form have no styling, so it is more flexible
 form {

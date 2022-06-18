@@ -19,6 +19,8 @@ stdenv.mkDerivation {
       jq -r '"
     /* \(.name) by \(.author) */
     @mixin theme_\(.slug) {
+      --scheme-name: \"\(.name)\";
+      --scheme-author: \"\(.author)\";
       --base00: #\(.colors.base00);
       --base01: #\(.colors.base01);
       --base02: #\(.colors.base02);
