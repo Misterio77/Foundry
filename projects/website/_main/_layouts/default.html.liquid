@@ -1,4 +1,17 @@
 ---
 layout: root.html
 ---
-{{ content | extlinks }}
+<header>
+  {% include nav.html.liquid %}
+</header>
+
+<main>
+  <h1>{{ page.title }}</h1>
+  <p><em>{{ page.description }}</em></p>
+  <hr />
+  {{ content }}
+</main>
+
+<footer>
+  {% include footer.html.liquid %}
+</footer>
