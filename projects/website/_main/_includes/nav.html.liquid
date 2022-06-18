@@ -17,9 +17,13 @@
     </li>
     {% endfor %}
   </ul>
-  {% if page.has_gemini %}
+  <p>
     <small>
-      Also available <a href="gemini://{{ site.domain }}{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
+    {% if page.has_gemini %}
+        Also available <a href="gemini://{{ site.domain }}{{ page.url | replace: ".html", ".gmi" }}">on gemini</a>
+    {% else %}
+      &#8203
+    {% endif %}
     </small>
-  {% endif %}
+  </p>
 </nav>

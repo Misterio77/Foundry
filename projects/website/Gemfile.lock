@@ -8,7 +8,7 @@ GIT
 
 GIT
   remote: https://github.com/misterio77/jekyll-relative-links
-  revision: d14c17f6f3cdc54149a65c97d1a97c11b6118a2d
+  revision: 18d60c161ecbfaf204e4cddf8e3b8fd9ef2aa584
   branch: main
   specs:
     jekyll-relative-links (0.6.1)

@@ -133,8 +133,8 @@
     platforms = [];
     source = {
       fetchSubmodules = false;
-      rev = "d14c17f6f3cdc54149a65c97d1a97c11b6118a2d";
-      sha256 = "0vbd5k0vsc47bkbdnqz4w4q1jg01ycdkvfm23s2yk7z0sxw6pqlv";
+      rev = "18d60c161ecbfaf204e4cddf8e3b8fd9ef2aa584";
+      sha256 = "0h4q7pca4c7l5h4kqsp9dr198dxkx3mw9hb26k77pbwblmy1wfcd";
       type = "git";
       url = "https://github.com/misterio77/jekyll-relative-links";
     };

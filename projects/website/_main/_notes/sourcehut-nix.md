@@ -1,6 +1,6 @@
 ---
 title: "Use builds.sr.ht with nix flakes"
-tags: nix srht
+tags: nix sourcehut cicd
 ---
 
 I've recently started migrating from github to sourcehut, and i've been having a blast.
@@ -20,7 +20,7 @@ First of all, of course, your project needs a `flake.nix`. More specifically, yo
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
-      let 
+      let
         pkgs = import nixpkgs { inherit system; };
         package = "misterio-me";
       in {

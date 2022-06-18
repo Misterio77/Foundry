@@ -1,4 +1,4 @@
-{ stdenv, ruby, bundlerEnv, css-themes, python3Packages, dos2unix }:
+{ stdenv, ruby, bundlerEnv, css-themes, python3Packages, dos2unix, perl }:
 
 let
   gems = bundlerEnv {
@@ -13,7 +13,7 @@ stdenv.mkDerivation {
 
   JEKYLL_ENV = "production";
 
-  buildInputs = [ gems ruby python3Packages.md2gemini dos2unix ];
+  buildInputs = [ gems ruby python3Packages.md2gemini dos2unix perl ];
 
   buildPhase = ''
     # Add themes
@@ -33,13 +33,20 @@ stdenv.mkDerivation {
 
       # Grab front matter
       sed -n '/---/,/---/p' "$mdfile" > "$gmifile"
-      # Convert
-      md2gemini "$mdfile" \
+
+      # Turn markdown linebreaks into actual breaks, as well as link lists, so md2gemini respects it
+      sed -r 's/(^\[.*\]\(.*\))(\s*\\+|\s\s+)$/\1\n/gm' "$mdfile" | \
+      sed -r 's/^-\s+(\[.*\]\(.*\))$/\1\n/gm' | \
+      md2gemini \
         --frontmatter --links copy --plain --md-links >> "$gmifile"
+
       # Fix CRLF
       dos2unix "$gmifile"
       # Strip SVGs
       sed -ri 's@\{% include icons/.*\.svg %\}@@g' "$gmifile"
+      # Trim double newlines between links
+      perl -0777 -pe 's/(^=>.*$)\n\n=>/\1\n=>/mg' -i "$gmifile"
+      perl -0777 -pe 's/(^=>.*$)\n\n=>/\1\n=>/mg' -i "$gmifile"
     done
 
     ${gems}/bin/bundle exec jekyll build
