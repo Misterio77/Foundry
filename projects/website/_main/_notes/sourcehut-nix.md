@@ -1,6 +1,6 @@
 ---
 title: "Use builds.sr.ht with nix flakes"
-tags: nix sourcehut cicd
+tags: nix sourcehut
 ---
 
 I've recently started migrating from github to sourcehut, and i've been having a blast.
