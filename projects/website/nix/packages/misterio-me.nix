@@ -17,13 +17,13 @@ stdenv.mkDerivation {
 
   buildPhase = ''
     # Add themes
-    mkdir _main/assets/themes -p
-    ln -s ${css-themes}/list.html -T _main/_includes/scheme-datalist.html
-    ln -s ${css-themes}/*.css -t _main/assets/themes/
+    mkdir src/assets/themes -p
+    ln -s ${css-themes}/list.html -T src/_includes/scheme-datalist.html
+    ln -s ${css-themes}/*.css -t src/assets/themes/
 
     # Convert markdown to gemtext, if needed
     shopt -s globstar
-    for mdfile in _main/**/*.md; do
+    for mdfile in src/**/*.md; do
       gmifile="''${mdfile/%.md/.gmi}"
 
       # Skip creating if gmi version already exists or if md does not have front matter

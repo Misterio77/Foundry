@@ -1,9 +1,12 @@
-_site/
 result
-_main/_includes/scheme-datalist.html
-_main/assets/themes
+
+src/_includes/scheme-datalist.html
+src/assets/themes
 
 .certificates
+
 .sass-cache/
+
 .jekyll-cache/
 .jekyll-metadata
+_site/
