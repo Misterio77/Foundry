@@ -9,6 +9,7 @@ function setTheme(scheme) {
     localStorage.setItem("current-scheme", scheme);
 }
 
+// Get currently applied scheme
 function getTheme() {
     let theme = localStorage.getItem("current-scheme");
     if (theme != "null") {
@@ -18,7 +19,7 @@ function getTheme() {
     }
 }
 
-// Reset scheme to defaults (rose-pine moon or dawn, depending on preference)
+// Reset scheme to default
 function resetTheme() {
     chosen_scheme_css.removeAttribute("href");
     localStorage.removeItem("current-scheme");
