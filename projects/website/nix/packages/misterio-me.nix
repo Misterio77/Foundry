@@ -4,7 +4,9 @@ let
   gems = bundlerEnv {
     name = "misterio-me-env";
     inherit ruby;
-    gemdir = ../..;
+    gemfile = ../../Gemfile;
+    lockfile = ../../Gemfile.lock;
+    gemset = ./gemset.nix;
   };
 in
 stdenv.mkDerivation {
