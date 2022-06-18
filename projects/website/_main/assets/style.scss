@@ -1,4 +1,17 @@
 ---
 ---
 
+@import "themes/{{ site.default_themes.light }}";
+@import "themes/{{ site.default_themes.dark }}";
+
+:root {
+  @include theme_{{ site.default_themes.light }};
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    @include theme_{{ site.default_themes.dark }};
+  }
+}
+
 @import "main";

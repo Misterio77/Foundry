@@ -5,9 +5,7 @@
   {% assign current = page.url | remove: "index.html" %}
   <ul>
     <li class="colorscheme">
-      <a {% if current == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme">
-        {% include icons/mdi/palette.svg class="icon medium" %}
-      </a>
+      <a {% if current == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme"></a>
     </li>
     {% for item in site.data.navigation %}
     <li>

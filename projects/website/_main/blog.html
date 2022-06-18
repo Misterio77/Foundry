@@ -6,13 +6,14 @@ has_gemini: true
 ---
 
 {% assign posts = site.posts | where: "gemini", false | where: "draft", false %}
-[Feed {% include icons/simple-icons/rss.svg %}](../feed.xml)
+<a href="/feed.xml" class="feed">Feed</a>
 
+<ul class="posts">
 {% for post in posts %}
-{:.posts}
-- ## [{{ post.title }} ({{ post.language }})]({{ post.url }})
-
-  {{ post.date | date: "%d/%m/%y" }}
-
-  {{ post.excerpt }}
+  <li>
+    <h2><a href="{{ post.url }}">{{ post.title }} ({{ post.language }})</a></h2>
+    <p>{{ post.date | date: "%d/%m/%y" }}</p>
+    <p>{{ post.excerpt }}</p>
+  </li>
 {% endfor %}
+</ul>

@@ -14,14 +14,14 @@ Serverside web app built with Rust + Rocket + Tera, backed by a PostgreSQL datab
 
 [Public instance](https://paste.misterio.me)
 
-[{% include icons/sourcehut.svg %}Repository](https://sr.ht/~misterio/paste.misterio.me)
+[Repository](https://sr.ht/~misterio/paste.misterio.me){:.sourcehut}
 
 ### misterio.me
 Personal website (you are here!).
 
 Static website built with jekyll and water.css. Hosted at sourcehut pages.
 
-[{% include icons/sourcehut.svg %}Repository](https://sr.ht/~misterio/misterio.me)
+[Repository](https://sr.ht/~misterio/misterio.me){:.sourcehut}
 
 ## CLI
 
@@ -30,21 +30,21 @@ Manager and builder for base16 themes.
 
 CLI app built with Rust + Clap. Packaged on the AUR and nixpkgs.
 
-[{% include icons/simple-icons/github.svg %} Repository](https://github.com/misterio77/flavours)
+[Repository](https://github.com/misterio77/flavours){:.github}
 
 ## Nix related
 
 ### nix-colors
 Nix-compatible base16 schemes and helper functions.
 
-[{% include icons/simple-icons/github.svg %}Repository](https://github.com/misterio77/nix-colors)
+[Repository](https://github.com/misterio77/nix-colors){:.github}
 
 ### nix-config
 Personal nix(os) configurations and packages.
 
 This declares pretty much the entirety of anything on my computers (all 4 of them), except for some state (which can be easily recreated) and secrets (which are all backed up by git and encrypted using my PGP key).
 
-[{% include icons/sourcehut.svg %}Repository](https://sr.ht/~misterio/nix-config)
+[Repository](https://sr.ht/~misterio/nix-config){:.sourcehut}
 
 ## Bots
 
@@ -53,23 +53,23 @@ Discord bot that acts as a subsonic music client.
 
 Built with Rust + Serenity + Sunk. Personal instance hosted at my rpi4.
 
-[{% include icons/sourcehut.svg %}Repository](https://sr.ht/~misterio/disconic)
+[Repository](https://sr.ht/~misterio/disconic){:.sourcehut}
 
 ### sistemer-bot
 Telegram bot for helping me and my classmates quickly look up our college subjects.
 
 Built with Rust + Teloxide. Personal instance hosted at my rpi4.
 
-[{% include icons/simple-icons/github.svg %}Repository](https://github.com/misterio77/sistemer-bot)
+[Repository](https://github.com/misterio77/sistemer-bot){:.github}
 
 ## USP
 
 ### My undergrad work
 I version control pretty much anything i do while on college. This project groups these repositories.
 
-[{% include icons/sourcehut.svg %}Repository](https://sr.ht/~misterio/bsi)
+[Repository](https://sr.ht/~misterio/bsi){:.sourcehut}
 
 ### GELOS
 I'm coordinator and one of the founders of my institute's free software extension group, GELOS. I was responsible for building our visual identity, as well as our institutional website.
 
-[{% include icons/simple-icons/gitlab.svg %}Repositories](https://gitlab.com/gelos-usp)
+[Repositories](https://gitlab.com/gelos-usp){:.gitlab}

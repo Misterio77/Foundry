@@ -1,0 +1,65 @@
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: bold;
+  src: url('/assets/FiraSans/Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: bold;
+  src: url('/assets/FiraSans/BoldItalic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraCode/Regular.woff2') format('woff2');
+}
+
+body {
+  font-family: "Fira Sans", sans-serif;
+}
+
+// Code font
+code {
+  font-family: "Fira Code", monospace;
+  font-size: .90em;
+}
+
+// Headings
+h1 {
+  font-size: 1.9em;
+  font-style: italic;
+}
+h2 {
+  font-size: 1.7em;
+}
+h3 {
+  font-size: 1.4em;
+}
+h4 {
+  font-size: 1.2em;
+}
+h5 {
+  font-size: 1.1em;
+}
+h6 {
+  font-size: 1em;
+}

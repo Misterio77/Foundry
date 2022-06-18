@@ -10,32 +10,42 @@ stdenv.mkDerivation {
   dontUnpack = true;
 
   buildInputs = [ jq ];
-  buildPhase = ''
+  buildPhase = /* bash */ ''
     build_css() {
+      mkdir -p partials themes
       scheme_name="$1"
       scheme=$(jq -r --arg scheme_name "$scheme_name" '.[$scheme_name]' $src)
 
       jq -r '"
-        /* \(.name) by \(.author) */
-        :root {
-          --base00: #\(.colors.base00);
-          --base01: #\(.colors.base01);
-          --base02: #\(.colors.base02);
-          --base03: #\(.colors.base03);
-          --base04: #\(.colors.base04);
-          --base05: #\(.colors.base05);
-          --base06: #\(.colors.base06);
-          --base07: #\(.colors.base07);
-          --base08: #\(.colors.base08);
-          --base09: #\(.colors.base09);
-          --base0A: #\(.colors.base0A);
-          --base0B: #\(.colors.base0B);
-          --base0C: #\(.colors.base0C);
-          --base0D: #\(.colors.base0D);
-          --base0E: #\(.colors.base0E);
-          --base0F: #\(.colors.base0F);
-        }
-      "' <<< "$scheme" > "$scheme_name.css"
+    /* \(.name) by \(.author) */
+    @mixin theme_\(.slug) {
+      --base00: #\(.colors.base00);
+      --base01: #\(.colors.base01);
+      --base02: #\(.colors.base02);
+      --base03: #\(.colors.base03);
+      --base04: #\(.colors.base04);
+      --base05: #\(.colors.base05);
+      --base06: #\(.colors.base06);
+      --base07: #\(.colors.base07);
+      --base08: #\(.colors.base08);
+      --base09: #\(.colors.base09);
+      --base0A: #\(.colors.base0A);
+      --base0B: #\(.colors.base0B);
+      --base0C: #\(.colors.base0C);
+      --base0D: #\(.colors.base0D);
+      --base0E: #\(.colors.base0E);
+      --base0F: #\(.colors.base0F);
+    }
+      "' <<< "$scheme" > "partials/$scheme_name.scss"
+
+      jq -r '"---
+    ---
+
+    @import \"themes/\(.slug)\";
+    :root {
+      @include theme_\(.slug);
+    }
+      "' <<< "$scheme" > "themes/$scheme_name.scss"
     }
 
     echo '<datalist id="scheme-list">' > list.html
@@ -51,6 +61,6 @@ stdenv.mkDerivation {
   '';
   installPhase = ''
     mkdir $out
-    cp * $out
+    cp -r * $out
   '';
 }

@@ -2,6 +2,10 @@ name: "Gabriel Fontes"
 description: "My personal website and projects"
 domain: "misterio.me"
 
+default_themes:
+  dark: catppuccin
+  light: sakura
+
 plugins:
   - jekyll-last-modified-at
   - jekyll-extlinks

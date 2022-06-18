@@ -1,4 +1,5 @@
 ---
+tags: digital-garden
 ---
 
 Hey! Welcome to my website and personal wiki.

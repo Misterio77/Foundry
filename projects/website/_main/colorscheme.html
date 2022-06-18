@@ -4,45 +4,106 @@ description: Set your colorscheme on the website
 permalink: /colorscheme/
 ---
 
-<small>Powered by <a href="https://github.com/base16-project/base16">base16</a> + <a href="https://github.com/misterio77/nix-colors">nix-colors</a></small>.
 
-{% include scheme-datalist.html %}
+<fieldset>
+  {% include scheme-datalist.html %}
+  <legend>
+    <small>
+      Powered by <a href="https://github.com/base16-project/base16">base16</a>
+      + <a href="https://github.com/misterio77/nix-colors">nix-colors</a>.
+    </small>
+  </legend>
 
-<div class="colors">
-  <p style="color: var(--base00)">█</p>
-  <p style="color: var(--base01)">█</p>
-  <p style="color: var(--base02)">█</p>
-  <p style="color: var(--base03)">█</p>
-  <p style="color: var(--base04)">█</p>
-  <p style="color: var(--base05)">█</p>
-  <p style="color: var(--base06)">█</p>
-  <p style="color: var(--base07)">█</p>
-  <p style="color: var(--base08)">█</p>
-  <p style="color: var(--base09)">█</p>
-  <p style="color: var(--base0A)">█</p>
-  <p style="color: var(--base0B)">█</p>
-  <p style="color: var(--base0C)">█</p>
-  <p style="color: var(--base0D)">█</p>
-  <p style="color: var(--base0E)">█</p>
-  <p style="color: var(--base0F)">█</p>
-</div>
+
+<p>
+    <span style="color: var(--base00)">█</span><!--
+ --><span style="color: var(--base01)">█</span><!--
+ --><span style="color: var(--base02)">█</span><!--
+ --><span style="color: var(--base03)">█</span><!--
+ --><span style="color: var(--base04)">█</span><!--
+ --><span style="color: var(--base05)">█</span><!--
+ --><span style="color: var(--base06)">█</span><!--
+ --><span style="color: var(--base07)">█</span><!--
+ --><span style="color: var(--base08)">█</span><!--
+ --><span style="color: var(--base09)">█</span><!--
+ --><span style="color: var(--base0A)">█</span><!--
+ --><span style="color: var(--base0B)">█</span><!--
+ --><span style="color: var(--base0C)">█</span><!--
+ --><span style="color: var(--base0D)">█</span><!--
+ --><span style="color: var(--base0E)">█</span><!--
+ --><span style="color: var(--base0F)">█</span>
+</p>
 
 <label class="colorscheme">
-  <div class="illustrated-input">
-    {% include icons/mdi/palette.svg %}
-    <input id="scheme-input" list="scheme-list" />
-  </div>
+  <input class="colorscheme" id="scheme-input" list="scheme-list" />
 </label>
 
-<button id="scheme-random">
+<button id="scheme-random" class="random">
   Random
-  {% include icons/mdi/shuffle.svg %}
 </button>
 
-<button id="scheme-default" hidden>
-  Reset
-  {% include icons/mdi/restore.svg %}
+<button id="scheme-default" hidden class="restore">
+  Restore
 </button>
+
+</fieldset>
+
+<h2>Theme preview</h2>
+
+<h3>A few links:</h3>
+<p>
+  <a href="">Internal link</a> -
+  <a href="" class="file">File link</a> -
+  <a href="https://usp.br">External link</a>
+</p>
+
+<h3>A quote/tip:</h3>
+<blockquote>
+  Type <kbd>:wq</kbd> and press <kbd>Enter</kbd> to exit Vim
+</blockquote>
+
+<h3>Form stuff:</h3>
+<input placeholder="a sweet input"/>
+<fieldset>
+  <legend>Buttons!</legend>
+  <button class="positive">Yes!</button>
+  <button class="negative">No!</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+  <button>Maybe</button>
+</fieldset>
+
+<h3>Some haskell code, <code>collatz.hs</code>:</h3>
+{% highlight haskell %}
+module CollatzConjecture (collatz) where
+
+collatz :: Integer -> Maybe Integer
+collatz n
+  | n <= 0 = Nothing
+  | n == 1 = Just 0
+  | odd n     = succ <$> collatz (3 * n + 1)
+  | otherwise = succ <$> collatz (n `div` 2)
+{% endhighlight %}
+
+<h3>And...</h3>
+<details>
+  <summary>
+    Click me
+  </summary>
+  Some hidden stuff!
+</details>
+
 
 <script>
 let scheme_input = document.getElementById("scheme-input");
@@ -52,9 +113,9 @@ let scheme_default_button = document.getElementById("scheme-default");
 
 function updatePlaceholder(dark) {
     if (dark) {
-        scheme_input.setAttribute("placeholder", "rose-pine-moon");
+        scheme_input.setAttribute("placeholder", "{{ site.default_themes.dark }}");
     } else {
-        scheme_input.setAttribute("placeholder", "rose-pine-dawn");
+        scheme_input.setAttribute("placeholder", "{{ site.default_themes.light }}");
     }
 }
 
