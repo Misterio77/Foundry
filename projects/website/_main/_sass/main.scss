@@ -52,12 +52,11 @@ a[href^="sms\:"]:before {
 
   // Additional variables
   --blockquote-color: var(--base0C);
-  --error: var(--base08);
   --links-files: var(--base0B);
   --links-external: var(--base0D);
-  --links-anchor: var(--base0A);
   --negative: var(--base08);
   --positive: var(--base0B);
+  --warning: var(--base0A);
 }
 
 // Jump fragment indicator
@@ -162,8 +161,14 @@ button {
 }
 
 blockquote {
-  border-left-color: var(--blockquote-color);
-  &.info {
+  &.negative {
+      border-left-color: var(--negative);
+  }
+  &.positive {
+      border-left-color: var(--positive);
+  }
+  &.warning {
+      border-left-color: var(--warning);
   }
 }
 
