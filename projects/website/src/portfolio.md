@@ -1,6 +1,7 @@
 ---
 title: My projects
 description: Some of my past and current projects
+permalink: /portfolio/index.html
 ---
 
 Most of these can be found at my [sourcehut](https://sr.ht/~misterio) or [github](https://github.com/misterio77) profiles (usually mirrored at both).
