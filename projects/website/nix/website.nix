@@ -37,15 +37,18 @@ stdenv.mkDerivation {
       sed -n '/---/,/---/p' "$mdfile" > "$gmifile"
 
       # Turn markdown linebreaks into actual breaks, as well as link lists, so md2gemini respects it
-      sed -r 's/(^\[.*\]\(.*\))(\s*\\+|\s\s+)$/\1\n/gm' "$mdfile" | \
-      sed -r 's/^-\s+(\[.*\]\(.*\))$/\1\n/gm' | \
-      md2gemini \
-        --frontmatter --links copy --plain --md-links >> "$gmifile"
+      sed -E 's/(^\[.*\]\(.*\))(\s*\\+|\s\s+)$/\1\n/gm' "$mdfile" | \
+      sed -E 's/^-\s+(\[.*\]\(.*\))$/\1\n/gm' | \
+        md2gemini --frontmatter --links copy --plain --md-links >> "$gmifile"
 
       # Fix CRLF
       dos2unix "$gmifile"
       # Strip SVGs
-      sed -ri 's@\{% include icons/.*\.svg %\}@@g' "$gmifile"
+      sed -Ei 's/\{% include icons\/.*\.svg %\}//g' "$gmifile"
+      # Rewrite frontmatter containing .html permalinks into .gmi ones
+      sed -Ei 's/(^permalink:.*)\.html/\1\.gmi/g' "$gmifile"
+      # Rewrite relative .html links into .gmi
+      sed -Ei 's/(^=>\s+\..*)\.html/\1\.gmi/g' "$gmifile"
       # Trim double newlines between links
       perl -0777 -pe 's/(^=>.*$)\n\n=>/\1\n=>/mg' -i "$gmifile"
       perl -0777 -pe 's/(^=>.*$)\n\n=>/\1\n=>/mg' -i "$gmifile"

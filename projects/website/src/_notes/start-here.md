@@ -8,7 +8,7 @@ Hey! Welcome to my website and personal wiki.
 ## What's this?
 
 If you're here for info about me, visit the [homepage](../index.md). If you're interested
-in more polished writing, check the [blog](../blog.md) (if I ever get to write
+in more polished writing, check the [blog](../blog.html) (if I ever get to write
 something better, that is). If you're interested in my personal knowledge and
 work-in-progress notes, you're in the right place!
 
@@ -24,7 +24,7 @@ This section of my website ("notes") is my "second brain", "digital garden",
 You'll find random notes, class notes, links, work in progress guides, and more
 here.
 
-To start browsing, check the [notes homepage](../notes.md). You'll find everything
+To start browsing, check the [notes homepage](../notes.html). You'll find everything
 grouped by tags they belong to.
 
 All notes have backlinking, so just click away!
