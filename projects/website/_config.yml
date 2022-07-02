@@ -24,7 +24,7 @@ kramdown:
 
 include: [".well-known"]
 
-source: src
+source: _src
 
 collections:
   posts:

@@ -7,11 +7,11 @@
       cd ..
     done
 
-    rm src/_includes/scheme-datalist.html 2> /dev/null
-    rm src/assets/themes/* 2> /dev/null
+    rm _src/_includes/scheme-datalist.html 2> /dev/null
+    rm _src/assets/themes/* 2> /dev/null
 
-    mkdir src/assets/themes -p
-    ln -s ${css-themes}/list.html -T src/_includes/scheme-datalist.html
-    ln -s ${css-themes}/*.css -t src/assets/themes/
+    mkdir _src/assets/themes -p
+    ln -s ${css-themes}/list.html -T _src/_includes/scheme-datalist.html
+    ln -s ${css-themes}/*.css -t _src/assets/themes/
   '';
 }

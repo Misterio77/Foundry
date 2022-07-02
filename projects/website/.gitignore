@@ -1,7 +1,7 @@
 result
 
-src/_includes/scheme-datalist.html
-src/assets/themes
+_src/_includes/scheme-datalist.html
+_src/assets/themes
 
 .certificates
 
