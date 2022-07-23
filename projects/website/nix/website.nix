@@ -43,8 +43,6 @@ stdenv.mkDerivation {
 
       # Fix CRLF
       dos2unix "$gmifile"
-      # Strip SVGs
-      sed -Ei 's/\{% include icons\/.*\.svg %\}//g' "$gmifile"
       # Rewrite frontmatter containing .html permalinks into .gmi ones
       sed -Ei 's/(^permalink:.*)\.html/\1\.gmi/g' "$gmifile"
       # Rewrite relative .html links into .gmi

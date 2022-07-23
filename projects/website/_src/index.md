@@ -27,5 +27,3 @@ I love animals (I have five cats and a dog), the planet, and the people who live
 Studying at one of the big public universities of Brazil, meeting all sort of amazing people, and witnessing injustice has shaped how i think.
 
 I'm an free software, environmental, queer, anti-capitalist, and education activist.
-
-You'll probably see me avoiding proprietary software and walled gardens at all costs.
