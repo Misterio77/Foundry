@@ -1,21 +1,7 @@
 ---
 layout: default.html
 ---
-<p><a href="/notes">/notes</a></p>
-<p>
-  Last modified on {{ page.date | date_to_string }} by {{ page.author }}
-</p>
-{% if page.tags.size > 0 %}
-  <p>Tags:
-    {% for tag in page.tags %}
-      <a href="/notes#{{ tag }}">#{{ tag }}</a>
-    {% endfor %}
-  </p>
-{% endif %}
-<hr />
-
 
 {{ content }}
-
 
 {% include note-backlinks.html.liquid %}

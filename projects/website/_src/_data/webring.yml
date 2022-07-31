@@ -1,90 +1,68 @@
 
-- title: "Status update, June 2022"
-  link: "https://drewdevault.com/2022/06/15/Status-update-June-2022.html"
-  date: "2022-06-15 00:00:00 &#43;0000 &#43;0000"
-  summary: "Hello again! I would like to open this post by acknowledging the response to my
-earlier post, “bleh”. Since it was published, I have received several hundred
-emails expressing support and kindness. I initially tried to provide these with
-thoughtful replies, …"
+- title: "Making Tax Digital and Plain-Text Accounting"
+  link: "https://wilw.dev/blog/2022/07/30/mtd-plain-text-accounting/"
+  date: "2022-07-30 22:25:00 &#43;0000 GMT"
+  summary: "HMRC&#39;s Making Tax Digital
+Making Tax Digital (MTD) is part of the UK Government&#39;s plan for modernising the tax system for both businesses and individuals.
+For years, HMRC (the Government&#39;s tax department) has had an online tax system that is inf…"
+  sourcelink: "https://wilw.dev"
+  sourcetitle: "Will Webberley&#39;s Blog"
+
+- title: "What is your top 10 lists of CLI tools?"
+  link: "http://lazybear.io/notes/what-is-your-top-ten-cli-tools/"
+  date: "2022-07-28 10:58:03 &#43;0100 &#43;0100"
+  summary: "Being always in terminals, I use many CLI tools
+like :
+
+mutt
+tmux
+vim
+fzf
+newsboat
+many others …
+
+What is your top 10?"
+  sourcelink: "http://lazybear.io/"
+  sourcetitle: "Lazybear"
+
+- title: "Conciseness"
+  link: "https://drewdevault.com/2022/07/26/Conciseness.html"
+  date: "2022-07-26 00:00:00 &#43;0000 &#43;0000"
+  summary: "Conciseness is often considered a virtue among hackers and software engineers.
+FOSS maintainers in particular generally prefer to keep bug reports, questions
+on mailing lists, discussions in IRC channels, and so on, close to the point and
+with minimal faff. …"
   sourcelink: "https://drewdevault.com"
   sourcetitle: "Drew DeVault&#39;s blog"
 
-- title: "Denver to Lisbon, Portugal"
-  link: "https://sumnerevans.com/posts/travel/2022-lisbon-and-paris/denver-to-lisbon/"
-  date: "2022-06-05 12:00:00 -0600 -0600"
-  summary: "Today I ventured across the Atlantic for the first time since 2019. The reason: a work retreat in Ericeira, Portugal, a small town about 40 minutes from Lisbon. My flight path was from DEN -&gt; IAD (Washington Dulles) -&gt; LIS.
-Both flights were uneventf…"
-  sourcelink: "https://sumnerevans.com/"
-  sourcetitle: "Sumner Evans"
+- title: "Revisiting the Web Analytics Rabbit Hole"
+  link: "https://kevq.uk/revisiting-the-web-analytics-rabbit-hole/"
+  date: "2022-07-25 09:49:08 &#43;0000 &#43;0000"
+  summary: "A little over a year ago, I removed all analytics from this site because it was sending me down a rabbit hole that I didn’t like. Here’s an update. If ... More --&gt;"
+  sourcelink: "https://kevq.uk/"
+  sourcetitle: "Kev Quirk"
 
-- title: "First impressions of Purism Librem 5"
-  link: "https://elis.nu/blog/2021/10/first-impressions-of-purism-librem-5/index.html"
-  date: "2021-10-15 00:00:00 &#43;0000 &#43;0000"
+- title: "Keeping LG webOS Developer Mode alive with Home Assistant"
+  link: "https://elis.nu/blog/2022/07/keeping-webos-developer-mode-alive-with-home-assistant/index.html"
+  date: "2022-07-25 00:00:00 &#43;0000 &#43;0000"
   summary: "
 
  
  Table of Contents
  
-   Delays and more delays
-  Delivery
-  First Impressions
-   Packaging
-  Wall plug &amp; USB-cable
-  The Librem 5 hardware
-  The PureOS phone software
-   Some photos of the device in use
-   Had some problem downloading updates in the GUI applic…"
+   Keeping the session alive
+   First attempt using a systemd timer
+  Second attempt using Home Assistant
+
+
+
+ 
+For over 10 years I&#39;ve used  Kodi on a separate PC connected to a TV to play
+back local media.
+
+
+ 
+A couple of weeks ago everything …"
   sourcelink: "https://elis.nu/"
   sourcetitle: "~elis/blog/"
-
-- title: "NixOS on the Framework"
-  link: "http://grahamc.com/blog/nixos-on-framework"
-  date: "2021-07-26 00:00:00 &#43;0000 &#43;0000"
-  summary: "
-
-What a treat it is to review the Framework laptop a few months before I’ll be buying my own.
-
-The Framework promises to be an powerful, high-end ultra thin laptop with the stand-out feature of easy repairs and upgrades. I think they’ve done it.
-
-Let’s install…"
-  sourcelink: "http://grahamc.com/"
-  sourcetitle: "Graham Christensen"
-
-- title: "NixOS: Confederation"
-  link: "https://myme.no/posts/2022-06-14-nixos-confederation.html"
-  date: "0001-01-01 00:00:00 &#43;0000 UTC"
-  summary: "
-  NixOS: Confederation
-  
-    Posted on 2022-06-14
-    
-  
-  
-    Contents
-
-The flake
-
-Inputs
-Outputs
-Nixpkgs and overlays
-NixOS &amp; Home Manager
-Development shell
-
-Machines
-
-Generic config
-On hardware
-VMWare
-WSL
-QEmu
-Raspberry PI
-
-Configuration
-
-Secrets
-In the repl
-
-Controlled upda…"
-  sourcelink: "https://myme.no"
-  sourcetitle: "myme.no tech blog"
 

@@ -1,19 +1,23 @@
 ---
 title: Latest Posts
-description: My personal thoughts, rants, and occasional guide
+description: More structured thoughts and guides
 permalink: /blog/index.html
 has_gemini: true
 ---
 
 {% assign posts = site.posts | where: "gemini", false | where: "draft", false %}
-<a href="/feed.xml" class="feed">Feed</a>
+<p><a href="/feed.xml" class="feed">Feed</a></p>
 
-<ul class="posts">
 {% for post in posts %}
-  <li>
-    <h2><a href="{{ post.url }}">{{ post.title }} ({{ post.language }})</a></h2>
-    <p>{{ post.date | date: "%d/%m/%y" }}</p>
+  <article>
+    <header>
+      <h2><a href="{{ post.url }}">{{ post.title }} ({{ post.language }})</a></h2>
+    </header>
+    <p>
+      <time datetime="{{ post.date }}">
+        {{ post.date | date_to_string }}
+      </time>
+    </p>
     <p>{{ post.excerpt }}</p>
-  </li>
+  </article>
 {% endfor %}
-</ul>

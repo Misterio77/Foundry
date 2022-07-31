@@ -218,63 +218,71 @@ nav li.colorscheme a {
   }
 }
 
-header > nav {
-  // Navigation menu
-  ul {
-    list-style: none;
-    margin-left: -30px;
+body > header {
+  // Add a line between header and main
+  border-bottom: 1px solid var(--border);
+  & > nav {
+    // Navigation menu
+    ul {
+      list-style: none;
+      margin-left: -30px;
 
-    li {
-      font-size: 1.1em;
-      display: inline-block;
-      margin-bottom: 10px;
-      margin-right: 15px;
-      margin-top: -10px;
-      vertical-align: middle;
-      &.colorscheme:after {
-        margin-left: 0.5rem;
-        content: "-";
-        color: var(--text-muted);
+      li {
+        font-size: 1.1em;
+        display: inline-block;
+        margin-bottom: 10px;
+        margin-right: 15px;
+        margin-top: -10px;
+        vertical-align: middle;
+        &.colorscheme:after {
+          margin-left: 0.5rem;
+          content: "-";
+          color: var(--text-muted);
+        }
       }
     }
-  }
-  // Site logo
-  & > nav {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    margin-bottom: 2em;
-    margin-top: 2em;
+    // Site logo
+    & > nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin-bottom: 2em;
+      margin-top: 2em;
 
 
-    .title {
-      // Name itself
-      a {
-        color: var(--base0E);
-        text-decoration: none;
-      }
+      .title {
+        // Name itself
+        a {
+          color: var(--base0E);
+          text-decoration: none;
+        }
 
-      // Decorations around
-      color: var(--text-muted);
-      font-size: 2.4em;
-      font-weight: 600;
-      &:hover {
-        color: var(--base09);
+        // Decorations around
+        color: var(--text-muted);
+        font-size: 2.4em;
+        font-weight: 600;
+        &:hover {
+          color: var(--base09);
+        }
       }
     }
   }
 }
 
-// Posts listing
-ul.posts li,
-li.post {
-  // Remove list bullets
-  list-style: none;
-  h2, h3, h4, h5, h6, {
-    // Remove top margin from post info
+aside {
+  border-top: 1px solid var(--border);
+  font-size: 80%;
+}
+
+// Remove top margin from post info
+article header {
+  margin-bottom: 0;
+  h2, h3, h4, h5, h6 {
     margin-bottom: 0;
-    & + p {
-      margin-top: 0;
-    }
   }
+}
+
+// If it's main article
+body > main > article > header {
+  padding-bottom: 0.5em;
 }

@@ -6,10 +6,24 @@ layout: root.html
 </header>
 
 <main>
-  <h1>{{ page.title }}</h1>
-  <p><em>{{ page.description }}</em></p>
-  <hr />
-  {{ content }}
+  <article>
+    <header>
+      <h1>{{ page.title }}</h1>
+      <p><em>{{ page.description }}</em></p>
+      {% if page.date %}
+        <p><time datetime="{{ page.date }}">{{ page.date | date_to_string }}</time></p>
+      {% endif %}
+      {% if page.tags.size > 0 %}
+        <p>
+          {% for tag in page.tags %}
+            <a href="/notes#{{ tag }}">#{{ tag }}</a>
+          {% endfor %}
+        </p>
+      {% endif %}
+    </header>
+
+    {{ content }}
+  </article>
 </main>
 
 <footer>

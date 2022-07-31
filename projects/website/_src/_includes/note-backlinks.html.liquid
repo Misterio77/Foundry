@@ -1,17 +1,20 @@
 {%- include fetch-backlinks.liquid -%}
 
 {% if referees.size > 0 %}
-    <hr />
-    <h2>Links to this note:</h2>
-    <ul class="posts">
+  <aside class="backlinks">
+    <header>
+      <h2>Links to this note:</h2>
+    </header>
     {% for referee in referees %}
-        {% if referee != '' %}
-            {% assign document = site.documents | where: "slug", referee | where: "gemini", false | first %}
-            <li>
-                <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
-                <p><small>{{ document.excerpt }}</small></p>
-            </li>
-        {% endif %}
+      {% if referee != '' %}
+        {% assign document = site.documents | where: "slug", referee | where: "gemini", false | first %}
+        <article>
+          <header>
+            <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
+          </header>
+          <p><small>{{ document.excerpt }}</small></p>
+        </article>
+      {% endif %}
     {% endfor %}
-    </ul>
+  </aside>
 {% endif %}

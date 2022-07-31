@@ -4,6 +4,14 @@ description: Personal wiki and digital garden
 permalink: /notes/index.gmi
 ---
 {%- assign notes = site.notes | where: "gemini", true  | sort: "last_modified_at" | reverse -%}
+## All notes
+
+{% for note in notes -%}
+=>  {{ note.url }} {{ note.title }} ({{ note.language }})
+{{ note.last_modified_at | date: "%d/%m/%y" }}
+{%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
+{% endfor %}
+
 ## Tags
 {% assign tags = site.notes | map: 'tags' | sort | uniq -%}
 {% for tag in tags %}
@@ -16,12 +24,4 @@ permalink: /notes/index.gmi
 {{ note.excerpt }}
 {%- endif -%}
 {% endfor %}
-{% endfor %}
-
-## All notes
-
-{% for note in notes -%}
-=>  {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.last_modified_at | date: "%d/%m/%y" }}
-{%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
 {% endfor %}

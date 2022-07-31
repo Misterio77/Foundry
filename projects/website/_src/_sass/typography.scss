@@ -47,9 +47,12 @@ code {
 h1 {
   font-size: 1.9em;
   font-style: italic;
+  &::before {
+    content: "> ";
+  }
 }
 h2 {
-  font-size: 1.7em;
+  font-size: 1.6em;
 }
 h3 {
   font-size: 1.4em;

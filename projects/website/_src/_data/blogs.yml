@@ -13,3 +13,30 @@
 - title: Sumner Evans
   link: https://sumnerevans.com
   feed: https://sumnerevans.com/index.xml
+- title: Oh Hello Ana
+  link: https://ohhelloana.blog
+  feed: https://ohhelloana.blog/feed.xml
+- title: m16o's blog
+  link: https://m15o.ichi.city/site/blog.html
+  feed: https://blog.miso.town/atom?url=https://m15o.ichi.city/site/blog.html
+- title: Will Webberley's blog
+  link: https://wilw.dev/
+  feed: https://wilw.dev/rss.xml
+- title: ~chrono
+  link: https://chrono.tilde.cafe
+  feed: https://chrono.tilde.cafe/rss.xml
+- title: joelchrono12
+  link: https://joelchrono12.xyz
+  feed: https://joelchrono12.xyz/feed.xml
+- title: Simonsafar
+  link: https://simonsafar.com/
+  feed: https://simonsafar.com/index.xml
+- title: Lazybear
+  link: https://lazybear.io
+  feed: https://lazybear.io/index.xml
+- title: Kev Quirk
+  link: https://kevq.uk
+  feed: https://kevq.uk/feed/
+- title: Dennis Schubert
+  link: https://overengineer.dev/
+  feed: https://overengineer.dev/blog/feeds/all.xml

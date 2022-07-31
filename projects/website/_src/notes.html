@@ -1,6 +1,6 @@
 ---
 title: Personal notes
-description: Personal wiki and digital garden
+description: Ever changing and interlinked digital garden
 permalink: /notes/index.html
 has_gemini: true
 ---
@@ -8,70 +8,19 @@ has_gemini: true
 
 <p>Not sure where to go? <a href="start-here">Start here</a>
 
-<h2 id="tags">
-  <a href="#tags">#</a>
-  Tags
-</h2>
-
-<details open>
-  <summary>
-    Show tags
-  </summary>
-
-  <ul class="posts">
-    {% assign tags = site.notes | map: 'tags' | sort | uniq %}
-    {% for tag in tags %}
-    <li>
-      <h3 id="{{ tag }}">
-        <a href="#{{ tag }}">#</a>
-        {{ tag }}
-      </h3>
-      <details open>
-        <summary>
-          Show {{ tag }}
-        </summary>
-        <ul class="posts">
-        {% for note in notes %}
-          {% if note.tags contains tag %}
-          <li>
-            <h4><a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a></h4>
-            <p>{{ note.last_modified_at | date: "%d/%m/%y" }} |
-            {% for tag in note.tags %}<a href="#{{ tag }}">{{ tag }}</a>; {% endfor %}
-            </p>
-            <p>{{ note.excerpt }}</p>
-          </li>
-          {% endif %}
-        {% endfor %}
-        </ul>
-      </details>
-    </li>
-    {% endfor %}
-  </ul>
-</details>
-
-<hr />
-
-<h2 id="all">
-  <a href="#all">#</a>
-  All notes
-</h2>
-<details open>
-  <summary>
-    Show all notes
-  </summary>
-  <ul>
-  {% for note in notes %}
-    <li>
-      <p>
-        <a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a> <br />
-        {{ note.last_modified_at | date: "%d/%m/%y" }}
-        {% if note.tags.size > 0 %} |
-          {% for tag in note.tags %}
-            <a href="#{{ tag }}">{{ tag }}</a>;
-          {% endfor %}
-        {% endif %}
-      </p>
-    </li>
-  {% endfor %}
-  </ul>
-</details>
+{% for note in notes %}
+  <article>
+    <header>
+      <h2><a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a></h2>
+    </header>
+    <p>
+      <time datetime="{{ note.last_modified_at }}">
+        {{ note.last_modified_at | date_to_string }}
+      </time>
+      {% for tag in note.tags %}
+        <a href="/notes#{{ tag }}">#{{ tag }}</a>
+      {% endfor %}
+    </p>
+    <p>{{ note.excerpt }}</p>
+  </article>
+{% endfor %}
