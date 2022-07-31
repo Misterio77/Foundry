@@ -1,7 +1,7 @@
 ---
 title: "Use builds.sr.ht with nix flakes"
 tags: nix sourcehut
-last_modified_at: 2022-06-18 10:54
+date: 2022-06-18 10:54
 ---
 
 I've recently started migrating from github to sourcehut, and i've been having a blast.

@@ -3,12 +3,12 @@ title: Personal notes
 description: Personal wiki and digital garden
 permalink: /notes/index.gmi
 ---
-{%- assign notes = site.notes | where: "gemini", true  | sort: "last_modified_at" | reverse -%}
+{%- assign notes = site.notes | where: "gemini", true  | sort: "date" | reverse -%}
 ## All notes
 
 {% for note in notes -%}
 =>  {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.last_modified_at | date: "%d/%m/%y" }}
+{{ note.date | date: "%d/%m/%y" }}
 {%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
 {% endfor %}
 
@@ -19,7 +19,7 @@ permalink: /notes/index.gmi
 {% for note in notes -%}
 {%- if note.tags contains tag %}
 => {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.last_modified_at | date: "%d/%m/%y" }}
+{{ note.date | date: "%d/%m/%y" }}
 {%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
 {{ note.excerpt }}
 {%- endif -%}

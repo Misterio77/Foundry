@@ -4,7 +4,7 @@ description: Ever changing and interlinked digital garden
 permalink: /notes/index.html
 has_gemini: true
 ---
-{% assign notes = site.notes | where: "gemini", false | sort: "last_modified_at" | reverse %}
+{% assign notes = site.notes | where: "gemini", false | sort: "date" | reverse %}
 
 <p>Not sure where to go? <a href="start-here">Start here</a>
 
@@ -14,8 +14,8 @@ has_gemini: true
       <h2><a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a></h2>
     </header>
     <p>
-      <time datetime="{{ note.last_modified_at }}">
-        {{ note.last_modified_at | date_to_string }}
+      <time datetime="{{ note.date }}">
+        {{ note.date | date_to_string }}
       </time>
       {% for tag in note.tags %}
         <a href="/notes#{{ tag }}">#{{ tag }}</a>
