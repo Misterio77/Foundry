@@ -10,7 +10,7 @@ permalink: /blog/index.gmi
 
 => {{ post.url }} {{ post.title }} ({{ post.language }})
 {{ post.date | date: "%d/%m/%y" }}
-{%- if first_letter != "-" -%}
+{%- if first_letter != "-" %}
 {{ post.excerpt }}
 {%- endif %}
 
