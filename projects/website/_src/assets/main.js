@@ -21,7 +21,7 @@ function getTheme() {
 
 // Reset scheme to default
 function resetTheme() {
-    chosen_scheme_css.setAttribute("href", "");
+    chosen_scheme_css.removeAttribute("href");
     localStorage.removeItem("current-scheme");
 }
 
