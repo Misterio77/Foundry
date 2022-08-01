@@ -6,6 +6,13 @@
 {%- if page.description %}
 {{ page.description }}
 {%- endif %}
+{%- if page.date %}
+Date: {{ page.date | date_to_string }}
+{%- endif %}
+{%- if page.tags.size > 0 %}
+Tags: {% for tag in page.tags %}#{{ tag }} {% endfor %}
+{%- endif %}
+
 
 {{ content }}
 

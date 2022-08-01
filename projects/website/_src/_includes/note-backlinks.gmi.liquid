@@ -7,7 +7,7 @@
 {%- for referee in referees -%}
 {%- if referee != '' %}
 {% assign document = site.documents | where: "slug", referee | where: "gemini", true | first %}
-=> {{ document.url }} {{ document.title }}
+=> {{ document.url }} {{ document.title }} ({{ document.language }})
 {{ document.excerpt }}
 {%- endif -%}
 {%- endfor -%}

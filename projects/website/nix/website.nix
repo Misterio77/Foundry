@@ -32,6 +32,7 @@ stdenv.mkDerivation {
       if [ -f "$gmifile" ] || ! grep "\-\-\-" "$mdfile"; then
         continue
       fi
+      echo "Converting $mdfile"
 
       # Grab front matter
       sed -n '/---/,/---/p' "$mdfile" > "$gmifile"

@@ -274,8 +274,8 @@ aside {
   font-size: 80%;
 }
 
-// Remove top margin from post info
 article header {
+  // Remove top margin from post info
   margin-bottom: 0;
   h2, h3, h4, h5, h6 {
     margin-bottom: 0;
@@ -284,5 +284,11 @@ article header {
 
 // If it's main article
 body > main > article > header {
+  // Decrease margin between p's
+  p {
+    margin-block-start: 0.2em;
+    margin-block-end: 0.4em;
+  }
+  // Add some padding after it
   padding-bottom: 0.5em;
 }

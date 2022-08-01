@@ -6,21 +6,19 @@ has_gemini: true
 ---
 {% assign notes = site.notes | where: "gemini", false | sort: "date" | reverse %}
 
-<p>Not sure where to go? <a href="start-here">Start here</a>
-
 {% for note in notes %}
   <article>
     <header>
-      <h2><a href="{{ note.url }}">{{ note.title }} ({{ note.language }})</a></h2>
+      <h2><a href="{{ note.url }}">{{ note.title }}</a> ({{ note.language }})</h2>
     </header>
     <p>
       <time datetime="{{ note.date }}">
-        {{ note.date | date_to_string }}
+        {{ note.date | date: "%d/%m/%y" }}
       </time>
       {% for tag in note.tags %}
         <a href="/notes#{{ tag }}">#{{ tag }}</a>
       {% endfor %}
     </p>
-    <p>{{ note.excerpt }}</p>
+    <p>{{ note.excerpt | strip_html }}</p>
   </article>
 {% endfor %}

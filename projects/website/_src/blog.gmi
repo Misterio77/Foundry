@@ -1,11 +1,17 @@
 ---
 title: Latest Posts
-description: My personal thoughts, rants, and occasional guide
+description: More structured thoughts and guides
 permalink: /blog/index.gmi
 ---
 {%- assign posts = site.posts | where: "gemini", true | where: "draft", false -%}
-{%- for post in posts %}
+
+{%- for post in posts -%}
+{%- assign first_letter = post.excerpt | slice: 0 -%}
+
 => {{ post.url }} {{ post.title }} ({{ post.language }})
 {{ post.date | date: "%d/%m/%y" }}
+{%- if first_letter != "-" -%}
 {{ post.excerpt }}
-{% endfor %}
+{%- endif %}
+
+{% endfor -%}

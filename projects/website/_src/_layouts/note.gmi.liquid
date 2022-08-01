@@ -1,9 +1,6 @@
 ---
 layout: default.gmi
 ---
-Last modified on {{ page.date | date_to_string }} by {{ page.author }}
-{% if page.tags.size > 0 %}Tags: {% for tag in page.tags %}#{{ tag }} {% endfor %}{% endif %}
-
 {{ content }}
 
 {%- include note-backlinks.gmi.liquid -%}

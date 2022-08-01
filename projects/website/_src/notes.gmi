@@ -1,27 +1,17 @@
 ---
 title: Personal notes
-description: Personal wiki and digital garden
+description: Ever changing and interlinked digital garden
 permalink: /notes/index.gmi
 ---
-{%- assign notes = site.notes | where: "gemini", true  | sort: "date" | reverse -%}
-## All notes
+{%- assign notes = site.notes | where: "gemini", true | sort: "date" | reverse -%}
 
-{% for note in notes -%}
-=>  {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.date | date: "%d/%m/%y" }}
-{%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
-{% endfor %}
+{%- for note in notes -%}
+{%- assign first_letter = note.excerpt | slice: 0 -%}
 
-## Tags
-{% assign tags = site.notes | map: 'tags' | sort | uniq -%}
-{% for tag in tags %}
-### {{ tag }}
-{% for note in notes -%}
-{%- if note.tags contains tag %}
 => {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.date | date: "%d/%m/%y" }}
-{%- if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
+{{ note.date | date: "%d/%m/%y" }}{% if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
+{%- if first_letter != "-" -%}
 {{ note.excerpt }}
-{%- endif -%}
-{% endfor %}
-{% endfor %}
+{%- endif %}
+
+{% endfor -%}

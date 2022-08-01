@@ -10,9 +10,9 @@
         {% assign document = site.documents | where: "slug", referee | where: "gemini", false | first %}
         <article>
           <header>
-            <h3><a href="{{ document.url }}">{{ document.title }}</a></h3>
+            <h3><a href="{{ document.url }}">{{ document.title }}</a> ({{ document.language }})</h3>
           </header>
-          <p><small>{{ document.excerpt }}</small></p>
+          <p>{{ document.excerpt | strip_html }}</p>
         </article>
       {% endif %}
     {% endfor %}
