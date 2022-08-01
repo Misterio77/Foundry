@@ -12,8 +12,8 @@ has_gemini: true
       <h2><a href="{{ note.url }}">{{ note.title }}</a> ({{ note.language }})</h2>
     </header>
     <p>
-      <time datetime="{{ note.date }}">
-        {{ note.date | date: "%d/%m/%y" }}
+      <time datetime="{{ note.date | date_to_xmlschema }}">
+        {{ note.date | date_to_long_string: "ordinal" }}
       </time>
       {% for tag in note.tags %}
         <a href="/notes#{{ tag }}">#{{ tag }}</a>

@@ -9,7 +9,7 @@ permalink: /notes/index.gmi
 {%- assign first_letter = note.excerpt | slice: 0 -%}
 
 => {{ note.url }} {{ note.title }} ({{ note.language }})
-{{ note.date | date: "%d/%m/%y" }}{% if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
+{{ note.date | date_to_long_string: "ordinal" }}{% if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
 {%- if first_letter != "-" -%}
 {{ note.excerpt }}
 {%- endif %}

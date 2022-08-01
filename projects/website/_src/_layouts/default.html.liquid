@@ -12,7 +12,7 @@ layout: root.html
       <p><em>{{ page.description }}</em></p>
       {% if page.date %}
         <p>
-          Date: <time datetime="{{ page.date }}">{{ page.date | date: "%d/%m/%y" }}</time>
+          Date: <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>
         </p>
       {% endif %}
       {% if page.tags.size > 0 %}
