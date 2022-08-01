@@ -2,7 +2,7 @@
   description = "My personal website, blog, and digital garden";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
     utils.url = "github:numtide/flake-utils";
     nix-colors.url = "github:misterio77/nix-colors";
   };
