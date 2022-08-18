@@ -4,7 +4,7 @@ let
   inherit (builtins) toJSON toFile;
 in
 stdenv.mkDerivation {
-  name = "misterio-me-themes";
+  name = "website-themes";
   src = toFile "schemes" (toJSON nix-colors.colorSchemes);
 
   dontUnpack = true;

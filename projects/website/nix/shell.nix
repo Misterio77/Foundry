@@ -1,5 +1,5 @@
-{ mkShell, yq, openring, website, css-themes }: mkShell {
-  inputsFrom = [ website ];
+{ mkShell, yq, openring, main, css-themes }: mkShell {
+  inputsFrom = [ main ];
   buildInputs = [ yq openring ];
   shellHook = ''
     while [ ! -f flake.nix ]; do

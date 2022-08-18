@@ -2,7 +2,7 @@
 
 let
   gems = bundlerEnv {
-    name = "misterio-me-env";
+    name = "website-env";
     inherit ruby;
     gemfile = ../Gemfile;
     lockfile = ../Gemfile.lock;
@@ -10,7 +10,7 @@ let
   };
 in
 stdenv.mkDerivation {
-  name = "misterio-me";
+  name = "website";
   src = ../.;
 
   JEKYLL_ENV = "production";
