@@ -1,14 +1,13 @@
-# misterio.me
+# fontes.dev.br
 
 ## About
-[![builds.sr.ht status](https://builds.sr.ht/~misterio/misterio.me.svg)](https://builds.sr.ht/~misterio/misterio.me?)
 [![built with nix](https://img.shields.io/static/v1?logo=nixos&logoColor=white&label=&message=Built%20with%20Nix&color=41439a)](https://nixos.org)
 
 My personal website and gemini capsule.
 
 Licensed under MIT (code) and CC BY-SA 4.0 (content), available at both
-[sourcehut](https://git.sr.ht/~misterio/misterio.me) and
-[github](https://github.com/misterio77/misterio.me)
+[sourcehut](https://git.sr.ht/~misterio/website) and
+[github](https://github.com/misterio77/:ebsite)
 
 Currently deployed at [sourcehut pages](https://srht.site).
 

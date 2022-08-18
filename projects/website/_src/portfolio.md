@@ -17,12 +17,12 @@ Serverside web app built with Rust + Rocket + Tera, backed by a PostgreSQL datab
 
 [Repository](https://sr.ht/~misterio/paste.misterio.me)
 
-### misterio.me
+### fontes.dev.br // misterio.me
 Personal website (you are here!).
 
-Static website built with jekyll and water.css. Hosted at sourcehut pages.
+Static website built with jekyll and water.css. Hosted at my VPS.
 
-[Repository](https://sr.ht/~misterio/misterio.me)
+[Repository](https://sr.ht/~misterio/website)
 
 ## CLI
 

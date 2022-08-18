@@ -9,7 +9,7 @@ I've recently started migrating from github to sourcehut, and i've been having a
 Here's a quick write up on how to use the awesome [builds.sr.ht](https://builds.sr.ht) CI with your shiny [nix flake](https://nixos.wiki/wiki/Flakes)-based project.
 
 ## flake.nix
-First of all, of course, your project needs a `flake.nix`. More specifically, your flake needs a `outputs.packages.xxx` to be built with `nix build xxx` (as a plus, set your preferred packaged to `outputs.defaultPackage`, so you can build with `nix build`). Here's how this [website](https://sr.ht/~misterio/misterio.me)'s looks like:
+First of all, of course, your project needs a `flake.nix`. More specifically, your flake needs a `outputs.packages.xxx` to be built with `nix build xxx` (as a plus, set your preferred packaged to `outputs.defaultPackage`, so you can build with `nix build`). Here's how this [website](https://sr.ht/~misterio/website)'s looks like:
 ```nix
 {
   description = "My personal website, blog, and digital garden";
@@ -73,7 +73,7 @@ This baby will install `nixUnstable` using `nix-env`, and add the required exper
 
 ### How i use it
 
-Just add your `tasks` and `environment` entries as needed. I build and deploy [this website](https://git.sr.ht/~misterio/misterio.me/) to [SourceHut pages](https://srht.site) with [this manifest](https://git.sr.ht/~misterio/misterio.me/tree/main/item/.build.yml):
+Just add your `tasks` and `environment` entries as needed.
 ```yml
 image: nixos/unstable
 packages:
@@ -87,10 +87,6 @@ tasks:
 - build: |
     cd misterio.me
     nix --quiet build
-- package: |
-    tar -C misterio.me/result -cvz . > site.tar.gz
-- upload: |
-    acurl -f https://pages.sr.ht/publish/misterio.me -Fcontent=@site.tar.gz
 ```
 
 Pretty sweet!

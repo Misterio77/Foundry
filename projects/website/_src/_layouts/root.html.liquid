@@ -6,7 +6,7 @@
     {% if page.noindex == true %} <meta name="robots" content="noindex"> {% endif %}
     <title>Gabriel Fontes | {{ page.title }}</title>
     <meta name="description" content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}" />
-    <link rel="canonical" href="https://misterio.me{{ page.url }}" />
+    <link rel="canonical" href="https://{{ site.domain }}{{ page.url }}" />
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" id="scheme-css" />
     <link rel="alternate" type="application/rss+xml" title="RSS" href="/feed.xml" />
