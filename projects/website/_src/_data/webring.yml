@@ -1,4 +1,43 @@
 
+- title: "Heaven’s River (Bobiverse Book 4)"
+  link: "https://kevq.uk/heavens-river-bobiverse-book-4/"
+  date: "2022-08-18 11:18:29 &#43;0000 &#43;0000"
+  summary: "When I wrote about book 3, I said that the constant context switching was becoming tiresome, and I would have liked to see Taylor focus on a single storyline. Well, ... More --&gt;"
+  sourcelink: "https://kevq.uk/"
+  sourcetitle: "Kev Quirk"
+
+- title: "PINE64 has let its community down"
+  link: "https://drewdevault.com/2022/08/18/PINE64-let-us-down.html"
+  date: "2022-08-18 00:00:00 &#43;0000 &#43;0000"
+  summary: "Context for this post:
+
+Pine64 should re-evaluate their community priorities
+The Pine Formula
+Why I left PINE64
+A response to Martijn’s blog
+
+
+I know that apologising and taking responsibility for your mistakes is
+difficult. It seems especially difficult for comme…"
+  sourcelink: "https://drewdevault.com"
+  sourcetitle: "Drew DeVault&#39;s blog"
+
+- title: "Debian turns 29"
+  link: "http://lazybear.io/notes/debian-29th-bday/"
+  date: "2022-08-17 12:49:58 &#43;0100 &#43;0100"
+  summary: "Debian GNU/Linux turned 29 years old yesterday.
+I remember I touched my first Debian in ‘96…
+That looks so close, and so far at the same time."
+  sourcelink: "http://lazybear.io/"
+  sourcetitle: "Lazybear"
+
+- title: "Yunohost to the rescue"
+  link: "https://joelchrono12.xyz/blog/yunohost-x-tailscale/"
+  date: "2022-08-13 19:31:22 &#43;0000 &#43;0000"
+  summary: "Reviving my Raspberry Pi led me to Yunohost, which was quite tedious, but it might end up easier than what I used before in the long run."
+  sourcelink: "https://joelchrono12.xyz/"
+  sourcetitle: "Joelchrono12"
+
 - title: "Making Tax Digital and Plain-Text Accounting"
   link: "https://wilw.dev/blog/2022/07/30/mtd-plain-text-accounting/"
   date: "2022-07-30 22:25:00 &#43;0000 GMT"
@@ -7,62 +46,4 @@ Making Tax Digital (MTD) is part of the UK Government&#39;s plan for modernising
 For years, HMRC (the Government&#39;s tax department) has had an online tax system that is inf…"
   sourcelink: "https://wilw.dev"
   sourcetitle: "Will Webberley&#39;s Blog"
-
-- title: "What is your top 10 lists of CLI tools?"
-  link: "http://lazybear.io/notes/what-is-your-top-ten-cli-tools/"
-  date: "2022-07-28 10:58:03 &#43;0100 &#43;0100"
-  summary: "Being always in terminals, I use many CLI tools
-like :
-
-mutt
-tmux
-vim
-fzf
-newsboat
-many others …
-
-What is your top 10?"
-  sourcelink: "http://lazybear.io/"
-  sourcetitle: "Lazybear"
-
-- title: "Conciseness"
-  link: "https://drewdevault.com/2022/07/26/Conciseness.html"
-  date: "2022-07-26 00:00:00 &#43;0000 &#43;0000"
-  summary: "Conciseness is often considered a virtue among hackers and software engineers.
-FOSS maintainers in particular generally prefer to keep bug reports, questions
-on mailing lists, discussions in IRC channels, and so on, close to the point and
-with minimal faff. …"
-  sourcelink: "https://drewdevault.com"
-  sourcetitle: "Drew DeVault&#39;s blog"
-
-- title: "Revisiting the Web Analytics Rabbit Hole"
-  link: "https://kevq.uk/revisiting-the-web-analytics-rabbit-hole/"
-  date: "2022-07-25 09:49:08 &#43;0000 &#43;0000"
-  summary: "A little over a year ago, I removed all analytics from this site because it was sending me down a rabbit hole that I didn’t like. Here’s an update. If ... More --&gt;"
-  sourcelink: "https://kevq.uk/"
-  sourcetitle: "Kev Quirk"
-
-- title: "Keeping LG webOS Developer Mode alive with Home Assistant"
-  link: "https://elis.nu/blog/2022/07/keeping-webos-developer-mode-alive-with-home-assistant/index.html"
-  date: "2022-07-25 00:00:00 &#43;0000 &#43;0000"
-  summary: "
-
- 
- Table of Contents
- 
-   Keeping the session alive
-   First attempt using a systemd timer
-  Second attempt using Home Assistant
-
-
-
- 
-For over 10 years I&#39;ve used  Kodi on a separate PC connected to a TV to play
-back local media.
-
-
- 
-A couple of weeks ago everything …"
-  sourcelink: "https://elis.nu/"
-  sourcetitle: "~elis/blog/"
 
