@@ -10,7 +10,7 @@ permalink: /notes/index.gmi
 
 => {{ note.url }} {{ note.title }} ({{ note.language }})
 {{ note.date | date_to_long_string: "ordinal" }}{% if note.tags.size > 0 %} | tags: {% for tag in note.tags %}{{ tag }} {% endfor %}{% endif %}
-{%- if first_letter != "-" -%}
+{% if first_letter != "-" -%}
 {{ note.excerpt }}
 {%- endif %}
 
