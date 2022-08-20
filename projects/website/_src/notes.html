@@ -6,19 +6,51 @@ has_gemini: true
 ---
 {% assign notes = site.notes | where: "gemini", false | sort: "date" | reverse %}
 
-{% for note in notes %}
-  <article>
-    <header>
-      <h2><a href="{{ note.url }}">{{ note.title }}</a> ({{ note.language }})</h2>
-    </header>
-    <p>
-      <time datetime="{{ note.date | date_to_xmlschema }}">
-        {{ note.date | date_to_long_string: "ordinal" }}
-      </time>
-      {% for tag in note.tags %}
-        <a href="/notes#{{ tag }}">#{{ tag }}</a>
-      {% endfor %}
-    </p>
-    <p>{{ note.excerpt | strip_html }}</p>
-  </article>
+<h2 id="all"><a href="#all">#</a> all</a></h2>
+<details open>
+  <summary>Show notes</summary>
+  {% for note in notes %}
+    <article>
+      <header>
+        <h3><a href="{{ note.url }}">{{ note.title }}</a> ({{ note.language }})</h3>
+      </header>
+      <p>
+        <time datetime="{{ note.date | date_to_xmlschema }}">
+          {{ note.date | date_to_long_string: "ordinal" }}
+        </time>
+        {% for tag in note.tags %}
+          <a href="#{{ tag }}">#{{ tag }}</a>
+        {% endfor %}
+      </p>
+      <p>{{ note.excerpt | strip_html }}</p>
+    </article>
+  {% endfor %}
+</details>
+
+<hr />
+
+{% assign tags = site.notes | map: 'tags' | sort | uniq %}
+{% for tag in tags %}
+  <h2 id="{{ tag }}"><a href="#{{ tag }}">#</a> {{  tag }}</h2>
+  <details open>
+    <summary>Show notes</summary>
+    {% for note in notes %}
+      {% if note.tags contains tag %}
+        <article>
+          <header>
+            <h4><a href="{{ note.url }}">{{ note.title }}</a> ({{ note.language }})</h4>
+          </header>
+          <p>
+            <time datetime="{{ note.date | date_to_xmlschema }}">
+              {{ note.date | date_to_long_string: "ordinal" }}
+            </time>
+            {% for tag in note.tags %}
+              <a href="#{{ tag }}">#{{ tag }}</a>
+            {% endfor %}
+          </p>
+          <p>{{ note.excerpt | strip_html }}</p>
+        </article>
+      {% endif %}
+    {% endfor %}
+  </details>
 {% endfor %}
