@@ -6,7 +6,7 @@ has_gemini: true
 ---
 {% assign notes = site.notes | where: "gemini", false | sort: "date" | reverse %}
 
-<h2 id="all"><a href="#all">#</a> all</a></h2>
+<h2 id="all">All notes</h2>
 <details open>
   <summary>Show notes</summary>
   {% for note in notes %}
@@ -29,9 +29,10 @@ has_gemini: true
 
 <hr />
 
+<h2 id="tags">By tags</h2>
 {% assign tags = site.notes | map: 'tags' | sort | uniq %}
 {% for tag in tags %}
-  <h2 id="{{ tag }}"><a href="#{{ tag }}">#</a> {{  tag }}</h2>
+  <h3 id="{{ tag }}"><a href="#{{ tag }}">#</a> {{  tag }}</h3>
   <details open>
     <summary>Show notes</summary>
     {% for note in notes %}
