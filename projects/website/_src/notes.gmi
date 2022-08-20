@@ -1,6 +1,6 @@
 ---
 title: Personal notes
-description: Ever changing and interlinked digital garden
+description: Ever changing and interlinked personal wiki & school notes
 permalink: /notes/index.gmi
 ---
 {%- assign notes = site.notes | where: "gemini", true | sort: "date" | reverse -%}
