@@ -1,9 +1,13 @@
 function setCookie(name,value,days) {
     var expires = "";
     if (days) {
-        var date = new Date();
-        date.setTime(date.getTime() + (days*24*60*60*1000));
-        expires = "; Expires=" + date.toUTCString();
+        if (days < 0) {
+            expires = "; Expires=Thu, 01 Jan 1970 00:00:01 GMT"
+        } else {
+            var date = new Date();
+            date.setTime(date.getTime() + (days*24*60*60*1000));
+            expires = "; Expires=" + date.toUTCString();
+        }
     }
     var domain = "";
     var samesite = "";
@@ -24,7 +28,7 @@ function getCookie(name) {
     return null;
 }
 function eraseCookie(name) {
-    document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+    setCookie(name, "", -1);
 }
 
 let chosen_scheme_css = document.getElementById("scheme-css");
