@@ -1,3 +1,30 @@
+function setCookie(name,value,days) {
+    var expires = "";
+    if (days) {
+        var date = new Date();
+        date.setTime(date.getTime() + (days*24*60*60*1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    var domain = "";
+    if (window.location.host == "fontes.dev.br") {
+        domain = "; domain=fontes.dev.br"
+    }
+    document.cookie = name + "=" + (value || "")  + expires + "; path=/" + domain;
+}
+function getCookie(name) {
+    var nameEQ = name + "=";
+    var ca = document.cookie.split(';');
+    for(var i=0;i < ca.length;i++) {
+        var c = ca[i];
+        while (c.charAt(0)==' ') c = c.substring(1,c.length);
+        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+function eraseCookie(name) {
+    document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+}
+
 let chosen_scheme_css = document.getElementById("scheme-css");
 
 // Set a given scheme
@@ -6,12 +33,13 @@ function setTheme(scheme) {
         "href",
         "/assets/themes/" + scheme + ".css"
     );
-    localStorage.setItem("current-scheme", scheme);
+    setCookie("fontes_theme", scheme);
 }
 
 // Get currently applied scheme
 function getTheme() {
-    let theme = localStorage.getItem("current-scheme");
+    let theme = getCookie("fontes_theme");
+
     if (theme != "null") {
         return theme;
     } else {
@@ -22,10 +50,10 @@ function getTheme() {
 // Reset scheme to default
 function resetTheme() {
     chosen_scheme_css.removeAttribute("href");
-    localStorage.removeItem("current-scheme");
+    eraseCookie("fontes_theme");
 }
 
-// Get stored scheme from localStorage and reapply it
+// Get stored scheme from cookies and reapply it
 let stored = getTheme();
 if (stored) {
     setTheme(stored);
