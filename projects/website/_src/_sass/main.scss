@@ -218,7 +218,7 @@ nav li.colorscheme a {
 
 header {
   margin-bottom: 2px;
-  & > nav {
+  & > nav:last-child {
     // Add some border when header has a nav
     border-bottom: 1px solid var(--border);
   }
