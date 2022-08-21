@@ -135,6 +135,19 @@ details {
   }
 }
 
+// Make figure a scroller (stolen from picocss)
+figure {
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+
+  figcaption {
+    padding: 1em;
+    color: var(--text-muted);
+  }
+}
+
 // ===================
 // More specific stuff
 // ===================
