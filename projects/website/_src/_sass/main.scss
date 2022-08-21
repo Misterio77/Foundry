@@ -218,14 +218,14 @@ nav li.colorscheme a {
 
 header {
   margin-bottom: 2px;
+  & > nav {
+    // Add some border when header has a nav
+    border-bottom: 1px solid var(--border);
+  }
 }
 body {
   // Bit of space at the top
   margin-top: 2em;
-  & > header {
-    // Add a line after first header
-    border-bottom: 1px solid var(--border);
-  }
 }
 
 nav {
