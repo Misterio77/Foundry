@@ -66,9 +66,6 @@ a[href^="sms\:"]:before {
 // Make current navigation item inactive
 [aria-current="page"] {
   color: var(--text-main);
-  cursor: default;
-  pointer-events: none;
-  text-decoration: none;
 
   &::before {
     content: '[  ';
