@@ -7,7 +7,7 @@ function setCookie(name,value,days) {
     }
     var domain = "";
     var samesite = "";
-    if (window.location.host == "fontes.dev.br") {
+    if (window.location.host == "fontes.dev.br" || window.location.host == "git.fontes.dev.br") {
         domain = "; Domain=fontes.dev.br";
         samesite = "; SameSite=None; Secure";
     }
