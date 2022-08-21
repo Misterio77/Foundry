@@ -19,8 +19,3 @@ tasks:
 - build: |
     cd misterio.me
     cachix watch-exec misterio nix build
-- package: |
-    tar -C misterio.me/result/public -cvz . > site.tar.gz
-- upload: |
-    hut pages publish -d misterio.me -p HTTPS  --not-found "/404" site.tar.gz
-    hut pages publish -d misterio.me -p GEMINI --not-found "/404" site.tar.gz
