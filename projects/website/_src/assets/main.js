@@ -3,13 +3,13 @@ function setCookie(name,value,days) {
     if (days) {
         var date = new Date();
         date.setTime(date.getTime() + (days*24*60*60*1000));
-        expires = "; expires=" + date.toUTCString();
+        expires = "; Expires=" + date.toUTCString();
     }
     var domain = "";
     if (window.location.host == "fontes.dev.br") {
-        domain = "; domain=fontes.dev.br"
+        domain = "; Domain=fontes.dev.br"
     }
-    document.cookie = name + "=" + (value || "")  + expires + "; path=/" + domain;
+    document.cookie = name + "=" + (value || "")  + expires + "; SameSite=None; Path=/" + domain;
 }
 function getCookie(name) {
     var nameEQ = name + "=";
