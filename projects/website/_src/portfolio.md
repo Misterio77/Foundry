@@ -17,7 +17,7 @@ Serverside web app built with Rust + Rocket + Tera, backed by a PostgreSQL datab
 
 [Repository](https://sr.ht/~misterio/paste.misterio.me)
 
-### fontes.dev.br // misterio.me
+### This website
 Personal website (you are here!).
 
 Static website built with jekyll and water.css. Hosted at my VPS.

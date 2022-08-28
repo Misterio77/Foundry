@@ -69,7 +69,7 @@ that aims to create a simpler web. This website has full gemini support (some
 hand-written, some automated through
 [md2gemini](https://github.com/makeworld-the-better-one/md2gemini)).
 
-- [My gemini capsule (perhaps you're here already? :o)](gemini://fontes.dev.br)
+- [My gemini capsule (perhaps you're here already? :o)](gemini://gsfontes.com)
 
 ## Inspirations
 

@@ -9,13 +9,7 @@ function setCookie(name,value,days) {
             expires = "; Expires=" + date.toUTCString();
         }
     }
-    var domain = "";
-    var samesite = "";
-    if (window.location.host == "fontes.dev.br" || window.location.host == "git.fontes.dev.br") {
-        domain = "; Domain=fontes.dev.br";
-        samesite = "; SameSite=None; Secure";
-    }
-    document.cookie = name + "=" + (value || "")  + expires + "; Path=/" + samesite + domain;
+    document.cookie = name + "=" + (value || "")  + expires + "; Path=/";
 }
 function getCookie(name) {
     var nameEQ = name + "=";
