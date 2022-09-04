@@ -6,10 +6,8 @@
 My personal website and gemini capsule.
 
 Licensed under MIT (code) and CC BY-SA 4.0 (content), available at both
-[sourcehut](https://git.sr.ht/~misterio/website) and
-[github](https://github.com/misterio77/:ebsite)
-
-Currently deployed at [sourcehut pages](https://srht.site).
+[my cgit](https://m7.rs/git/website/about) and
+[github](https://github.com/misterio77/website)
 
 ## Developing
 
