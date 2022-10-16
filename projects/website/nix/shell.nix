@@ -1,4 +1,4 @@
-{ mkShell, yq, openring, main, css-themes }: mkShell {
+{ mkShell, yq, openring, main, themes }: mkShell {
   inputsFrom = [ main ];
   buildInputs = [ yq openring ];
   shellHook = ''
@@ -11,7 +11,7 @@
     rm _src/assets/themes/* 2> /dev/null
 
     mkdir _src/assets/themes -p
-    ln -s ${css-themes}/list.html -T _src/_includes/scheme-datalist.html
-    ln -s ${css-themes}/*.css -t _src/assets/themes/
+    ln -s ${themes}/list.html -T _src/_includes/scheme-datalist.html
+    ln -s ${themes}/*.css -t _src/assets/themes/
   '';
 }

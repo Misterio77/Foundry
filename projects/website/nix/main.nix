@@ -1,4 +1,4 @@
-{ stdenv, ruby, bundlerEnv, css-themes, python3Packages, dos2unix, perl }:
+{ stdenv, ruby, bundlerEnv, themes, python3Packages, dos2unix, perl }:
 
 let
   gems = bundlerEnv {
@@ -20,8 +20,8 @@ stdenv.mkDerivation {
   buildPhase = ''
     # Add themes
     mkdir _src/assets/themes -p
-    ln -s ${css-themes}/list.html -T _src/_includes/scheme-datalist.html
-    ln -s ${css-themes}/*.css -t _src/assets/themes/
+    ln -s ${themes}/list.html -T _src/_includes/scheme-datalist.html
+    ln -s ${themes}/*.css -t _src/assets/themes/
 
     # Convert markdown to gemtext, if needed
     shopt -s globstar
