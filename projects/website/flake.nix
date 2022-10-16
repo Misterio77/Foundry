@@ -33,6 +33,8 @@
         default = packages.${system}.shell;
       });
 
-      hydraJobs = packages;
+      hydraJobs = {
+        x86_64-linux.main = packages.x86_64-linux.main;
+      };
     };
 }
