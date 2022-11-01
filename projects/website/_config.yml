@@ -9,7 +9,8 @@ plugins:
   - jekyll-relative-links
 
 extlinks:
-  attributes: {class: external}
+  attributes: 
+    class: external
 
 relative_links:
   enabled: true
