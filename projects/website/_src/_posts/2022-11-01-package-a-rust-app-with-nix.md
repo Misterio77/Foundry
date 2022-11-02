@@ -123,8 +123,6 @@ pkgs.mkShell {
 }
 ```
 
-This will also allow the older `nix-shell` to work.
-
 Nice. Let's try it:
 ```bash
 # Nix3 command
