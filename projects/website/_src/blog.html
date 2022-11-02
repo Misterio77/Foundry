@@ -2,13 +2,11 @@
 title: Latest Posts
 description: Ocasional thoughts and guides
 permalink: /blog/index.html
-has_gemini: true
 ---
 
-{% assign posts = site.posts | where: "gemini", false | where: "draft", false %}
 <p><a href="/feed.xml" class="feed">Feed</a></p>
 
-{% for post in posts %}
+{% for post in site.posts %}
   <article>
     <header>
       <h2><a href="{{ post.url }}">{{ post.title }}</a> ({{ post.language }})</h2>

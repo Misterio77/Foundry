@@ -10,8 +10,7 @@ layout: none
         <link>https://{{ site.domain }}</link>
         <atom:link href="https://{{ site.domain }}{{ page.url }}" rel="self" type="application/rss+xml" />
         <lastBuildDate>{% for post in site.posts limit:1 %}{{ post.date | date_to_rfc822 }}{% endfor %}</lastBuildDate>
-        {% assign html_posts = site.posts | where: "gemini", false %}
-        {% for post in html_posts limit:10 %}
+        {% for post in site.posts limit:10 %}
             <item>
                 <title>{{ post.title | xml_escape }}</title>
                 {% if post.author.name %}

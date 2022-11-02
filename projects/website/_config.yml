@@ -3,6 +3,7 @@ description: "My personal website and projects"
 domain: "m7.rs"
 
 default_theme: catppuccin
+themes_url: //nix-colors.m7.rs/css
 
 plugins:
   - jekyll-extlinks
@@ -34,46 +35,23 @@ collections:
     name: Posts
 
 defaults:
-  # Set HTML layouts
+  # Set layouts
   -
     scope:
       path: ""
       type: "posts"
     values:
       layout: "post.html"
-      gemini: false
   -
     scope:
       path: ""
     values:
       layout: "default.html"
-      gemini: false
 
-  # Set gemini layouts
-  -
-    scope:
-      path: "**/*.gmi"
-      type: "posts"
-    values:
-      layout: "post.gmi"
-      gemini: true
-  -
-    scope:
-      path: "**/*.gmi"
-    values:
-      layout: "default.gmi"
-      gemini: true
-
-  # Post default metadata
+  # Default metadata
   -
     scope:
       path: ""
     values:
       language: "en"
       author: "Gabriel Fontes"
-  # All markdown pages have a gemini version, by default
-  -
-    scope:
-      path: "**/*.md"
-    values:
-      has_gemini: true

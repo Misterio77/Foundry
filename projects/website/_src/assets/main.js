@@ -1,3 +1,7 @@
+---
+layout: null
+---
+
 function setCookie(name,value,days) {
     var expires = "";
     if (days) {
@@ -25,13 +29,13 @@ function eraseCookie(name) {
     setCookie(name, "", -1);
 }
 
-let chosen_scheme_css = document.getElementById("scheme-css");
+let chosen_scheme_css = document.getElementById("theme-css");
 
 // Set a given scheme
 function setTheme(scheme) {
     chosen_scheme_css.setAttribute(
         "href",
-        "/assets/themes/" + scheme + ".css"
+        "{{ site.themes_url }}/" + scheme + ".css"
     );
     setCookie("fontes_theme", scheme);
 }

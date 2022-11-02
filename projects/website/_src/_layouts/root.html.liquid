@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    {% if page.noindex == true %} <meta name="robots" content="noindex"> {% endif %}
     <title>Gabriel Fontes | {{ page.title }}</title>
     <meta name="description" content="{% if page.description %}{{ page.description }}{% else %}{{ site.description }}{% endif %}" />
     <link rel="canonical" href="https://{{ site.domain }}{{ page.url }}" />
+    {% if page.noindex == true %} <meta name="robots" content="noindex"> {% endif %}
+
     <link rel="stylesheet" href="/assets/style.css" />
-    <link rel="stylesheet" id="scheme-css" />
+    <link rel="stylesheet" href="{{ site.themes_url }}/{{ site.default_theme }}.css" id="theme-css" />
     <link rel="alternate" type="application/rss+xml" title="RSS" href="/feed.xml" />
     <link rel="icon" href="data:,">
     <script src="/assets/main.js"></script>

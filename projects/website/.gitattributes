@@ -1,3 +1,4 @@
 _src/_sass/vendor liguist-vendored
+
 nix/gemset.nix liguist-generated
 Gemfile.lock liguist-generated
