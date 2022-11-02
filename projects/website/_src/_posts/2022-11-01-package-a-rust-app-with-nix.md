@@ -4,7 +4,7 @@ description: Here's a quick tutorial on how to nixify your cargo-based rust proj
 tags: [ nix, rust ]
 ---
 
-Sometimes I see people looking around for a cookbook to package  rust project.
+Sometimes I see people looking around for a cookbook to package a rust project.
 Here's a simple way to do it. As a plus, I'll also show how to export the package
 through a flake.
 
