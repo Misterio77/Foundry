@@ -2,8 +2,6 @@
   link: /
 - name: Blog
   link: /blog/
-- name: Notes
-  link: /notes/
 - name: Portfolio
   link: /portfolio/
 - name: Git

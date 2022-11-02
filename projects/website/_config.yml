@@ -32,10 +32,6 @@ collections:
     output: true
     permalink: /blog/:path/index:output_ext
     name: Posts
-  notes:
-    output: true
-    permalink: /notes/:path/index:output_ext
-    name: Notes
 
 defaults:
   # Set HTML layouts
@@ -45,13 +41,6 @@ defaults:
       type: "posts"
     values:
       layout: "post.html"
-      gemini: false
-  -
-    scope:
-      path: ""
-      type: "notes"
-    values:
-      layout: "note.html"
       gemini: false
   -
     scope:
@@ -67,13 +56,6 @@ defaults:
       type: "posts"
     values:
       layout: "post.gmi"
-      gemini: true
-  -
-    scope:
-      path: "**/*.gmi"
-      type: notes
-    values:
-      layout: "note.gmi"
       gemini: true
   -
     scope:
