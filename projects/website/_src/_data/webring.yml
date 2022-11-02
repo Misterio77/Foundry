@@ -1,49 +1,49 @@
 
-- title: "Heaven’s River (Bobiverse Book 4)"
-  link: "https://kevq.uk/heavens-river-bobiverse-book-4/"
-  date: "2022-08-18 11:18:29 &#43;0000 &#43;0000"
-  summary: "When I wrote about book 3, I said that the constant context switching was becoming tiresome, and I would have liked to see Taylor focus on a single storyline. Well, ... More --&gt;"
-  sourcelink: "https://kevq.uk/"
-  sourcetitle: "Kev Quirk"
-
-- title: "PINE64 has let its community down"
-  link: "https://drewdevault.com/2022/08/18/PINE64-let-us-down.html"
-  date: "2022-08-18 00:00:00 &#43;0000 &#43;0000"
-  summary: "Context for this post:
-
-Pine64 should re-evaluate their community priorities
-The Pine Formula
-Why I left PINE64
-A response to Martijn’s blog
+- title: "October 2022"
+  link: "http://lazybear.io/posts/october-2022/"
+  date: "2022-10-31 00:30:00 &#43;0100 &#43;0100"
+  summary: "Like every month, the things I’ve read, watched, listened to, and done in
+October.
+I’ll start with this video made by the Dubai authorities and the Emirates NBD
+bank that I found brilliant. #shaggy
 
 
-I know that apologising and taking responsibility for your mistakes is
-difficult. It seems especially difficult for comme…"
-  sourcelink: "https://drewdevault.com"
-  sourcetitle: "Drew DeVault&#39;s blog"
 
-- title: "Debian turns 29"
-  link: "http://lazybear.io/notes/debian-29th-bday/"
-  date: "2022-08-17 12:49:58 &#43;0100 &#43;0100"
-  summary: "Debian GNU/Linux turned 29 years old yesterday.
-I remember I touched my first Debian in ‘96…
-That looks so close, and so far at the same time."
+Podcasts
+I discovered a new podcast, Hard fork, with many new …"
   sourcelink: "http://lazybear.io/"
   sourcetitle: "Lazybear"
 
-- title: "Yunohost to the rescue"
-  link: "https://joelchrono12.xyz/blog/yunohost-x-tailscale/"
-  date: "2022-08-13 19:31:22 &#43;0000 &#43;0000"
-  summary: "Reviving my Raspberry Pi led me to Yunohost, which was quite tedious, but it might end up easier than what I used before in the long run."
+- title: "The Time My Nan Bought Me a Baby-G Watch"
+  link: "https://kevquirk.com/the-time-my-nan-bought-me-a-baby-g-watch/"
+  date: "2022-10-30 12:25:11 &#43;0000 &#43;0000"
+  summary: "Back in the 1990’s I wanted a G-Shock watch, so my nan bought me one for Christmas. Here’s the story of what happened to that watch… So cast your mind ... More --&gt;"
+  sourcelink: "https://kevquirk.com/"
+  sourcetitle: "Kev Quirk"
+
+- title: "Tailscale: multi-service HTTPS on a single machine"
+  link: "https://wilw.dev/blog/2022/10/27/tailscale-virtualhosts/"
+  date: "2022-10-27 18:48:00 &#43;0000 &#43;0000"
+  summary: "HTTPS on Tailscale
+Tailscale’s HTTPS feature is an excellent tool for adding TLS connections to web services exposed over the tailnet.
+Although traffic over the tailnet is encrypted anyway due to the nature of Tailscale itself, some web-based services work …"
+  sourcelink: "https://wilw.dev/"
+  sourcetitle: "Will Webberley&#39;s Blog"
+
+- title: "Notes from kernel hacking in Hare, part 3: serial driver"
+  link: "https://drewdevault.com/2022/10/27/Kernel-hacking-with-Hare-part-3.html"
+  date: "2022-10-27 00:00:00 &#43;0000 &#43;0000"
+  summary: "Today I would like to show you the implementation of the first userspace driver
+for Helios: a simple serial driver. All of the code we’re going to look at today
+runs in userspace, not in the kernel, so strictly speaking this should be “notes
+from OS hacking …"
+  sourcelink: "https://drewdevault.com"
+  sourcetitle: "Drew DeVault&#39;s blog"
+
+- title: "My Every Day Carry because why not"
+  link: "https://joelchrono12.xyz/blog/every-day-carry-because-why-not/"
+  date: "2022-10-18 18:37:42 &#43;0000 &#43;0000"
+  summary: "As a student I get quite interested in EDC videos and similar content quite often, but they often tend to have pretty expensive stuff. So I wanted to share what I carry with me in a more realistic and pragmatic manner."
   sourcelink: "https://joelchrono12.xyz/"
   sourcetitle: "Joelchrono12"
-
-- title: "Making Tax Digital and Plain-Text Accounting"
-  link: "https://wilw.dev/blog/2022/07/30/mtd-plain-text-accounting/"
-  date: "2022-07-30 22:25:00 &#43;0000 GMT"
-  summary: "HMRC&#39;s Making Tax Digital
-Making Tax Digital (MTD) is part of the UK Government&#39;s plan for modernising the tax system for both businesses and individuals.
-For years, HMRC (the Government&#39;s tax department) has had an online tax system that is inf…"
-  sourcelink: "https://wilw.dev"
-  sourcetitle: "Will Webberley&#39;s Blog"
 
