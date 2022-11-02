@@ -1,6 +1,6 @@
 ---
 title: Latest Posts
-description: More structured thoughts and guides
+description: Ocasional thoughts and guides
 permalink: /blog/index.gmi
 ---
 {%- assign posts = site.posts | where: "gemini", true | where: "draft", false -%}
