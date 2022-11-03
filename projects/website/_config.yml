@@ -3,7 +3,7 @@ description: "My personal website and projects"
 domain: "m7.rs"
 
 default_theme: catppuccin
-themes_url: //colors.m7.rs/themes
+themes_url: https://colors.m7.rs
 
 plugins:
   - jekyll-extlinks
