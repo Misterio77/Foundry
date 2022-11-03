@@ -237,10 +237,18 @@ header {
   }
 }
 body {
-  // Bit of space at the top
-  margin-top: 2em;
   // Increase width a bit
-  max-width: 60em;
+  max-width: 55em;
+
+  @media(min-width: 360px) {
+    padding: 1em;
+  }
+  @media(min-width: 480px) {
+    padding: 1.5em;
+  }
+  @media(min-width: 720px) {
+    padding: 2em;
+  }
 }
 
 nav {
@@ -271,13 +279,16 @@ nav {
     color: var(--base0E);
     text-decoration: none;
   }
-
   // Decorations around
   color: var(--text-muted);
-  font-size: 2.4em;
-  font-weight: 600;
   &:hover {
     color: var(--base09);
+  }
+
+  font-size: 2.4em;
+  font-weight: 600;
+  @media(max-width: 325px) {
+    font-size: 2em;
   }
 }
 
