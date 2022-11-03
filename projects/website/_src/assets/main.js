@@ -35,7 +35,7 @@ let chosen_scheme_css = document.getElementById("theme-css");
 function setTheme(scheme) {
     chosen_scheme_css.setAttribute(
         "href",
-        "{{ site.themes_url }}/" + scheme + ".css"
+        "/colors/" + scheme + ".css"
     );
     setCookie("fontes_theme", scheme);
 }
