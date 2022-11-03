@@ -54,11 +54,35 @@ permalink: /colorscheme/
 
 </fieldset>
 
-<script>
+<script async type="module">
 let scheme_input = document.getElementById("scheme-input");
-let scheme_options = document.getElementById("scheme-list").getElementsByTagName("option");
+let scheme_list = document.getElementById("scheme-list");
 let scheme_random_button = document.getElementById("scheme-random");
 let scheme_default_button = document.getElementById("scheme-default");
+
+async function fetch_schemes() {
+  var schemes_data = await fetch("https://colors.m7.rs/themes.json");
+  var schemes_json = await schemes_data.json();
+  return Object.keys(schemes_json);
+}
+
+fetch_schemes().then(function(schemes) {
+  // Add options to datalist
+  schemes.forEach(function(scheme) {
+    var option = document.createElement('option');
+    option.value = scheme;
+    scheme_list.appendChild(option);
+  });
+
+  // Add click event for random button
+  scheme_random_button.addEventListener("click", function () {
+    // Get random scheme
+    let scheme = schemes[Math.floor(Math.random() * schemes.length)];
+    setTheme(scheme);
+    scheme_input.value = scheme;
+    scheme_default_button.hidden = false;
+  });
+});
 
 // Add listener on input to change theme
 scheme_input.addEventListener("input", function () {
@@ -70,15 +94,6 @@ scheme_input.addEventListener("input", function () {
     resetTheme();
     scheme_default_button.hidden = true;
   }
-});
-
-// Add click event to random button
-scheme_random_button.addEventListener("click", function () {
-  // Get random scheme
-  let scheme = scheme_options.item(Math.floor(Math.random() * scheme_options.length)).textContent;
-  setTheme(scheme);
-  scheme_input.value = scheme;
-  scheme_default_button.hidden = false;
 });
 
 // Add click event for clear button
