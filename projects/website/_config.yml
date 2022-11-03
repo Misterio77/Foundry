@@ -41,6 +41,7 @@ defaults:
       type: "posts"
     values:
       layout: "post.html"
+      nav_current: "blog"
   -
     scope:
       path: ""
