@@ -1,13 +1,22 @@
 <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
 <ul>
-  <li class="colorscheme">
-    <a {% if page.nav_current == "/colorscheme/" %} aria-current="page" {% endif %} aria-label="Change color scheme" href="/colorscheme"></a>
-  </li>
-
   {% for item in site.data.navigation %}
   <li>
-    <a {% if page.nav_current == item.link %} aria-current="page" {% endif %} href="{{ item.link }}">
-      {{ item.name | downcase }}
+    <a
+      {% if page.nav_current == item.link or page.url == item.link %}
+        aria-current="page"
+      {% endif %}
+      {% if item.class %}
+        class="{{ item.class }}"
+      {% endif %}
+      {% if item.label %}
+        aria-label="{{ item.label }}"
+      {% endif %}
+      href="{{ item.link }}"
+    >
+      {% if item.text %}
+        {{ item.text | downcase }}
+      {% endif %}
     </a>
   </li>
   {% endfor %}

@@ -1,18 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    {% include head.html.liquid %}
     <title>Gabriel Fontes | {{ page.title }}</title>
     <meta name="description" content="
-      {% if page.description %}
+      {%- if page.description -%}
         {{ page.description }}
-      {% else %}
+      {%- else -%}
         {{ site.description }}
-      {% endif %}"
+      {%- endif -%}"
     />
-    {% if page.noindex == true %}
+    {% if page.noindex == true -%}
       <meta name="robots" content="noindex">
-    {% endif %}
+    {%- endif %}
+
+    {% include head.html.liquid %}
   </head>
   <body>
     {{ content | extlinks }}

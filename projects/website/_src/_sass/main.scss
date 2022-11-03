@@ -203,7 +203,7 @@ a {
   }
 }
 
-nav li.colorscheme a {
+nav a.colorscheme {
   @include set-icon("palette", $size: 1.4rem);
 }
 

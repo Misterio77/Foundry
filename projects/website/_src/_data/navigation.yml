@@ -1,8 +1,12 @@
-- name: About
+- label: Change colorscheme
+  class: colorscheme
+  link: /colorscheme/
+
+- text: about
   link: /
-- name: Blog
+- text: blog
   link: /blog/
-- name: Portfolio
+- text: portfolio
   link: /portfolio/
-- name: Git
+- text: git
   link: /git/
