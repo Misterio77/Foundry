@@ -4,14 +4,18 @@ description: Some of my past and current projects
 permalink: /portfolio/
 ---
 
-Most of these can be found at my [github](https://github.com/misterio77) profile and [my selfhosted cgit](https://m7.rs/git/) (usually mirrored at both).
+Most of these can be found at my [github](https://github.com/misterio77)
+profile and [my selfhosted cgit](https://m7.rs/git/) (usually mirrored at
+both).
 
 ## Web
 
 ### paste.misterio.me
-Full featured, yet simple, pasting service. Also includes a companion CLI for usage in the terminal.
+Full featured, yet simple, pasting service. Also includes a companion CLI for
+usage in the terminal.
 
-Serverside web app built with Rust + Rocket + Tera, backed by a PostgreSQL database. CLI is built with Rust + Clap. Hosted at my rpi4.
+Serverside web app built with Rust + Rocket + Tera, backed by a PostgreSQL
+database. CLI is built with Rust + Clap. Hosted at my rpi4.
 
 [Public instance](https://paste.misterio.me)
 
@@ -35,6 +39,16 @@ CLI app built with Rust + Clap. Packaged on the AUR and nixpkgs.
 
 ## Nix related
 
+### nix-starter-templates
+A couple opinionated templates for people getting started with
+[home-manager](https://github.com/nix-community/home-manager) and
+[NixOS](https://nixos.org).
+
+I made them to help my friends at university, but quite a few people seem to
+like it.
+
+[Repository](https://github.com/misterio77/nix-starter-templates)
+
 ### nix-colors
 Nix-compatible base16 schemes and helper functions.
 
@@ -43,7 +57,9 @@ Nix-compatible base16 schemes and helper functions.
 ### nix-config
 Personal nix(os) configurations and packages.
 
-This declares pretty much the entirety of anything on my computers (all 4 of them), except for some state (which can be easily recreated) and secrets (which are all backed up by git and encrypted using my PGP key).
+This declares pretty much the entirety of anything on my computers (all 4 of
+them), except for some state (which can be easily recreated) and secrets (which
+are all backed up by git and encrypted using my PGP key).
 
 [Repository](https://github.com/misterio77/nix-config)
 
@@ -66,6 +82,8 @@ Built with Rust + Teloxide. Personal instance hosted at my rpi4.
 ## USP
 
 ### GELOS
-I'm coordinator and one of the founders of my institute's free software extension group, GELOS. I was responsible for building our visual identity, as well as our institutional website.
+I'm coordinator and one of the founders of my institute's free software
+extension group, GELOS. I was responsible for building our visual identity, as
+well as our institutional website.
 
 [Repositories](https://github.com/gelos-icmc)
