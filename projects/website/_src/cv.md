@@ -1,8 +1,11 @@
 ---
-title: Resume
-description: My professional experience
-permalink: /resume/
+title: Curriculum Vitae
+description: Why you should consider hiring me
+permalink: /cv/
 ---
+
+Most of this info is also available on my [linkedin
+profile](https://linkedin.com/in/misterio7), if you prefer.
 
 ## About
 
@@ -14,7 +17,7 @@ engineering, reproducibility, DevOps, CI/CD, and development tooling.
 I started out with Linux, service hosting, programming, and design as a
 teenager, and have never stopped. I currently contribute to a few free software
 projects, some of them of my own creation. My technologies of choice nowadays
-are Rust, Haskell, Lua, PostgreSQL, Nix(OS), and Terraform.
+are Rust, Haskell, Lua, PostgreSQL, Nix(OS), Docker, and Terraform.
 
 Most of my professional experience consists of development processes, build
 systems, and infrastructure. I also have some experience with backend
@@ -46,8 +49,8 @@ I've studied a bit about a lot of different areas in computing, and gained a
 lot of interpersonal experience. Subjects I've particularly enjoyed include
 Software Engineering, Software Testing, Databases, and Operating Systems.
 
-I'm also a founding member of our institute's Open Source & Free Software
-extracurricular group; as well as the current director.
+I'm one of the founding members and currently director at our [Open Source &
+Free Software extracurricular group](https://gelos.club).
 
 ## Industry experience
 
@@ -57,13 +60,15 @@ extracurricular group; as well as the current director.
 
 U-Get is a brazillian startup that pioneered a computer vision-based vending
 machine system. The system is able to recognize and bill customers based on
-what they grabbed from a simple machine (a fridge, for example), dismissing any
-need for complex and expensive mechanisms. This flexibility makes setting up
-vending spots similar to trust markets, but without needing any trust.
+what they grabbed from a simple machine (a fridge, for example), avoiding
+complex and expensive mechanisms present in traditional vending machines. This
+flexibility makes it possible to set up vending spots that are similar in
+opration to trust markets, without requiring any trust; making them viable for
+public spaces.
 
 I've started working with U-Get in 2020, and still do. Our team built our
-systems from the ground up - including mobile apps, management and billing
-systems, leveraging Cloud of Things technologies.
+systems from the ground up - including mobile apps, fleet management and
+billing systems; leveraging Cloud of Things technologies.
 
 I mostly work with automation, databases, and service architecture; I've
 championed development cultural changes, making me the person in charge of
@@ -73,6 +78,8 @@ During 2022, I've led a successful change to declarative infrastructure
 (through Terraform), this came in handy when we needed to replicate our cloud.
 
 ### Communication Intern (2020-2020)
+
+[EVAG](https://evag.me)
 
 A temporary job during brazillian 2020 municipal elections, I've built campaign
 websites for multiple candidates. The job involved working closely together
@@ -89,21 +96,20 @@ color schemes to different programs a person uses. This allows for consistent
 theming that can be easily changed (after setting it up once), and works
 specially well for programs that have text-based configuration files.
 
-It was my first real world Rust program. I designed it to scratch a personal
-itch: changing themes with a single command (or click). People seemed to use
-base16 themes manually, and I had to combine multiple different software in an
-unorthodox script to automate theme changing.
+I designed it to scratch a personal itch: changing themes with a single command
+(or click). People seemed to use base16 manually, and I had to combine multiple
+different software in an unorthodox script to automate theme changing.
 
-Flavours was my attempt at remaking my script into a easy to use, highly
-composable CLI utility, with great UX. Flavours was, unexpectedly, quite
+Flavours is my attempt at remaking my script into an easy to use, highly
+composable CLI utility, with great UX. Flavours is, unexpectedly, quite
 popular (nearing 300 stars at github now).
 
-I've received multiple idea and code contributions from other users; flavours
-eventually had: automatic scheme generation, better scheme/template management,
-among other changes.
+I've received multiple suggestions, as well as docs and code contributions from
+other users. Flavours now has automatic scheme generation, better
+scheme/template management, among other changes.
 
-Maintaining flavours taught me Rust, software packaging and distribution, as
-well as code review.
+Creating flavours taught me Rust, software packaging and distribution, code
+review, and how to be a open source maintainer.
 
 ### Nix ecossystem
 
