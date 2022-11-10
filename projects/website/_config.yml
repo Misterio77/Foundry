@@ -2,7 +2,9 @@ name: "Gabriel Fontes"
 description: "My personal website and projects"
 domain: "m7.rs"
 
-default_theme: catppuccin
+dark_scheme: tokyo-city-terminal-dark
+light_scheme: tokyo-city-terminal-light
+
 
 plugins:
   - jekyll-extlinks
