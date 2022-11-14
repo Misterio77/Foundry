@@ -53,6 +53,7 @@ a[href^="sms\:"]:before {
   --blockquote-color: var(--base0C);
   --links-files: var(--base0B);
   --links-external: var(--base0D);
+  --links-mail: var(--base0E);
   --negative: var(--base08);
   --positive: var(--base0B);
   --warning: var(--base0A);
@@ -189,7 +190,7 @@ a {
   }
 
   &[href^="mailto"] {
-    color: var(--links-external);
+    color: var(--links-mail);
     @include add-icon("mail");
   }
 
@@ -208,9 +209,8 @@ nav a.colorscheme {
 }
 
 .pgp {
-  // Appearance
-  @include add-icon("key", $position: left);
   a {
+    @include add-icon("key", $position: right);
     color: var(--links-files);
   }
 
@@ -254,20 +254,16 @@ body {
 nav {
   // Navigation menu
   ul {
+    margin-left: 0;
+    padding-left: 0;
     margin-top: 2em;
     list-style: none;
-    margin-left: -2.1em;
 
     li {
       font-size: 1.1em;
       display: inline-block;
-      margin-right: 0.7em;
       vertical-align: middle;
-      &.colorscheme:after {
-        margin-left: 0.5rem;
-        content: "-";
-        color: var(--text-muted);
-      }
+      margin-right: 0.5em;
     }
   }
 }
