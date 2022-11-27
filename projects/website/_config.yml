@@ -36,24 +36,17 @@ collections:
     name: Posts
 
 defaults:
-  # Set layouts
   -
     scope:
       path: ""
       type: "posts"
     values:
       layout: "post.html"
-      nav_current: "blog"
+      nav_current: "/blog/"
   -
     scope:
       path: ""
     values:
       layout: "default.html"
-
-  # Default metadata
-  -
-    scope:
-      path: ""
-    values:
       language: "en"
       author: "Gabriel Fontes"
