@@ -4,6 +4,7 @@ domain: "m7.rs"
 
 dark_scheme: tokyo-city-terminal-dark
 light_scheme: tokyo-city-terminal-light
+printing_scheme: tomorrow # Must have #FFFFFF background
 
 
 plugins:
