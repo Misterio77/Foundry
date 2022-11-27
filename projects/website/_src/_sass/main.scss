@@ -236,6 +236,12 @@ footer {
       display: none;
     }
   }
+  p.print-site-link {
+    display: none;
+    @media print {
+      display: block;
+    }
+  }
 }
 
 header {
@@ -251,11 +257,6 @@ header {
 body {
   // Increase width a bit
   max-width: 55em;
-
-  @media print {
-    padding: 0;
-    margin: 0;
-  }
   @media(min-width: 360px) {
     padding: 1em;
   }
@@ -264,6 +265,11 @@ body {
   }
   @media(min-width: 720px) {
     padding: 2em;
+  }
+
+  margin: 1.2em auto;
+  @media print {
+    margin: 0 auto;
   }
 }
 
