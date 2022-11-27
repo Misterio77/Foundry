@@ -157,17 +157,23 @@ figure {
 
 label {
   &.colorscheme {
-    @include add-icon-label("palette");
+    @media not print {
+      @include add-icon-label("palette");
+    }
   }
 }
 
 button {
   &.random {
-    @include add-icon-button("shuffle");
+    @media not print {
+      @include add-icon-button("shuffle");
+    }
   }
 
   &.restore {
-    @include add-icon-button("restore");
+    @media not print {
+      @include add-icon-button("restore");
+    }
   }
 }
 
@@ -186,17 +192,23 @@ blockquote {
 a {
   &.external {
     color: var(--links-external);
-    @include add-icon("external");
+    @media not print {
+      @include add-icon("external");
+    }
   }
 
   &[href^="mailto"] {
     color: var(--links-mail);
-    @include add-icon("mail");
+    @media not print {
+      @include add-icon("mail");
+    }
   }
 
   &.feed {
     color: var(--links-files);
-    @include add-icon("rss", $margin: 0.5rem);
+    @media not print {
+      @include add-icon("rss", $margin: 0.5rem);
+    }
   }
 
   &.file {
@@ -210,7 +222,9 @@ nav a.colorscheme {
 
 .pgp {
   a {
-    @include add-icon("key", $position: right);
+    @media not print {
+      @include add-icon("key", $position: right);
+    }
     color: var(--links-files);
   }
 
