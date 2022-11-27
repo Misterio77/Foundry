@@ -2,6 +2,7 @@
 layout: root.html
 ---
 <header>
+  <div class="title">{ <a href="/">Gabriel Fontes</a> }</div>
   <nav>
     {% include nav.html.liquid %}
   </nav>
@@ -11,7 +12,9 @@ layout: root.html
   <article>
     <header>
       <h1>{{ page.title }}</h1>
-      <p><em>{{ page.description }}</em></p>
+      {% if page.description %}
+          <p><em>{{ page.description }}</em></p>
+      {% endif %}
       {% if page.date %}
         <p>
           Date: <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>

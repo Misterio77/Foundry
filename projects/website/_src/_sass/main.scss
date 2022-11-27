@@ -229,8 +229,20 @@ nav a.colorscheme {
   }
 }
 
+footer {
+  margin-top: 3em;
+  .copyleft {
+    @media print {
+      display: none;
+    }
+  }
+}
+
 header {
-  margin-bottom: 2px;
+  margin-bottom: 2em;
+  @media print {
+    margin-bottom: 0.5em;
+  }
   & > nav:last-child {
     // Add some border when header has a nav
     border-bottom: 1px solid var(--border);
@@ -240,6 +252,10 @@ body {
   // Increase width a bit
   max-width: 55em;
 
+  @media print {
+    padding: 0;
+    margin-top: 0;
+  }
   @media(min-width: 360px) {
     padding: 1em;
   }
@@ -253,10 +269,13 @@ body {
 
 nav {
   // Navigation menu
+  @media print {
+    display: none;
+  }
   ul {
     margin-left: 0;
     padding-left: 0;
-    margin-top: 2em;
+    margin-top: 1em;
     list-style: none;
 
     li {
@@ -265,26 +284,6 @@ nav {
       vertical-align: middle;
       margin-right: 0.5em;
     }
-  }
-}
-
-// Site logo
-.title {
-  // Name itself
-  a {
-    color: var(--base0E);
-    text-decoration: none;
-  }
-  // Decorations around
-  color: var(--text-muted);
-  &:hover {
-    color: var(--base09);
-  }
-
-  font-size: 2.4em;
-  font-weight: 600;
-  @media(max-width: 325px) {
-    font-size: 2em;
   }
 }
 
@@ -310,4 +309,7 @@ body > main > article > header {
   }
   // Add some padding after it
   padding-bottom: 0.5em;
+  @media print {
+    padding-bottom: 0.1em;
+  }
 }
