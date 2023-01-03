@@ -90,4 +90,4 @@ ecossystem:
 - [nix-starter-configs](https://github.com/misterio77/nix-starter-configs)
     is a collection of nix repository templates. It aims to provide simple,
     opinionated templates so that people starting out with Nix can hit the
-    ground rouning. It currently has 200+ stars on github.
+    ground running. It currently has 300+ stars on github.
