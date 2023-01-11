@@ -15,8 +15,9 @@ Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
-I'm currently a Computer Information Systems undergrad student at [University
-of São Paulo](https://usp.br), in my final year.
+I've recently finished my Bachelor of Computer Information Systems gegree at
+[University of São Paulo](https://usp.br), but plan on sticking around for
+Software Engineering MSc and PhD courses as well.
 
 Outside of computing, I enjoy reading (mostly sci-fi), playing the keyboard,
 snuggling with my pets, and speaking about things I'm passionate about. I love
@@ -32,11 +33,11 @@ Computer Sciences](https://icmc.usp.br).
 USP is considered to be Brazil's most prestigious university, and is frequently
 ranked the top university in latin america.
 
-I've studied different areas in computing, and gained a lot of interpersonal
-experience. Subjects I've particularly enjoyed include Software Engineering,
+I've studied different areas in computing, and gained a lot of hard and soft
+skills. Subjects I've particularly enjoyed include Software Engineering,
 Software Testing, Databases, and Operating Systems.
 
-I'm also one of the founding members and current director at our [Open Source &
+I'm one of the founding members and current leader at our [Open Source &
 Free Software extracurricular group](https://gelos.club).
 
 ## Industry experience
@@ -51,9 +52,9 @@ machines.
 
 Our team built our systems from the ground up - including mobile apps, fleet
 management and billing systems; leveraging Cloud of Things technologies. I
-mostly work with automation, databases, and service architecture; I've
-championed development cultural changes, making me the person in charge of
-CI/CD, version control, and cloud infrastructure. 
+mostly work with declarative infrastructure, deployments, databases, and
+service architecture; I've championed development cultural changes, making me
+the person in charge of CI/CD, git repositories, and cloud infrastructure.
 
 ### Communication Intern (2020-2020)
 
@@ -71,8 +72,7 @@ created to aid in managing and applying
 [base16](https://github.com/chriskempson/base16) color schemes to different
 programs a person uses. This allows for consistent theming that can be easily
 changed (after setting it up once), and works specially well for software with
-text-based configuration files. It is quite popular, with almost 300 stars on
-github.
+text-based configuration files. It is quite popular, with 300+ stars on github.
 
 ### Nix ecossystem
 
@@ -86,8 +86,14 @@ and modules, I've also created a couple relatively popular projects for the
 ecossystem:
 - [nix-colors](https://github.com/misterio77/nix-colors), a repository of
     nix-accessible base16 color schemes and a module that make their use more
-    convenient. It currently has 100+ stars on github.
+    convenient. It currently has 130+ stars on github.
 - [nix-starter-configs](https://github.com/misterio77/nix-starter-configs)
     is a collection of nix repository templates. It aims to provide simple,
     opinionated templates so that people starting out with Nix can hit the
-    ground running. It currently has 300+ stars on github.
+    ground running. It currently has 340+ stars on github.
+
+### Other contributions
+
+As I prefer to use open source tools, I frequently hack on them to add a
+feature I want or fix a bug; usually upstreaming the results as PRs. Thanks to
+this, I know my way around codebases written on many different languages.
