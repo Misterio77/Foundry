@@ -1,4 +1,4 @@
-_src/_sass/vendor liguist-vendored
+_src/_sass/vendor/* linguist-vendored
 
-nix/gemset.nix liguist-generated
-Gemfile.lock liguist-generated
+gemset.nix linguist-generated
+Gemfile.lock linguist-generated
