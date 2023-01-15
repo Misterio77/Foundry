@@ -15,7 +15,7 @@ Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
-I've recently finished my Bachelor of Computer Information Systems gegree at
+I've recently finished my Bachelor of Computer Information Systems degree at
 [University of São Paulo](https://usp.br), but plan on sticking around for
 Software Engineering MSc and PhD courses as well.
 
