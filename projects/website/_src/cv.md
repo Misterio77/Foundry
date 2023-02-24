@@ -9,19 +9,19 @@ engineering, reproducibility, DevOps, CI/CD, and development tooling.
 I started out with Linux, service hosting, programming, and design as a
 teenager, and have never stopped. I currently contribute to a few free software
 projects, some of them of my own creation. My technologies of choice nowadays
-are Rust, Haskell, Lua, PostgreSQL, Nix(OS), Docker, and Terraform.
+include Rust, Haskell, Lua, PostgreSQL, Nix(OS), Docker, and Terraform.
 
 Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
-I've recently finished my Bachelor of Computer Information Systems degree at
-[University of São Paulo](https://usp.br), but plan on sticking around for
-Software Engineering MSc and PhD courses as well.
+I've recently completed my Bachelor of Computer Information Systems degree at
+[University of São Paulo](https://usp.br), but plan on sticking around for grad
+school as well.
 
-Outside of computing, I enjoy reading (mostly sci-fi), playing the keyboard,
-snuggling with my pets, and speaking about things I'm passionate about. I love
-learning new things and teaching what I know.
+Outside of computing, I enjoy reading, playing the keyboard, snuggling with my
+pets, and speaking about things I'm passionate about. I love learning new
+things and teaching what I know to others.
 
 ## Education
 
@@ -31,7 +31,7 @@ learning new things and teaching what I know.
 Computer Sciences](https://icmc.usp.br).
 
 USP is considered to be Brazil's most prestigious university, and is frequently
-ranked the top university in latin america.
+ranked the top university in Latin America.
 
 I've studied different areas in computing, and gained a lot of hard and soft
 skills. Subjects I've particularly enjoyed include Software Engineering,
@@ -42,7 +42,12 @@ Free Software extracurricular group](https://gelos.club).
 
 ## Industry experience
 
-### DevOps Engineer (2020-present)
+### Zoocha (2023-present)
+
+[Zoocha](https://zoocha.com) is a software agency, specially focused on Drupal
+development.
+
+### DevOps Engineer (2020-2023)
 
 [U-Get](https://uget.express) is a startup that pioneered a computer
 vision-based vending machine system. The system is able to recognize and bill
@@ -58,7 +63,7 @@ the person in charge of CI/CD, git repositories, and cloud infrastructure.
 
 ### Communication Intern (2020-2020)
 
-[EVAG](https://evag.me). A temporary job during brazillian 2020 municipal
+[EVAG](https://evag.me). A temporary job during Brazilian 2020 municipal
 elections, I've built campaign websites for multiple candidates. The job
 involved working closely together with the candidates, and making their
 requirements into actual websites in a short timespan.
@@ -72,9 +77,9 @@ created to aid in managing and applying
 [base16](https://github.com/chriskempson/base16) color schemes to different
 programs a person uses. This allows for consistent theming that can be easily
 changed (after setting it up once), and works specially well for software with
-text-based configuration files. It is quite popular, with 300+ stars on github.
+text-based configuration files. It is quite popular, with 300+ stars on GitHub.
 
-### Nix ecossystem
+### Nix ecosystem
 
 [Nix](https://nixos.org) is a build and deployment tool based on functional
 programming concepts, such as immutability. It allows for highly reproducible
@@ -86,14 +91,14 @@ and modules, I've also created a couple relatively popular projects for the
 ecossystem:
 - [nix-colors](https://github.com/misterio77/nix-colors), a repository of
     nix-accessible base16 color schemes and a module that make their use more
-    convenient. It currently has 130+ stars on github.
+    convenient. It currently has 130+ stars on GitHub.
 - [nix-starter-configs](https://github.com/misterio77/nix-starter-configs)
     is a collection of nix repository templates. It aims to provide simple,
     opinionated templates so that people starting out with Nix can hit the
-    ground running. It currently has 340+ stars on github.
+    ground running. It currently has 340+ stars on GitHub.
 
 ### Other contributions
 
 As I prefer to use open source tools, I frequently hack on them to add a
-feature I want or fix a bug; usually upstreaming the results as PRs. Thanks to
-this, I know my way around codebases written on many different languages.
+feature I want or fix a bug; usually upstream the results as PRs. Thanks to
+this, I know my way around codebases written on different languages.
