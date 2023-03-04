@@ -22,11 +22,11 @@ live in it.
 
 ## Occupation
 
-I'm about to graduate with a Bachelor of Computer Information Systems degree at
+I've recently graduated as a Bachelor of Computer Information Systems at
 [University of São Paulo](https://usp.br)'s [Institute of Mathematics and
 Computer Sciences](https://www.icmc.usp.br/en/).
 
-I'm currently working at [U-Get](https://br.linkedin.com/company/u-get) as a
+I'm currently working at [Zoocha](https://Zoocha.com) as a
 DevOps Engineer.
 
 ## Tooling
