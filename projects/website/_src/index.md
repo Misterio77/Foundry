@@ -2,7 +2,7 @@
 title: About me
 ---
 
-Hey 👋, my name is Gabriel. I'm a brazillian programmer, designer, and
+Hey 👋, my name is Gabriel. I'm a brazilian programmer, designer, and
 activist. Welcome to my little cozy web corner!
 
 ## Interests
@@ -22,29 +22,17 @@ live in it.
 
 ## Occupation
 
-I've recently graduated as a Bachelor of Computer Information Systems at
-[University of São Paulo](https://usp.br)'s [Institute of Mathematics and
-Computer Sciences](https://www.icmc.usp.br/en/).
+I'm working towards a Computer Science MSc degree at [University of São
+Paulo](https://usp.br)'s [Institute of Mathematics and Computer
+Sciences](https://icmc.usp.br/en/), under the [Software Engineering
+Lab][https://labes.icmc.usp.br]. My current research is around Software
+Engineering topics within Open Source projects.
 
-I'm currently working at [Zoocha](https://Zoocha.com) as a
-DevOps Engineer.
+I'm currently employed at [Zoocha](https://Zoocha.com) as a DevOps Engineer,
+where I work on improving our development and deployment practices.
 
 ## Tooling
 
-My current tools of choice are: [NixOS](https://nixos.org),
+Some of my current tools of choice are: [NixOS](https://nixos.org),
 [Hyprland](https://hyprland.org/), [Neovim](https://neovim.io),
 [NeoMutt](https://neomutt.org/).
-
----
-
-Wanna hire me? Check out my [Curriculum Vitae](/cv)
-
-Interested in what I have to share? Here's [my blog](/blog)
-
-Want to know what I'm coding? Check [my github](https://github.com/misterio77)
-or, if you hate Microsoft, my [personal cgit](https://m7.rs/git/).
-
-Color of this website hurts your eyes? No problem, pick your favorite base16
-colors at my [colorscheme picker](https://m7.rs/colorscheme/)
-
-Wanna talk (or stalk) me? My email and social networks are down here `\/`

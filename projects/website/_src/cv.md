@@ -15,9 +15,11 @@ Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
-I've recently completed my Bachelor of Computer Information Systems degree at
-[University of São Paulo](https://usp.br), but plan on sticking around for grad
-school as well.
+I'm working towards a Computer Science MSc degree at [University of São
+Paulo](https://usp.br)'s [Institute of Mathematics and Computer
+Sciences](https://icmc.usp.br/en/), under the [Software Engineering
+Lab][https://labes.icmc.usp.br]. My current research is around Software
+Engineering topics within Open Source projects.
 
 Outside of computing, I enjoy reading, playing the keyboard, snuggling with my
 pets, and speaking about things I'm passionate about. I love learning new
@@ -25,7 +27,15 @@ things and teaching what I know to others.
 
 ## Education
 
-### Computer Information Systems (2020-2022)
+### Masters: Computer Science (2023-present)
+
+[University of São Paulo](https://usp.br), [Institute of Mathematics and
+Computer Sciences](https://icmc.usp.br).
+
+I'm one of the founding members and current leader at our [Open Source &
+Free Software extracurricular group](https://gelos.club).
+
+### Bachelor: Computer Information Systems (2020-2022)
 
 [University of São Paulo](https://usp.br), [Institute of Mathematics and
 Computer Sciences](https://icmc.usp.br).
@@ -36,9 +46,6 @@ ranked the top university in Latin America.
 I've studied different areas in computing, and gained a lot of hard and soft
 skills. Subjects I've particularly enjoyed include Software Engineering,
 Software Testing, Databases, and Operating Systems.
-
-I'm one of the founding members and current leader at our [Open Source &
-Free Software extracurricular group](https://gelos.club).
 
 ## Industry experience
 
