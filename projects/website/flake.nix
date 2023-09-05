@@ -3,22 +3,37 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
+    systems.url = "github:nix-systems/default-linux";
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, systems, nixpkgs }:
     let
-      supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
-      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-      pkgsFor = nixpkgs.legacyPackages;
+      forAllSystems = f: nixpkgs.lib.genAttrs (import systems) (system: f {
+        inherit system;
+        pkgs = nixpkgs.legacyPackages.${system};
+      });
     in
     rec {
-      packages = forAllSystems (system: rec {
-        main = pkgsFor.${system}.callPackage ./. { };
-        default = main;
+      packages = forAllSystems ({ pkgs, ... }: rec {
+        default = pkgs.callPackage ./. { };
+
+        serve = let
+          port = 4000;
+        in pkgs.writeShellScriptBin "serve-website" ''
+          echo "Running in http://localhost:${toString port}"
+          ${nixpkgs.lib.getExe pkgs.webfs} -F -p ${toString port} -f index.html -r ${default}/public
+        '';
+      });
+
+      apps = forAllSystems ({ system, ... }: {
+        default = {
+          type = "app";
+          program = "${packages.${system}.serve}/bin/serve-website";
+        };
       });
 
       hydraJobs = {
-        x86_64-linux.main = packages.x86_64-linux.main;
+        x86_64-linux.main = packages.x86_64-linux.default;
       };
     };
 }
