@@ -25,7 +25,7 @@ live in it.
 I'm working towards a Computer Science MSc degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
 Sciences](https://icmc.usp.br/en/), under the [Software Engineering
-Lab][https://labes.icmc.usp.br]. My current research is around Software
+Lab](http://www.labes.icmc.usp.br). My current research is around Software
 Engineering topics within Open Source projects.
 
 I'm currently employed at [Zoocha](https://Zoocha.com) as a DevOps Engineer,
