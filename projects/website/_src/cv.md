@@ -3,6 +3,8 @@ title: Curriculum Vitae
 permalink: /cv/
 ---
 
+## Overview
+
 My interests in computing include free software, distributed systems, software
 engineering, reproducibility, DevOps, CI/CD, and development tooling.
 
@@ -27,53 +29,80 @@ things and teaching what I know to others.
 
 ## Education
 
-### Masters: Computer Science (2023-present)
+### University of São Paulo (2020-present)
 
-[University of São Paulo](https://usp.br), [Institute of Mathematics and
-Computer Sciences](https://icmc.usp.br).
+[University of São Paulo](https://usp.br) is considered to be Brazil's most
+prestigious university, and is frequently ranked the top university in Latin
+America. The computing degrees offered by the [Institute of Mathematics and
+Computer Sciences](https://icmc.usp.br) are also top-ranking, being one of the
+best places to study computing in Latin America.
 
-I'm one of the founding members and current leader at our [Open Source &
-Free Software extracurricular group](https://gelos.club).
+During my time here, I helped create and currently lead our [Open Source & Free
+Software extracurricular group](https://gelos.club).
 
-### Bachelor: Computer Information Systems (2020-2022)
+#### Masters: Computer Science and Computational Mathematics (2023-present)
 
-[University of São Paulo](https://usp.br), [Institute of Mathematics and
-Computer Sciences](https://icmc.usp.br).
+I'm currently researching Software Engineering topics applied to Open Source
+Software projects, hoping to contribute to how we currently understand best
+practices for successful, long-lived, self-sustaining OSS.
 
-USP is considered to be Brazil's most prestigious university, and is frequently
-ranked the top university in Latin America.
+#### Bachelor: Computer Information Systems (2020-2022)
 
 I've studied different areas in computing, and gained a lot of hard and soft
 skills. Subjects I've particularly enjoyed include Software Engineering,
 Software Testing, Databases, and Operating Systems.
 
+I was a teaching assistant for a semester, on the Database Laboratory subject.
+
 ## Industry experience
 
 ### Zoocha (2023-present)
 
-[Zoocha](https://zoocha.com) is a software agency, specially focused on Drupal
-development.
+[Zoocha](https://zoocha.com) is a digital agency, specially focused on Drupal
+development. Clients include government, universities, and private companies.
 
-### DevOps Engineer (2020-2023)
+#### DevOps Engineer (2023-present)
+
+As part of the DevOps, we aim to tackle technical debt and support developers
+with better tooling and practices, while simultaneously taking care of cloud
+operations and making sure everything is running smoothly.
+
+### U-Get (2020-2023)
 
 [U-Get](https://uget.express) is a startup that pioneered a computer
 vision-based vending machine system. The system is able to recognize and bill
-customers based on what they grab from a simple machine (a fridge, for
-example), avoiding expensive mechanisms present in traditional vending
-machines.
+customers based on what they pick up from a vending spot (e.g. a fridge or
+locker), without any mechanical components other than some cameras and an
+electronic lock, avoiding complex (and expensive) mechanisms present in
+traditional vending machines.
 
 Our team built our systems from the ground up - including mobile apps, fleet
-management and billing systems; leveraging Cloud of Things technologies. I
-mostly work with declarative infrastructure, deployments, databases, and
-service architecture; I've championed development cultural changes, making me
-the person in charge of CI/CD, git repositories, and cloud infrastructure.
+management and billing systems; leveraging Cloud of Things technologies.
 
-### Communication Intern (2020-2020)
+#### DevOps Engineer (2020-2023)
 
-[EVAG](https://evag.me). A temporary job during Brazilian 2020 municipal
-elections, I've built campaign websites for multiple candidates. The job
-involved working closely together with the candidates, and making their
-requirements into actual websites in a short timespan.
+I worked with cloud computing (AWS), declarative infrastructure (terraform),
+containers, deployments, CI/CD, databases; I've championed development cultural
+changes, moving everything over to more reproducible solutions, and leaded a
+shift to a working code review culture with shared ownership.
+
+#### Freelance Developer (2020-2020)
+
+I started off at U-Get by creating a management solution for a fleet of Android
+tablets. The MVP was a Python CLI (later re-written into a Rust Backend) that
+handled the entire lifecycle of our tablets.
+
+### EVAG
+
+[EVAG](https://evag.me) is a digital agency, focusing on WordPress and custom
+solutions for different clients, mostly politicians and activists.
+
+#### Communication Intern (2020-2020)
+
+A temporary job during Brazilian 2020 municipal elections, I've built campaign
+websites for multiple candidates. The job involved working closely together
+with the candidates, and making their requirements into actual websites in a
+very short timespan.
 
 ## Open Source Experience
 
