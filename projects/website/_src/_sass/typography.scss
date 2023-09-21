@@ -61,65 +61,37 @@ code {
   @media(max-width: 325px) {
     font-size: 2em;
   }
-  @media print {
-    font-size: 1.9em;
-  }
 }
 
 // Headings
 h1 {
-  font-size: 1.8em;
+  font-size: 2em;
   font-style: italic;
   margin-top: 1em;
   margin-bottom: 0.5em;
   &::before {
     content: "> ";
   }
-  @media print {
-    font-size: 1.5em;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-  }
 }
 h2 {
+  font-size: 1.9em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h3 {
   font-size: 1.6em;
   margin-top: 1em;
   margin-bottom: 0.5em;
-  @media print {
-    font-size: 1.3em;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-  }
-}
-h3 {
-  font-size: 1.4em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  @media print {
-    font-size: 1.2em;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-  }
 }
 h4 {
-  font-size: 1.2em;
+  font-size: 1.3em;
   margin-top: 1em;
   margin-bottom: 0.5em;
-  @media print {
-    font-size: 1.1em;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-  }
 }
 h5 {
   font-size: 1.1em;
   margin-top: 1em;
   margin-bottom: 0.5em;
-  @media print {
-    font-size: 1em;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-  }
 }
 h6 {
   font-size: 1em;
