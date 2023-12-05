@@ -2,7 +2,7 @@
   description = "My personal website and blog";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
     systems.url = "github:nix-systems/default-linux";
   };
 
@@ -32,8 +32,8 @@
         };
       });
 
-      hydraJobs = {
-        x86_64-linux.main = packages.x86_64-linux.default;
-      };
+      hydraJobs = forAllSystems ({ system, ... }: {
+        main = packages.${system}.default;
+      });
     };
 }
