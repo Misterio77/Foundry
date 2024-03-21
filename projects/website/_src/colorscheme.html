@@ -61,7 +61,7 @@ let scheme_random_button = document.getElementById("scheme-random");
 let scheme_default_button = document.getElementById("scheme-default");
 
 async function fetch_schemes() {
-  var schemes_data = await fetch("https://colors.m7.rs/themes.json");
+  var schemes_data = await fetch("https://m7.rs/colors/themes.json");
   var schemes_json = await schemes_data.json();
   return Object.keys(schemes_json);
 }

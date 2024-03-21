@@ -35,7 +35,7 @@ let chosen_scheme_css = document.getElementById("theme-css");
 function setTheme(scheme) {
     chosen_scheme_css.setAttribute(
         "href",
-        "https://colors.m7.rs/" + scheme + ".css"
+        "https://m7.rs/colors/" + scheme + ".css"
     );
     setCookie("fontes_theme", scheme);
 }
