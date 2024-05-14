@@ -56,16 +56,23 @@ I was a teaching assistant for a semester, on the Database Laboratory subject.
 
 ## Industry experience
 
-### Zoocha (2023-present)
+### Zoocha (2023-2024)
 
 [Zoocha](https://zoocha.com) is a digital agency, specially focused on Drupal
-development. Clients include government, universities, and private companies.
+development. Drupal is something between a framework and a CMS, allowing for
+great extensibility and development experience, while letting final users
+intuitively manage content. Zoocha's clients include government, universities,
+and private companies.
 
-#### DevOps Engineer (2023-present)
+#### DevOps Engineer (2023-2024)
 
-As part of the DevOps, we aim to tackle technical debt and support developers
-with better tooling and practices, while simultaneously taking care of cloud
-operations and making sure everything is running smoothly.
+As part of the DevOps team, I mainly tackled technical debt and supported
+developers with better tooling and practices, while simultaneously taking care
+of cloud operations and making sure everything was running smoothly.
+
+While Zoocha was a smaller company, it was my first time working with other
+DevOps professionals, and I learned a lot about task prioritization,
+organization, and processes.
 
 ### U-Get (2020-2023)
 

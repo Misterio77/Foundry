@@ -22,9 +22,6 @@ live in it.
 
 ## Occupation
 
-I'm currently employed at [Zoocha](https://Zoocha.com) as a DevOps Engineer,
-where I work on improving our development and deployment practices.
-
 I'm working towards a Computer Science M.Sc. degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
 Sciences](https://icmc.usp.br/en/), under the [Software Engineering
