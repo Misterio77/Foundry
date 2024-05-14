@@ -120,7 +120,7 @@ created to aid in managing and applying
 [base16](https://github.com/chriskempson/base16) color schemes to different
 programs a person uses. This allows for consistent theming that can be easily
 changed (after setting it up once), and works specially well for software with
-text-based configuration files. It is quite popular, with 400+ stars on GitHub.
+text-based configuration files. It is quite popular, with 450+ stars on GitHub.
 
 ### Nix ecosystem
 
@@ -134,12 +134,12 @@ and modules, I've also created a couple relatively popular projects for the
 ecossystem:
 - [nix-colors](https://github.com/misterio77/nix-colors), a repository of
     nix-accessible base16 color schemes and a module that make their use more
-    convenient. It currently has 250+ stars on GitHub.
+    convenient. It currently has 440+ stars on GitHub.
 - [nix-starter-configs](https://github.com/misterio77/nix-starter-configs)
     is a collection of nix repository templates. It aims to provide simple,
     opinionated templates so that people starting out with Nix can hit the
     ground running. It has become the most popular NixOS flake template, and
-    one of the most starred nix projects overall, with 1,000+ stars on GitHub.
+    one of the most starred nix projects overall, with 2,000+ stars on GitHub.
 
 ### Other contributions
 
