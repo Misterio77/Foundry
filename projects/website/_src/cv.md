@@ -56,6 +56,20 @@ I was a teaching assistant for a semester, on the Database Laboratory subject.
 
 ## Industry experience
 
+### Magazine Luiza / Luizalabs (2024-present)
+
+[Magazine
+Luiza](https://ri.magazineluiza.com.br/ShowCanal/Quem-Somos?=urUqu4hANldyCLgMRgOsTw==&linguagem=en)
+is a leading retail company group in Brazil. Its technology division,
+[Luizalabs](https://ri.magazineluiza.com.br/show.aspx?idMateria=zrW63qZDygmEVMe9BMldXQ%3D%3D&linguagem=en),
+generates technological innovation within the retail industry, and beyond.
+
+#### Site Reliability Engineer (2024-present)
+
+I'm currently working as an SRE within the team building an Object Storage
+(S3-like) solution for the newly released [Magalu
+Cloud](https://magalu.cloud/sobre-nos/) platform.
+
 ### Zoocha (2023-2024)
 
 [Zoocha](https://zoocha.com) is a digital agency, specially focused on Drupal
@@ -64,15 +78,19 @@ great extensibility and development experience, while letting final users
 intuitively manage content. Zoocha's clients include government, universities,
 and private companies.
 
+While Zoocha was a smaller company, it was my first time working within a
+dedicated DevOps team, and I learned a lot about task prioritization,
+organization, and processes.
+
 #### DevOps Engineer (2023-2024)
 
 As part of the DevOps team, I mainly tackled technical debt and supported
 developers with better tooling and practices, while simultaneously taking care
 of cloud operations and making sure everything was running smoothly.
 
-While Zoocha was a smaller company, it was my first time working with other
-DevOps professionals, and I learned a lot about task prioritization,
-organization, and processes.
+Some of the work included improving developer tooling, migrating (chef-based)
+client infrastructure from AWS OpsWorks into Terraform-managed AWS SSM, and
+dealing with day-to-day operations.
 
 ### U-Get (2020-2023)
 
