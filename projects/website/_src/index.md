@@ -33,8 +33,8 @@ I'm also working towards a Computer Science M.Sc. degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
 Sciences](https://icmc.usp.br/en/), under the [Software Engineering
 Lab](http://www.labes.icmc.usp.br). My current research is around Software
-Engineering topics within Open Source projects. I currently lead our
-institute's FLOSS student group, [GELOS](https://gelos.club).
+Sustainability in Open Source projects. I also currently lead our institute's
+FLOSS extracurricular student group, [GELOS](https://gelos.club).
 
 ## Tooling
 

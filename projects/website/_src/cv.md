@@ -21,7 +21,7 @@ I'm working towards a Computer Science MSc degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
 Sciences](https://icmc.usp.br/en/), under the [Software Engineering
 Lab](http://www.labes.icmc.usp.br). My current research is around Software
-Engineering topics within Open Source projects.
+Sustainability in Open Source projects.
 
 Outside of computing, I enjoy reading, playing the keyboard, snuggling with my
 pets, and speaking about things I'm passionate about. I love learning new
@@ -42,9 +42,9 @@ Software extracurricular group](https://gelos.club).
 
 #### Masters: Computer Science and Computational Mathematics (2023-present)
 
-I'm currently researching Software Engineering topics applied to Open Source
-Software projects, hoping to contribute to how we currently understand best
-practices for successful, long-lived, self-sustaining OSS.
+I'm currently researching Software Sustainability in Open Source Software
+projects, hoping to contribute to how we currently understand best practices
+for successful, long-lived, self-sustaining OSS.
 
 #### Bachelor: Computer Information Systems (2020-2022)
 
