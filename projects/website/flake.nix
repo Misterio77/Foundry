@@ -2,7 +2,7 @@
   description = "My personal website and blog";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-24.05";
     systems.url = "github:nix-systems/default-linux";
   };
 

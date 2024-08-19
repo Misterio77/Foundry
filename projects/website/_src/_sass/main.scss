@@ -68,14 +68,6 @@ a[href^="sms\:"]:before {
 [aria-current="page"],
 .active {
   color: var(--text-main);
-
-  &::before {
-    content: '[  ';
-  }
-
-  &::after {
-    content: ' ]';
-  }
 }
 
 // Add prettier border
@@ -340,4 +332,8 @@ body > main > article > header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+@view-transition {
+  navigation: auto;
 }
