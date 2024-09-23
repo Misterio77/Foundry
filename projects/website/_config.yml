@@ -1,6 +1,7 @@
 name: "Gabriel Fontes"
 description: "My personal website and projects"
 domain: "m7.rs"
+url: "https://m7.rs/"
 
 dark_scheme: rose-pine-moon
 light_scheme: rose-pine-dawn
@@ -8,16 +9,10 @@ printing_scheme: standardized-light # Must have #FFFFFF background
 
 
 plugins:
-  - jekyll-extlinks
-  - jekyll-relative-links
+  - jekyll-target-blank
 
-extlinks:
-  attributes: 
-    class: external
-
-relative_links:
-  enabled: true
-  collections: true
+target-blank:
+  add_css_classes: external
 
 sass:
   style: compact
