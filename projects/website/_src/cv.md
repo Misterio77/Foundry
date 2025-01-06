@@ -17,6 +17,9 @@ Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
+I'm currently employed full-time as a Site Reliability Engineer at [Magalu
+Cloud](https://magalu.cloud), where we build a Object Storage solution.
+
 I'm working towards a Computer Science MSc degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
 Sciences](https://icmc.usp.br/en/), under the [Software Engineering
@@ -66,9 +69,11 @@ generates technological innovation within the retail industry, and beyond.
 
 #### Site Reliability Engineer (2024-present)
 
-I'm currently working as an SRE within the team building an Object Storage
-(S3-like) solution for the newly released [Magalu
-Cloud](https://magalu.cloud/sobre-nos/) platform.
+[Magalu Cloud](https://magalu.cloud) is Brazil's first 100% domestic Public
+Cloud Platform. My team is responsible for the platform's Object Storage
+solution. My responsabilities as an SRE include: deployment automation (mainly
+[Canonical Juju](https://juju.is)), automated testing, monitoring, and
+coordinating routine processes (deployments, disk replacements, etc.).
 
 ### Zoocha (2023-2024)
 

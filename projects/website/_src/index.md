@@ -22,12 +22,9 @@ live in it.
 
 ## Occupation
 
-I currently work full time in [Magazine
-Luiza](https://ri.magazineluiza.com.br/ShowCanal/Quem-Somos?=urUqu4hANldyCLgMRgOsTw==&linguagem=en)'s
-technology division,
-[LuizaLabs](https://ri.magazineluiza.com.br/show.aspx?idMateria=zrW63qZDygmEVMe9BMldXQ%3D%3D&linguagem=en),
-as an Site Reliability Engineer. Our team is currently building an Object
-Storage solution for [Magalu Cloud](https://magalu.cloud/sobre-nos/).
+I currently work full-time at [Magalu Cloud](https://magalu.cloud), an
+innovative 100% brazilian Public Cloud. My team is responsible for the Object
+Storage product, my role being a Site Reliability Engineer.
 
 I'm also working towards a Computer Science M.Sc. degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
