@@ -5,8 +5,7 @@ permalink: /portfolio/
 ---
 
 Most of these can be found at my [github](https://github.com/misterio77)
-profile and [my selfhosted cgit](https://m7.rs/git/) (usually mirrored at
-both).
+profile.
 
 ## Web
 

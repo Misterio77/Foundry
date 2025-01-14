@@ -6,9 +6,7 @@
 
 My personal website.
 
-Licensed under MIT (code) and CC BY-SA 4.0 (content), available at both
-[my cgit](https://m7.rs/git/website/about) and
-[github](https://github.com/misterio77/website)
+Licensed under MIT (code) and CC BY-SA 4.0 (content)
 
 ## Developing
 
