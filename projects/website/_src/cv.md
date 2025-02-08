@@ -30,7 +30,7 @@ Outside of computing, I enjoy reading, playing the keyboard, snuggling with my
 pets, and speaking about things I'm passionate about. I love learning new
 things and teaching what I know to others.
 
-## Education
+## Education/Research
 
 ### University of São Paulo (2020-present)
 
@@ -43,19 +43,19 @@ best places to study computing in Latin America.
 During my time here, I helped create and currently lead our [Open Source & Free
 Software extracurricular group](https://gelos.club).
 
-#### Masters: Computer Science and Computational Mathematics (2023-present)
+#### Master's: Computer Science and Computational Mathematics (2023-present)
 
 I'm currently researching Software Sustainability in Open Source Software
 projects, hoping to contribute to how we currently understand best practices
 for successful, long-lived, self-sustaining OSS.
 
-#### Bachelor: Computer Information Systems (2020-2022)
+#### Bachelor's: Computer Information Systems (2020-2022)
 
 I've studied different areas in computing, and gained a lot of hard and soft
 skills. Subjects I've particularly enjoyed include Software Engineering,
 Software Testing, Databases, and Operating Systems.
 
-I was a teaching assistant for a semester, on the Database Laboratory subject.
+I was a teaching assistant for a semester, on a Database Practice subject.
 
 ## Industry experience
 
