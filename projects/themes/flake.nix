@@ -29,6 +29,6 @@
       in
         pkgs.linkFarmFromDrvs "colorschemes" (pkgs.lib.attrValues colorschemes ++ [combined]);
     });
-    hydraJobs = packages;
+    hydraJobs = nixpkgs.lib.filterAttrs (_: nixpkgs.lib.isDerivation) packages;
   };
 }
