@@ -32,9 +32,21 @@ things and teaching what I know to others.
 
 ## Education/Research
 
+### University of Groningen (2025)
+
+[University of Groningen](https://rug.nl) (RUG) is one of Netherland's top universities,
+and frequently in the world's top 100, and is specially focused in
+internationalization.
+
+#### Research Internship (2025)
+
+I'm currently enrolled in a 3 month internship in RUG, focusing on the
+intersection between Cloud Computing Sustainability and Open Source Software
+tooling.
+
 ### University of São Paulo (2020-present)
 
-[University of São Paulo](https://usp.br) is considered to be Brazil's most
+[University of São Paulo](https://usp.br) (USP) is considered to be Brazil's most
 prestigious university, and is frequently ranked the top university in Latin
 America. The computing degrees offered by the [Institute of Mathematics and
 Computer Sciences](https://icmc.usp.br) are also top-ranking, being one of the
@@ -127,7 +139,7 @@ handled the entire lifecycle of our tablets.
 [EVAG](https://evag.me) is a digital agency, focusing on WordPress and custom
 solutions for different clients, mostly politicians and activists.
 
-#### Communication Intern (2020-2020)
+#### Communication Intern (2020)
 
 A temporary job during Brazilian 2020 municipal elections, I've built campaign
 websites for multiple candidates. The job involved working closely together
