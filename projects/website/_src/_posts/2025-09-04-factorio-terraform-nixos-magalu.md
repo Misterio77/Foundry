@@ -131,7 +131,7 @@ Pode levar alguns minutos, pois o Nix irá baixar absolutamente tudo nescessári
 
 Irá abrir uma janela com o console da sua VM. Faça login com `root` e `123456`.
 
-![image](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/aa442cc9cf735b530098e1b800e9e6d514f1c61f.png?v=1)
+![Uma captura de tela mostrando um console QEMU, com login no tty feito no usuário root](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/aa442cc9cf735b530098e1b800e9e6d514f1c61f.png?v=1)
 
 Vamos ver se o servidor está okay:
 
@@ -139,7 +139,7 @@ Vamos ver se o servidor está okay:
 systemctl status factorio
 ```
 
-![image](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/7698218f20b9ca2bd9062715a1968779a0132fc0.png?v=1)
+![Uma captura de tela mostrando um console QEMU, após executar 'systemctl status factorio', mostrando que ele está executando corretamente](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/7698218f20b9ca2bd9062715a1968779a0132fc0.png?v=1)
 
 Sucesso! Nossa VM está rodando Factorio :gear:
 
@@ -314,7 +314,7 @@ $ ssh debian@<IP DA VM>
 
 Agora temos uma VM… Rodando Debian (por enquanto):
 
-![image](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/6f6ec1c34d15f3c917db776ec3433b3ebc359852.png?v=1)
+![Uma captura de tela de um terminal conectado por SSH na VM do Magalu, rodando screenfetch e exibindo o logo do debian](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/6f6ec1c34d15f3c917db776ec3433b3ebc359852.png?v=1)
 
 Vamos agora infectar essa querida com NixOS! Iremos utilizar o [nixos-anywhere](https://github.com/nix-community/nixos-anywhere).
 
@@ -488,7 +488,7 @@ Sempre que você modificar a configuração, basta dar apply novamente, ele irá
 
 Sucesso! Podemos usar o IP agora para jogar factorio:
 
-![image](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/135ef87fb35016ea28af6319e543245f91ae7389.jpeg)
+![Uma captura de tela nos menus da tela inicial do factorio, está sendo feita uma conexão direta ao IP da VM](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/135ef87fb35016ea28af6319e543245f91ae7389.jpeg)
 
 
 ## Fechamento
