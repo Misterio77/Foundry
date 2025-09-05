@@ -12,7 +12,7 @@ Nesse guia, eu quero mostrar uma das melhores (na minha opinião) soluções par
 
 Factorio é um jogo de automação com uma qualidade absurda e uma gameplay extremamente polida. Se você valoriza seu sono, recomendo não jogar! Pro resto de nós, já viciados, a fábrica deve crescer!
 
-Com isso em mente, esse guia irá, como exemplo divertido, focar em subir um servidor de Factorio! :gear:
+Com isso em mente, esse guia irá, como exemplo divertido, focar em subir um servidor de Factorio! ⚙️
 
 > *Mas, Gabriel, eu não gosto de Factorio!*
 >
@@ -22,7 +22,7 @@ Com isso em mente, esse guia irá, como exemplo divertido, focar em subir um ser
 
 O versão final está disponível aqui: [GitHub - Misterio77/hackathon-mgc-factorio-terraform](https://github.com/misterio77/hackathon-mgc-factorio-terraform). Esse tutorial irá mostrar como construir esse código iterativamente.
 
-## Intro :checkered_flag:
+## Intro 🏁
 
 O NixOS é uma distribuição Linux baseada no gerenciador de pacotes Nix. O Nix permite empacotar programas de forma reproduzível e isolada, numa linguagem declarativa e pura. O NixOS leva isso a um outro nível, e permite configurar sistemas inteiros usando essa mesma linguagem. Por exemplo, para subir um servidor de Factorio:
 
@@ -42,7 +42,7 @@ A idéia é que, com apenas um `tofu apply`, o servidor seja criado já rodando 
 
 Mãos à obra!
 
-## Setup :hammer:
+## Setup 🔨
 
 Caso queira acompanhar o tutorial e ir rodando coisas na sua máquina (que recomendo!), você vai precisar:
 
@@ -53,7 +53,7 @@ Caso queira acompanhar o tutorial e ir rodando coisas na sua máquina (que recom
 * Uma chave SSH;
 * Um editor de texto que você goste.
 
-## Configuração de NixOS :snowflake:
+## Configuração de NixOS ❄️
 
 Para usarmos algumas funcionalidades novas do Nix, vamos habilitar `flakes` e `nix-command`:
 
@@ -141,11 +141,11 @@ systemctl status factorio
 
 ![Uma captura de tela mostrando um console QEMU, após executar 'systemctl status factorio', mostrando que ele está executando corretamente](https://canada1.discourse-cdn.com/flex008/uploads/jaxy/original/1X/7698218f20b9ca2bd9062715a1968779a0132fc0.png?v=1)
 
-Sucesso! Nossa VM está rodando Factorio :gear:
+Sucesso! Nossa VM está rodando Factorio ⚙️
 
 Agora, vamos colocar isso na Cloud! Bora para o Terraform. Depois voltaremos para fazer alguns ajustes nessa configuração.
 
-## Subindo VM com Terraform :cloud:
+## Subindo VM com Terraform ☁️
 
 Crie um arquivo `main.tf`, com o conteúdo:
 
@@ -186,7 +186,7 @@ resource "mgc_virtual_machine_instances" "factorio_server" {
 
 > *Ué, Debian? Não íamos usar NixOS? Que sacrilégio é esse?*
 >
-> Calma calma foguetinho :rocket:! O Magalu Cloud ainda não tem imagem de NixOS, mas temos uma carta na manga para instalar e configurar o NixOS, aguenta ai!
+> Calma calma foguetinho 🚀! O Magalu Cloud ainda não tem imagem de NixOS, mas temos uma carta na manga para instalar e configurar o NixOS, aguenta ai!
 
 ### Tornando ela acessível ao mundo
 
@@ -318,7 +318,7 @@ Agora temos uma VM… Rodando Debian (por enquanto):
 
 Vamos agora infectar essa querida com NixOS! Iremos utilizar o [nixos-anywhere](https://github.com/nix-community/nixos-anywhere).
 
-## Instalando NixOS na VM :magic_wand:
+## Instalando NixOS na VM 🪄
 
 A idéia do `nixos-anywhere` é iniciar um NixOS via kexec, desmontar o disco da máquina, re-particionar ele, e instalar NixOS de verdade (com a nossa configuração). Eles provêm um módulo de Terraform, que é perfeito para a gente!
 
