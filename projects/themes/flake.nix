@@ -23,11 +23,7 @@
       # And colorschemes based on it
       generateColorscheme = import ./colorschemes/generator.nix {inherit pkgs;};
       colorschemes = import ./colorschemes {inherit pkgs wallpapers generateColorscheme;};
-      allColorschemes = let
-        # This is here to help us keep IFD cached (hopefully)
-        combined = pkgs.writeText "colorschemes.json" (builtins.toJSON (pkgs.lib.mapAttrs (_: drv: drv.imported) colorschemes));
-      in
-        pkgs.linkFarmFromDrvs "colorschemes" (pkgs.lib.attrValues colorschemes ++ [combined]);
+      allColorschemes = pkgs.linkFarmFromDrvs "colorschemes" (pkgs.lib.attrValues colorschemes);
     });
     hydraJobs = nixpkgs.lib.mapAttrs (_: nixpkgs.lib.filterAttrs (_: nixpkgs.lib.isDerivation)) packages;
   };
