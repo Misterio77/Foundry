@@ -203,6 +203,13 @@ a {
     }
   }
 
+  &.doi {
+    color: var(--links-external);
+    @media not print {
+      @include add-icon("doi", $margin: 0.5rem);
+    }
+  }
+
   &.file {
     color: var(--links-files);
   }

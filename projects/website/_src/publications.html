@@ -1,0 +1,19 @@
+---
+title: Publications
+description: My research papers
+permalink: /publications/
+---
+
+{% for pub in site.data.publications %}
+  <article>
+    <header>
+      <h2><a class="file" href="{{ pub.file }}">{{ pub.title }}</a></h2><a class="doi" href="https://doi.org/{{ pub.doi }}">{{ pub.doi }}</a>
+    </header>
+    {% if pub.venue %}<p>{{ pub.venue }}</p>{% endif %}
+    <p>
+      <time datetime="{{ pub.date | date_to_xmlschema }}">
+        {{ pub.date | date_to_long_string: "ordinal" }}
+      </time>
+    </p>
+  </article>
+{% endfor %}

@@ -1,0 +1,10 @@
+- title: Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability
+  doi: 10.1145/3786152.3788587
+  file: /assets/docs/fontes-design-2026.pdf
+  date: 2026-04-13
+  venue: 3rd International Workshop on Designing Software (Designing '26)
+- title: "Open Source Software Ecosystem for Cloud Observability: An Overview and Trends"
+  doi: 10.1145/3786163.3788453
+  file: /assets/docs/fontes-sesos-2026.pdf
+  date: 2026-04-12
+  venue: 14th International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS '26)
