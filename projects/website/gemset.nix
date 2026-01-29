@@ -155,6 +155,17 @@
     };
     version = "3.1.0";
   };
+  jekyll-sitemap = {
+    dependencies = ["jekyll"];
+    groups = ["default"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "0622rwsn5i0m5xcyzdn86l68wgydqwji03lqixdfm1f1xdfqrq0d";
+      type = "gem";
+    };
+    version = "1.4.0";
+  };
   jekyll-target-blank = {
     dependencies = ["jekyll" "nokogiri"];
     groups = ["default"];

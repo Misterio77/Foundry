@@ -1,7 +1,7 @@
 name: "Gabriel Fontes"
 description: "My personal website and projects"
 domain: "m7.rs"
-url: "https://m7.rs/"
+url: "https://m7.rs"
 
 dark_scheme: rose-pine-moon
 light_scheme: rose-pine-dawn
@@ -10,6 +10,7 @@ printing_scheme: standardized-light # Must have #FFFFFF background
 
 plugins:
   - jekyll-target-blank
+  - jekyll-sitemap
 
 target-blank:
   add_css_classes: external
@@ -46,3 +47,8 @@ defaults:
       layout: "default.html"
       language: "en"
       author: "Gabriel Fontes"
+  -
+    scope:
+      path: "cgit_partials/**/*"
+    values:
+      sitemap: false
