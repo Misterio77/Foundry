@@ -38,7 +38,7 @@ Lembra bastante o Terraform, né?
 
 Vou mostrar pra vocês como implantar e configurar um servidor no Magalu Cloud, via Terraform e NixOS, por meio do [nixos-anywhere](https://github.com/nix-community/nixos-anywhere).
 
-A idéia é que, com apenas um `tofu apply`, o servidor seja criado já rodando exatamente o que você quer que rode, sem nenhum passo manual. :construction_worker:
+A idéia é que, com apenas um `tofu apply`, o servidor seja criado já rodando exatamente o que você quer que rode, sem nenhum passo manual. 👷
 
 Mãos à obra!
 
