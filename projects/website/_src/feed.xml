@@ -7,8 +7,8 @@ layout: none
     <channel>
         <title>{{ site.name | xml_escape }}</title>
         <description>{{ site.description | xml_escape }}</description>
-        <link>https://{{ site.domain }}</link>
-        <atom:link href="https://{{ site.domain }}{{ page.url }}" rel="self" type="application/rss+xml" />
+        <link>{{ site.url }}</link>
+        <atom:link href="{{ site.url }}{{ page.url }}" rel="self" type="application/rss+xml" />
         <lastBuildDate>{% for post in site.posts limit:1 %}{{ post.date | date_to_rfc822 }}{% endfor %}</lastBuildDate>
         {% for post in site.posts limit:10 %}
             <item>
@@ -18,8 +18,8 @@ layout: none
                 {% endif %}
                 <description>{{ post.content | xml_escape }}</description>
                 <pubDate>{{ post.date | date_to_rfc822 }}</pubDate>
-                <link>https://{{ site.domain }}{{ post.url }}</link>
-                <guid isPermaLink="true">https://{{ site.domain }}{{ post.url }}</guid>
+                <link>{{ site.url }}{{ post.url }}</link>
+                <guid isPermaLink="true">{{ site.url }}{{ post.url }}</guid>
             </item>
         {% endfor %}
     </channel>
