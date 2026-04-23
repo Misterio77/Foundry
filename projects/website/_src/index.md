@@ -23,8 +23,8 @@ live in it.
 ## Occupation
 
 I currently work full-time at [Magalu Cloud](https://magalu.cloud), an
-innovative 100% brazilian Public Cloud. My team is responsible for the Object
-Storage product, my role being a Site Reliability Engineer.
+innovative 100% brazilian Public Cloud, as part of the team that handles
+underlying virtualization, packaging, and deployment orchestration.
 
 I'm also working towards a Computer Science M.Sc. degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer

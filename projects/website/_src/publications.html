@@ -5,7 +5,7 @@ permalink: /publications/
 ---
 
 {% for pub in site.data.publications %}
-  <article>
+  <article id="{{ pub.slug }}">
     <header>
       <h2><a class="file" href="{{ pub.file }}">{{ pub.title }}</a></h2><a class="doi" href="https://doi.org/{{ pub.doi }}">{{ pub.doi }}</a>
     </header>

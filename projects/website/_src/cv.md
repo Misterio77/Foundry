@@ -3,6 +3,8 @@ title: Curriculum Vitae
 permalink: /cv/
 ---
 
+Last updated: 2026-04-23
+
 ## Overview
 
 My interests in computing include free software, distributed systems, software
@@ -17,8 +19,9 @@ Most of my professional experience consists of development processes, build
 systems, infrastructure, and backend development. I also have experience with
 UI/UX, as well as (web and graphical) design.
 
-I'm currently employed full-time as a Site Reliability Engineer at [Magalu
-Cloud](https://magalu.cloud), where we build a Object Storage solution.
+I'm currently employed full-time as a software engineer at [Magalu
+Cloud](https://magalu.cloud), where I work with the team that handles underlying
+resources (virtualization, deployment tooling).
 
 I'm working towards a Computer Science MSc degree at [University of São
 Paulo](https://usp.br)'s [Institute of Mathematics and Computer
@@ -32,17 +35,16 @@ things and teaching what I know to others.
 
 ## Education/Research
 
-### University of Groningen (2025)
+### University of Groningen (2025-present)
 
 [University of Groningen](https://rug.nl) (RUG) is one of Netherland's top universities,
-and frequently in the world's top 100, and is specially focused in
-internationalization.
+and frequently in the world's top 100.
 
 #### Research Internship (2025)
 
-I'm currently enrolled in a 3 month internship in RUG, focusing on the
-intersection between Cloud Computing Sustainability and Open Source Software
-tooling.
+I was in RUG for a 3 month internship, focusing on the intersection between
+Cloud Computing Sustainability and Open Source Software tooling. Some of this
+research was [published at SESoS '26](/publications#fontes-sesos-2026).
 
 ### University of São Paulo (2020-present)
 
@@ -59,7 +61,8 @@ Software extracurricular group](https://gelos.club).
 
 I'm currently researching Software Sustainability in Open Source Software
 projects, hoping to contribute to how we currently understand best practices
-for successful, long-lived, self-sustaining OSS.
+for successful, long-lived, self-sustaining OSS. Some of this research was
+[published at Designing '26](/publications#fontes-design-2026).
 
 #### Bachelor's: Computer Information Systems (2020-2022)
 
@@ -71,21 +74,29 @@ I was a teaching assistant for a semester, on a Database Practice subject.
 
 ## Industry experience
 
-### Magazine Luiza / Luizalabs (2024-present)
+### Magalu Cloud (2024-present)
 
 [Magazine
-Luiza](https://ri.magazineluiza.com.br/ShowCanal/Quem-Somos?=urUqu4hANldyCLgMRgOsTw==&linguagem=en)
-is a leading retail company group in Brazil. Its technology division,
-[Luizalabs](https://ri.magazineluiza.com.br/show.aspx?idMateria=zrW63qZDygmEVMe9BMldXQ%3D%3D&linguagem=en),
-generates technological innovation within the retail industry, and beyond.
+Luiza](https://ri.magazineluiza.com.br/ShowCanal/Quem-Somos?=urUqu4hANldyCLgMRgO
+sTw==&linguagem=en) is a leading retail company group in Brazil. [Magalu
+Cloud](https://magalu.cloud), an innovative project under the company's wing, is
+Brazil's first 100% domestic Public Cloud Platform.
 
-#### Site Reliability Engineer (2024-present)
+### Software Engineer (2025-present)
 
-[Magalu Cloud](https://magalu.cloud) is Brazil's first 100% domestic Public
-Cloud Platform. My team is responsible for the platform's Object Storage
-solution. My responsabilities as an SRE include: deployment automation (mainly
-[Canonical Juju](https://juju.is)), automated testing, monitoring, and
-coordinating routine processes (deployments, disk replacements, etc.).
+I am current part of the team managing underlying resources.
+That includes working with Open Source solutions for
+virtualization (including [OpenStack](https://openstack.org/)
+and [Incus](https://linuxcontainers.org/incus)), packaging, and
+deployment automation (mainly [Canonical Juju](https://juju.is) and
+[Ansible](https://ansible.com)).
+
+#### Site Reliability Engineer (2024-2025)
+
+I was part of the team working on the platform's Object Storage solution.
+My responsabilities SRE included deployment automation, automated testing,
+monitoring, and coordinating routine processes (deployments, disk replacements,
+etc.).
 
 ### Zoocha (2023-2024)
 
