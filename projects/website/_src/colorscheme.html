@@ -7,41 +7,31 @@ permalink: /colorscheme/
 
 <fieldset>
   <datalist id="scheme-list">
+    {%- for scheme in site.data.colorscheme.schemes %}
+      {%- if scheme[0] != "print" %}
+        <option value="{{ scheme[0] }}">
+      {%- endif %}
+    {%- endfor %}
   </datalist>
-  <legend>
-    <small>
-      Powered by <a href="https://github.com/base16-project/base16">base16</a>
-      + <a href="https://github.com/misterio77/nix-colors">nix-colors</a>.
-    </small>
-  </legend>
+
 
   <p>
-    Name: <span id="scheme-name"></span>
-    <br />
-    Author: <span id="scheme-author"></span>
-  </p>
-
-  <p>
-    <span style="color: var(--base00)">█</span><!--
- --><span style="color: var(--base01)">█</span><!--
- --><span style="color: var(--base02)">█</span><!--
- --><span style="color: var(--base03)">█</span><!--
- --><span style="color: var(--base04)">█</span><!--
- --><span style="color: var(--base05)">█</span><!--
- --><span style="color: var(--base06)">█</span><!--
- --><span style="color: var(--base07)">█</span><!--
- --><span style="color: var(--base08)">█</span><!--
- --><span style="color: var(--base09)">█</span><!--
- --><span style="color: var(--base0A)">█</span><!--
- --><span style="color: var(--base0B)">█</span><!--
- --><span style="color: var(--base0C)">█</span><!--
- --><span style="color: var(--base0D)">█</span><!--
- --><span style="color: var(--base0E)">█</span><!--
- --><span style="color: var(--base0F)">█</span>
+    <span style="color: var(--background)">█</span><!--
+ --><span style="color: var(--surface)">█</span><!--
+ --><span style="color: var(--primary)">█</span><!--
+ --><span style="color: var(--secondary)">█</span><!--
+ --><span style="color: var(--tertiary)">█</span><!--
+ --><span style="color: var(--error)">█</span><!--
+ --><span style="color: var(--green)">█</span><!--
+ --><span style="color: var(--blue)">█</span><!--
+ --><span style="color: var(--orange)">█</span><!--
+ --><span style="color: var(--yellow)">█</span><!--
+ --><span style="color: var(--cyan)">█</span><!--
+ --><span style="color: var(--magenta)">█</span>
   </p>
 
   <label class="colorscheme">
-    <input class="colorscheme" id="scheme-input" list="scheme-list" placeholder="auto" />
+    <input class="colorscheme" id="scheme-input" list="scheme-list" placeholder="{{ site.default_scheme }}" />
   </label>
 
   <button id="scheme-random" class="random">
@@ -55,58 +45,44 @@ permalink: /colorscheme/
 </fieldset>
 
 <script async type="module">
-let scheme_input = document.getElementById("scheme-input");
-let scheme_list = document.getElementById("scheme-list");
-let scheme_random_button = document.getElementById("scheme-random");
-let scheme_default_button = document.getElementById("scheme-default");
+var scheme_input = document.getElementById("scheme-input");
+var scheme_random_button = document.getElementById("scheme-random");
+var scheme_default_button = document.getElementById("scheme-default");
 
-async function fetch_schemes() {
-  var schemes_data = await fetch("https://m7.rs/colors/themes.json");
-  var schemes_json = await schemes_data.json();
-  return Object.keys(schemes_json);
-}
+var schemes = {{ site.data.colorscheme.schemes | jsonify }};
+var scheme_names = Object.keys(schemes).filter(function(s) { return s !== "print"; });
 
-fetch_schemes().then(function(schemes) {
-  // Add options to datalist
-  schemes.forEach(function(scheme) {
-    var option = document.createElement('option');
-    option.value = scheme;
-    scheme_list.appendChild(option);
-  });
-
-  // Add click event for random button
-  scheme_random_button.addEventListener("click", function () {
-    // Get random scheme
-    let scheme = schemes[Math.floor(Math.random() * schemes.length)];
+// Add click event for random button
+scheme_random_button.addEventListener("click", function () {
+    var scheme = scheme_names[Math.floor(Math.random() * scheme_names.length)];
     setTheme(scheme);
     scheme_input.value = scheme;
     scheme_default_button.hidden = false;
-  });
 });
 
 // Add listener on input to change theme
 scheme_input.addEventListener("input", function () {
-  let input = scheme_input.value;
-  if (input) {
-    setTheme(input);
-    scheme_default_button.hidden = false;
-  } else {
-    resetTheme();
-    scheme_default_button.hidden = true;
-  }
+    var input = scheme_input.value;
+    if (input) {
+        setTheme(input);
+        scheme_default_button.hidden = false;
+    } else {
+        resetTheme();
+        scheme_default_button.hidden = true;
+    }
 });
 
 // Add click event for clear button
 scheme_default_button.addEventListener("click", function () {
-  scheme_default_button.hidden = true;
-  resetTheme();
-  scheme_input.value = "";
+    scheme_default_button.hidden = true;
+    resetTheme();
+    scheme_input.value = "";
 });
 
 // Set first value based on current theme
-let current = getTheme();
+var current = getTheme();
 if (current) {
-  scheme_input.value = current;
-  scheme_default_button.hidden = false;
+    scheme_input.value = current;
+    scheme_default_button.hidden = false;
 }
 </script>

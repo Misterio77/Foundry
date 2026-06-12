@@ -1,2 +1,3 @@
 ---
 BUNDLE_FORCE_RUBY_PLATFORM: "true"
+BUNDLE_PATH: "vendor/bundle"

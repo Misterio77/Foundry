@@ -2,9 +2,8 @@ name: "Gabriel Fontes"
 description: "My personal website and projects"
 url: "https://gsfontes.com"
 
-dark_scheme: rose-pine-moon
-light_scheme: rose-pine-dawn
-printing_scheme: standardized-light # Must have #FFFFFF background
+default_scheme: alcyone
+printing_scheme: print
 
 
 plugins:

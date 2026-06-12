@@ -29,20 +29,33 @@ function eraseCookie(name) {
     setCookie(name, "", -1);
 }
 
-let chosen_scheme_css = document.getElementById("theme-css");
+var schemes = {{ site.data.colorscheme.schemes | jsonify }};
+var chosen_scheme_style = null;
 
 // Set a given scheme
 function setTheme(scheme) {
-    chosen_scheme_css.setAttribute(
-        "href",
-        "https://m7.rs/colors/" + scheme + ".css"
-    );
+    var colors = schemes[scheme];
+    if (!colors) return;
+
+    if (!chosen_scheme_style) {
+        chosen_scheme_style = document.createElement("style");
+        chosen_scheme_style.id = "theme-css";
+        document.head.appendChild(chosen_scheme_style);
+    }
+    var css = ":root {\n";
+    for (var key in colors) {
+        if (colors.hasOwnProperty(key)) {
+            css += "  --" + key + ": " + colors[key] + ";\n";
+        }
+    }
+    css += "}";
+    chosen_scheme_style.textContent = css;
     setCookie("fontes_theme", scheme);
 }
 
 // Get currently applied scheme
 function getTheme() {
-    let theme = getCookie("fontes_theme");
+    var theme = getCookie("fontes_theme");
 
     if (theme != "null") {
         return theme;
@@ -53,12 +66,15 @@ function getTheme() {
 
 // Reset scheme to default
 function resetTheme() {
-    chosen_scheme_css.removeAttribute("href");
+    if (chosen_scheme_style) {
+        chosen_scheme_style.remove();
+        chosen_scheme_style = null;
+    }
     eraseCookie("fontes_theme");
 }
 
 // Get stored scheme from cookies and reapply it
-let stored = getTheme();
+var stored = getTheme();
 if (stored) {
     setTheme(stored);
 }

@@ -5,13 +5,6 @@
 @import "typography";
 @import "utils";
 
-#scheme-name:after {
-  content: var(--scheme-name);
-}
-#scheme-author:after {
-  content: var(--scheme-author);
-}
-
 // =============
 // General stuff
 // =============
@@ -28,35 +21,35 @@ a[href^="sms\:"]:before {
 }
 
 :root {
-  // Map water.css variables to base16
-  --background-body: var(--base00);
-  --background: var(--base01);
-  --background-alt: var(--base02);
-  --selection: var(--base06);
-  --text-main: var(--base05);
-  --text-bright: var(--base06);
-  --text-muted: var(--base04);
-  --links: var(--base09);
-  --focus: var(--base0C);
-  --border: var(--base02);
-  --code: var(--base05);
+  // Map water.css variables to material colors
+  --background-body: color-mix(in srgb, var(--surface_container_low) 85%, var(--primary) 15%);
+  --background: color-mix(in srgb, var(--surface_container_highest) 85%, var(--primary) 15%);
+  --background-alt: color-mix(in srgb, var(--surface_container_high) 80%, var(--tertiary) 20%);
+  --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
+  --text-main: var(--on_background);
+  --text-bright: var(--on_surface);
+  --text-muted: var(--on_surface_variant);
+  --links: var(--primary);
+  --focus: var(--primary);
+  --border: color-mix(in srgb, var(--outline_variant) 80%, var(--primary) 20%);
+  --code: var(--on_background);
   --animation-duration: 0.13s;
-  --button-hover: var(--base02);
-  --scrollbar-thumb: var(--base04);
-  --scrollbar-thumb-hover: var(--base05);
-  --form-placeholder: var(--base04);
-  --form-text: var(--base05);
-  --variable: var(--base0B);
-  --highlight: var(--base0E);
+  --button-hover: color-mix(in srgb, var(--surface_container_highest) 70%, var(--secondary) 30%);
+  --scrollbar-thumb: color-mix(in srgb, var(--outline) 30%, var(--primary) 70%);
+  --scrollbar-thumb-hover: var(--primary);
+  --form-placeholder: var(--outline);
+  --form-text: var(--on_background);
+  --variable: var(--green);
+  --highlight: var(--magenta);
 
   // Additional variables
-  --blockquote-color: var(--base0C);
-  --links-files: var(--base0B);
-  --links-external: var(--base0D);
-  --links-mail: var(--base0E);
-  --negative: var(--base08);
-  --positive: var(--base0B);
-  --warning: var(--base0A);
+  --blockquote-color: var(--primary);
+  --links-files: var(--green);
+  --links-external: var(--blue);
+  --links-mail: var(--magenta);
+  --negative: var(--error);
+  --positive: var(--green);
+  --warning: var(--yellow);
 }
 
 // Jump fragment indicator

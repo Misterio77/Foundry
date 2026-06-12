@@ -4,9 +4,19 @@
 <link rel="icon" href="data:,">
 
 <link rel="stylesheet" href="/assets/style.css" />
-<link rel="stylesheet" href="https://m7.rs/colors/{{ site.light_scheme }}.css" />
-<link rel="stylesheet" href="https://m7.rs/colors/{{ site.dark_scheme }}.css" media="(prefers-color-scheme: dark)" />
-<link rel="stylesheet" href="https://m7.rs/colors/{{ site.printing_scheme }}.css" media="print" />
-<link rel="stylesheet" id="theme-css" />
+<style id="default-css">
+:root {
+{%- for color in site.data.colorscheme.schemes[site.default_scheme] %}
+  --{{ color[0] }}: {{ color[1] }};
+{%- endfor %}
+}
+</style>
+<style id="print-css" media="print">
+:root {
+{%- for color in site.data.colorscheme.schemes[site.printing_scheme] %}
+  --{{ color[0] }}: {{ color[1] }};
+{%- endfor %}
+}
+</style>
 
 <script src="/assets/main.js"></script>

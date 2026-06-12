@@ -10,7 +10,7 @@ let gems = bundlerEnv {
 in
 stdenv.mkDerivation {
   name = "website";
-  src = ./.;
+  src = builtins.path { path = ./.; name = "website-source"; };
 
   JEKYLL_ENV = "production";
 

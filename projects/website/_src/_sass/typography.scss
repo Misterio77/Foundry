@@ -47,13 +47,13 @@ code {
 .title {
   // Name itself
   a {
-    color: var(--base0E);
+    color: var(--primary);
     text-decoration: none;
   }
   // Decorations around
   color: var(--text-muted);
   &:hover {
-    color: var(--base09);
+    color: var(--orange);
   }
 
   font-size: 2.2em;
