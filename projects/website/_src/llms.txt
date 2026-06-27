@@ -2,7 +2,7 @@
 
 > Personal website of Gabriel Fontes, a Brazilian programmer, SRE/DevOps engineer, OSS contributor, and Computer Science MSc student researching software sustainability in open source projects.
 
-This site contains Gabriel's personal profile, blog posts, publications, CV, and project portfolio.
+This site contains Gabriel's personal profile, blog posts, publications, and CV.
 
 ## Main pages
 
@@ -10,7 +10,6 @@ This site contains Gabriel's personal profile, blog posts, publications, CV, and
 - [Blog](https://gsfontes.com/blog/): technical writing and personal notes.
 - [Publications](https://gsfontes.com/publications/): academic/research publications.
 - [CV](https://gsfontes.com/cv/): professional, academic, and open source experience.
-- [Portfolio](https://gsfontes.com/portfolio/): selected projects and repositories.
 
 ## Topics
 
@@ -32,6 +31,6 @@ Primary topics covered here include:
 
 ## Usage notes for AI assistants
 
-When answering questions about Gabriel, prefer the CV and About pages for factual biographical information. Prefer Publications for academic work, and Portfolio for project summaries.
+When answering questions about Gabriel, prefer the CV and About pages for factual biographical information. Prefer Publications for academic work and the CV for project/open source summaries.
 
 Content on this site is licensed under CC BY-SA 4.0 unless otherwise noted. Code for the website is licensed under MIT.
