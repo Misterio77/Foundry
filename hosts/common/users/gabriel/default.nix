@@ -11,17 +11,22 @@
   activateHomeForTime = pkgs.writeShellScript "activate-home-gabriel-for-time" ''
     set -euo pipefail
 
-    generation=${homeActivation}
+    profiles="$HOME/.local/state/nix/profiles"
+    base=${homeActivation}
+
     hour="$(${lib.getExe' pkgs.coreutils "date"} +%H)"
     if [ "$hour" -ge ${toString lightStartHour} ] && [ "$hour" -lt ${toString darkStartHour} ]; then
-      generation="$generation/specialisation/light"
+      specialisation="$base/specialisation/light"
     else
-      generation="$generation/specialisation/dark"
+      specialisation="$base/specialisation/dark"
     fi
 
     eval "$(XDG_RUNTIME_DIR=''${XDG_RUNTIME_DIR:-/run/user/$UID} ${pkgs.systemd}/bin/systemctl --user show-environment 2>/dev/null | ${lib.getExe pkgs.gnused} -En '/^(DBUS_SESSION_BUS_ADDRESS|DISPLAY|WAYLAND_DISPLAY|XAUTHORITY|XDG_RUNTIME_DIR)=/s/^/export /p')"
 
-    exec "$generation/activate" --driver-version 1
+    # Activate specialisation
+    "$specialisation/activate" --driver-version 1
+    # Link base config (so that user can switch between them)
+    ln -sfT "$base" "$profiles/home-manager-base"
   '';
 in {
   users.mutableUsers = false;
