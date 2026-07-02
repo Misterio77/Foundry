@@ -3,74 +3,33 @@ title: Curriculum Vitae
 permalink: /cv/
 ---
 
-Last updated: 2026-04-23
+Last updated: 2026-07-02
 
 ## Overview
 
-My interests in computing include free software, distributed systems, software
-engineering, reproducibility, DevOps, CI/CD, and development tooling.
+Software engineer and researcher focused on reproducible infrastructure,
+developer tooling, cloud deployment workflows, and free/open-source software.
+My work is mostly around development processes, build systems, infrastructure,
+DevOps, CI/CD, and backend.
 
-I started out with Linux, service hosting, programming, and design as a
-teenager, and have never stopped. I currently contribute to a few free software
-projects, some of them of my own creation. My technologies of choice nowadays
-include Rust, Haskell, Lua, PostgreSQL, Nix(OS), Docker, and Terraform.
+I currently work full-time at Magalu Cloud, where I work on underlying cloud
+resources, virtualization, packaging, and deployment orchestration. I am also
+pursuing a Computer Science M.Sc. at the University of São Paulo, researching
+software sustainability in open-source ecosystems.
 
-Most of my professional experience consists of development processes, build
-systems, infrastructure, and backend development. I also have experience with
-UI/UX, as well as (web and graphical) design.
+I frequently work with Rust, Python, Lua, PostgreSQL, Nix/NixOS, Docker,
+Terraform, Linux, Juju, and GitHub Actions. I also have experience with UI/UX
+and web/graphic design.
 
-I'm currently employed full-time as a software engineer at [Magalu
-Cloud](https://magalu.cloud), where I work with the team that handles underlying
-resources (virtualization, deployment tooling).
+Outside of work, I [contribute to free/open-source
+software](https://github.com/misterio77), help coordinate
+[GELOS](https://gelos.club), and enjoy teaching what I know to others.
 
-I'm working towards a Computer Science MSc degree at [University of São
-Paulo](https://usp.br)'s [Institute of Mathematics and Computer
-Sciences](https://icmc.usp.br/en/), under the [Software Engineering
-Lab](http://www.labes.icmc.usp.br). My current research is around Software
-Sustainability in Open Source projects.
+### Selected public technical artifacts
 
-Outside of computing, I enjoy reading, playing the keyboard, snuggling with my
-pets, and speaking about things I'm passionate about. I love learning new
-things and teaching what I know to others.
-
-## Education/Research
-
-### University of Groningen (2025-present)
-
-[University of Groningen](https://rug.nl) (RUG) is one of Netherland's top universities,
-and frequently in the world's top 100.
-
-#### Research Internship (2025)
-
-I was in RUG for a 3 month internship, focusing on the intersection between
-Cloud Computing Sustainability and Open Source Software tooling. Some of this
-research was [published at SESoS '26](/publications#fontes-sesos-2026).
-
-### University of São Paulo (2020-present)
-
-[University of São Paulo](https://usp.br) (USP) is considered to be Brazil's most
-prestigious university, and is frequently ranked the top university in Latin
-America. The computing degrees offered by the [Institute of Mathematics and
-Computer Sciences](https://icmc.usp.br) are also top-ranking, being one of the
-best places to study computing in Latin America.
-
-During my time here, I helped create and currently lead our [Open Source & Free
-Software extracurricular group](https://gelos.club).
-
-#### Master's: Computer Science and Computational Mathematics (2023-present)
-
-I'm currently researching Software Sustainability in Open Source Software
-projects, hoping to contribute to how we currently understand best practices
-for successful, long-lived, self-sustaining OSS. Some of this research was
-[published at Designing '26](/publications#fontes-design-2026).
-
-#### Bachelor's: Computer Information Systems (2020-2022)
-
-I've studied different areas in computing, and gained a lot of hard and soft
-skills. Subjects I've particularly enjoyed include Software Engineering,
-Software Testing, Databases, and Operating Systems.
-
-I was a teaching assistant for a semester, on a Database Practice subject.
+* [GELOS monorepo](https://github.com/gelos-icmc/monorepo): NixOS-based community infrastructure, website, CI/CD workflows, merge queues, CODEOWNERS-based review, contribution practices, and declarative host configuration.
+* [nix-starter-configs](https://github.com/misterio77/nix-starter-configs): widely used Nix/NixOS flake templates designed to make reproducible system configuration easier for newcomers.
+* [nix-config](https://github.com/misterio77/nix-config): my personal NixOS infrastructure and system configuration, including declarative hosts, services, secrets, deployment workflows, and reproducible development environments.
 
 ## Industry experience
 
@@ -80,12 +39,12 @@ I was a teaching assistant for a semester, on a Database Practice subject.
 Luiza](https://ri.magazineluiza.com.br/ShowCanal/Quem-Somos?=urUqu4hANldyCLgMRgO
 sTw==&linguagem=en) is a leading retail company group in Brazil. [Magalu
 Cloud](https://magalu.cloud), an innovative project under the company's wing, is
-Brazil's first 100% domestic Public Cloud Platform.
+Brazil's first 100% domestic public cloud platform.
 
-### Software Engineer (2025-present)
+#### Software Engineer (2025-present)
 
-I am current part of the team managing underlying resources.
-That includes working with Open Source solutions for
+I am currently part of the team managing underlying resources.
+That includes working with open-source solutions for
 virtualization (including [OpenStack](https://openstack.org/)
 and [Incus](https://linuxcontainers.org/incus)), packaging, and
 deployment automation (mainly [Canonical Juju](https://juju.is) and
@@ -93,22 +52,16 @@ deployment automation (mainly [Canonical Juju](https://juju.is) and
 
 #### Site Reliability Engineer (2024-2025)
 
-I was part of the team working on the platform's Object Storage solution.
-My responsabilities SRE included deployment automation, automated testing,
+I was part of the team working on the platform's Object Storage solution. My
+responsibilities as an SRE included deployment automation, automated testing,
 monitoring, and coordinating routine processes (deployments, disk replacements,
 etc.).
 
 ### Zoocha (2023-2024)
 
-[Zoocha](https://zoocha.com) is a digital agency, specially focused on Drupal
-development. Drupal is something between a framework and a CMS, allowing for
-great extensibility and development experience, while letting final users
-intuitively manage content. Zoocha's clients include government, universities,
-and private companies.
-
-While Zoocha was a smaller company, it was my first time working within a
-dedicated DevOps team, and I learned a lot about task prioritization,
-organization, and processes.
+[Zoocha](https://zoocha.com) is a digital agency, especially focused on
+[Drupal](https://drupal.org) development. Zoocha's clients include government,
+universities, and private companies.
 
 #### DevOps Engineer (2023-2024)
 
@@ -116,33 +69,40 @@ As part of the DevOps team, I mainly tackled technical debt and supported
 developers with better tooling and practices, while simultaneously taking care
 of cloud operations and making sure everything was running smoothly.
 
-Some of the work included improving developer tooling, migrating (chef-based)
+Some of the work included improving developer tooling, migrating (Chef-based)
 client infrastructure from AWS OpsWorks into Terraform-managed AWS SSM, and
 dealing with day-to-day operations.
 
 ### U-Get (2020-2023)
 
-[U-Get](https://uget.express) is a startup that pioneered a computer
+[U-Get](https://uget.express) was a startup that pioneered a computer
 vision-based vending machine system. The system is able to recognize and bill
-customers based on what they pick up from a vending spot (e.g. a fridge or
-locker), without any mechanical components other than some cameras and an
-electronic lock, avoiding complex (and expensive) mechanisms present in
-traditional vending machines.
+customers based on what they pick up from a vending spot (fridge, locker), being
+much cheaper than traditional mechanical machines.
 
 Our team built our systems from the ground up - including mobile apps, fleet
-management and billing systems; leveraging Cloud of Things technologies.
+management (MDM) and billing systems; leveraging Cloud of Things technologies.
 
 #### DevOps Engineer (2020-2023)
 
-I worked with cloud computing (AWS), declarative infrastructure (terraform),
-containers, deployments, CI/CD, databases; I've championed development cultural
-changes, moving everything over to more reproducible solutions, and leaded a
-shift to a working code review culture with shared ownership.
+I worked with AWS, Terraform, containers, CI/CD, deployments, databases, and
+multi-tenant environments.
+
+I led the migration from fragile manual deployments and partially configured
+Kubernetes infrastructure into reproducible AWS-based infrastructure using
+Terraform, ECS, ECR, IAM, and S3. This included reorganizing and decoupling
+application components, introducing CI/CD pipelines, and supporting safer
+blue-green deployments with short feedback loops.
+
+I also helped shift the engineering culture toward code review, shared
+ownership, and safer production changes. I mentored peers and senior
+stakeholders on Git, Linux, infrastructure practices, and code review, helping
+replace direct production changes with review-gated workflows.
 
 #### Freelance Developer (2020-2020)
 
 I started off at U-Get by creating a management solution for a fleet of Android
-tablets. The MVP was a Python CLI (later re-written into a Rust Backend) that
+tablets. The MVP was a Python CLI (later rewritten into a Rust backend) that
 handled the entire lifecycle of our tablets.
 
 ### EVAG
@@ -152,43 +112,89 @@ solutions for different clients, mostly politicians and activists.
 
 #### Communication Intern (2020)
 
-A temporary job during Brazilian 2020 municipal elections, I've built campaign
-websites for multiple candidates. The job involved working closely together
-with the candidates, and making their requirements into actual websites in a
-very short timespan.
+A temporary job during Brazilian 2020 municipal elections, I built campaign
+websites for multiple candidates, many of them now elected. The job involved
+working closely together with the candidates, and making their requirements into
+actual websites in a very short timespan.
 
-## Open Source Experience
+## Education and Research
 
-### Flavours
+For my publications, see: [Publications](https://gsfontes.com/publications).
 
-[Flavours](https://github.com/misterio77/flavours) is a command line tool I
-created to aid in managing and applying
-[base16](https://github.com/chriskempson/base16) color schemes to different
-programs a person uses. This allows for consistent theming that can be easily
-changed (after setting it up once), and works specially well for software with
-text-based configuration files. It is quite popular, with 450+ stars on GitHub.
+### University of Groningen (2025)
 
-### Nix ecosystem
+[University of Groningen](https://rug.nl) (RUG) is one of the leading universities
+in the Netherlands.
+
+#### Research Internship (2025)
+
+I was at RUG for a 3 month internship, focusing on the intersection between
+Cloud Computing Sustainability and open-source software tooling. Some of this
+research was [published at SESoS '26](/publications#fontes-sesos-2026).
+
+### University of São Paulo (2020-present)
+
+[University of São Paulo](https://usp.br) (USP) is considered to be Brazil's
+most prestigious university, and frequently the top university in Latin America.
+
+During my time here, I helped create and currently lead our [Open-Source & Free
+Software extracurricular group](https://gelos.club).
+
+#### Master's: Computer Science and Computational Mathematics (2023-present)
+
+I'm currently researching Software Sustainability in open-source software
+projects, hoping to contribute to our understanding of best practices
+for successful, long-lived, self-sustaining OSS. Some of this research was
+[published at Designing '26](/publications#fontes-design-2026).
+
+#### Bachelor's: Computer Information Systems (2020-2022)
+
+I studied different areas in computing, especially software engineering,
+software testing, databases, and operating systems.
+
+I was a teaching assistant for a semester, on a Database Practice subject.
+
+## Open-source and Community
+
+### GELOS - Leadership
+
+I co-founded and help lead [GELOS](https://gelos.club), a free/open-source
+software group at ICMC-USP. I coordinate, mentor, review work, and help resolve
+conflicts for a group of roughly 10-20 members, and have mentored many more
+contributors over the years.
+
+I implemented and maintain much of our [infrastructure and development
+process](https://github.com/gelos-icmc/monorepo), including our website,
+NixOS-based hosts, GitHub monorepo, CI/CD workflows, merge queues,
+CODEOWNERS-based review, and contribution practices.
+
+Together with [UFSCar's](https://www.ufscar.br/) [Patos](https://patos.dev/),
+we maintain a large Brazilian [free software package
+mirrors](https://github.com/ufscar/mirror).
+
+### Nix ecosystem - Contributor
 
 [Nix](https://nixos.org) is a build and deployment tool based on functional
 programming concepts, such as immutability. It allows for highly reproducible
 packaging, as well as fully declarative Linux systems through
 [NixOS](https://nixos.org).
 
-I'm a very active member in the community. Besides contributing with packages
-and modules, I've also created a couple relatively popular projects for the
-ecossystem:
+I'm a very active member in the community. Besides contributing with
+packages and modules in [nixpkgs](https://github.com/nixos/nixpkgs) and
+[home-manager](https://github.com/nix-community/home-manager), I've also created
+a couple relatively popular projects for the ecosystem:
 - [nix-colors](https://github.com/misterio77/nix-colors), a repository of
-    nix-accessible base16 color schemes and a module that make their use more
-    convenient. It currently has 440+ stars on GitHub.
+    nix-accessible base16 color schemes and a module that makes their use more
+    convenient. It currently has 580+ stars on GitHub. Now archived, due to me
+    moving onto other theming standards.
 - [nix-starter-configs](https://github.com/misterio77/nix-starter-configs)
     is a collection of nix repository templates. It aims to provide simple,
     opinionated templates so that people starting out with Nix can hit the
     ground running. It has become the most popular NixOS flake template, and
-    one of the most starred nix projects overall, with 2,000+ stars on GitHub.
+    one of the most starred nix projects overall, with 3,700+ stars on GitHub.
 
 ### Other contributions
 
 As I prefer to use open source tools, I frequently hack on them to add a
 feature I want or fix a bug; usually upstream the results as PRs. Thanks to
-this, I know my way around codebases written on different languages.
+this, I know my way around codebases written in different languages.
