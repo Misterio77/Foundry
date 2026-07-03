@@ -18,7 +18,9 @@
         key = gitCfg.user.signing.key;
       };
       revsets = {
-        bookmark-advance-to = "@-";
+        # Pick @ parents reachable from the nearest bookmarks.
+        # Errors out if ambiguous, by design
+        bookmark-advance-to = "@- & heads(::@ & bookmarks())::";
       };
       aliases = {
         tug = ["bookmark" "advance"];
