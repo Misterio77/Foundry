@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Manage Gabs's todos (todoman), appointments (khal), contacts (khard), notes (~/Notes), and email (~/Mail)
+description: Manage Gabs's todos (todoman), appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail)
 ---
 
 ## Syncing vdir-backed data
@@ -115,22 +115,22 @@ The underlying sync is done by vdirsyncer. (DAVx5 handles sync on Android.) The 
 rm ~/.cache/khal/khal.db
 ```
 
-## Notes (~/Notes)
+## Notes (`~/Atelier/notes`)
 
 Plain markdown files. Key locations:
 
 | Path | Purpose |
 |---|---|
-| `~/Notes/TODO` | Main working todo (text-based, not todoman) |
-| `~/Notes/Elisa/` | Advisor meeting notes, dated `YYYY-MM-DD.md` |
-| `~/Notes/old/` | Archived/older notes |
-| `~/Notes/old/very-old/` | Ancient notes, GELOS, classes, etc. |
+| `~/Atelier/notes/TODO` | Main working todo (text-based, not todoman) |
+| `~/Atelier/notes/Elisa/` | Advisor meeting notes, dated `YYYY-MM-DD.md` |
+| `~/Atelier/notes/old/` | Archived/older notes |
+| `~/Atelier/notes/old/very-old/` | Ancient notes, GELOS, classes, etc. |
 
 The Elisa notes typically have `# Pre` (agenda) and `# Post` (action items) sections.
 
-The `~/Notes/old/todo.md` file has a dated task breakdown (work, masters, GELOS, personal).
+The `~/Atelier/notes/old/todo.md` file has a dated task breakdown (work, masters, GELOS, personal).
 
-The Notes directory is a jj (Jujutsu) repo. Always run `jj new` before making any edits there — same workflow as any other jj repo. Use `jj` for all VCS operations, never `git`.
+The notes directory is a jj (Jujutsu) repo. Always run `jj new` before making any edits there — same workflow as any other jj repo. Use `jj` for all VCS operations, never `git`.
 
 ## Contacts (khard)
 
