@@ -16,7 +16,6 @@
     ./ssh.nix
     ./xpo.nix
     ./fzf.nix
-    ./jira.nix
     ./mandoc.nix
   ];
   home.packages = with pkgs; [
