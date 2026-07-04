@@ -1,4 +1,8 @@
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   imports = [
     ./runescape
     ./steam.nix
@@ -9,7 +13,6 @@
     packages = with pkgs; [gamescope];
     persistence = {
       "/persist".directories = [
-        "Games"
         ".config/unity3d" # Unity game saves
       ];
     };
