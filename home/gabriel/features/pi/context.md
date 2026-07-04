@@ -90,7 +90,7 @@ handlr launch x-scheme-handler/terminal -- -e <cmd> <arg> ...
 Example:
 
 ```bash
-handlr launch x-scheme-handler/terminal -- -e sudo nixos-rebuild switch --flake ~/Projects/NixConfig
+handlr launch x-scheme-handler/terminal -- -e sudo nixos-rebuild switch --flake ~/Foundry
 ```
 
 Then prompt the user to confirm when the operation is complete:

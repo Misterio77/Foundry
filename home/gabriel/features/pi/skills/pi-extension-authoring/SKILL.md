@@ -3,7 +3,7 @@ name: pi-extension-authoring
 description: Workflow guidelines for durable Pi package, extension, skill, prompt, and theme changes in Gabs's Nix-managed Pi config. Use before editing ~/.pi/agent or home/gabriel/features/pi.
 ---
 
-# Pi Authoring for Gabs's NixConfig
+# Pi Authoring for Gabs's Foundry
 
 This is a workflow guardrail, not a duplicate map of the code. Inspect the existing Nix files and follow their current shape.
 
