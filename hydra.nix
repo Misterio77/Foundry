@@ -16,7 +16,6 @@
     pkgs;
 in {
   pkgs = lib.mapAttrs filterValidPkgs outputs.packages;
-  themes = inputs.themes.hydraJobs;
   hosts = lib.mapAttrs (_: cfg: cfg.config.system.build.toplevel) outputs.nixosConfigurations;
   homes = lib.mapAttrs (_: cfg: cfg.activationPackage) outputs.homeConfigurations;
 }

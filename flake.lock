@@ -379,22 +379,6 @@
         "type": "github"
       }
     },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1767313136,
-        "narHash": "sha256-16KkgfdYqjaeRGBaYsNrhPRRENs0qzkQVUooNHtoy2w=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "ac62194c3917d5f474c1a844b6fd6da2db95077d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-25.05",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "pre-commit": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -432,7 +416,6 @@
         "nixpkgs": "nixpkgs",
         "sops-nix": "sops-nix",
         "systems": "systems_2",
-        "themes": "themes",
         "website": "website"
       }
     },
@@ -506,23 +489,6 @@
         "repo": "default-linux",
         "type": "github"
       }
-    },
-    "themes": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2",
-        "systems": [
-          "systems"
-        ]
-      },
-      "locked": {
-        "path": "./projects/themes",
-        "type": "path"
-      },
-      "original": {
-        "path": "./projects/themes",
-        "type": "path"
-      },
-      "parent": []
     },
     "website": {
       "inputs": {

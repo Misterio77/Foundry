@@ -61,10 +61,6 @@
     };
 
     # My own programs, packaged with nix
-    themes = {
-      url = "path:./projects/themes";
-      inputs.systems.follows = "systems";
-    };
     website = {
       url = "path:./projects/website";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -83,7 +79,10 @@
     lib = let
       base = nixpkgs.lib // home-manager.lib;
     in
-      base // {colors = import ./lib/colors.nix {lib = base;};};
+      base // {
+        colors = import ./lib/colors.nix {lib = base;};
+        material-you = import ./lib/material-you.nix {lib = base;};
+      };
     forEachSystem = f: lib.genAttrs (import systems) (system: f pkgsFor.${system});
     pkgsFor = lib.genAttrs (import systems) (
       system:
@@ -100,7 +99,15 @@
     overlays = import ./overlays {inherit inputs outputs;};
     hydraJobs = import ./hydra.nix {inherit inputs outputs;};
 
-    packages = forEachSystem (pkgs: import ./pkgs {inherit pkgs;});
+    packages = forEachSystem (
+      pkgs:
+        import ./pkgs {inherit pkgs;}
+        // {
+          # All wallpapers as one derivation, so Hydra builds + caches them
+          # (imgur is the only upstream; this is our backup).
+          wallpapers = pkgs.linkFarmFromDrvs "wallpapers" (lib.attrValues (import ./wallpapers {inherit pkgs;}));
+        }
+    );
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});
     formatter = forEachSystem (pkgs: pkgs.alejandra);
 

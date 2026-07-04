@@ -10,7 +10,7 @@
   ];
 
   # Purple
-  wallpaper = pkgs.inputs.themes.wallpapers.deer-lunar-fantasy;
+  wallpaper = pkgs.wallpapers.deer-lunar-fantasy;
 
   monitors = [
     {

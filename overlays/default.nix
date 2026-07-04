@@ -28,6 +28,7 @@ in {
   additions = final: prev:
     import ../pkgs {pkgs = final;}
     // {
+      wallpapers = import ../wallpapers {pkgs = final;};
       formats = (prev.formats or {}) // import ../pkgs/formats {pkgs = final;};
       roundcubePlugins = (prev.roundcubePlugins or {}) // import ../pkgs/roundcube-plugins {pkgs = final;};
     };
