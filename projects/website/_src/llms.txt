@@ -26,7 +26,7 @@ Primary topics covered here include:
 ## Notable external profiles and projects
 
 - [GitHub](https://github.com/misterio77)
-- [nix-config](https://github.com/misterio77/nix-config): Gabriel's personal NixOS, home-manager, package, and infrastructure configuration.
+- [Foundry](https://github.com/misterio77/Foundry): Gabriel's personal NixOS, home-manager, package, and infrastructure configuration.
 - [Source repository for this website](https://github.com/misterio77/website)
 
 ## Usage notes for AI assistants
