@@ -566,18 +566,14 @@
         ]
       },
       "locked": {
-        "lastModified": 1769627411,
-        "narHash": "sha256-Wtqffr2/FgRShhti+3qc2g3nXKqmihlrGw4x0HFMOns=",
-        "owner": "misterio77",
-        "repo": "themes",
-        "rev": "b37f7780a38026b0fd6ecbf9e96c86fe1693118b",
-        "type": "github"
+        "path": "./projects/themes",
+        "type": "path"
       },
       "original": {
-        "owner": "misterio77",
-        "repo": "themes",
-        "type": "github"
-      }
+        "path": "./projects/themes",
+        "type": "path"
+      },
+      "parent": []
     },
     "website": {
       "inputs": {
@@ -589,18 +585,14 @@
         ]
       },
       "locked": {
-        "lastModified": 1783047867,
-        "narHash": "sha256-b1COV5YAYWtzW+DE4rHnZ6qpfckO5JstZPAnUkRRps8=",
-        "owner": "misterio77",
-        "repo": "website",
-        "rev": "afb7459b2e999783704c07f7ba657881b9ebd354",
-        "type": "github"
+        "path": "./projects/website",
+        "type": "path"
       },
       "original": {
-        "owner": "misterio77",
-        "repo": "website",
-        "type": "github"
-      }
+        "path": "./projects/website",
+        "type": "path"
+      },
+      "parent": []
     }
   },
   "root": "root",

@@ -63,11 +63,11 @@
 
     # My own programs, packaged with nix
     themes = {
-      url = "github:misterio77/themes";
+      url = "path:./projects/themes";
       inputs.systems.follows = "systems";
     };
     website = {
-      url = "github:misterio77/website";
+      url = "path:./projects/website";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.systems.follows = "systems";
     };
