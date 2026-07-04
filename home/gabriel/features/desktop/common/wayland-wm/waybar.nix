@@ -363,10 +363,6 @@ in {
             script = "playerctl play-pause";
           };
         };
-        "custom/minicava" = {
-          exec = mkScript {script = lib.getExe pkgs.minicava;};
-          "restart-interval" = 5;
-        };
         "custom/rfkill" = {
           interval = 3;
           exec-if = mkScript {

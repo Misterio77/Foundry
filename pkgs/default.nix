@@ -6,7 +6,6 @@
   jellysearch = pkgs.callPackage ./jellysearch {};
 
   # Personal scripts
-  minicava = pkgs.callPackage ./minicava {};
   pass-wofi = pkgs.callPackage ./pass-wofi {};
   xpo = pkgs.callPackage ./xpo {};
   clip-notify = pkgs.callPackage ./clip-notify {};
