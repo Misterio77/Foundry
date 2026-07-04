@@ -29,7 +29,7 @@ software](https://github.com/misterio77), help coordinate
 
 * [GELOS monorepo](https://github.com/gelos-icmc/monorepo): NixOS-based community infrastructure, website, CI/CD workflows, merge queues, CODEOWNERS-based review, contribution practices, and declarative host configuration.
 * [nix-starter-configs](https://github.com/misterio77/nix-starter-configs): widely used Nix/NixOS flake templates designed to make reproducible system configuration easier for newcomers.
-* [nix-config](https://github.com/misterio77/nix-config): my personal NixOS infrastructure and system configuration, including declarative hosts, services, secrets, deployment workflows, and reproducible development environments.
+* [Foundry](https://github.com/misterio77/Foundry): my personal NixOS infrastructure and system configuration, including declarative hosts, services, secrets, deployment workflows, and reproducible development environments.
 
 ## Industry experience
 

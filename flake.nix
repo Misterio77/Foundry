@@ -1,5 +1,5 @@
 {
-  description = "My NixOS configuration";
+  description = "Foundry - my public NixOS/home-manager infrastructure monorepo";
 
   nixConfig = {
     extra-substituters = [

@@ -104,7 +104,7 @@ in {
       };
       project = lib.mkOption {
         type = lib.types.str;
-        example = "nix-config";
+        example = "foundry";
       };
       jobset = lib.mkOption {
         type = lib.types.str;
