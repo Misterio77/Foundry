@@ -41,7 +41,7 @@ input-wiring status.
 - **Mesh networked** hosts with **tailscale** and **headscale**
 - Flexible **Home Manager** configs through **feature flags**
 - Extensively configured **hyprland** environment
-- **Declarative** **themes** and **wallpapers**
+- **Declarative theming**: wallpapers + a from-scratch pure-Nix **Material You** color engine (no matugen/IFD)
 - **Hydra CI/CD** builds every host, serves a binary cache, and hosts auto-upgrade by pull deployment
 
 

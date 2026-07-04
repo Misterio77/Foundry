@@ -3,15 +3,21 @@
 ## Repository
 
 Foundry is my public infra monorepo (colocated jj/git — use `jj`, not `git`).
-It is the NixOS/home-manager config plus, under `projects/`, the sources of the
-personal projects the config deploys (`website`, `themes`). Those were imported
-from their standalone repos with full history and are still mirrored there.
+It is the NixOS/home-manager config, plus:
 
-Input wiring: `flake.nix` still references `website`/`themes` as GitHub inputs
-(`github:misterio77/...`). Switching them to the in-repo `./projects/<name>`
-sources is the intended follow-up so the monorepo is self-contained; until then
-the projects are vendored-for-history but the build still pulls the published
-flakes.
+- `projects/website/` — the site served at m7.rs, vendored from
+  `github:misterio77/website` with full history and wired as a local flake input
+  (`path:./projects/website`), so the monorepo builds it from its own tree; still
+  mirrored to the standalone repo.
+- `wallpapers/` — my wallpaper collection. Each entry in `list.json` carries a
+  committed `sourceColor` (matugen's extracted seed), and they're exposed as
+  `pkgs.wallpapers` plus a Hydra-cached `wallpapers` package (imgur is upstream).
+- `lib/` — a from-scratch pure-Nix implementation of Material You color science
+  (`math`, `hct`, `palettes`, `scheme`, `material-you`), validated bit-for-bit
+  against matugen. `modules/home-manager/colors.nix` uses it via
+  `outputs.lib.material-you.generateColorscheme` to produce colorschemes during
+  evaluation — no matugen, no import-from-derivation. Adding a wallpaper needs a
+  one-time `matugen image` run to seed its `sourceColor` in `list.json`.
 
 ## Commit Messages
 
@@ -22,7 +28,8 @@ Conventional commits: `type(scope): description`
   - `home/{feature}` for home-manager features: `home/calendar`, `home/opencode`, `home/helix`
   - `{host}` or `{host}/{service}` for host-specific: `pleione`, `alcyone/firefly`, `merope/recyclarr`
   - Just the component for shared/global: `grafana`, `minecraft`, `recyclarr`
-  - `projects/{name}` for the vendored project sources: `projects/website`, `projects/themes`
+  - `projects/{name}` for vendored project sources: `projects/website`
+  - `lib` / `wallpapers` for the color engine and wallpaper collection
 - Message is lowercase, no period at end.
 
 ### Flake Lock Bumps
@@ -70,11 +77,19 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 ├── modules/               # Custom NixOS & HM modules
 │   ├── nixos/
 │   └── home-manager/
-├── overlays/              # Package overlays and patches
+├── overlays/              # Package overlays and patches (incl. pkgs.wallpapers)
 │   └── default.nix
 ├── pkgs/                  # Custom packages
 │   └── default.nix
-├── templates/             # Project templates
+├── lib/                   # Pure-Nix Material You color engine
+│   ├── math.nix           #   hand-rolled float transcendentals
+│   ├── hct.nix            #   sRGB<->CAM16<->HCT + solver
+│   ├── palettes.nix       #   tonal palettes
+│   ├── scheme.nix         #   DynamicColor MD3 roles
+│   └── material-you.nix   #   generateColorscheme (used by colors.nix)
+├── wallpapers/            # Wallpaper collection + committed source colors
+├── projects/              # Vendored public projects
+│   └── website/           #   github.com/misterio77/website (served at m7.rs)
 ├── flake.nix              # Flake entry point
 ├── deploy.sh              # nixos-rebuild wrapper
 └── .sops.yaml             # SOPS encryption keys
