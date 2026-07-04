@@ -379,7 +379,7 @@ in {
     # x y z -> top, horizontal, bottom
     # w x y z -> top, right, bottom, left
     style = let
-      inherit (inputs.nix-colors.lib.conversions) hexToRGBString;
+      inherit (outputs.lib.colors) hexToRGBString;
       inherit (config.colorscheme) colors;
       toRGBA = color: opacity: "rgba(${hexToRGBString "," (lib.removePrefix "#" color)},${opacity})";
     in

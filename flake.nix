@@ -15,7 +15,6 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     systems.url = "github:nix-systems/default-linux";
 
-    nix-colors.url = "github:misterio77/nix-colors";
     hardware = {
       url = "github:nixos/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -81,7 +80,10 @@
     ...
   } @ inputs: let
     inherit (self) outputs;
-    lib = nixpkgs.lib // home-manager.lib;
+    lib = let
+      base = nixpkgs.lib // home-manager.lib;
+    in
+      base // {colors = import ./lib/colors.nix {lib = base;};};
     forEachSystem = f: lib.genAttrs (import systems) (system: f pkgsFor.${system});
     pkgsFor = lib.genAttrs (import systems) (
       system:
