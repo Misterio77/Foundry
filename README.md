@@ -1,11 +1,34 @@
 [![built with nix](https://img.shields.io/static/v1?logo=nixos&logoColor=white&label=&message=Built%20with%20Nix&color=41439a)](https://builtwithnix.org)
 [![hydra status](https://img.shields.io/endpoint?url=https://hydra.m7.rs/job/nix-config/main/hosts.atlas/shield)](https://hydra.m7.rs/jobset/nix-config/main#tabs-jobs)
 
-# My NixOS configurations
+# Foundry
 
-Here's my NixOS/home-manager config files. Requires [Nix flakes](https://nixos.wiki/wiki/Flakes).
+My public infrastructure monorepo: the NixOS/home-manager configuration that
+runs all my machines, plus the source of the personal projects it deploys.
+Requires [Nix flakes](https://nixos.wiki/wiki/Flakes).
 
 Looking for something simpler to start out with flakes? Try [my starter config repo](https://github.com/Misterio77/nix-starter-config).
+
+## Repository layout
+
+```text
+flake.nix, flake.lock   the monorepo flake (hosts, modules, packages, CI)
+hosts/                  per-machine NixOS configurations (atlas, alcyone, ...)
+home/                   home-manager configuration (feature-flagged)
+modules/                reusable nixos/ and home-manager/ modules
+overlays/, pkgs/        package overlays and custom packages
+hydra.nix, .hydra.json  Hydra CI/CD jobset (builds every host, binary cache)
+deploy.sh               deployment helper
+projects/               my public projects that this config deploys
+  website/              github.com/misterio77/website (served at m7.rs)
+  themes/               github.com/misterio77/themes (themes & wallpapers)
+```
+
+The `projects/` subtrees were vendored in from their own repos **with full git
+history** (via `git filter-repo --to-subdirectory-filter` + an unrelated-history
+merge), so this monorepo now owns the sources of the things it deploys. They are
+still mirrored to their standalone GitHub repos. See `AGENTS.md` for the
+input-wiring status.
 
 **Highlights**:
 

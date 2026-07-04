@@ -1,4 +1,17 @@
-# NixConfig Conventions for LLMs
+# Foundry Conventions for LLMs
+
+## Repository
+
+Foundry is my public infra monorepo (colocated jj/git — use `jj`, not `git`).
+It is the NixOS/home-manager config plus, under `projects/`, the sources of the
+personal projects the config deploys (`website`, `themes`). Those were imported
+from their standalone repos with full history and are still mirrored there.
+
+Input wiring: `flake.nix` still references `website`/`themes` as GitHub inputs
+(`github:misterio77/...`). Switching them to the in-repo `./projects/<name>`
+sources is the intended follow-up so the monorepo is self-contained; until then
+the projects are vendored-for-history but the build still pulls the published
+flakes.
 
 ## Commit Messages
 
@@ -9,6 +22,7 @@ Conventional commits: `type(scope): description`
   - `home/{feature}` for home-manager features: `home/calendar`, `home/opencode`, `home/helix`
   - `{host}` or `{host}/{service}` for host-specific: `pleione`, `alcyone/firefly`, `merope/recyclarr`
   - Just the component for shared/global: `grafana`, `minecraft`, `recyclarr`
+  - `projects/{name}` for the vendored project sources: `projects/website`, `projects/themes`
 - Message is lowercase, no period at end.
 
 ### Flake Lock Bumps
