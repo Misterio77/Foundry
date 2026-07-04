@@ -1,0 +1,22 @@
+<!-- Common head elements I use in this website and cgit -->
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:,">
+
+<link rel="stylesheet" href="/assets/style.css" />
+<style id="default-css">
+:root {
+{%- for color in site.data.colorscheme.schemes[site.default_scheme] %}
+  --{{ color[0] }}: {{ color[1] }};
+{%- endfor %}
+}
+</style>
+<style id="print-css" media="print">
+:root {
+{%- for color in site.data.colorscheme.schemes[site.printing_scheme] %}
+  --{{ color[0] }}: {{ color[1] }};
+{%- endfor %}
+}
+</style>
+
+<script src="/assets/main.js"></script>

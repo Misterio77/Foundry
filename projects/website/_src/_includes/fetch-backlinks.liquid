@@ -1,0 +1,11 @@
+{%- assign desired_link = page.url -%}
+{%- assign documents = site.documents %}
+{%- assign referees = '' -%}
+{%- for document in documents -%}
+    {%- if document.url != page.url -%}
+        {%- if document.content contains desired_link -%}
+            {%- assign slug = document.slug | split: "," -%}
+            {%- assign referees = referees | concat: slug | uniq -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}

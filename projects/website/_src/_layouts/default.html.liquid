@@ -1,0 +1,36 @@
+---
+layout: root.html
+---
+<header>
+  {% include header.html.liquid %}
+</header>
+
+<main>
+  <article>
+    <header>
+      <h1>{{ page.title }}</h1>
+      {% if page.description %}
+          <p><em>{{ page.description }}</em></p>
+      {% endif %}
+      {% if page.date %}
+        <p>
+          Date: <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>
+        </p>
+      {% endif %}
+      {% if page.tags.size > 0 %}
+        <p>
+          Tags:
+          {% for tag in page.tags %}
+            <a href="/notes#{{ tag }}">#{{ tag }}</a>
+          {% endfor %}
+        </p>
+      {% endif %}
+    </header>
+
+    {{ content }}
+  </article>
+</main>
+
+<footer>
+  {% include footer.html.liquid %}
+</footer>

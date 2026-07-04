@@ -1,0 +1,12 @@
+- label: Change colorscheme
+  class: colorscheme
+  link: /colorscheme/
+
+- text: about
+  link: /
+- text: blog
+  link: /blog/
+- text: publications
+  link: /publications/
+- text: cv
+  link: /cv/

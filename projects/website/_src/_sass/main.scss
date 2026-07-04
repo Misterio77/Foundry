@@ -1,0 +1,339 @@
+@import "vendor/normalize";
+@import "vendor/water";
+
+@import "highlight";
+@import "typography";
+@import "utils";
+
+// =============
+// General stuff
+// =============
+
+// Remove water.css emojis
+a[href^="mailto\:"]:before {
+  content: "";
+}
+a[href^="tel\:"]:before {
+  content: "";
+}
+a[href^="sms\:"]:before {
+  content: "";
+}
+
+:root {
+  // Map water.css variables to material colors
+  --background-body: color-mix(in srgb, var(--surface_container_low) 85%, var(--primary) 15%);
+  --background: color-mix(in srgb, var(--surface_container_highest) 85%, var(--primary) 15%);
+  --background-alt: color-mix(in srgb, var(--surface_container_high) 80%, var(--tertiary) 20%);
+  --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
+  --text-main: var(--on_background);
+  --text-bright: var(--on_surface);
+  --text-muted: var(--on_surface_variant);
+  --links: var(--primary);
+  --focus: var(--primary);
+  --border: color-mix(in srgb, var(--outline_variant) 80%, var(--primary) 20%);
+  --code: var(--on_background);
+  --animation-duration: 0.13s;
+  --button-hover: color-mix(in srgb, var(--surface_container_highest) 70%, var(--secondary) 30%);
+  --scrollbar-thumb: color-mix(in srgb, var(--outline) 30%, var(--primary) 70%);
+  --scrollbar-thumb-hover: var(--primary);
+  --form-placeholder: var(--outline);
+  --form-text: var(--on_background);
+  --variable: var(--green);
+  --highlight: var(--magenta);
+
+  // Additional variables
+  --blockquote-color: var(--primary);
+  --links-files: var(--green);
+  --links-external: var(--blue);
+  --links-mail: var(--magenta);
+  --negative: var(--error);
+  --positive: var(--green);
+  --warning: var(--yellow);
+}
+
+// Jump fragment indicator
+:target {
+  background: var(--background-alt);
+}
+
+// Make current navigation item inactive
+[aria-current="page"],
+.active {
+  color: var(--text-main);
+}
+
+// Add prettier border
+button,
+input,
+select,
+textarea {
+  border: var(--background-alt) dashed 2px;
+  &:focus {
+    box-shadow: 2px 2px var(--background);
+    border-color: var(--text-muted);
+    border-style: solid;
+  }
+  &:hover {
+    border-color: var(--focus);
+    &.positive {
+      border-color: var(--positive);
+    }
+    &.negative {
+      border-color: var(--negative);
+    }
+  }
+}
+label {
+  display: inline;
+}
+// Make fieldset look nicer and more discreet
+fieldset {
+  legend {
+    color: var(--text-muted);
+  }
+  border: 2px dashed var(--background);
+}
+// Make form have no styling, so it is more flexible
+form {
+  display: inline;
+}
+// Inline block is better
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  display: inline-block;
+}
+// Change first and second layer of details
+details {
+  &[open] > summary {
+    font-style: italic;
+  }
+  background-color: var(--background);
+  summary {
+    background-color: var(--background-alt);
+  }
+
+  & > ul details {
+    background-color: var(--background-body);
+    summary {
+      background-color: var(--background-alt);
+    }
+  }
+}
+
+// Make figure a scroller (stolen from picocss)
+figure {
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+
+  figcaption {
+    padding: 1em;
+    color: var(--text-muted);
+  }
+}
+
+// ===================
+// More specific stuff
+// ===================
+
+// Special icons and colors
+
+label {
+  &.colorscheme {
+    @media not print {
+      @include add-icon-label("palette");
+    }
+  }
+}
+
+button {
+  &.random {
+    @media not print {
+      @include add-icon-button("shuffle");
+    }
+  }
+
+  &.restore {
+    @media not print {
+      @include add-icon-button("restore");
+    }
+  }
+}
+
+blockquote {
+  &.negative {
+      border-left-color: var(--negative);
+  }
+  &.positive {
+      border-left-color: var(--positive);
+  }
+  &.warning {
+      border-left-color: var(--warning);
+  }
+}
+
+a {
+  &.external {
+    color: var(--links-external);
+    @media not print {
+      @include add-icon("external");
+    }
+  }
+
+  &[href^="mailto"] {
+    color: var(--links-mail);
+    @media not print {
+      @include add-icon("mail");
+    }
+  }
+
+  &.feed {
+    color: var(--links-files);
+    @media not print {
+      @include add-icon("rss", $margin: 0.5rem);
+    }
+  }
+
+  &.doi {
+    color: var(--links-external);
+    @media not print {
+      @include add-icon("doi", $margin: 0.5rem);
+    }
+  }
+
+  &.file {
+    color: var(--links-files);
+  }
+}
+
+nav a.colorscheme {
+  @include set-icon("palette", $size: 1.4rem);
+}
+
+.pgp {
+  a {
+    @media not print {
+      @include add-icon("key", $position: right);
+    }
+    color: var(--links-files);
+  }
+
+  // Expanding
+  span {
+    display: inline-block;
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width .5s;
+    vertical-align: bottom;
+    white-space: nowrap;
+  }
+  &:hover span {
+    max-width: 14em;
+    text-decoration: underline;
+  }
+}
+
+footer {
+  margin-top: 3em;
+  .copyleft {
+    @media print {
+      display: none;
+    }
+  }
+  p.print-site-link {
+    display: none;
+    @media print {
+      display: block;
+    }
+  }
+}
+
+header {
+  margin-bottom: 2em;
+  @media print {
+    margin-bottom: 0.5em;
+  }
+  & > nav:last-child {
+    // Add some border when header has a nav
+    border-bottom: 1px solid var(--border);
+  }
+}
+body {
+  // Increase width a bit
+  max-width: 55em;
+  @media(min-width: 360px) {
+    padding: 1em;
+  }
+  @media(min-width: 480px) {
+    padding: 1.5em;
+  }
+  @media(min-width: 720px) {
+    padding: 2em;
+  }
+
+  margin: 1.2em auto;
+  @media print {
+    margin: 0 auto;
+  }
+}
+
+nav {
+  // Navigation menu
+  @media print {
+    display: none;
+  }
+  ul {
+    margin-left: 0;
+    padding-left: 0;
+    margin-top: 1em;
+    list-style: none;
+
+    li {
+      font-size: 1.1em;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 0.5em;
+    }
+  }
+}
+
+aside {
+  border-top: 1px solid var(--border);
+  font-size: 80%;
+}
+
+article header {
+  // Remove top margin from post info
+  margin-bottom: 0;
+  h2, h3, h4, h5, h6 {
+    margin-bottom: 0;
+  }
+}
+
+// If it's main article
+body > main > article > header {
+  // Decrease margin between p's
+  p {
+    margin-block-start: 0.2em;
+    margin-block-end: 0.4em;
+  }
+  // Add some padding after it
+  padding-bottom: 0.5em;
+  @media print {
+    padding-bottom: 0.1em;
+  }
+}
+
+// Keep colors if printing with colors
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@view-transition {
+  navigation: auto;
+}

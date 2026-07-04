@@ -1,0 +1,99 @@
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: normal;
+  src: url('/assets/FiraSans/Italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: normal;
+  font-weight: bold;
+  src: url('/assets/FiraSans/Bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Sans';
+  font-style: italic;
+  font-weight: bold;
+  src: url('/assets/FiraSans/BoldItalic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: normal;
+  src: url('/assets/FiraCode/Regular.woff2') format('woff2');
+}
+
+body {
+  font-family: "Fira Sans", sans-serif;
+}
+
+// Code font
+code {
+  font-family: "Fira Code", monospace;
+  font-size: .90em;
+}
+
+// Site logo
+.title {
+  // Name itself
+  a {
+    color: var(--primary);
+    text-decoration: none;
+  }
+  // Decorations around
+  color: var(--text-muted);
+  &:hover {
+    color: var(--orange);
+  }
+
+  font-size: 2.2em;
+  font-weight: 600;
+  @media(max-width: 325px) {
+    font-size: 2em;
+  }
+}
+
+// Headings
+h1 {
+  font-size: 2em;
+  font-style: italic;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  &::before {
+    content: "> ";
+  }
+}
+h2 {
+  font-size: 1.9em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h3 {
+  font-size: 1.6em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h4 {
+  font-size: 1.3em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h5 {
+  font-size: 1.1em;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+h6 {
+  font-size: 1em;
+  margin-top: 1em;
+}

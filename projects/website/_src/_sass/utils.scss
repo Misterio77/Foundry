@@ -1,0 +1,80 @@
+@function opposite-position($direction) {
+  $map: (
+    'top':    'bottom',
+    'right':  'left',
+    'bottom': 'top',
+    'left':   'right',
+  );
+  @return unquote(map-get($map, $direction));
+}
+
+@function position-to-location($position) {
+  $map: (
+    'left':  'before',
+    'right': 'after',
+  );
+  @return unquote(map-get($map, $position));
+}
+// Make the element be an icon
+@mixin set-icon($icon-name, $size: 1.5rem, $margin: $size / 10, $align: "middle") {
+  $icon: url("icons/#{$icon-name}.svg");
+
+  background-color: currentColor;
+  width: $size;
+  height: $size;
+  display: inline-block;
+  content: '';
+  margin: $margin;
+  mask: $icon no-repeat;
+  -webkit-mask: $icon no-repeat;
+  mask-size: cover;
+  -webkit-mask-size: cover;
+  vertical-align: unquote($align);
+}
+
+// Adds an icon after or before something
+@mixin add-icon($icon-name, $position: "right", $size: 1rem, $margin: $size / 10, $align: "top", $float: false) {
+  $icon: url("icons/#{$icon-name}.svg");
+  &:#{position-to-location($position)} {
+    background-color: currentColor;
+    width: $size;
+    height: $size;
+    margin-#{opposite-position($position)}: $margin;
+    display: inline-block;
+    content: '';
+    mask: $icon no-repeat;
+    -webkit-mask: $icon no-repeat;
+    mask-size: cover;
+    -webkit-mask-size: cover;
+    vertical-align: unquote($align);
+    position: relative;
+  }
+}
+
+// Specialiazed version, for labels with one text input
+@mixin add-icon-label($icon-name, $size: 1.4rem, $margin: $size / 2, $position: left) {
+  @include add-icon($icon-name, $size: $size, $margin: $margin, $position: $position);
+
+  &:#{position-to-location($position)} {
+    z-index: 100;
+    #{$position}: $margin;
+    top: 1.28rem - (0.45 * $size);;
+  }
+  input {
+    padding-#{$position}: $size + (2 * $margin);
+    #{opposite-position($position)}: $size + $margin;
+    margin-#{opposite-position($position)}: - $size - ($margin / 2);
+    position: relative;
+  }
+}
+
+// Specialized version, for buttons
+@mixin add-icon-button($icon-name, $size: 1.2rem, $margin: $size / 5, $position: left) {
+  @include add-icon($icon-name, $size: $size, $margin: $margin, $position: $position);
+
+  &:#{position-to-location($position)} {
+    z-index: 100;
+    top: 0.5rem - (0.45 * $size);
+    #{opposite-position($position)}: $margin + 0.3rem;
+  }
+}

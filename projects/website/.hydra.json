@@ -1,0 +1,14 @@
+{
+   "main": {
+        "enabled": 1,
+        "type": 1,
+        "hidden": false,
+        "description": "Build main branch",
+        "flake": "github:misterio77/website/main",
+        "checkinterval": 60,
+        "schedulingshares": 10,
+        "enableemail": false,
+        "emailoverride": "",
+        "keepnr": 1
+    }
+}

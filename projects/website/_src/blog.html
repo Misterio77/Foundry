@@ -1,0 +1,21 @@
+---
+title: Latest Posts
+description: Ocasional thoughts and guides
+permalink: /blog/
+---
+
+<p><a href="/feed.xml" class="feed">Feed</a></p>
+
+{% for post in site.posts %}
+  <article>
+    <header>
+      <h2><a href="{{ post.url }}">{{ post.title }}</a> ({{ post.language }})</h2>
+    </header>
+    <p>
+      <time datetime="{{ post.date | date_to_xmlschema }}">
+        {{ post.date | date_to_long_string: "ordinal" }}
+      </time>
+    </p>
+    <p>{{ post.excerpt | strip_html }}</p>
+  </article>
+{% endfor %}

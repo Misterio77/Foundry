@@ -1,0 +1,52 @@
+name: "Gabriel Fontes"
+description: "My personal website and projects"
+url: "https://gsfontes.com"
+
+default_scheme: atlas
+printing_scheme: print
+
+
+plugins:
+  - jekyll-target-blank
+  - jekyll-sitemap
+
+target-blank:
+  add_css_classes: external
+
+sass:
+  style: compact
+
+kramdown:
+  syntx_highlighter: coderay
+
+
+include: [".well-known"]
+
+source: _src
+
+collections:
+  posts:
+    output: true
+    permalink: /blog/:path/index:output_ext
+    name: Posts
+
+defaults:
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post.html"
+      nav_current: "/blog/"
+  -
+    scope:
+      path: ""
+    values:
+      layout: "default.html"
+      language: "en"
+      author: "Gabriel Fontes"
+  -
+    scope:
+      path: "cgit_partials/**/*"
+    values:
+      sitemap: false

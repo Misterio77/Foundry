@@ -1,0 +1,88 @@
+---
+title: Change colorscheme
+description: Set your colorscheme on the website
+permalink: /colorscheme/
+---
+
+
+<fieldset>
+  <datalist id="scheme-list">
+    {%- for scheme in site.data.colorscheme.schemes %}
+      {%- if scheme[0] != "print" %}
+        <option value="{{ scheme[0] }}">
+      {%- endif %}
+    {%- endfor %}
+  </datalist>
+
+
+  <p>
+    <span style="color: var(--background)">█</span><!--
+ --><span style="color: var(--surface)">█</span><!--
+ --><span style="color: var(--primary)">█</span><!--
+ --><span style="color: var(--secondary)">█</span><!--
+ --><span style="color: var(--tertiary)">█</span><!--
+ --><span style="color: var(--error)">█</span><!--
+ --><span style="color: var(--green)">█</span><!--
+ --><span style="color: var(--blue)">█</span><!--
+ --><span style="color: var(--orange)">█</span><!--
+ --><span style="color: var(--yellow)">█</span><!--
+ --><span style="color: var(--cyan)">█</span><!--
+ --><span style="color: var(--magenta)">█</span>
+  </p>
+
+  <label class="colorscheme">
+    <input class="colorscheme" id="scheme-input" list="scheme-list" placeholder="{{ site.default_scheme }}" />
+  </label>
+
+  <button id="scheme-random" class="random">
+    Random
+  </button>
+
+  <button id="scheme-default" hidden class="restore">
+    Restore
+  </button>
+
+</fieldset>
+
+<script async type="module">
+var scheme_input = document.getElementById("scheme-input");
+var scheme_random_button = document.getElementById("scheme-random");
+var scheme_default_button = document.getElementById("scheme-default");
+
+var schemes = {{ site.data.colorscheme.schemes | jsonify }};
+var scheme_names = Object.keys(schemes).filter(function(s) { return s !== "print"; });
+
+// Add click event for random button
+scheme_random_button.addEventListener("click", function () {
+    var scheme = scheme_names[Math.floor(Math.random() * scheme_names.length)];
+    setTheme(scheme);
+    scheme_input.value = scheme;
+    scheme_default_button.hidden = false;
+});
+
+// Add listener on input to change theme
+scheme_input.addEventListener("input", function () {
+    var input = scheme_input.value;
+    if (input) {
+        setTheme(input);
+        scheme_default_button.hidden = false;
+    } else {
+        resetTheme();
+        scheme_default_button.hidden = true;
+    }
+});
+
+// Add click event for clear button
+scheme_default_button.addEventListener("click", function () {
+    scheme_default_button.hidden = true;
+    resetTheme();
+    scheme_input.value = "";
+});
+
+// Set first value based on current theme
+var current = getTheme();
+if (current) {
+    scheme_input.value = current;
+    scheme_default_button.hidden = false;
+}
+</script>

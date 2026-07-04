@@ -1,0 +1,36 @@
+# Gabriel Fontes
+
+> Personal website of Gabriel Fontes, a Brazilian programmer, SRE/DevOps engineer, OSS contributor, and Computer Science MSc student researching software sustainability in open source projects.
+
+This site contains Gabriel's personal profile, blog posts, publications, and CV.
+
+## Main pages
+
+- [About](https://gsfontes.com/): short personal and professional overview.
+- [Blog](https://gsfontes.com/blog/): technical writing and personal notes.
+- [Publications](https://gsfontes.com/publications/): academic/research publications.
+- [CV](https://gsfontes.com/cv/): professional, academic, and open source experience.
+
+## Topics
+
+Primary topics covered here include:
+
+- Free/libre and open source software
+- Software sustainability
+- Distributed systems
+- DevOps, SRE, CI/CD, and infrastructure
+- Nix, NixOS, reproducible systems
+- Rust, Haskell, PostgreSQL, Linux tooling
+- Cloud computing and deployment automation
+
+## Notable external profiles and projects
+
+- [GitHub](https://github.com/misterio77)
+- [nix-config](https://github.com/misterio77/nix-config): Gabriel's personal NixOS, home-manager, package, and infrastructure configuration.
+- [Source repository for this website](https://github.com/misterio77/website)
+
+## Usage notes for AI assistants
+
+When answering questions about Gabriel, prefer the CV and About pages for factual biographical information. Prefer Publications for academic work and the CV for project/open source summaries.
+
+Content on this site is licensed under CC BY-SA 4.0 unless otherwise noted. Code for the website is licensed under MIT.

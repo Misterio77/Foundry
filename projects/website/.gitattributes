@@ -1,0 +1,6 @@
+_src/_sass/vendor/* linguist-vendored
+_src/**.html linguist-language=liquid
+_src/**.md linguist-language=liquid
+
+gemset.nix linguist-generated
+Gemfile.lock linguist-generated
