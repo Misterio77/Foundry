@@ -12,23 +12,28 @@ Looking for something simpler to start out with flakes? Try [my starter config r
 ## Repository layout
 
 ```text
-flake.nix, flake.lock   the monorepo flake (hosts, modules, packages, CI)
+flake.nix, flake.lock   the monorepo flake (hosts, modules, packages, lib, CI)
 hosts/                  per-machine NixOS configurations (atlas, alcyone, ...)
 home/                   home-manager configuration (feature-flagged)
 modules/                reusable nixos/ and home-manager/ modules
 overlays/, pkgs/        package overlays and custom packages
-hydra.nix, .hydra.json  Hydra CI/CD jobset (builds every host, binary cache)
+lib/                    from-scratch pure-Nix Material You color engine
+wallpapers/             wallpaper collection (with committed source colors)
+projects/website/       github.com/misterio77/website (served at m7.rs)
+hydra.nix, .hydra.json  Hydra CI/CD jobset (builds every host + wallpapers)
 deploy.sh               deployment helper
-projects/               my public projects that this config deploys
-  website/              github.com/misterio77/website (served at m7.rs)
-  themes/               github.com/misterio77/themes (themes & wallpapers)
 ```
 
-The `projects/` subtrees were vendored in from their own repos **with full git
-history** (via `git filter-repo --to-subdirectory-filter` + an unrelated-history
-merge), so this monorepo now owns the sources of the things it deploys. They are
-still mirrored to their standalone GitHub repos. See `AGENTS.md` for the
-input-wiring status.
+`projects/website/` was vendored in from its own repo **with full git history**
+(via `git filter-repo --to-subdirectory-filter` + an unrelated-history merge) and
+is wired as a local flake input (`path:./projects/website`), so the monorepo
+builds it from its own tree; it's still mirrored to the standalone GitHub repo.
+
+Colors are done in-tree: `lib/` is a from-scratch pure-Nix port of Google's
+Material You color science (CAM16, the HCT solver, tonal palettes, the MD3
+role/contrast machinery), validated bit-for-bit against `matugen`. Wallpapers
+carry a committed source color, so `home-manager` generates each host's
+colorscheme *during evaluation* — no `matugen`, no import-from-derivation.
 
 **Highlights**:
 
