@@ -1,6 +1,26 @@
-{config, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   c = config.colorscheme.colors;
   tmux = "${config.programs.tmux.package}/bin/tmux";
+  # Rename the group's base session, not the disposable "_view_*" session you
+  # might be attached to. The group's internal name is frozen at creation, so
+  # find the live base via session_group_list (real current names), rename it,
+  # then refresh the @base marker each view carries for its status line.
+  renameBase = pkgs.writeShellScript "tmux-rename-base" ''
+    new="$1"
+    list="$(${tmux} display -p '#{session_group_list}')"
+    base="$(printf '%s\n' "$list" | tr , '\n' | grep -v '^_view_' | head -1)"
+    [ -z "$base" ] && base="$(${tmux} display -p '#S')"
+    ${tmux} rename-session -t "$base" "$new"
+    printf '%s\n' "$list" | tr , '\n' | while read -r s; do
+      case "$s" in
+        _view_*) ${tmux} set-option -t "$s" @base "$new" ;;
+      esac
+    done
+  '';
 in {
   programs.tmux = {
     enable = true;
@@ -20,9 +40,13 @@ in {
       # Keep window numbers compact after closing windows
       set -g renumber-windows on
 
-      # Make terminal/window titles identify the tmux session
+      # Make terminal/window titles identify the tmux session (base, not view)
       set -g set-titles on
-      set -g set-titles-string '#S:#W'
+      # (test emptiness, not truthiness, so a session literally named "0" works)
+      set -g set-titles-string '#{?#{==:#{@base},},#S,#{@base}}:#W'
+
+      # Status left shows the base session name, not the disposable view
+      set -g status-left ' #{?#{==:#{@base},},#S,#{@base}} '
 
       # Theme tmux UI from the active colorscheme
       set -g status-style 'bg=${c.surface},fg=${c.on_surface}'
@@ -38,6 +62,9 @@ in {
       # More ergonomic splits
       bind | split-window -h
       bind - split-window -v
+
+      # Rename the group's base session even from a disposable view
+      bind R command-prompt -p "rename base:" "run-shell '${renameBase} \"%%\"'"
 
       # Prefix ? shows the active prefix key bindings
       bind ? display-popup -E "${config.programs.tmux.package}/bin/tmux list-keys -T prefix | less"

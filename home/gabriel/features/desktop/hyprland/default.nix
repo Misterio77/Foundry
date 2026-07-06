@@ -26,7 +26,8 @@
     choice=$(
       {
         printf '%s\n' "new session"
-        "$tmux" list-sessions -F '#S' 2>/dev/null || true
+        # Hide the disposable grouped views (see below) from the picker.
+        "$tmux" list-sessions -F '#S' 2>/dev/null | grep -v '^_view_' || true
       } | "$wofi" -S dmenu --cache-file /dev/null -p 'tmux session'
     )
 
@@ -35,7 +36,15 @@
       "new session") exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session ;;
       *)
         if "$tmux" has-session -t "$choice" 2>/dev/null; then
-          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" attach-session -t "$choice"
+          # Open an independent, disposable view into the existing session:
+          # a grouped session shares the same windows but tracks its own
+          # current window (so terminals don't mirror each other), and
+          # destroy-unattached makes it vanish when this terminal closes,
+          # leaving the real session (and its shells) alive.
+          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" \
+            new-session -t "$choice" -s "_view_''${choice}_$RANDOM" \; \
+            set-option @base "$choice" \; \
+            set-option destroy-unattached on
         else
           exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -s "$choice"
         fi
