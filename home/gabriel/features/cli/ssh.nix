@@ -40,7 +40,7 @@ in {
           # subsequent ssh, and lets the tmux picker enumerate a box's sessions
           # over the existing master (ssh -O check) without dialing out.
           ControlMaster = "auto";
-          ControlPersist = "10m";
+          ControlPersist = "1m";
         };
       };
     };

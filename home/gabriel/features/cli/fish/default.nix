@@ -35,6 +35,11 @@ in {
 
       aws-switch = mkIf hasAwsCli "export AWS_PROFILE=(aws configure list-profiles | fzf)";
       awssw = aws-switch;
+
+      # ssh control-master helpers: open a bare background master (populates the
+      # tmux picker), and fully close one. Abbrs so host-completion still works.
+      mopen = "ssh -fN";
+      mclose = "ssh -O exit";
     };
     shellAliases = {
       # Clear screen and scrollback
