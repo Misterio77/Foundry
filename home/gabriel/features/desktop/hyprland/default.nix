@@ -94,6 +94,27 @@
     host="''${socket#master-}"
     ssh "$host" "$@"
   '');
+
+  # Hyprland's systemd integration only *starts* the session (exec-once starts
+  # hyprland-session.target); nothing stops it on logout. Since our units are
+  # PartOf/WantedBy graphical-session.target, they would leak stale into the
+  # next login. Wrap the exported session so start-hyprland's return tears the
+  # user session down cleanly.
+  hyprPackage = config.wayland.windowManager.hyprland.package;
+  hyprSessionLauncher = pkgs.writeShellScript "start-hyprland-session" ''
+    ${hyprPackage}/bin/start-hyprland "$@"
+    ${pkgs.systemd}/bin/systemctl --user stop hyprland-session.target graphical-session.target
+  '';
+  hyprSession =
+    pkgs.runCommandLocal "hyprland-session" {
+      passthru.providedSessions = ["hyprland"];
+    } ''
+      mkdir -p $out/share/wayland-sessions
+      substitute \
+        ${hyprPackage}/share/wayland-sessions/hyprland.desktop \
+        $out/share/wayland-sessions/hyprland.desktop \
+        --replace-fail ${hyprPackage}/bin/start-hyprland ${hyprSessionLauncher}
+    '';
 in {
   imports = [
     ../common
@@ -120,7 +141,7 @@ in {
     pkgs.hyprpicker
   ];
 
-  home.exportedSessionPackages = [config.wayland.windowManager.hyprland.package];
+  home.exportedSessionPackages = [hyprSession];
 
   wayland.windowManager.hyprland = {
     enable = true;
