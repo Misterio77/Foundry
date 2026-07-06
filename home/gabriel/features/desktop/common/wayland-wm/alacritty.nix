@@ -39,10 +39,6 @@ in {
           style = "Medium";
         };
       };
-      terminal.shell = {
-        program = "${config.programs.tmux.package}/bin/tmux";
-        args = ["new-session"];
-      };
       window = {
         padding = {
           x = 24;
