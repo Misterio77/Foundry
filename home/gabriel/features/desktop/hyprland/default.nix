@@ -26,27 +26,16 @@
     choice=$(
       {
         printf '%s\n' "new session"
-        "$tmux" list-sessions -F '#{?session_grouped,#{session_group},#{session_name}}' 2>/dev/null | sort -u || true
+        "$tmux" list-sessions -F '#S' 2>/dev/null || true
       } | "$wofi" -S dmenu --cache-file /dev/null -p 'tmux session'
     )
-
-    open_view() {
-      target="$1"
-      safe_target="$(printf '%s' "$target" | tr -c '[:alnum:]_-' '_')"
-      view="''${safe_target}-view-$$"
-
-      exec "$handlr" launch x-scheme-handler/terminal -- \
-        -e "$tmux" new-session -d -t "$target" -s "$view" \; \
-        set-option -t "$view" destroy-unattached on \; \
-        attach-session -t "$view"
-    }
 
     case "$choice" in
       "") exit 0 ;;
       "new session") exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session ;;
       *)
         if "$tmux" has-session -t "$choice" 2>/dev/null; then
-          open_view "$choice"
+          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" attach-session -t "$choice"
         else
           exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -s "$choice"
         fi
