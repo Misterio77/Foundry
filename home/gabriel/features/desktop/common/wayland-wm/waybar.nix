@@ -86,6 +86,7 @@ in {
 
         modules-right = [
           "tray"
+          "custom/ssh-masters"
           "custom/gpg-status"
           "custom/sync-status"
           "custom/unread-mail"
@@ -370,6 +371,29 @@ in {
             script = "rfkill list wifi | grep yes -q";
           };
           exec = "echo 󰀝";
+        };
+        # Show only while at least one ssh control-master is alive; tooltip
+        # lists the boxes (also what the tmux picker enumerates over).
+        "custom/ssh-masters" = {
+          interval = 5;
+          return-type = "json";
+          exec-if = mkScript {
+            deps = [pkgs.findutils];
+            script = "find ~/.ssh -maxdepth 1 -name 'master-*' -type s | grep -q .";
+          };
+          exec = mkScriptJson {
+            deps = [pkgs.findutils pkgs.gnused];
+            script = ''
+              hosts="$(find ~/.ssh -maxdepth 1 -name 'master-*' -type s -printf '%f\n' \
+                | sed -E 's/^master-[^@]*@//; s/:[0-9]+$//' | sort -u | paste -sd ', ' -)"
+            '';
+            alt = "connected";
+            tooltip = "SSH masters: $hosts";
+          };
+          format = "{icon}";
+          format-icons = {
+            connected = "󰢹";
+          };
         };
       };
     };

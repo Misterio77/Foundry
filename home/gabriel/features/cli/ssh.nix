@@ -34,7 +34,14 @@ in {
         forwardX11 = true;
         forwardX11Trusted = true;
         setEnv.WAYLAND_DISPLAY = "wayland-waypipe";
-        extraOptions.StreamLocalBindUnlink = "yes";
+        extraOptions = {
+          StreamLocalBindUnlink = "yes";
+          # Keep connections to the fleet warm after first use: speeds up
+          # subsequent ssh, and lets the tmux picker enumerate a box's sessions
+          # over the existing master (ssh -O check) without dialing out.
+          ControlMaster = "auto";
+          ControlPersist = "10m";
+        };
       };
     };
   };

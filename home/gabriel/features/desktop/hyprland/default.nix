@@ -22,34 +22,66 @@
     tmux="${config.programs.tmux.package}/bin/tmux"
     wofi="${lib.getExe config.programs.wofi.package}"
     handlr="${lib.getExe pkgs.handlr-regex}"
+    ssh="${lib.getExe' pkgs.openssh "ssh"}"
+    timeout="${lib.getExe' pkgs.coreutils "timeout"}"
 
-    choice=$(
-      {
-        printf '%s\n' "new session"
-        # Hide the disposable grouped views (see below) from the picker.
-        "$tmux" list-sessions -F '#S' 2>/dev/null | grep -v '^_view_' || true
-      } | "$wofi" -S dmenu --cache-file /dev/null -p 'tmux session'
-    )
+    # Maps a "host: session" menu entry back to its ssh target.
+    declare -A remote_target
+
+    entries="new session"
+
+    # Local sessions (hide the disposable grouped views).
+    while IFS= read -r s; do
+      [ -n "$s" ] && entries+=$'\n'"$s"
+    done < <("$tmux" list-sessions -F '#S' 2>/dev/null | grep -v '^_view_' || true)
+
+    # Remote sessions, but ONLY on boxes with a live control-master: `ssh -O
+    # check` never dials out, so this stays instant and silently skips boxes
+    # that are down or that we haven't connected to (masters go stale after
+    # ControlPersist, see ssh.nix). Query rides the existing master.
+    shopt -s nullglob
+    for sock in "$HOME"/.ssh/master-*; do
+      [ -S "$sock" ] || continue
+      target="''${sock##*/}"        # master-user@host:port
+      target="''${target#master-}"  # user@host:port
+      target="''${target%:*}"       # user@host (kept verbatim so -O check matches)
+      label="''${target#*@}"        # host
+      label="''${label%%.*}"        # short hostname, for display
+      "$ssh" -O check "$target" 2>/dev/null || continue
+      while IFS= read -r s; do
+        [ -n "$s" ] || continue
+        key="$label: $s"
+        remote_target["$key"]="$target"
+        entries+=$'\n'"$key"
+      done < <("$timeout" 3 "$ssh" "$target" "tmux list-sessions -F '#S'" 2>/dev/null | grep -v '^_view_' || true)
+    done
+
+    choice=$(printf '%s\n' "$entries" | "$wofi" -S dmenu --cache-file /dev/null -p 'tmux session')
 
     case "$choice" in
       "") exit 0 ;;
       "new session") exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session ;;
-      *)
-        if "$tmux" has-session -t "$choice" 2>/dev/null; then
-          # Open an independent, disposable view into the existing session:
-          # a grouped session shares the same windows but tracks its own
-          # current window (so terminals don't mirror each other), and
-          # destroy-unattached makes it vanish when this terminal closes,
-          # leaving the real session (and its shells) alive.
-          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" \
-            new-session -t "$choice" -s "_view_''${choice}_$RANDOM" \; \
-            set-option @base "$choice" \; \
-            set-option destroy-unattached on
-        else
-          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -s "$choice"
-        fi
-        ;;
     esac
+
+    if [ -n "''${remote_target[$choice]:-}" ]; then
+      # Remote pick: same disposable-view trick, over ssh. Remote tmux gets the
+      # ; separators (escaped so the remote shell hands them to tmux, not sh).
+      target="''${remote_target[$choice]}"
+      session="''${choice#*: }"
+      exec "$handlr" launch x-scheme-handler/terminal -- -e \
+        "$ssh" -t "$target" \
+        "tmux new-session -t \"$session\" -s \"_view_''${session}_$RANDOM\" \; set-option @base \"$session\" \; set-option destroy-unattached on"
+    elif "$tmux" has-session -t "$choice" 2>/dev/null; then
+      # Local disposable grouped view: shares the session's windows but tracks
+      # its own current window (so terminals don't mirror), and destroy-unattached
+      # makes it vanish on close, leaving the real session and its shells alive.
+      exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" \
+        new-session -t "$choice" -s "_view_''${choice}_$RANDOM" \; \
+        set-option @base "$choice" \; \
+        set-option destroy-unattached on
+    else
+      exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -s "$choice"
+    fi
   '';
   remote = lib.getExe (pkgs.writeShellScriptBin "remote" ''
     socket="$(basename "$(find ~/.ssh -name 'master-gabriel@*' | head -1 | cut -d ':' -f1)")"
