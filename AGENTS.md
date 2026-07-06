@@ -2,8 +2,7 @@
 
 ## Repository
 
-Foundry is my public infra monorepo (colocated jj/git — use `jj`, not `git`).
-It is the NixOS/home-manager config, plus:
+Foundry is my public infra monorepo: the NixOS/home-manager config, plus:
 
 - `projects/website/` — the site served at m7.rs, vendored from
   `github:misterio77/website` with full history and wired as a local flake input
@@ -130,8 +129,7 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 After deploying a host, verify the correct revision landed:
 
 1. `ssh {host} -- nix flake metadata self --json | jq .revision -r` — get the deployed commit hash (first 8 chars).
-2. `jj log -r 'commit_id("{hash}")'` — map it to a change ID and commit description.
-3. Confirm it's the expected commit (should be at or near `main` / the tip of the stack).
+2. Confirm it's the expected commit (should be at or near the expected branch/tip).
 
 ## Vdirsyncer Calendar Collections
 
