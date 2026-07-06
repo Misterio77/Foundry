@@ -43,7 +43,9 @@ in {
       # Make terminal/window titles identify the tmux session (base, not view)
       set -g set-titles on
       # (test emptiness, not truthiness, so a session literally named "0" works)
-      set -g set-titles-string '#{?#{==:#{@base},},#S,#{@base}}:#W'
+      # Forward the active pane's own title (e.g. fish's command+pwd) to the WM,
+      # suffixed with the base session so the window still says which it is.
+      set -g set-titles-string '#{pane_title} — #{?#{==:#{@base},},#S,#{@base}}'
 
       # Status left shows the base session name, not the disposable view
       set -g status-left ' #{?#{==:#{@base},},#S,#{@base}} '
