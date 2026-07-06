@@ -48,6 +48,9 @@
       label="''${target#*@}"        # host
       label="''${label%%.*}"        # short hostname, for display
       "$ssh" -O check "$target" 2>/dev/null || continue
+      # Offer a fresh session on the box too, alongside its existing ones.
+      remote_target["$label: new session"]="$target"
+      entries+=$'\n'"$label: new session"
       while IFS= read -r s; do
         [ -n "$s" ] || continue
         key="$label: $s"
@@ -68,6 +71,9 @@
       # ; separators (escaped so the remote shell hands them to tmux, not sh).
       target="''${remote_target[$choice]}"
       session="''${choice#*: }"
+      if [ "$session" = "new session" ]; then
+        exec "$handlr" launch x-scheme-handler/terminal -- -e "$ssh" -t "$target" tmux new-session
+      fi
       exec "$handlr" launch x-scheme-handler/terminal -- -e \
         "$ssh" -t "$target" \
         "tmux new-session -t \"$session\" -s \"_view_''${session}_$RANDOM\" \; set-option @base \"$session\" \; set-option destroy-unattached on"
