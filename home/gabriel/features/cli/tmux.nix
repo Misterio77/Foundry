@@ -1,11 +1,13 @@
 {config, ...}: let
   c = config.colorscheme.colors;
+  tmux = "${config.programs.tmux.package}/bin/tmux";
 in {
   programs.tmux = {
     enable = true;
     mouse = true;
     historyLimit = 100000;
     keyMode = "vi";
+    prefix = "M-Space";
     escapeTime = 0;
     terminal = "tmux-256color";
     baseIndex = 1;
@@ -17,6 +19,10 @@ in {
 
       # Keep window numbers compact after closing windows
       set -g renumber-windows on
+
+      # Make terminal/window titles identify the tmux session
+      set -g set-titles on
+      set -g set-titles-string '#S:#W'
 
       # Theme tmux UI from the active colorscheme
       set -g status-style 'bg=${c.surface},fg=${c.on_surface}'
@@ -32,6 +38,9 @@ in {
       # More ergonomic splits
       bind | split-window -h
       bind - split-window -v
+
+      # Prefix ? shows the active prefix key bindings
+      bind ? display-popup -E "${config.programs.tmux.package}/bin/tmux list-keys -T prefix | less"
 
       # Normal mode: Alacritty-ish scrollback
       bind -n S-PPage copy-mode -u
@@ -56,4 +65,8 @@ in {
       bind -T copy-mode-vi C-d send -X halfpage-down
     '';
   };
+
+  xdg.configFile."tmux/tmux.conf".onChange = ''
+    ${tmux} list-sessions >/dev/null 2>&1 && ${tmux} source-file "$HOME/.config/tmux/tmux.conf" || true
+  '';
 }

@@ -16,6 +16,32 @@
   grimblast = lib.getExe pkgs.grimblast;
   pactl = lib.getExe' pkgs.pulseaudio "pactl";
   defaultApp = type: "${lib.getExe pkgs.handlr-regex} launch ${type}";
+  tmuxSessionPicker = pkgs.writeShellScript "tmux-session-picker" ''
+    set -euo pipefail
+
+    tmux="${config.programs.tmux.package}/bin/tmux"
+    wofi="${lib.getExe config.programs.wofi.package}"
+    handlr="${lib.getExe pkgs.handlr-regex}"
+
+    choice=$(
+      {
+        printf '%s\n' "new session"
+        "$tmux" list-sessions -F '#{?session_grouped,#{session_group},#{session_name}}' 2>/dev/null | sort -u || true
+      } | "$wofi" -S dmenu --cache-file /dev/null -p 'tmux session'
+    )
+
+    case "$choice" in
+      "") exit 0 ;;
+      "new session") exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session ;;
+      *)
+        if "$tmux" has-session -t "$choice" 2>/dev/null; then
+          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -t "$choice"
+        else
+          exec "$handlr" launch x-scheme-handler/terminal -- -e "$tmux" new-session -s "$choice"
+        fi
+        ;;
+    esac
+  '';
   remote = lib.getExe (pkgs.writeShellScriptBin "remote" ''
     socket="$(basename "$(find ~/.ssh -name 'master-gabriel@*' | head -1 | cut -d ':' -f1)")"
     host="''${socket#master-}"
@@ -312,6 +338,7 @@ in {
               "SUPER,x,exec,${wofi} -S drun -x 10 -y 10 -W 25% -H 60%"
               "SUPER,s,exec,specialisation $(specialisation | ${wofi} -S dmenu)"
               "SUPER,d,exec,${wofi} -S run"
+              "SUPER,space,exec,${tmuxSessionPicker}"
 
               "SUPERALT,x,exec,${remote} ${wofi} -S drun -x 10 -y 10 -W 25% -H 60%"
               "SUPERALT,d,exec,${remote} ${wofi} -S run"
