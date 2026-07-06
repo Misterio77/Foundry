@@ -100,3 +100,24 @@ Let me know if you have any questions about them :)
 ## Unixpornish stuff
 ![fakebusy](https://i.imgur.com/PZ4L7TR.png)
 ![clean](https://i.imgur.com/T5FjqbZ.jpg)
+
+## AI usage note
+
+Since June 2026, I've been trying out LLM assistance in my workflows. So far it feels pretty good; brainstorming helps me a lot with decision paralysis. I'm trying to keep my use bounded and disclosed. I think it's a useful tool, but it should be adopted with care.
+
+I will write a decent blog post about my opinions on AI at some point. The gist is:
+
+- These things are useful for bounded tasks with good docs and reviews, but suck at owning architecture or accountability
+- There's no going back now that open-weight models run on consumer hardware, we can't uninvent them
+- Boycotting AI does not help by itself; non-use is not a political strategy
+- We need clear LLM policy on projects rather than trying (and failing) to forbid it
+- Disclosure is very important, and trying to pass LLM output off as human-written is disrespectful
+- LLMs should never have been built by scraping and exploiting our art and work
+- If copyright doesn't protect our creations, it shouldn't protect their models; support open-weight models and distillation as harm reduction
+- We need regulation, decentralization, and redistribution of the value LLMs generate
+- Machines can't be horny, thus can't create art; LLMs are for utility, not art or craft. Pay an artist instead
+
+Some bibliography I'd recommend:
+- Alice's ["AI Sucks. Hating it is not enough."](https://shaping.systems/blog/ai-sucks-hating-it-is-not-enough/) (please read it, it's an amazing piece)
+- Drew's ["The cults of TDD and GenAI"](https://drewdevault.com/blog/Cult-of-TDD-and-LLMs/) (I don't really agree with the non-use perspective, but otherwise I think it's solid)
+- Armin's ["Communities of Not"](https://lucumr.pocoo.org/2026/6/6/communities-of-not/) and ["The Center Has a Bias"](https://lucumr.pocoo.org/2026/4/11/the-center-has-a-bias/) (I'm not a centrist politically, though)
