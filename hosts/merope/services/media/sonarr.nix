@@ -46,4 +46,6 @@
     group = config.services.sonarr.group;
     mode = "0755";
   };
+
+  systemd.services.sonarr.serviceConfig.Nice = 10;
 }

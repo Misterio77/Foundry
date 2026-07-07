@@ -359,6 +359,8 @@
     };
   };
 
+  systemd.services.recyclarr.serviceConfig.Nice = 10;
+
   sops.secrets = {
     sonarr-key = {
       sopsFile = ../../secrets.yaml;

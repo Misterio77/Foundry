@@ -46,4 +46,6 @@
     group = config.services.radarr.group;
     mode = "0755";
   };
+
+  systemd.services.radarr.serviceConfig.Nice = 10;
 }

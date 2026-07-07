@@ -37,6 +37,7 @@
     DynamicUser = lib.mkForce false;
     User = lib.mkForce "prowlarr";
     Group = lib.mkForce "prowlarr";
+    Nice = 10;
   };
   users = {
     users.prowlarr = {

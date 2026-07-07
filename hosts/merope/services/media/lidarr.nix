@@ -45,4 +45,6 @@
     group = config.services.lidarr.group;
     mode = "0755";
   };
+
+  systemd.services.lidarr.serviceConfig.Nice = 10;
 }

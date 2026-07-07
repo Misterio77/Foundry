@@ -14,6 +14,7 @@
     serviceConfig = {
       User = "jellysearch";
       Group = "jellysearch";
+      Nice = 15;
     };
   };
 

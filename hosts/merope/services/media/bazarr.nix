@@ -37,4 +37,6 @@
       }
     ];
   };
+
+  systemd.services.bazarr.serviceConfig.Nice = 10;
 }
