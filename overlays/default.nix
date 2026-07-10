@@ -119,6 +119,21 @@ in {
       });
     });
 
+    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: _: {
+      version = "0.80.6";
+      src = final.fetchFromGitHub {
+        owner = "earendil-works";
+        repo = "pi";
+        tag = "v${finalAttrs.version}";
+        hash = "sha256-e/wcHruEcBAHDF5tKvwew7LXjVp0eraHh2k+QaL2sCA=";
+      };
+      npmDeps = final.fetchNpmDeps {
+        name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
+        inherit (finalAttrs) src;
+        hash = "sha256-xXEOR0epZcfbXayYGyJdBiFVliamBexqA+1Sd7wlGhU=";
+      };
+    });
+
     buildPiPackage = let
       inherit (final) lib buildNpmPackage jq stdenvNoCC;
       fakeSha512 = lib.convertHash {

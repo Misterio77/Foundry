@@ -27,9 +27,9 @@ in {
         keepRecentTokens = 20000;
         reserveTokens = 16384;
       };
-      defaultModel = "gpt-5.5";
+      defaultModel = "gpt-5.6-sol";
       enabledModels = [
-        "gpt-5.5"
+        "gpt-5.6-sol"
         "claude-opus-4-8"
         "qwen3.6"
         "gemma-4"
