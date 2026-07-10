@@ -30,7 +30,11 @@ in {
       defaultModel = "gpt-5.6-sol";
       enabledModels = [
         "gpt-5.6-sol"
+        "gpt-5.6-terra"
+        "gpt-5.6-luna"
         "claude-opus-4-8"
+        "claude-sonnet-4-6"
+        "claude-sonnet-4-5"
         "qwen3.6"
         "gemma-4"
       ];
