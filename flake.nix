@@ -59,6 +59,11 @@
       url = "github:TNAZEP/HytaleLauncherFlake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    paseo = {
+      # FIXME: Return to getpaseo/paseo once getpaseo/paseo#1587 is merged.
+      url = "github:yhori991/paseo/fix/nix-local-speech-worker";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # My own programs, packaged with nix
     website = {
@@ -79,7 +84,8 @@
     lib = let
       base = nixpkgs.lib // home-manager.lib;
     in
-      base // {
+      base
+      // {
         colors = import ./lib/colors.nix {lib = base;};
         material-you = import ./lib/material-you.nix {lib = base;};
       };
