@@ -30,7 +30,10 @@
     relay.enable = false;
     settings = {
       daemon = {
-        mcp.enabled = false;
+        mcp = {
+          enabled = true;
+          injectIntoAgents = true;
+        };
         browserTools.enabled = false;
         autoArchiveAfterMerge = false;
         enableTerminalAgentHooks = false;
@@ -43,12 +46,25 @@
           copilot.enabled = false;
           opencode.enabled = false;
           omp.enabled = false;
+          pi.enabled = true;
         };
         metadataGeneration.providers = [];
       };
       features = {
         dictation.enabled = true;
-        voiceMode.enabled = true;
+        voiceMode = {
+          enabled = true;
+          llm.provider = "pi";
+          stt = {
+            provider = "local";
+            model = "parakeet-tdt-0.6b-v3-int8";
+          };
+          tts = {
+            provider = "local";
+            model = "kokoro-en-v0_19";
+            speakerId = 0;
+          };
+        };
         webUi.enabled = true;
       };
     };
