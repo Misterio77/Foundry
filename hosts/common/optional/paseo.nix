@@ -9,6 +9,21 @@
 
   services.paseo = {
     enable = true;
+    package = inputs.paseo.packages.${pkgs.system}.default.overrideAttrs (old: {
+      # Upstream's daemon-only source filter excludes the web app sources.
+      src = inputs.paseo;
+      postBuild =
+        (old.postBuild or "")
+        + ''
+          npm run build:daemon-web-ui
+        '';
+      postInstall =
+        (old.postInstall or "")
+        + ''
+          cp -a packages/server/dist/server/web-ui \
+            $out/lib/paseo/packages/server/dist/server/
+        '';
+    });
     user = "gabriel";
     group = "users";
     listenAddress = "0.0.0.0";
