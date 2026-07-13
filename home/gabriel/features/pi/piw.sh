@@ -48,10 +48,10 @@ if [[ "$workspace_has_changes" == true ]]; then
     [[ "$confirm" =~ ^[Yy]$ ]] && integrate=true
   fi
 
-  imported_change=$(jj -R "$workspace_path" log --no-graph -r @ -T change_id)
-  # Move the workspace onto a disposable child so its change remains a head.
-  jj -R "$workspace_path" new
-
+  imported_change=$(
+    jj -R "$workspace_path" log --no-graph \
+      -r 'heads(first_ancestors(@) & ~empty())' -T change_id
+  )
   if [[ "$integrate" == true ]]; then
     jj -R "$root" rebase -s "$invoking_change" -d "$imported_change"
     result="integrated changes into the invoking workspace"
