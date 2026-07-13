@@ -118,7 +118,7 @@ in {
       });
     });
 
-    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: _: {
+    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
       version = "0.80.6";
       src = final.fetchFromGitHub {
         owner = "earendil-works";
@@ -131,6 +131,7 @@ in {
         inherit (finalAttrs) src;
         hash = "sha256-xXEOR0epZcfbXayYGyJdBiFVliamBexqA+1Sd7wlGhU=";
       };
+      patches = (oldAttrs.patches or []) ++ [./pi-cli-model-scope.patch];
     });
 
     buildPiPackage = let

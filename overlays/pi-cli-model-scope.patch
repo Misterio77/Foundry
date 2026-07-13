@@ -1,0 +1,118 @@
+diff -ruN a/packages/coding-agent/src/core/model-resolver.ts b/packages/coding-agent/src/core/model-resolver.ts
+--- a/packages/coding-agent/src/core/model-resolver.ts	2026-07-13 13:54:52.511483695 -0300
++++ b/packages/coding-agent/src/core/model-resolver.ts	2026-07-13 13:58:42.289962350 -0300
+@@ -365,16 +365,25 @@
+ 	cliModel?: string;
+ 	cliThinking?: ThinkingLevel;
+ 	modelRegistry: ModelRegistry;
++	/** Restrict CLI model matching to an already-resolved model scope. */
++	modelScope?: ScopedModel[];
+ }): ResolveCliModelResult {
+-	const { cliProvider, cliModel, cliThinking, modelRegistry } = options;
++	const { cliProvider, cliModel, cliThinking, modelRegistry, modelScope } = options;
+ 
+ 	if (!cliModel) {
+ 		return { model: undefined, warning: undefined, error: undefined };
+ 	}
+ 
+-	// Important: use *all* models here, not just models with pre-configured auth.
+-	// This allows "--api-key" to be used for first-time setup.
+-	const availableModels = modelRegistry.getAll();
++	// Qualified CLI references intentionally bypass model scoping so scripts can select
++	// any provider/model explicitly. Bare patterns are restricted when a scope exists.
++	const allModels = modelRegistry.getAll();
++	const slashIndex = cliModel.indexOf("/");
++	const providerPrefix = slashIndex === -1 ? undefined : cliModel.substring(0, slashIndex).toLowerCase();
++	const hasQualifiedProvider =
++		cliProvider !== undefined ||
++		(providerPrefix !== undefined && allModels.some((model) => model.provider.toLowerCase() === providerPrefix));
++	const availableModels =
++		modelScope && !hasQualifiedProvider ? modelScope.map(({ model }) => model) : allModels;
+ 	if (availableModels.length === 0) {
+ 		return {
+ 			model: undefined,
+diff -ruN a/packages/coding-agent/src/main.ts b/packages/coding-agent/src/main.ts
+--- a/packages/coding-agent/src/main.ts	2026-07-13 13:54:52.515483732 -0300
++++ b/packages/coding-agent/src/main.ts	2026-07-13 13:55:16.100799091 -0300
+@@ -360,6 +360,7 @@
+ 	hasExistingSession: boolean,
+ 	modelRegistry: ModelRegistry,
+ 	settingsManager: SettingsManager,
++	cliModelScope?: ScopedModel[],
+ ): {
+ 	options: CreateAgentSessionOptions;
+ 	cliThinkingFromModel: boolean;
+@@ -378,6 +379,7 @@
+ 			cliModel: parsed.model,
+ 			cliThinking: parsed.thinking,
+ 			modelRegistry,
++			modelScope: cliModelScope,
+ 		});
+ 		if (resolved.warning) {
+ 			diagnostics.push({ type: "warning", message: resolved.warning });
+@@ -700,6 +702,7 @@
+ 			sessionManager.buildSessionContext().messages.length > 0,
+ 			modelRegistry,
+ 			settingsManager,
++			modelPatterns && modelPatterns.length > 0 ? scopedModels : undefined,
+ 		);
+ 		diagnostics.push(...sessionOptionDiagnostics);
+ 
+diff -ruN a/packages/coding-agent/test/model-resolver.test.ts b/packages/coding-agent/test/model-resolver.test.ts
+--- a/packages/coding-agent/test/model-resolver.test.ts	2026-07-13 13:54:52.515483732 -0300
++++ b/packages/coding-agent/test/model-resolver.test.ts	2026-07-13 13:58:42.290295858 -0300
+@@ -273,6 +273,54 @@
+ 		expect(result.model?.id).toBe("gpt-4o");
+ 	});
+ 
++	test("restricts --model matching to the supplied model scope", () => {
++		const registry = {
++			getAll: () => allModels,
++		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
++
++		const result = resolveCliModel({
++			cliModel: "4o",
++			modelRegistry: registry,
++			modelScope: [{ model: mockModels[0] }],
++		});
++
++		expect(result.model).toBeUndefined();
++		expect(result.error).toContain('Model "4o" not found');
++	});
++
++	test("allows --provider to bypass the supplied model scope", () => {
++		const registry = {
++			getAll: () => allModels,
++		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
++
++		const result = resolveCliModel({
++			cliProvider: "openai",
++			cliModel: "4o",
++			modelRegistry: registry,
++			modelScope: [{ model: mockModels[0] }],
++		});
++
++		expect(result.error).toBeUndefined();
++		expect(result.model?.provider).toBe("openai");
++		expect(result.model?.id).toBe("gpt-4o");
++	});
++
++	test("allows provider/model to bypass the supplied model scope", () => {
++		const registry = {
++			getAll: () => allModels,
++		} as unknown as Parameters<typeof resolveCliModel>[0]["modelRegistry"];
++
++		const result = resolveCliModel({
++			cliModel: "openai/gpt-4o",
++			modelRegistry: registry,
++			modelScope: [{ model: mockModels[0] }],
++		});
++
++		expect(result.error).toBeUndefined();
++		expect(result.model?.provider).toBe("openai");
++		expect(result.model?.id).toBe("gpt-4o");
++	});
++
+ 	test("resolves fuzzy patterns within an explicit provider", () => {
+ 		const registry = {
+ 			getAll: () => allModels,

@@ -37,12 +37,12 @@ in {
       };
       defaultModel = "gpt-5.6-sol";
       enabledModels = [
-        "gpt-5.6-sol"
-        "gpt-5.6-terra"
-        "gpt-5.6-luna"
-        "claude-opus-4-8"
-        "claude-sonnet-4-6"
-        "claude-haiku-4-5"
+        "openai-codex/gpt-5.6-sol"
+        "openai-codex/gpt-5.6-terra"
+        "openai-codex/gpt-5.6-luna"
+        "claude-bridge/claude-opus-4-8"
+        "claude-bridge/claude-sonnet-4-6"
+        "claude-bridge/claude-haiku-4-5"
         "qwen3.6"
         "gemma-4"
       ];
