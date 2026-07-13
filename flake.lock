@@ -379,27 +379,6 @@
         "type": "github"
       }
     },
-    "paseo": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1783370453,
-        "narHash": "sha256-A2zJNnuvltg5SmUp0anrz/WoLPTKL+T6R/U6q2Gw7P0=",
-        "owner": "yhori991",
-        "repo": "paseo",
-        "rev": "dbc60c825c4888c5417ffb82ecfa619a7291b2dd",
-        "type": "github"
-      },
-      "original": {
-        "owner": "yhori991",
-        "ref": "fix/nix-local-speech-worker",
-        "repo": "paseo",
-        "type": "github"
-      }
-    },
     "pre-commit": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -435,7 +414,6 @@
         "nix-minecraft": "nix-minecraft",
         "nixos-mailserver": "nixos-mailserver",
         "nixpkgs": "nixpkgs",
-        "paseo": "paseo",
         "sops-nix": "sops-nix",
         "systems": "systems_2",
         "website": "website"

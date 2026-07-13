@@ -59,12 +59,6 @@
       url = "github:TNAZEP/HytaleLauncherFlake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    paseo = {
-      # FIXME: Return to getpaseo/paseo once getpaseo/paseo#1587 is merged.
-      url = "github:yhori991/paseo/fix/nix-local-speech-worker";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # My own programs, packaged with nix
     website = {
       url = "path:./projects/website";

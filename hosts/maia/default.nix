@@ -13,7 +13,6 @@
     ../common/users/gabriel
 
     ../common/optional/peripherals.nix
-    ../common/optional/paseo.nix
     ../common/optional/regreet.nix
     ../common/optional/pipewire.nix
     ../common/optional/quietboot.nix
