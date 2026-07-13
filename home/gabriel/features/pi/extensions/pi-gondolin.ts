@@ -30,10 +30,6 @@ const GLOBAL_SETTINGS = path.join(AGENT_DIR, "settings.json");
 const PROJECT_SETTINGS = path.join(process.cwd(), ".pi/settings.json");
 const MODES = new Set(["", "toggle", "status", "on", "off"]);
 
-// Published so cwd-changing commands (/cd, /workspace) can refuse to run while
-// the VM owns the tools, since the VM mounts a fixed host cwd at startup.
-const gondolinScope = globalThis as { __piGondolinActive?: boolean };
-
 type Tool = ReturnType<typeof createCodingTools>[number];
 type ToolMap = Record<string, Tool>;
 type GondolinModeEntry = {
@@ -480,7 +476,6 @@ export default function (pi: ExtensionAPI) {
 
   const setEnabled = (value: boolean) => {
     enabled = value;
-    gondolinScope.__piGondolinActive = value;
     pi.appendEntry(MODE_ENTRY, { enabled });
   };
 
@@ -534,7 +529,9 @@ export default function (pi: ExtensionAPI) {
       ...local,
       async execute(id, params, signal, onUpdate, ctx) {
         if (enabled) {
-          throw new Error(`${name} is disabled while Gondolin is enabled. Use bash to run it instead.`);
+          throw new Error(
+            `${name} is disabled while Gondolin is enabled. Use bash to run it instead.`,
+          );
         }
         return local.execute(id, params, signal, onUpdate);
       },
@@ -545,7 +542,6 @@ export default function (pi: ExtensionAPI) {
     enabled = resolveSessionEnabled(
       ctx.sessionManager.getBranch?.() ?? ctx.sessionManager.getEntries(),
     );
-    gondolinScope.__piGondolinActive = enabled;
     if (!enabled) return status(ctx, "disabled", "muted");
     try {
       await start(ctx);
@@ -555,7 +551,6 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async () => {
-    gondolinScope.__piGondolinActive = false;
     await stop();
   });
 
