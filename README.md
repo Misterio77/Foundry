@@ -15,9 +15,8 @@ Looking for something simpler to start out with flakes? Try [my starter config r
 hosts/          per-machine NixOS configurations (atlas, alcyone, ...)
 home/           home-manager configuration (feature-flagged)
 modules/        reusable nixos/ and home-manager/ modules
-overlays/, pkgs/ package overlays and custom packages
+overlays/, pkgs/ package overlays and custom packages (including wallpapers)
 lib/            pure-Nix Material You color engine
-wallpapers/     wallpaper collection
 projects/       my public projects deployed from here (e.g. the m7.rs website)
 ```
 

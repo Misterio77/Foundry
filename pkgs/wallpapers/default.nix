@@ -15,6 +15,6 @@
     });
 in
   lib.listToAttrs (map (w: {
-      inherit (w) name;
-      value = mk w;
-    }) (lib.importJSON ./list.json))
+    inherit (w) name;
+    value = mk w;
+  }) (lib.importJSON ./list.json))

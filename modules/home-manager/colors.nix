@@ -11,7 +11,7 @@
 in {
   options.colorscheme = {
     # Source color (hex). Defaults to the wallpaper's precomputed sourceColor
-    # (matugen's extracted seed, committed in wallpapers/list.json), so schemes
+    # (matugen's extracted seed, committed in pkgs/wallpapers/list.json), so schemes
     # are generated purely with no image decoding / IFD.
     source = mkOption {
       type = hexColor;

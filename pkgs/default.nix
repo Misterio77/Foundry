@@ -14,4 +14,12 @@
 
   # My slightly customized plymouth theme, just makes the blue outline white
   plymouth-spinner-monochrome = pkgs.callPackage ./plymouth-spinner-monochrome {};
+
+  # Wallpapers
+  # Expose as a single package, that also has passthru attributes for the individual ones
+  wallpapers = let
+    collection = import ./wallpapers {inherit pkgs;};
+    combined = pkgs.linkFarmFromDrvs "wallpapers" (pkgs.lib.attrValues collection);
+  in
+    combined // collection;
 }

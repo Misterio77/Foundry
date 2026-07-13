@@ -8,7 +8,7 @@ Foundry is my public infra monorepo: the NixOS/home-manager config, plus:
   `github:misterio77/website` with full history and wired as a local flake input
   (`path:./projects/website`), so the monorepo builds it from its own tree; still
   mirrored to the standalone repo.
-- `wallpapers/` — my wallpaper collection. Each entry in `list.json` carries a
+- `pkgs/wallpapers/` — my wallpaper collection. Each entry in `list.json` carries a
   committed `sourceColor` (matugen's extracted seed), and they're exposed as
   `pkgs.wallpapers` plus a Hydra-cached `wallpapers` package (imgur is upstream).
 - `lib/` — a from-scratch pure-Nix implementation of Material You color science
@@ -79,6 +79,7 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 ├── overlays/              # Package overlays and patches (incl. pkgs.wallpapers)
 │   └── default.nix
 ├── pkgs/                  # Custom packages
+│   ├── wallpapers/        #   Wallpaper collection + committed source colors
 │   └── default.nix
 ├── lib/                   # Pure-Nix Material You color engine
 │   ├── math.nix           #   hand-rolled float transcendentals
@@ -86,7 +87,6 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 │   ├── palettes.nix       #   tonal palettes
 │   ├── scheme.nix         #   DynamicColor MD3 roles
 │   └── material-you.nix   #   generateColorscheme (used by colors.nix)
-├── wallpapers/            # Wallpaper collection + committed source colors
 ├── projects/              # Vendored public projects
 │   └── website/           #   github.com/misterio77/website (served at m7.rs)
 ├── flake.nix              # Flake entry point

@@ -105,15 +105,7 @@
     overlays = import ./overlays {inherit inputs outputs;};
     hydraJobs = import ./hydra.nix {inherit inputs outputs;};
 
-    packages = forEachSystem (
-      pkgs:
-        import ./pkgs {inherit pkgs;}
-        // {
-          # All wallpapers as one derivation, so Hydra builds + caches them
-          # (imgur is the only upstream; this is our backup).
-          wallpapers = pkgs.linkFarmFromDrvs "wallpapers" (lib.attrValues (import ./wallpapers {inherit pkgs;}));
-        }
-    );
+    packages = forEachSystem (pkgs: import ./pkgs {inherit pkgs;});
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});
     formatter = forEachSystem (pkgs: pkgs.alejandra);
 
