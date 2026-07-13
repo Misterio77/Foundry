@@ -69,6 +69,7 @@ type QuotaProbeResult = {
 
 type QuotaWindowDisplay = {
   percentUsed?: number;
+  limitWindowSeconds?: number;
   resetsAt?: string;
   resetsAtEpoch?: number;
 };
@@ -232,7 +233,7 @@ export default function codexUsage(pi: ExtensionAPI) {
           .sort((a, b) => b[1].cost - a[1].cost)
           .map(([model, summary]) => `  ${model}: ${formatSummary(summary)}`),
         quotaLine(quota),
-        quotaEstimateLine(ranged),
+        quotaEstimateLine(ranged, quota?.snapshot),
         `Log: ${usagePath}`,
       ];
 
@@ -387,18 +388,17 @@ function formatTokens(tokens: number) {
   return String(tokens);
 }
 
-function quotaEstimateLine(records: UsageRecord[]) {
-  const secondary = estimateWindowCapacity(records, "secondaryWindow");
-  const primary = estimateWindowCapacity(records, "primaryWindow");
+function quotaEstimateLine(
+  records: UsageRecord[],
+  snapshot: QuotaSnapshot | undefined,
+) {
   const parts = ["Quota estimate:"];
-  if (secondary) {
+  for (const [name, key] of quotaWindows(snapshot)) {
+    const estimate = estimateWindowCapacity(records, key);
+    if (!estimate) continue;
+    const label = quotaWindowLabel(name, snapshot?.[key]?.limitWindowSeconds);
     parts.push(
-      `weekly≈${formatTokens(secondary.capacityTokens)} tokens (${formatTokens(secondary.tokensPerPercent)}/%)`,
-    );
-  }
-  if (primary) {
-    parts.push(
-      `5h≈${formatTokens(primary.capacityTokens)} tokens (${formatTokens(primary.tokensPerPercent)}/%)`,
+      `${label}≈${formatTokens(estimate.capacityTokens)} tokens (${formatTokens(estimate.tokensPerPercent)}/%)`,
     );
   }
   if (parts.length === 1)
@@ -607,6 +607,7 @@ function quotaWindowDisplay(
   const resetsAtEpoch = window.resetAt;
   return {
     percentUsed: window.usedPercent,
+    limitWindowSeconds: window.limitWindowSeconds,
     resetsAtEpoch,
     resetsAt: resetsAtEpoch
       ? new Date(resetsAtEpoch * 1000).toISOString()
@@ -624,12 +625,16 @@ function quotaLine(result: QuotaProbeResult | undefined) {
   if (!result) return "Quota: no probe yet";
   if (!result.ok) return `Quota: probe failed (${result.error ?? "unknown"})`;
   const parsed = result.parsed ?? {};
-  const parts = ["Quota:"];
-  const weekly = quotaWindowLine("weekly", parsed.secondary);
-  const fiveHour = quotaWindowLine("5h", parsed.primary);
-  if (weekly) parts.push(weekly);
-  if (fiveHour) parts.push(fiveHour);
-  if (!weekly && !fiveHour) parts.push("no window usage returned");
+  const windows = quotaWindowDisplays(parsed)
+    .map(([name, window]) =>
+      quotaWindowLine(
+        quotaWindowLabel(name, window.limitWindowSeconds),
+        window,
+      ),
+    )
+    .filter((line): line is string => Boolean(line));
+  const parts = ["Quota:", ...windows];
+  if (windows.length === 0) parts.push("no window usage returned");
   if (parsed.plan) parts.push(`plan ${parsed.plan}`);
   parts.push(`via ${result.endpoint}`);
   return parts.join(" ");
@@ -653,11 +658,53 @@ function updateQuotaStatus(
 function quotaStatusLine(result: QuotaProbeResult | undefined) {
   if (!result?.ok) return undefined;
   const parsed = result.parsed ?? {};
-  const fiveHour = quotaWindowLeftLine("5h", parsed.primary);
-  const weekly = quotaWindowLeftLine("weekly", parsed.secondary);
-  const parts = [fiveHour, weekly].filter(Boolean);
+  const parts = quotaWindowDisplays(parsed)
+    .map(([name, window]) =>
+      quotaWindowLeftLine(
+        quotaWindowLabel(name, window.limitWindowSeconds),
+        window,
+      ),
+    )
+    .filter((line): line is string => Boolean(line));
   if (parts.length === 0) return undefined;
   return `[Quota left: ${parts.join("/")}]`;
+}
+
+function quotaWindows(
+  snapshot: QuotaSnapshot | undefined,
+): Array<["primary" | "secondary", "primaryWindow" | "secondaryWindow"]> {
+  const windows: Array<
+    ["primary" | "secondary", "primaryWindow" | "secondaryWindow"]
+  > = [];
+  if (snapshot?.primaryWindow) windows.push(["primary", "primaryWindow"]);
+  if (snapshot?.secondaryWindow) windows.push(["secondary", "secondaryWindow"]);
+  return windows;
+}
+
+function quotaWindowDisplays(
+  display: QuotaDisplay,
+): Array<["primary" | "secondary", QuotaWindowDisplay]> {
+  const windows: Array<["primary" | "secondary", QuotaWindowDisplay]> = [];
+  if (display.primary) windows.push(["primary", display.primary]);
+  if (display.secondary) windows.push(["secondary", display.secondary]);
+  return windows;
+}
+
+function quotaWindowLabel(
+  fallback: "primary" | "secondary",
+  seconds: number | undefined,
+) {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return fallback;
+  const units = [
+    [7 * 24 * 60 * 60, "w"],
+    [24 * 60 * 60, "d"],
+    [60 * 60, "h"],
+    [60, "m"],
+  ] as const;
+  for (const [unitSeconds, suffix] of units) {
+    if (seconds % unitSeconds === 0) return `${seconds / unitSeconds}${suffix}`;
+  }
+  return `${seconds}s`;
 }
 
 function quotaWindowLeftLine(
