@@ -1,8 +1,4 @@
-{
-  pkgs,
-  lib,
-  ...
-}: let
+{pkgs, ...}: let
   letFateDecide = pkgs.buildPiPackage {
     pname = "let-fate-decide";
     version = "1.1.1";
@@ -16,7 +12,7 @@
     dontNpmInstall = true;
     postPatch = ''
       substituteInPlace skills/let-fate-decide/SKILL.md \
-        --replace-fail "uv run --no-config" "${lib.getExe pkgs.python3}"
+        --replace-fail "uv run --no-config" "python3"
     '';
   };
 in {

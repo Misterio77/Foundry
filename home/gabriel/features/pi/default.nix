@@ -27,7 +27,10 @@ in {
 
   programs.pi-coding-agent = {
     enable = true;
-    extraPackages = [pkgs.python3Packages.trafilatura]; # Used by the web-fetch skill
+    extraPackages = [
+      pkgs.python3 # Often used
+      pkgs.python3Packages.trafilatura # Used by the web-fetch skill
+    ];
     context = ./context.md;
     settings = {
       compaction = {
