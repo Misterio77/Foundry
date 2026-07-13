@@ -11,6 +11,14 @@
     npmDeps = pkgs.importNpmLock {npmRoot = ./extensions;};
     npmConfigHook = pkgs.importNpmLock.npmConfigHook;
   };
+  piw = pkgs.writeShellApplication {
+    name = "piw";
+    runtimeInputs = [
+      pkgs.jujutsu
+      pkgs.pi-coding-agent
+    ];
+    text = builtins.readFile ./piw.sh;
+  };
 in {
   imports = [
     ./theme.nix
@@ -69,5 +77,6 @@ in {
       "app.editor.external" = ["alt+e"];
     };
   };
+  home.packages = [piw];
   home.sessionVariables.PI_OFFLINE = true;
 }
