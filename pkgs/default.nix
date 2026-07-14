@@ -4,6 +4,7 @@
   prefetcharr = pkgs.callPackage ./prefetcharr {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
+  runescape = pkgs.callPackage ./runescape {};
 
   # Personal scripts
   pass-wofi = pkgs.callPackage ./pass-wofi {};

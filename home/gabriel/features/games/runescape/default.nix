@@ -5,10 +5,12 @@
 }: let
   runelite = pkgs.jagex-auth.wrapLaunch pkgs.runelite;
   hdos = pkgs.jagex-auth.wrapLaunch pkgs.hdos;
+  runescape = pkgs.jagex-auth.wrapLaunch pkgs.runescape;
 in {
   home.packages = [
     runelite
     hdos
+    runescape
     pkgs.jagex-auth
   ];
 
@@ -26,6 +28,7 @@ in {
       ".runelite"
       ".config/hdos"
       ".local/share/jagex-auth"
+      "Jagex"
     ];
   };
 }

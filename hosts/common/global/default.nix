@@ -40,6 +40,10 @@
     overlays = builtins.attrValues outputs.overlays;
     config = {
       allowUnfree = true;
+      permittedInsecurePackages = [
+        # RS3
+        "openssl-1.1.1w"
+      ];
     };
   };
 
