@@ -219,6 +219,7 @@ in {
         steamGame = "match:class steam_app_[0-9]*";
         wineTray = "match:class explorer.exe";
         rsiLauncher = "match:class rsi launcher.exe";
+        runescape = "match:class Runescape";
         steamBigPicture = "match:title Steam Big Picture Mode";
         firefoxPictureInPicture = "match:class firefox, match:title Picture-in-Picture";
         floatingVlc = "match:float 1, match:class vlc";
@@ -232,6 +233,8 @@ in {
           "workspace special silent, ${wineTray}"
 
           "tile on, ${rsiLauncher}"
+
+          "suppress_event activate, ${runescape}"
 
           "fullscreen on, ${steamBigPicture}"
 
