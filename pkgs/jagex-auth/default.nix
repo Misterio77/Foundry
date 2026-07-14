@@ -1,12 +1,21 @@
 # Note: vibecoded (pi running gpt 5.5)
 {
+  copyDesktopItems,
   lib,
+  makeDesktopItem,
   makeWrapper,
   python3,
   stdenvNoCC,
   symlinkJoin,
 }: let
   python = python3.withPackages (ps: [ps.requests]);
+  desktopItem = makeDesktopItem {
+    name = "jagex-auth-handler";
+    desktopName = "Jagex Auth URL Handler";
+    exec = "jagex-auth handle-url %u";
+    mimeTypes = ["x-scheme-handler/jagex"];
+    noDisplay = true;
+  };
 in
   stdenvNoCC.mkDerivation {
     pname = "jagex-auth";
@@ -15,7 +24,11 @@ in
     src = ./jagex-auth.py;
     dontUnpack = true;
 
-    nativeBuildInputs = [makeWrapper];
+    nativeBuildInputs = [
+      copyDesktopItems
+      makeWrapper
+    ];
+    desktopItems = [desktopItem];
 
     installPhase = ''
       runHook preInstall
