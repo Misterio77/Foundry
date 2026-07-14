@@ -86,8 +86,7 @@ in {
       NIX_CFLAGS_COMPILE = ["-fno-fast-math"];
     });
 
-    # Force $XDG_CONFIG_DIR/hdos
-    # Read credentials.properties
+    # Force $XDG_CONFIG_DIR/hdos.
     hdos = prev.hdos.overrideAttrs (_: let
       inherit (final) lib openjdk11 libGL;
     in {
@@ -97,9 +96,6 @@ in {
           --run "export XDG_CONFIG_DIR=\"\''${XDG_CONFIG_DIR:-\$HOME/.config}\"" \
           --run "export HDOS_DIR=\"\$XDG_CONFIG_DIR/hdos\"" \
           --run "export HOME=\"\$XDG_CONFIG_DIR\"" \
-          --run "set -a" \
-          --run "source \"\$HDOS_DIR/credentials.properties\" || true" \
-          --run "set +a" \
           --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [libGL]}" \
           --add-flags "-Dapp.user.home=\"\$HDOS_DIR\"" \
           --add-flags "-Duser.home=\"\$HDOS_DIR\"" \

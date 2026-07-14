@@ -2,10 +2,13 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  runelite = pkgs.jagex-auth.wrapLaunch pkgs.runelite;
+  hdos = pkgs.jagex-auth.wrapLaunch pkgs.hdos;
+in {
   home.packages = [
-    pkgs.runelite
-    pkgs.hdos
+    runelite
+    hdos
     pkgs.jagex-auth
   ];
 

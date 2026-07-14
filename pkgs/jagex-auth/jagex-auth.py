@@ -337,7 +337,7 @@ def finish_authorize(
     tokens["session_id"] = get_session_id(consent_id_token)
     configure_character(tokens, interactive=True)
     store_tokens(tokens)
-    write_runelite_credentials(tokens)
+    write_game_credentials(tokens)
     print(f"Stored Jagex OAuth tokens in {TOKEN_FILE}", file=sys.stderr)
 
 
@@ -562,20 +562,22 @@ def configure_character(tokens: dict, *, interactive: bool) -> None:
 
 
 def java_property_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("\n", "\\n")
+    return (
+        value.replace("\\", "\\\\")
+        .replace(" ", "\\ ")
+        .replace("\n", "\\n")
+    )
 
 
-def write_runelite_credentials(tokens: dict) -> None:
-    runelite_dir = Path.home() / ".runelite"
-    if not runelite_dir.is_dir():
-        return
+def write_game_credentials(tokens: dict) -> None:
+    ensure_data_dir()
 
     values = {
         "JX_SESSION_ID": tokens.get("session_id"),
         "JX_CHARACTER_ID": tokens.get("character_id"),
         "JX_DISPLAY_NAME": tokens.get("display_name"),
     }
-    path = runelite_dir / "credentials.properties"
+    path = DATA_DIR / "credentials.properties"
     lines = [
         f"{key}={java_property_escape(value)}"
         for key, value in values.items()
@@ -583,7 +585,7 @@ def write_runelite_credentials(tokens: dict) -> None:
     ]
     path.write_text("\n".join(lines) + "\n")
     path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    print(f"Wrote RuneLite credentials to {path}", file=sys.stderr)
+    print(f"Wrote game credentials to {path}", file=sys.stderr)
 
 
 def session(_args: argparse.Namespace) -> None:
@@ -597,7 +599,7 @@ def session(_args: argparse.Namespace) -> None:
         configure_character(tokens, interactive=False)
         store_tokens(tokens)
 
-    write_runelite_credentials(tokens)
+    write_game_credentials(tokens)
     print(tokens["session_id"])
 
 
