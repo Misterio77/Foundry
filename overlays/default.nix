@@ -34,6 +34,8 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    runelite = addPatches prev.runelite [./runelite-developer-mode.patch];
+
     qutebrowser = prev.qutebrowser.overrideAttrs (oldAttrs: {
       preFixup =
         oldAttrs.preFixup
