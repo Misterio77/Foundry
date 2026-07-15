@@ -28,6 +28,7 @@ in {
   programs.pi-coding-agent = {
     enable = true;
     extraPackages = [
+      pkgs.jujutsu # Used by the jj snapshot extension
       pkgs.python3 # Often used
       pkgs.python3Packages.trafilatura # Used by the web-fetch skill
     ];
