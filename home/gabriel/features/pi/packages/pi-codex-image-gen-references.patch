@@ -1,0 +1,141 @@
+--- a/extensions/index.ts
++++ b/extensions/index.ts
+@@ -28,6 +28,7 @@
+ type SaveMode = (typeof SAVE_MODES)[number];
+ 
+ const OUTPUT_FORMATS = ["png", "jpeg", "webp"] as const;
++const ACTIONS = ["auto", "generate", "edit"] as const;
+ type OutputFormat = (typeof OUTPUT_FORMATS)[number];
+ 
+ // --- #1: Retry helpers with exponential backoff + jitter ---
+@@ -46,6 +47,12 @@
+ 
+ const TOOL_PARAMS = Type.Object({
+ 	prompt: Type.String({ description: "The image prompt. Be specific about subject, composition, style, text, and constraints." }),
++	referenceImages: Type.Optional(
++		Type.Array(Type.String({ description: "Absolute or workspace-relative path to an input image." })),
++	),
++	action: Type.Optional(
++		StringEnum(ACTIONS, { description: "Whether to automatically choose, generate, or edit an image." }),
++	),
+ 	model: Type.Optional(
+ 		Type.String({ description: `Codex model that should invoke image generation. Defaults to ${DEFAULT_MODEL}.` }),
+ 	),
+@@ -214,7 +221,25 @@
+ // #7: parallel_tool_calls: false
+ // #14: include removed (not needed without reasoning)
+ 
+-function buildRequestBody(params: ToolParams, model: string, outputFormat: OutputFormat, sessionId: string) {
++function mimeForPath(path: string): string {
++	const lower = path.toLowerCase();
++	if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
++	if (lower.endsWith(".webp")) return "image/webp";
++	if (lower.endsWith(".gif")) return "image/gif";
++	return "image/png";
++}
++
++function buildRequestBody(params: ToolParams, model: string, outputFormat: OutputFormat, sessionId: string, cwd: string) {
++	const content: Array<Record<string, unknown>> = [{ type: "input_text", text: params.prompt }];
++	for (const imagePath of params.referenceImages || []) {
++		const resolvedPath = resolveUnderCwd(cwd, imagePath);
++		const data = readFileSync(resolvedPath).toString("base64");
++		content.push({
++			type: "input_image",
++			image_url: `data:${mimeForPath(resolvedPath)};base64,${data}`,
++			detail: "original",
++		});
++	}
+ 	return {
+ 		model,
+ 		store: false,
+@@ -225,10 +250,10 @@
+ 		input: [
+ 			{
+ 				role: "user",
+-				content: [{ type: "input_text", text: params.prompt }],
++				content,
+ 			},
+ 		],
+-		tools: [{ type: "image_generation", output_format: outputFormat }],
++		tools: [{ type: "image_generation", output_format: outputFormat, action: params.action || "auto" }],
+ 		tool_choice: "auto",
+ 		parallel_tool_calls: false,
+ 		text: { verbosity: "low" },
+@@ -346,9 +371,10 @@
+ 	model: string,
+ 	outputFormat: OutputFormat,
+ 	sessionId: string,
++	cwd: string,
+ 	signal?: AbortSignal,
+ ): Promise<ParsedCodexResponse> {
+-	const body = JSON.stringify(buildRequestBody(params, model, outputFormat, sessionId));
++	const body = JSON.stringify(buildRequestBody(params, model, outputFormat, sessionId, cwd));
+ 	const headers: Record<string, string> = {
+ 		Authorization: `Bearer ${token}`,
+ 		"chatgpt-account-id": accountId,
+@@ -393,7 +419,7 @@
+ 		name: "codex_generate_image",
+ 		label: "Codex Image",
+ 		description:
+-			"Generate an image with the OpenAI Codex ChatGPT backend built-in image_generation tool (gpt-image-2). Uses the existing openai-codex login; does not require OPENAI_API_KEY.",
++			"Generate or edit an image, optionally using image file references, with the OpenAI Codex ChatGPT backend built-in image_generation tool (gpt-image-2). Uses the existing openai-codex login; does not require OPENAI_API_KEY.",
+ 		promptSnippet: "Generate bitmap images via the OpenAI Codex ChatGPT backend gpt-image-2 image_generation tool.",
+ 		promptGuidelines: [
+ 			"Use codex_generate_image when the user asks to generate a raster image, illustration, photo, sprite, icon draft, banner, or other bitmap asset with OpenAI/Codex image generation.",
+@@ -418,7 +444,7 @@
+ 				details: { provider: PROVIDER, model, outputFormat },
+ 			});
+ 
+-			const parsed = await requestImage(params, token, accountId, model, outputFormat, sessionId, signal);
++			const parsed = await requestImage(params, token, accountId, model, outputFormat, sessionId, ctx.cwd, signal);
+ 			if (!parsed.image) {
+ 				const text = parsed.text.join("").trim();
+ 				throw new Error(text ? `Codex did not return an image. Response text: ${text}` : "Codex did not return an image.");
+--- a/README.md
++++ b/README.md
+@@ -95,8 +95,10 @@
+ 
+ | Parameter      | Type   | Required | Description                                                        |
+ | -------------- | ------ | -------- | ------------------------------------------------------------------ |
+-| `prompt`       | string | ✅        | The image generation prompt.                                       |
+-| `model`        | string | —        | Override the Codex model. Defaults to config or `gpt-5.5`.         |
++| `prompt`          | string   | ✅        | The image generation or editing prompt.                            |
++| `referenceImages` | string[] | —      | Absolute or workspace-relative paths to input images.              |
++| `action`          | string   | —        | `auto` (default), `generate`, or `edit`.                            |
++| `model`           | string   | —        | Override the Codex model. Defaults to config or `gpt-5.5`.         |
+ | `outputFormat` | string | —        | `png` (default), `jpeg`, or `webp`.                                |
+ | `save`         | string | —        | Override save mode for this call.                                  |
+ | `saveDir`      | string | —        | Directory when `save=custom`. Relative paths resolve under CWD.    |
+--- a/skills/imagegen/SKILL.md
++++ b/skills/imagegen/SKILL.md
+@@ -15,7 +15,7 @@
+ 
+ This skill has exactly two top-level modes:
+ 
+-- **Default Pi tool mode (preferred):** Pi `codex_generate_image` tool for normal image generation, editing, and simple transparent-image requests. Does not require `OPENAI_API_KEY`.
++- **Default Pi tool mode (preferred):** Pi `codex_generate_image` tool for normal image generation, reference-image generation, filesystem-path image editing, and simple transparent-image requests. Does not require `OPENAI_API_KEY`.
+ - **Fallback CLI mode:** `scripts/image_gen.py` CLI. Use when the user explicitly asks for the CLI/API/model path, or after the user explicitly confirms a true model-native transparency fallback with `gpt-image-1.5`. Requires `OPENAI_API_KEY`.
+ 
+ Within CLI fallback, the CLI exposes three subcommands:
+@@ -82,9 +82,9 @@
+ - If the user provides no images, treat the request as **generate**.
+ 
+ Pi edit semantics:
+-- The current Pi `codex_generate_image` tool is for new image generation. Do not promise arbitrary filesystem-path editing through the Pi tool.
+-- If the user wants to edit an existing image, use the explicit CLI fallback only when the user asks for it or confirms it.
+-- If a local file needs direct file-path control, masks, or other explicit CLI-only parameters, use the explicit CLI fallback only after confirmation.
++- The Pi `codex_generate_image` tool accepts local image paths through `referenceImages`; relative paths resolve under the workspace.
++- Set `action` to `edit` for edits, `generate` for reference-guided generation, or `auto` when either behavior is acceptable.
++- If a local edit needs masks or other explicit CLI-only parameters, use the explicit CLI fallback only after confirmation.
+ - For edits, preserve invariants aggressively and save non-destructively by default.
+ 
+ Execution strategy:
+@@ -104,7 +104,7 @@
+    - reference image
+    - edit target
+    - supporting insert/style/compositing input
+-7. If the edit target is only on the local filesystem, use CLI fallback for direct edits only after the user asks for or confirms fallback mode.
++7. Pass local edit targets and reference images to Pi `codex_generate_image` through `referenceImages`, label each image's role in the prompt, and set `action` appropriately.
+ 8. If the user asked for a photo, illustration, sprite, product image, banner, or other explicitly raster-style asset, use `codex_generate_image` rather than substituting SVG/HTML/CSS placeholders. If the request is for an icon, logo, or UI graphic that should match existing repo-native SVG/vector/code assets, prefer editing those directly instead.
+ 9. Augment the prompt based on specificity:
+    - If the user's prompt is already specific and detailed, normalize it into a clear spec without adding creative requirements.
