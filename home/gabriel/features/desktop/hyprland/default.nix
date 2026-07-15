@@ -219,10 +219,11 @@ in {
         steamGame = "match:class steam_app_[0-9]*";
         wineTray = "match:class explorer.exe";
         rsiLauncher = "match:class rsi launcher.exe";
-        runescape = "match:class Runescape";
+        runescape = "match:class (?i)^runescape$";
         steamBigPicture = "match:title Steam Big Picture Mode";
         firefoxPictureInPicture = "match:class firefox, match:title Picture-in-Picture";
         floatingVlc = "match:float 1, match:class vlc";
+        alt1 = "match:class (?i)^alt1lite$, match:title ^(Alt1 Lite app|Alt1Lite overlay window)$";
       in
         [
           "idle_inhibit focus, match:fullscreen_state_internal 2 *"
@@ -235,6 +236,15 @@ in {
           "tile on, ${rsiLauncher}"
 
           "suppress_event activate, ${runescape}"
+          "render_unfocused on, ${runescape}"
+
+          "float on, ${alt1}"
+          "pin on, ${alt1}"
+          "no_blur on, ${alt1}"
+          "no_shadow on, ${alt1}"
+          "no_anim on, ${alt1}"
+          "border_size 0, ${alt1}"
+          "rounding 0, ${alt1}"
 
           "fullscreen on, ${steamBigPicture}"
 

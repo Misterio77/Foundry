@@ -2,6 +2,7 @@
   # Packages with an actual source
   lyrics = pkgs.python3Packages.callPackage ./lyrics {};
   prefetcharr = pkgs.callPackage ./prefetcharr {};
+  alt1 = pkgs.callPackage ./alt1 {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
   runescape = pkgs.callPackage ./runescape {};

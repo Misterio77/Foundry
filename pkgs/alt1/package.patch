@@ -1,0 +1,37 @@
+--- a/src/ipcapi.ts
++++ b/src/ipcapi.ts
+@@ -5,7 +5,7 @@
+ import { admins, fixTooltip, getManagedAppWindow, ManagedWindow, openApp } from "./main";
+ import { native } from "./native";
+ import { settings } from "./settings";
+-import { FlatImageData, OverlayCommand, Rectangle, RsClientState, imageDataFrom } from "./shared";
++import { FlatImageData, OverlayCommand, Rectangle, RsClientState } from "./shared";
+ import { getRsInstanceFromWnd, rsInstances } from "./rsinstance";
+ import * as fs from 'fs';
+ 
+@@ -252,13 +252,12 @@
+ 				? (((mx & 0xFFFF) << 16) | (my & 0xFFFF))
+ 				: -1;
+ 
+-		let wnd = expectAppWindow(e);
+ 		let state: RsClientState = {
+-			active: wnd.rsClient.isActive,
+-			clientRect: wnd.rsClient.window.getClientBounds(),
+-			lastActiveTime: wnd.rsClient.lastActiveTime,
++			active: client.isActive,
++			clientRect: client.window.getClientBounds(),
++			lastActiveTime: client.lastActiveTime,
+ 			ping: 10,//TODO
+-			scaling: wnd.rsClient.window.getScale(),
++			scaling: client.window.getScale(),
+ 			captureMode: settings.captureMode,
+ 			mousePosition: mousePosition
+ 		};
+@@ -268,7 +267,6 @@
+ 	ipcMain.handle("capture", (e: any, x: any, y: any, width: any, height: any) => {
+ 		let client = expectPermittedRsClient(e);
+ 		let capt = native.captureWindowMulti(client.window.handle, settings.captureMode, { main: { x, y, width, height } });
+-		let data: ImageData = imageDataFrom(capt.main, width, height);
+ 		return capt.main;
+ 	});
+ 
