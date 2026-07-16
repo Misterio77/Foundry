@@ -1,231 +1,113 @@
 ---
 name: jujutsu
-description: "REQUIRED for any VCS operation in jj repositories (`.jj/` directory present). Activate on: commit, push, pull, status, diff, log, branch/bookmark, PR, merge, rebase, stash, conflict, undo, or any version-control task. In jj repos, use jj exclusively — running git commands can corrupt or confuse state."
+description: "REQUIRED for every version-control task in a Jujutsu repository (`.jj/` present): status, diff, log, commit/describe, bookmark, push/fetch, PR, rebase, split, squash, conflict, undo, recovery, or workspace work. Use jj exclusively; this skill provides a non-interactive inspect-act-verify protocol and prevents agents from mutating the wrong working-copy commit."
 ---
 
-# jj Guide for AI Agents
+# Jujutsu Agent Protocol
 
-Jujutsu (jj) is a Git-compatible VCS with mutable commits, automatic snapshotting, no staging area, and first-class conflicts. This skill teaches you how to use it safely from a non-interactive agent environment.
+Use this protocol whenever `.jj/` is present. Do not translate a Git workflow command-for-command; reason from jj's working-copy commit and graph.
 
-If `.jj/` exists in the repo root, this is a jj repo. **Use `jj` commands, not `git`.** In a colocated repo (`.jj/` *and* `.git/`), git tools can read the state, but mutations should go through `jj` so the operation log stays consistent.
+## Non-negotiable rules
 
-## Critical Rules
+- Use `jj` exclusively for VCS operations. Do not run raw `git` commands in a jj repo, including a colocated `.jj/` + `.git/` repo.
+- Never run `jj git push` unless the user explicitly said **push**. Preparing, committing, shipping, or opening a PR does not imply permission to push.
+- Never use interactive/editor forms (`-i`, `--interactive`, bare commands that open an editor, `jj resolve`, or `jj diffedit`). Supply messages with `-m`.
+- Before editing or mutating history, inspect the full status, graph position, and relevant diff. Do not assume `@` is where a previous agent left it.
+- Prefer stable change IDs (letters such as `nmwwolux`) over changing hexadecimal commit IDs.
+- After every history mutation, verify with `jj st`, `jj log`, and the relevant `jj diff`/`jj show`.
+- If syntax or behavior is uncertain, run `jj --version` and `jj help <command>` instead of guessing. jj's CLI changes quickly.
+- If a mutation has an unexpected result, stop. Inspect `jj op log`; use `jj undo` only after identifying the operation to reverse.
 
-- **NEVER** use interactive flags (`-i`, `--interactive`). TUI prompts hang in agent environments. This applies to `jj split -i`, `jj squash -i`, `jj commit -i`, `jj resolve`, `jj diffedit`, etc.
-- **ALWAYS** pass `-m "msg"` when describing/committing. Without `-m`, an editor opens and hangs.
-- **VERIFY** mutations with `jj st` and `jj log` after `squash`, `abandon`, `rebase`, `restore`, `commit`. jj will silently do exactly what you asked, even if it wasn't what you meant.
-- **PREFER change IDs** (letters, e.g. `nmwwolux`) over commit IDs (hex). Change IDs are stable across rewrites.
-- **NEVER** rebase or describe an immutable commit (e.g. `main` if it's tracking a remote). Target the commit *above* it, or use `main@origin` as `--destination`.
-- If you get stuck, `jj undo` reverses the last operation. `jj op log` shows everything; `jj op restore <op-id>` rewinds the whole repo.
+## Mental model
 
-## Mental Model
+- The working copy is a mutable commit named `@`. jj snapshots file edits at the start of most jj commands; there is no staging area.
+- `jj new` creates a new empty child commit. It does **not** finish or commit the current work.
+- `jj commit -m ...` describes the current commit and creates a new empty `@`; completed content is then in `@-`.
+- Bookmarks are named pointers, not current branches. They follow rewrites of the change they point to but do not advance to newly created child changes.
+- Conflicts are stored in commits. A rebase may finish successfully while leaving conflicted commits.
+- Rewrites preserve the change ID and replace the commit ID. The operation log makes repo-level recovery possible.
 
-- **The working copy is a commit (`@`).** File edits auto-amend `@` on every `jj` command — there is no staging area, no `git add`, no stashing.
-- **Commits are mutable** until pushed. You build commits by editing the working copy and refining with `squash`/`absorb`/`describe`/`restore`.
-- **Change ID vs commit ID.** A change has a stable change ID (k-z letters). Each rewrite produces a new commit ID (hex) but the change ID is preserved.
-- **Bookmarks ≈ git branches**, but they do **not** auto-advance when you make new commits. You move them yourself with `jj bookmark set` or `jj bookmark move`.
-- **Conflicts live in commits.** Operations never fail on merge conflict; the conflict is recorded in the resulting commit and you resolve it later by editing files.
-- **Operation log replaces reflog.** Every state change is an operation. `jj undo` / `jj op restore` make almost any mistake recoverable.
+## Required preflight
 
-## Two Workflow Styles
-
-There are two equivalent ways to make commits. Pick one and be consistent within a session.
-
-### Style A — `jj commit` (closest to git)
+Run from the repository, before making edits:
 
 ```bash
-# Make edits in @ (auto-tracked)
-echo "..." > file.rs
-jj st                       # verify tracked changes
-jj commit -m "feat: ..."    # finalize @ as a real commit; new empty @ is created
+jj root
+jj st
+jj log -r '@ | @-' --no-graph
+jj diff
 ```
 
-After `jj commit`, the *content* lives in `@-` (the parent) and `@` is a new empty change. Bookmarks and pushes target `@-`.
+Classify `@` before touching files:
 
-### Style B — describe-first (recommended for refining)
+| State of `@` | Action |
+|---|---|
+| Empty and undescribed | Safe starting point; describe it for this task. |
+| Empty but described | It may reserve another task. Continue only if its description matches; otherwise `jj new`. |
+| Non-empty | Inspect the full diff and description. Continue only when it belongs to this task; otherwise preserve it and `jj new`. |
+| Conflicted | Resolve or deliberately work above it; never silently treat it as clean. |
+
+When existing work is ambiguous or unrelated, preserve it in place and start a fresh `@` with `jj new`. Never squash, abandon, restore, or redescribe existing work merely to obtain a clean state.
+
+## Blessed coding workflow: describe first
+
+Use one workflow consistently:
 
 ```bash
-jj st                       # if @ already has content, run `jj new` first
-jj describe -m "feat: ..."  # set message before coding
-# ... edit files; they auto-amend into @ ...
-jj st                       # review
-# Leave @ as-is. The next task starts with `jj new`.
+# After preflight confirms @ is safe for this task
+jj describe -m "<description>"
+
+# Edit files and run project checks
+
+jj st
+jj diff
+jj log -r '@ | @-' --no-graph
 ```
 
-Style B keeps the message in the same change you're editing, which is convenient for `jj squash`/`jj absorb` refinement. **Don't run `jj new` at the end** — leave that for the start of the next task.
+- Keep one logical change in `@`.
+- Review the complete diff before calling the task done or writing a final description.
+- Leave the completed, described change at `@`. Do **not** run `jj new` at the end; start the next task with it after inspecting state.
+- If the user explicitly requests `jj commit`, use `jj commit -m ...`, then remember that content moved to `@-`. Do not move bookmarks without inspecting them.
 
-## Common Workflows
+## Safe mutation pattern
 
-### Inspect
+For any rewrite or destructive-looking operation:
+
+1. Inspect `jj st`, `jj log`, and `jj show <change-id>`/`jj diff`.
+2. State exactly which change(s) will move and where.
+3. Use explicit revisions and non-interactive flags.
+4. Verify graph, status, diff, bookmarks, and conflicts afterward.
+
+Examples:
+
 ```bash
-jj st                # status
-jj log               # graph of recent changes
-jj log -r '::@ & ~::main@origin'   # just YOUR commits not in main
-jj diff              # diff of @
-jj show <change-id>  # description + diff for a commit
+jj split path/to/file -m "<first description>"
+jj squash --from <source> --into <destination> \
+  -m "<resulting description>"
+jj rebase -s <source> -d <destination>
+jj restore --from <revision> path/to/file
+jj abandon <change-id>
 ```
 
-### Refine the current change
+Do not use a bare `jj squash` when both descriptions may be non-empty; it can request message editing or produce the wrong description. Do not use a destination bookmark as shorthand until `jj log` proves which commit it resolves to.
+
+## Push gate
+
+Only after the user explicitly says **push**:
+
 ```bash
-jj describe -m "better message"   # rewrite message only
-jj squash                         # fold @ into its parent (amend equivalent)
-jj squash --from <A> --into <B>   # move all of A into B
-jj absorb                         # auto-route hunks of @ to ancestors that last touched those lines
-jj restore path/to/file           # discard changes to a file (restore from parent)
-jj restore --from <change-id> path/to/file   # take file from another commit
-jj abandon <change-id>            # delete a commit; descendants reparent
-```
-
-### Split a change non-interactively
-`jj split -i` is interactive — don't use it. Instead:
-```bash
-jj split file1.rs file2.rs           # named files become first commit; rest stays in @
-jj split 'glob:tests/**'             # by fileset pattern
-```
-
-### Bookmarks (branches)
-```bash
-jj bookmark list
-jj bookmark create my-feature -r @       # tracks the change ID; survives rewrites of that change
-jj bookmark set my-feature -r @-         # move an existing bookmark (e.g. after `jj commit`)
-jj bookmark delete my-feature
-```
-
-### Push and pull
-```bash
-jj git fetch                              # fetch all remotes
-jj git push -b my-feature                 # push a specific bookmark
-jj git push                               # push all tracked bookmarks (auto force-push on rewrites)
-
-# Sync main, fast-forward
-jj git fetch
-jj bookmark set main -r main@origin
-
-# Sync main and rebase your work onto it
-jj git fetch
-jj rebase -d main@origin                  # rebase YOUR commits (not main) onto remote main
-```
-
-### Address PR review
-
-Rewrite (clean history):
-```bash
-jj edit <change-id>          # working copy becomes that commit
-# ... fix ...
-jj new                       # leave the commit
-jj git push                  # auto force-pushes the rewritten bookmark
-```
-
-Additive (preserve review history):
-```bash
-jj new <bookmark>            # new commit on top of bookmark tip
-# ... fix ...
-jj commit -m "address review"
-jj bookmark set <bookmark> -r @-
+jj st
+jj bookmark list --all
+jj log -r '<bookmark> | present(<bookmark>@origin)' --no-graph
+jj show <bookmark>
 jj git push -b <bookmark>
 ```
 
-### Conflicts
+Push one named bookmark; never use bare `jj git push` or `--all`. Never move or push `main`/the default branch unless the user explicitly names that exact target.
 
-jj never fails on conflict. After a `rebase`/`new`/`squash`, run `jj st` — conflicted files are listed. Open them and resolve by hand: jj's markers look like Git's but with extra sections (`%%%%%%% diff from:` / `+++++++` / `>>>>>>>`). See `references/conflicts.md` for the marker format. Do **not** use `jj resolve` (interactive). After editing, `jj st` will show the conflict cleared automatically.
+## Conflicts and recovery
 
-### Recovery
-```bash
-jj undo                      # reverse last operation
-jj op log                    # full operation history
-jj op restore <op-id>        # rewind the whole repo to that point
-jj workspace update-stale    # fix "working copy is stale" errors
-```
-
-## Git → jj Quick Reference
-
-| Task | git | jj |
-|---|---|---|
-| Status | `git status` | `jj st` |
-| Diff | `git diff` | `jj diff` |
-| Log | `git log` | `jj log` |
-| Show commit | `git show <ref>` | `jj show <rev>` |
-| Stage + commit | `git add . && git commit -m "msg"` | `jj commit -m "msg"` |
-| Amend message | `git commit --amend -m "msg"` | `jj describe -m "msg"` |
-| Amend content | `git commit --amend --no-edit` | `jj squash` |
-| Push bookmark | `git push origin <branch>` | `jj git push -b <bookmark>` |
-| Fetch | `git fetch` | `jj git fetch` |
-| Pull (ff) | `git pull` | `jj git fetch && jj bookmark set main -r main@origin` |
-| Pull (rebase) | `git pull --rebase` | `jj git fetch && jj rebase -d main@origin` |
-| Switch branch | `git checkout <branch>` | `jj new <rev>` (new on top) or `jj edit <rev>` (resume) |
-| Create branch | `git checkout -b <name>` | `jj new main` then `jj bookmark create <name>` |
-| List branches | `git branch` | `jj bookmark list` |
-| Stash | `git stash` | unnecessary — `jj new` leaves work in the parent |
-| Cherry-pick | `git cherry-pick <rev>` | `jj duplicate <rev>` |
-| Revert | `git revert <rev>` | `jj revert -r <rev>` |
-| Rebase | `git rebase <base>` | `jj rebase -d <base>` |
-| Reset --hard HEAD~1 | `git reset --hard HEAD~1` | `jj abandon <change-id>` |
-| Reflog | `git reflog` | `jj op log` |
-| Blame | `git blame <file>` | `jj file annotate <file>` |
-| Worktree add | `git worktree add` | `jj workspace add` |
-| Undo last op | (varies) | `jj undo` |
-
-Full mapping (including grep, bisect, fileset patterns, file restoration): see `references/git-to-jj.md`.
-
-## Revset Quick Reference
-
-Revsets are jj's expression language for selecting commits. They're accepted by `-r`/`--revisions`/`--from`/`--to`/`--into` on most commands.
-
-| Expression | Meaning |
-|---|---|
-| `@` | working copy commit |
-| `@-` | parent of @ |
-| `@--` | grandparent of @ |
-| `<change-id>` | commit by change ID |
-| `<bookmark-name>` | tip of a bookmark |
-| `main@origin` | tip of main on origin (remote bookmark) |
-| `trunk()` | configured trunk (usually `main@origin`) |
-| `mine()` | commits authored by current user |
-| `empty()` | commits with no diff |
-| `conflicts()` | commits with unresolved conflicts |
-| `description("substr")` | commits whose message matches |
-| `files("path")` | commits modifying given path |
-| `::x` | ancestors of `x` (inclusive) |
-| `x::` | descendants of `x` (inclusive) |
-| `x..y` | commits in `y` but not in `x` (set difference) |
-| `x::y` | DAG range — commits between `x` and `y` |
-| `x \| y` | union |
-| `x & y` | intersection |
-| `~x` | complement |
-| `heads(x)` | commits in `x` with no children in `x` |
-| `roots(x)` | commits in `x` with no parents in `x` |
-
-Distinguish carefully: `x..y` is *set difference*; `x::y` is a *DAG path*. They are not interchangeable.
-
-Full revset language reference: `references/revsets.md`.
-
-## Common Pitfalls
-
-1. **Bookmarks don't auto-advance.** After `jj commit`, you must `jj bookmark set <name> -r @-`. (`jj bookmark create <name> -r @` before working *also* works because it tracks the change ID, which follows the commit.)
-2. **`@` after `jj commit` is empty.** Don't push `@`; the content is in `@-`.
-3. **`jj new` ≠ `git commit`.** `jj new` creates a new empty change on top. `jj commit` finalizes `@` as a real commit and creates a new empty `@`.
-4. **`::` vs `..`.** `::` is a DAG range (all ancestors of). `..` is set difference. They are *not* interchangeable.
-5. **Empty commits are normal.** They mean "ready to work here."
-6. **`Commit is immutable` error** — you targeted a tracked bookmark like `main` directly. Target the commit above it, or use `main@origin` as the destination.
-7. **Stale working copy** — usually caused by another workspace rewriting the working-copy commit. Run `jj workspace update-stale`.
-8. **Don't run `git checkout`/`git commit`/`git reset` in a colocated repo.** Use jj for mutations; use git only for read-only operations or things jj doesn't have (e.g. `git submodule`).
-
-## Progressive Disclosure — When to Read More
-
-Load these references on demand (don't preload):
-
-**Language & commands**
-- `references/git-to-jj.md` — full Git ⇄ jj command mapping including history rewriting, stashing, worktrees, fileset patterns
-- `references/revsets.md` — complete revset language: operators, functions, string/date patterns, examples
-- `references/glossary.md` — formal definitions (change, view, head, divergent, hidden, root commit, etc.)
-
-**Topic deep-dives**
-- `references/bookmarks.md` — bookmark tracking, remotes, conflicted bookmarks, multiple-remote workflows (fork vs integrator)
-- `references/conflicts.md` — first-class conflicts, marker formats (jj / snapshot / git styles), long markers, missing-newline conflicts
-- `references/operation-log.md` — `jj op log`, `--at-op`, recovering files from past snapshots (the "snapshot scan" trick)
-- `references/workspaces.md` — multiple working copies, stale working copy recovery, colocated repos, ignored files
-
-**Action playbooks** — read when starting one of these tasks
-- `references/workflow-commit-push-pr.md` — exact step-by-step for: commit → push → open PR (with `gh`)
-- `references/workflow-new-workspace.md` — create an isolated workspace + bookmark for parallel work
-- `references/troubleshooting.md` — diagnostic protocol, problem→fix table, rebase matrix, op-log forensics. Use this whenever something has gone sideways.
+- Resolve conflicts by editing markers directly, then verify with `jj st` and `jj log -r 'conflicts()'`.
+- For an unexpected mutation, inspect `jj op log` before choosing `jj undo` or `jj op restore <op-id>`.
+- For a stale workspace, run `jj workspace update-stale`, then inspect for divergence.
+- Never use raw Git as a recovery fallback.
