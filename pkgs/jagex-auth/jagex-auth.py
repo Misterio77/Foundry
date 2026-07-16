@@ -11,7 +11,6 @@ import socket
 import stat
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.parse
 import webbrowser
@@ -28,23 +27,22 @@ SCOPE = "openid offline gamesso.token.create user.profile.read"
 CONSENT_SCOPE = "openid offline"
 SESSION_ENDPOINT = "https://auth.jagex.com/game-session/v1/sessions"
 ACCOUNTS_ENDPOINT = "https://auth.jagex.com/game-session/v1/accounts"
-USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) "
-    "Gecko/20100101 Firefox/140.0"
-)
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0"
 
-DATA_DIR = Path(
-    os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")
-) / "jagex-auth"
+DATA_DIR = (
+    Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "jagex-auth"
+)
 TOKEN_FILE = DATA_DIR / "tokens.json"
 LAUNCHER_CALLBACK_FILE = DATA_DIR / "launcher-callback-url"
 
 HTTP = requests.Session()
-HTTP.headers.update({
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
-    "User-Agent": USER_AGENT,
-})
+HTTP.headers.update(
+    {
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": USER_AGENT,
+    }
+)
 
 
 def b64url(data: bytes) -> str:
@@ -117,9 +115,7 @@ def request_json(
     headers: dict | None = None,
 ) -> dict | list:
     try:
-        return response_json(
-            HTTP.post(url, data=form, json=body, headers=headers)
-        )
+        return response_json(HTTP.post(url, data=form, json=body, headers=headers))
     except requests.RequestException as err:
         raise SystemExit(f"Request failed for {url}: {err}") from err
 
@@ -140,83 +136,6 @@ def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
-
-
-class ChromiumController:
-    def __init__(self) -> None:
-        self.port = get_free_port()
-        self.user_data_dir = tempfile.TemporaryDirectory()
-        self.process: subprocess.Popen | None = None
-
-    @property
-    def json_url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/json"
-
-    def launch(self, url: str, *extra_args: str) -> subprocess.Popen:
-        return subprocess.Popen(
-            [
-                "chromium",
-                f"--remote-debugging-port={self.port}",
-                f"--user-data-dir={self.user_data_dir.name}",
-                *extra_args,
-                url,
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-    def start(self, url: str) -> None:
-        self.process = self.launch(url, "--no-first-run", "--new-window")
-        self.wait_until_ready()
-
-    def open(self, url: str) -> None:
-        proc = self.launch(url)
-        if self.process is None or self.process.poll() is not None:
-            self.process = proc
-        self.wait_until_ready()
-
-    def wait_until_ready(self) -> None:
-        deadline = time.time() + 20
-        while time.time() < deadline:
-            if self.targets() is not None:
-                return
-            time.sleep(0.2)
-        raise SystemExit("Timed out waiting for Chromium DevTools")
-
-    def targets(self) -> list[dict] | None:
-        try:
-            return HTTP.get(self.json_url, timeout=1).json()
-        except requests.RequestException:
-            return None
-
-    def close_targets(self) -> None:
-        for target in self.targets() or []:
-            target_id = urllib.parse.quote(target.get("id", ""))
-            if not target_id:
-                continue
-            url = f"{self.json_url}/close/{target_id}"
-            try:
-                HTTP.get(url, timeout=1)
-            except requests.RequestException:
-                pass
-
-    def wait_for_url(self, predicate) -> str:
-        while True:
-            for target in self.targets() or []:
-                url = target.get("url", "")
-                if predicate(url):
-                    return url
-            time.sleep(0.25)
-
-    def stop(self) -> None:
-        self.close_targets()
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-        self.user_data_dir.cleanup()
 
 
 def query_param(url: str, name: str) -> str | None:
@@ -398,27 +317,6 @@ def is_consent_callback_url(url: str, expected_state: str) -> bool:
     )
 
 
-def authorize_chromium(_args: argparse.Namespace) -> None:
-    browser = ChromiumController()
-    try:
-        print("Opening Jagex login in controlled Chromium.", file=sys.stderr)
-        print("After login, click 'Return to launcher'.", file=sys.stderr)
-
-        def wait_consent(state: str) -> str:
-            return browser.wait_for_url(
-                lambda url: is_consent_callback_url(url, state)
-            )
-
-        run_authorization(
-            browser.start,
-            browser.open,
-            wait_consent,
-            browser.close_targets,
-        )
-    finally:
-        browser.stop()
-
-
 def has_param(url: str, name: str) -> bool:
     return query_param(url, name) is not None
 
@@ -555,18 +453,16 @@ def configure_character(tokens: dict, *, interactive: bool) -> None:
         return
 
     accounts = get_accounts(tokens["session_id"])
-    account = choose_account(accounts) if interactive else (accounts[0] if accounts else None)
+    account = (
+        choose_account(accounts) if interactive else (accounts[0] if accounts else None)
+    )
     if account:
         tokens["character_id"] = account.get("accountId")
         tokens["display_name"] = account.get("displayName")
 
 
 def java_property_escape(value: str) -> str:
-    return (
-        value.replace("\\", "\\\\")
-        .replace(" ", "\\ ")
-        .replace("\n", "\\n")
-    )
+    return value.replace("\\", "\\\\").replace(" ", "\\ ").replace("\n", "\\n")
 
 
 def write_game_credentials(tokens: dict) -> None:
@@ -579,9 +475,7 @@ def write_game_credentials(tokens: dict) -> None:
     }
     path = DATA_DIR / "credentials.properties"
     lines = [
-        f"{key}={java_property_escape(value)}"
-        for key, value in values.items()
-        if value
+        f"{key}={java_property_escape(value)}" for key, value in values.items() if value
     ]
     path.write_text("\n".join(lines) + "\n")
     path.chmod(stat.S_IRUSR | stat.S_IWUSR)
@@ -592,9 +486,7 @@ def session(_args: argparse.Namespace) -> None:
     tokens = refresh_if_needed()
     if not tokens.get("session_id"):
         if not tokens.get("consent_id_token"):
-            raise SystemExit(
-                "No consent ID token stored. Run: jagex-auth authorize"
-            )
+            raise SystemExit("No consent ID token stored. Run: jagex-auth authorize")
         tokens["session_id"] = get_session_id(tokens["consent_id_token"])
         configure_character(tokens, interactive=False)
         store_tokens(tokens)
@@ -615,18 +507,23 @@ def maybe_decode_jwt(token: str | None) -> dict | None:
 
 def show(_args: argparse.Namespace) -> None:
     tokens = load_tokens()
-    safe = {k: tokens.get(k) for k in (
-        "token_type",
-        "scope",
-        "expires_in",
-        "obtained_at",
-        "expires_at",
-    )}
-    safe.update({
-        "id_payload": maybe_decode_jwt(tokens.get("id_token")),
-        "consent_id_payload": maybe_decode_jwt(tokens.get("consent_id_token")),
-        "has_session_id": bool(tokens.get("session_id")),
-    })
+    safe = {
+        k: tokens.get(k)
+        for k in (
+            "token_type",
+            "scope",
+            "expires_in",
+            "obtained_at",
+            "expires_at",
+        )
+    }
+    safe.update(
+        {
+            "id_payload": maybe_decode_jwt(tokens.get("id_token")),
+            "consent_id_payload": maybe_decode_jwt(tokens.get("consent_id_token")),
+            "has_session_id": bool(tokens.get("session_id")),
+        }
+    )
     print(json.dumps(safe, indent=2, sort_keys=True))
 
 
@@ -637,12 +534,11 @@ def main() -> None:
     )
     sub = parser.add_subparsers(
         required=True,
-        metavar="{authorize,authorize-chromium,session,show}",
+        metavar="{authorize,session,show}",
     )
 
     commands = (
         "authorize",
-        "authorize-chromium",
         "session",
         "show",
     )
@@ -654,8 +550,7 @@ def main() -> None:
     handle.add_argument("url")
     handle.set_defaults(func=handle_url)
     sub._choices_actions = [
-        action for action in sub._choices_actions
-        if action.dest != "handle-url"
+        action for action in sub._choices_actions if action.dest != "handle-url"
     ]
 
     args = parser.parse_args()
