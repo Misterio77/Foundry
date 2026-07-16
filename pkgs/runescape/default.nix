@@ -52,8 +52,7 @@
     installPhase = ''
       runHook preInstall
 
-      install -Dm755 usr/share/games/runescape-launcher/runescape \
-        $out/libexec/runescape
+      install -Dm755 usr/share/games/runescape-launcher/runescape $out/libexec/runescape
       mkdir -p $out/share
       cp -r usr/share/icons $out/share/icons
 
@@ -109,10 +108,7 @@ in
     runScript = "runescape";
 
     extraInstallCommands = ''
-      mkdir -p $out/share/applications
-      ln -s ${client}/share/applications/runescape.desktop \
-        $out/share/applications/runescape.desktop
-      ln -s ${client}/share/icons $out/share/icons
+      ln -s ${client}/share -T $out/share
     '';
 
     meta = {
