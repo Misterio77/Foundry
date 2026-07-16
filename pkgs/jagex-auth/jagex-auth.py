@@ -1,5 +1,7 @@
-# Note: vibecoded (pi running gpt 5.5)
-# Use at your own risk, do not judge me for the verbose code ;)
+# Note: partially vibecoded (pi running gpt 5.5)
+#
+# Uses same mechanism as bolt (sans the GUI and CEF parts), so should be safe to use.
+# But might potentially break ToS, so please use at your own risk.
 import argparse
 import base64
 import hashlib
