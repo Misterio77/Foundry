@@ -15,8 +15,34 @@ Use this protocol whenever `.jj/` is present. Do not translate a Git workflow co
 - Before editing or mutating history, inspect the full status, graph position, and relevant diff. Do not assume `@` is where a previous agent left it.
 - Prefer stable change IDs (letters such as `nmwwolux`) over changing hexadecimal commit IDs.
 - After every history mutation, verify with `jj st`, `jj log`, and the relevant `jj diff`/`jj show`.
-- If syntax or behavior is uncertain, run `jj --version` and `jj help <command>` instead of guessing. jj's CLI changes quickly.
+- If syntax or behavior is uncertain, use `jj help` instead of guessing; the integrated help matches the active jj version.
 - If a mutation has an unexpected result, stop. Inspect `jj op log`; use `jj undo` only after identifying the operation to reverse.
+
+## Built-in documentation
+
+Prefer jj's integrated, version-correct help over remembered syntax or web examples:
+
+```bash
+jj help                         # command list, global options, short descriptions
+jj help <command>               # usage, arguments, options, behavior, and examples
+jj help <command> <subcommand>  # nested help, e.g. `jj help git push`
+jj help -k <keyword>            # conceptual and language reference
+```
+
+Use command help before running an unfamiliar command or when flags may have changed. `jj <command> --help` is equivalent, but `jj help ...` composes naturally for nested subcommands.
+
+Keyword topics:
+
+| Keyword | Covers |
+|---|---|
+| `bookmarks` | Bookmark semantics, remotes, tracking, and Git branch mapping |
+| `config` | Configuration files, scopes, precedence, values, and settings |
+| `filesets` | Selecting files with patterns, operators, functions, and quoting |
+| `glossary` | Canonical jj terminology |
+| `revsets` | Selecting revisions with symbols, operators, functions, and patterns |
+| `templates` | Customizing command output with `-T`/`--template` |
+
+For example, run `jj help -k revsets`. Run `jj help --help` to list all supported keyword values.
 
 ## Mental model
 
