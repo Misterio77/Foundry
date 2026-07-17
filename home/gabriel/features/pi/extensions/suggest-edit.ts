@@ -2,9 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
+import {
+  createEditToolDefinition,
+  type EditToolInput,
+  type ExtensionAPI,
+  type ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 
 const STATE_DIR = path.join(
@@ -14,6 +16,8 @@ const STATE_DIR = path.join(
 const SUGGESTIONS_FILE =
   process.env.LLM_SUGGEST_FILE ?? path.join(STATE_DIR, "suggestions.json");
 
+const editDefinition = createEditToolDefinition(process.cwd());
+
 type Suggestion = {
   id: string;
   file: string;
@@ -21,7 +25,6 @@ type Suggestion = {
   message: string;
   replacement: string;
   severity: number;
-  wholeLine?: boolean;
   range: {
     start: { line: number; character: number };
     end: { line: number; character: number };
@@ -29,21 +32,15 @@ type Suggestion = {
   createdAt: string;
 };
 
-type SuggestEditParams = {
-  file: string;
-  startLine: number;
-  startColumn?: number;
-  endLine: number;
-  endColumn?: number;
-  message: string;
-  replacement: string;
-  title?: string;
-  severity?: "error" | "warning" | "info" | "hint";
-  wholeLine?: boolean;
-};
-
 type ClearParams = {
   file?: string;
+};
+
+type MatchedEdit = {
+  editIndex: number;
+  start: number;
+  end: number;
+  newText: string;
 };
 
 function readSuggestions(): Suggestion[] {
@@ -66,57 +63,74 @@ function writeSuggestions(suggestions: Suggestion[]) {
   );
 }
 
-function resolveFile(file: string) {
-  return path.resolve(process.cwd(), file);
+function resolveFile(cwd: string, file: string) {
+  return path.resolve(cwd, file.startsWith("@") ? file.slice(1) : file);
 }
 
-function severity(value: SuggestEditParams["severity"]) {
-  switch (value) {
-    case "error":
-      return 1;
-    case "warning":
-      return 2;
-    case "hint":
-      return 4;
-    case "info":
-    default:
-      return 3;
-  }
+function normalizeToLf(value: string) {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-function lspPosition(line: number, column = 1) {
+function lspPosition(content: string, offset: number) {
+  const before = content.slice(0, offset);
+  const lastNewline = before.lastIndexOf("\n");
   return {
-    line: Math.max(0, line - 1),
-    character: Math.max(0, column - 1),
+    line: before.split("\n").length - 1,
+    character: offset - lastNewline - 1,
   };
 }
 
-function isWholeLineSuggestion(params: SuggestEditParams) {
-  return (
-    params.wholeLine === true ||
-    (params.startColumn === 0 && (params.endColumn ?? 0) === 0)
-  );
-}
+function matchEdits(
+  content: string,
+  edits: EditToolInput["edits"],
+  file: string,
+): MatchedEdit[] {
+  if (edits.length === 0) {
+    throw new Error(
+      "Suggest edit input is invalid. edits must contain at least one replacement.",
+    );
+  }
 
-function lspRange(params: SuggestEditParams) {
-  if (isWholeLineSuggestion(params)) {
+  const matches = edits.map((edit, editIndex) => {
+    const oldText = normalizeToLf(edit.oldText);
+    if (oldText.length === 0) {
+      throw new Error(
+        `edits[${editIndex}].oldText must not be empty in ${file}.`,
+      );
+    }
+
+    const start = content.indexOf(oldText);
+    if (start === -1) {
+      throw new Error(
+        `Could not find edits[${editIndex}] in ${file}. The oldText must match exactly including all whitespace and newlines.`,
+      );
+    }
+    if (content.indexOf(oldText, start + 1) !== -1) {
+      throw new Error(
+        `Found multiple occurrences of edits[${editIndex}] in ${file}. Each oldText must be unique. Please provide more context to make it unique.`,
+      );
+    }
+
     return {
-      start: { line: Math.max(0, params.startLine - 1), character: 0 },
-      end: { line: Math.max(0, params.endLine), character: 0 },
+      editIndex,
+      start,
+      end: start + oldText.length,
+      newText: normalizeToLf(edit.newText),
     };
+  });
+
+  const sorted = [...matches].sort((a, b) => a.start - b.start);
+  for (let i = 1; i < sorted.length; i++) {
+    const previous = sorted[i - 1];
+    const current = sorted[i];
+    if (previous.end > current.start) {
+      throw new Error(
+        `edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${file}. Merge them into one edit or target disjoint regions.`,
+      );
+    }
   }
 
-  return {
-    start: lspPosition(params.startLine, params.startColumn),
-    end: lspPosition(params.endLine, params.endColumn ?? params.startColumn),
-  };
-}
-
-function normalizeReplacement(params: SuggestEditParams) {
-  if (!isWholeLineSuggestion(params) || params.replacement.endsWith("\n")) {
-    return params.replacement;
-  }
-  return `${params.replacement}\n`;
+  return matches;
 }
 
 function normalizePath(file: string) {
@@ -132,85 +146,53 @@ export default function suggestEdit(pi: ExtensionAPI) {
     name: "suggest_edit",
     label: "Suggest Edit",
     description:
-      "Publish an editor-visible suggested edit/quickfix. This does not modify the file directly. Helix shows it as an LLM diagnostic; code actions apply the replacement. Ranges are 1-based and inclusive; for whole-line replacements, set wholeLine=true and provide the full replacement lines.",
+      "Suggest edits to a single file using the same exact-text replacement interface as edit. This publishes editor-visible quickfixes without modifying the file. Every edits[].oldText must match a unique, non-overlapping region of the original file.",
     promptSnippet:
-      "suggest_edit: propose a non-invasive editor quickfix instead of directly editing a file; ranges are 1-based/inclusive, and wholeLine replaces entire lines",
-    parameters: {
-      type: "object",
-      properties: {
-        file: {
-          type: "string",
-          description:
-            "File to annotate, absolute or relative to the current working directory.",
-        },
-        startLine: { type: "number", description: "1-based start line." },
-        startColumn: {
-          type: "number",
-          description:
-            "1-based inclusive start column; defaults to 1. Ignored when wholeLine=true.",
-        },
-        endLine: {
-          type: "number",
-          description:
-            "1-based inclusive end line. For whole-line replacement, the edit covers through this entire line.",
-        },
-        endColumn: {
-          type: "number",
-          description:
-            "1-based inclusive end column; defaults to startColumn. Ignored when wholeLine=true.",
-        },
-        message: {
-          type: "string",
-          description: "Diagnostic message shown in the editor.",
-        },
-        replacement: {
-          type: "string",
-          description:
-            "Full replacement text applied by the code action for the selected range.",
-        },
-        title: {
-          type: "string",
-          description: "Optional short code-action title.",
-        },
-        severity: {
-          type: "string",
-          enum: ["error", "warning", "info", "hint"],
-          description: "Diagnostic severity; defaults to info.",
-        },
-        wholeLine: {
-          type: "boolean",
-          description:
-            "Replace entire lines from startLine through endLine, ignoring columns. Replacement should contain the full replacement lines and may omit the final newline.",
-        },
-      },
-      required: ["file", "startLine", "endLine", "message", "replacement"],
-      additionalProperties: false,
-    },
-    async execute(_toolCallId, params) {
-      const p = params as SuggestEditParams;
-      const file = resolveFile(p.file);
-      const suggestion: Suggestion = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        file,
-        title: p.title,
-        message: p.message,
-        replacement: normalizeReplacement(p),
-        severity: severity(p.severity),
-        wholeLine: isWholeLineSuggestion(p),
-        range: lspRange(p),
-        createdAt: new Date().toISOString(),
-      };
+      "Propose non-invasive editor quickfixes using the same { path, edits } interface as edit",
+    promptGuidelines: [
+      "Use suggest_edit instead of edit when the user asks for proposed, reviewable, or non-invasive changes.",
+      "When suggesting multiple separate locations in one file, use one suggest_edit call with multiple entries in edits[].",
+    ],
+    parameters: editDefinition.parameters,
+    prepareArguments: editDefinition.prepareArguments,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const input = params as EditToolInput;
+      const file = resolveFile(ctx.cwd, input.path);
+      const rawContent = fs.readFileSync(file, "utf8");
+      const content = normalizeToLf(
+        rawContent.startsWith("\uFEFF") ? rawContent.slice(1) : rawContent,
+      );
+      const matches = matchEdits(content, input.edits, input.path);
+      const createdAt = new Date().toISOString();
+      const callId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const suggestions = matches.map((match) => {
+        const ordinal =
+          matches.length > 1 ? ` ${match.editIndex + 1}/${matches.length}` : "";
+        return {
+          id: `${callId}-${match.editIndex}`,
+          file,
+          title: `Apply suggested edit${ordinal}`,
+          message: `LLM suggested edit${ordinal}`,
+          replacement: match.newText,
+          severity: 3,
+          range: {
+            start: lspPosition(content, match.start),
+            end: lspPosition(content, match.end),
+          },
+          createdAt,
+        } satisfies Suggestion;
+      });
 
-      writeSuggestions([...readSuggestions(), suggestion]);
+      writeSuggestions([...readSuggestions(), ...suggestions]);
 
       return {
         content: [
           {
             type: "text",
-            text: `Published LLM suggested edit for ${path.relative(process.cwd(), file)}.`,
+            text: `Published ${suggestions.length} LLM suggested edit(s) for ${path.relative(ctx.cwd, file)}.`,
           },
         ],
-        details: { file, id: suggestion.id },
+        details: { file, ids: suggestions.map((suggestion) => suggestion.id) },
       };
     },
   });
@@ -229,13 +211,14 @@ export default function suggestEdit(pi: ExtensionAPI) {
       },
       additionalProperties: false,
     },
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const p = params as ClearParams;
       const before = readSuggestions();
       const after = p.file
         ? before.filter(
             (item) =>
-              normalizePath(item.file) !== normalizePath(resolveFile(p.file!)),
+              normalizePath(item.file) !==
+              normalizePath(resolveFile(ctx.cwd, p.file!)),
           )
         : [];
       writeSuggestions(after);
@@ -259,7 +242,8 @@ export default function suggestEdit(pi: ExtensionAPI) {
       const after = file
         ? before.filter(
             (item) =>
-              normalizePath(item.file) !== normalizePath(resolveFile(file)),
+              normalizePath(item.file) !==
+              normalizePath(resolveFile(ctx.cwd, file)),
           )
         : [];
       writeSuggestions(after);
