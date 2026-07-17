@@ -112,16 +112,16 @@ A recommendation must include:
 
 - The shortened, unambiguous source and destination change IDs (as rendered by `change_id.short()`) with their current descriptions.
 - Why they belong together.
-- The proposed combined description, including required trailers.
+- The proposed combined description.
 - An explicit statement that no rewrite has happened yet.
 
 Treat direct approval such as “do it” as authorization for exactly the proposed cleanup. Then re-run preflight, inspect every affected commit's full diff and graph relationship, confirm they are mutable, and apply the plan with explicit change IDs and non-interactive messages. For example:
 
 ```bash
 jj squash --from '<source1> | <source2>' --into <destination> \
-  -m $'<combined description>\n\nAssisted-by: <harness> (<model>)'
+  -m "<combined description>"
 # For description-only cleanup:
-jj describe -r <change-id> -m $'<new description>\n\nAssisted-by: <harness> (<model>)'
+jj describe -r <change-id> -m "<new description>"
 ```
 
 Afterward, verify status, graph, destination diff, descriptions, bookmarks, and conflicts. If the result differs from the approved plan, stop and inspect `jj op log`.

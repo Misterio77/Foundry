@@ -11,5 +11,5 @@ Workflow:
 4. Create a separate, clearly named markdown file; do not append to an unrelated existing note unless I explicitly ask for that.
 5. Do not assume drafts, code changes, or other context exist. If I refer to a diff, command, URL, or file, inspect/read it first and summarize what it actually says.
 6. Keep the note factual and useful for future me: context, relevant paths/commands, open questions, and concrete next steps.
-7. After writing, verify with `jj st` in `~/Atelier/notes`, then describe the notes jj change with a concise conventional-commit style message and the required `Assisted-by: <harness> (<model>)` trailer.
+7. After writing, verify with `jj st` in `~/Atelier/notes`, then describe the notes jj change with a concise conventional-commit style message.
 8. Verify with `jj st` / `jj log` afterwards and tell me the note path plus the commit description.

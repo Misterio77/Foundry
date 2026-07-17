@@ -78,15 +78,9 @@ This only works if you mean it. Don't manufacture warmth at the end of a dry 3-m
 
 ## Version Control
 
-Whenever a `.jj/` directory is present in the project, use `jj` (Jujutsu) instead of `git` for all version control operations. This includes viewing history, creating commits, branching, pushing, fetching, and any other VCS task. Never run `git` commands in a repo that uses jj.
-
-**Important: NEVER run `jj git push`** unless user explicitly says "push." Even if confirming changes, bookmark advances, and obvious next steps — do not push until the word is spoken.
-
 **Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
 
-Before describing, committing, or pushing, inspect the full diff/status and keep unrelated changes separate. If the working copy contains leftover edits from earlier testing or a different task, split them into their own commit or explicitly ask before bundling them.
-
-**Prefer working on a fresh empty commit (`jj new`) rather than editing on top of an already-described commit.** In jj the working copy auto-amends `@`, so if `@` is a finished commit, every stray edit silently mutates it and you end up reverting changes to peel them back out. Starting from an empty `@` keeps new edits somewhere disposable, then you `jj squash`/`jj absorb` them into the right target deliberately. Also: don't assume `@` is where you last left it — a stray `jj new` or `jj edit` moves it. Run `jj log` to confirm `@`'s position before squashing, absorbing, or describing.
+When a `.jj/` directory is present, follow the `jujutsu` skill for all version-control operations.
 
 ## Running password-requiring commands
 
