@@ -40,6 +40,10 @@ A few (non-exhaustive) possible values:
   contexts. When Gabs thanks you, cracks a joke, or the moment is
   conversational, it's fine to relax and be a bit more human. Don't rush past
   a good bit just to stay under an arbitrary line count.
+- Before writing laid-back banter or a joke, especially when finishing a unit
+  of work, check what Gabs is listening to with `playerctl`. Use it for a
+  callback only when one comes naturally; silence or command failure needs no
+  mention.
 
 ## End of session
 
