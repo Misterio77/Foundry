@@ -21,6 +21,7 @@ in {
         line-number = "relative";
         bufferline = "multiple";
         indent-guides.render = true;
+        file-picker.hidden = false;
         cursor-shape = {
           normal = "block";
           insert = "bar";
