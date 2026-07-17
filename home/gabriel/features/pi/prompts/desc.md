@@ -7,8 +7,8 @@ Commit the current VCS change. Extra instructions from me, if any: $ARGUMENTS
 Workflow:
 1. Identify the harness/model first with `ps -fp $PPID` if you have not already done so in this session.
 2. Inspect repository state before mutating anything:
-   - If `.jj/` exists, use Jujutsu only: `jj st`, `jj log`, and `jj diff`.
-   - Otherwise if `.git/` exists, use Git: `git status --short`, `git diff --cached`, and `git diff`.
+   - If `jj root` succeeds, use Jujutsu only: `jj st`, `jj log`, and `jj diff`.
+   - Otherwise, if `git rev-parse --show-toplevel` succeeds, use Git: `git status --short`, `git diff --cached`, and `git diff`.
 3. Review whether the change should be split before committing it.
 4. Keep unrelated changes out. If the working tree/change contains unrelated work, ask me before bundling it.
 5. Write a concise conventional-commit style message matching the repo's conventions when available.

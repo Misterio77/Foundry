@@ -1,11 +1,11 @@
 ---
 name: jujutsu
-description: "REQUIRED for every version-control task in a Jujutsu repository (`.jj/` present): status, diff, log, commit/describe, bookmark, push/fetch, PR, rebase, split, squash, conflict, undo, recovery, or workspace work. Use jj exclusively; this skill provides a non-interactive inspect-act-verify protocol and prevents agents from mutating the wrong working-copy commit."
+description: "REQUIRED for every version-control task in a Jujutsu workspace (`jj root` succeeds): status, diff, log, commit/describe, bookmark, push/fetch, PR, rebase, split, squash, conflict, undo, recovery, or workspace work. Use jj exclusively; this skill provides a non-interactive inspect-act-verify protocol and prevents agents from mutating the wrong working-copy commit."
 ---
 
 # Jujutsu Agent Protocol
 
-Use this protocol whenever `.jj/` is present. Do not translate a Git workflow command-for-command; reason from jj's working-copy commit and graph.
+Use this protocol whenever `jj root` succeeds from the current directory. Do not translate a Git workflow command-for-command; reason from jj's working-copy commit and graph.
 
 ## Non-negotiable rules
 

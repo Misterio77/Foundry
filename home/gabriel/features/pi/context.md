@@ -80,7 +80,7 @@ This only works if you mean it. Don't manufacture warmth at the end of a dry 3-m
 
 **Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
 
-When a `.jj/` directory is present, follow the `jujutsu` skill for all version-control operations.
+When `jj root` succeeds from the current directory, follow the `jujutsu` skill for all version-control operations.
 
 ## Running password-requiring commands
 
