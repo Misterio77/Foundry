@@ -18,6 +18,14 @@ const SUGGESTIONS_FILE =
 
 const editDefinition = createEditToolDefinition(process.cwd());
 
+type SuggestionEdit = {
+  replacement: string;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+};
+
 type Suggestion = {
   id: string;
   file: string;
@@ -25,10 +33,8 @@ type Suggestion = {
   message: string;
   replacement: string;
   severity: number;
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
+  range: SuggestionEdit["range"];
+  edits?: SuggestionEdit[];
   createdAt: string;
 };
 
@@ -162,37 +168,53 @@ export default function suggestEdit(pi: ExtensionAPI) {
       const content = normalizeToLf(
         rawContent.startsWith("\uFEFF") ? rawContent.slice(1) : rawContent,
       );
-      const matches = matchEdits(content, input.edits, input.path);
-      const createdAt = new Date().toISOString();
-      const callId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const suggestions = matches.map((match) => {
-        const ordinal =
-          matches.length > 1 ? ` ${match.editIndex + 1}/${matches.length}` : "";
-        return {
-          id: `${callId}-${match.editIndex}`,
-          file,
-          title: `Apply suggested edit${ordinal}`,
-          message: `LLM suggested edit${ordinal}`,
-          replacement: match.newText,
-          severity: 3,
-          range: {
-            start: lspPosition(content, match.start),
-            end: lspPosition(content, match.end),
-          },
-          createdAt,
-        } satisfies Suggestion;
-      });
+      const matches = matchEdits(content, input.edits, input.path)
+        .filter(
+          (match) => content.slice(match.start, match.end) !== match.newText,
+        )
+        .sort((a, b) => a.start - b.start);
+      if (matches.length === 0) {
+        throw new Error(
+          `No changes suggested for ${input.path}. The replacements produced identical content.`,
+        );
+      }
 
-      writeSuggestions([...readSuggestions(), ...suggestions]);
+      const edits = matches.map((match) => ({
+        replacement: match.newText,
+        range: {
+          start: lspPosition(content, match.start),
+          end: lspPosition(content, match.end),
+        },
+      }));
+      const firstEdit = edits[0];
+      const count = edits.length;
+      const suggestion = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        file,
+        title:
+          count === 1
+            ? "Apply suggested edit"
+            : `Apply ${count} suggested edits`,
+        message:
+          count === 1 ? "LLM suggested edit" : `LLM suggested ${count} edits`,
+        // Keep the legacy fields so older readers can display the primary edit.
+        replacement: firstEdit.replacement,
+        severity: 3,
+        range: firstEdit.range,
+        edits,
+        createdAt: new Date().toISOString(),
+      } satisfies Suggestion;
+
+      writeSuggestions([...readSuggestions(), suggestion]);
 
       return {
         content: [
           {
             type: "text",
-            text: `Published ${suggestions.length} LLM suggested edit(s) for ${path.relative(ctx.cwd, file)}.`,
+            text: `Published 1 LLM suggestion containing ${count} edit(s) for ${path.relative(ctx.cwd, file)}.`,
           },
         ],
-        details: { file, ids: suggestions.map((suggestion) => suggestion.id) },
+        details: { file, ids: [suggestion.id] },
       };
     },
   });

@@ -107,6 +107,30 @@ def diagnostic_for(item):
     }
 
 
+def text_edits_for(item):
+    edits = item.get("edits")
+    if isinstance(edits, list):
+        result = []
+        for edit in edits:
+            if not isinstance(edit, dict) or not isinstance(
+                edit.get("replacement"), str
+            ):
+                continue
+            result.append(
+                {
+                    "range": normalize_range(edit),
+                    "newText": edit["replacement"],
+                }
+            )
+        if result:
+            return result
+
+    replacement = item.get("replacement")
+    if not isinstance(replacement, str):
+        return []
+    return [{"range": normalize_range(item), "newText": replacement}]
+
+
 def publish(uri):
     path = uri_to_path(uri)
     if not path:
@@ -177,8 +201,8 @@ def code_actions(params):
     request_range = params.get("range")
     diagnostic_ids = context_diagnostic_ids(params)
     for item in suggestions_for(path):
-        replacement = item.get("replacement")
-        if not isinstance(replacement, str):
+        text_edits = text_edits_for(item)
+        if not text_edits:
             continue
         if diagnostic_ids is not None and item.get("id") not in diagnostic_ids:
             continue
@@ -191,7 +215,7 @@ def code_actions(params):
             "kind": "quickfix",
             "isPreferred": False,
             "diagnostics": [diagnostic_for(item)],
-            "edit": {"changes": {uri: [{"range": item_range, "newText": replacement}]}},
+            "edit": {"changes": {uri: text_edits}},
         }
         if item.get("id") is not None:
             action["command"] = {
