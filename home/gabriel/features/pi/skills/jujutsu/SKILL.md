@@ -1,6 +1,6 @@
 ---
 name: jujutsu
-description: "REQUIRED for every version-control task in a Jujutsu workspace (`jj root` succeeds): status, diff, log, commit/describe, bookmark, push/fetch, PR, rebase, split, squash, conflict, undo, recovery, or workspace work. Use jj exclusively; this skill provides a non-interactive inspect-act-verify protocol and prevents agents from mutating the wrong working-copy commit."
+description: "REQUIRED for every version-control task in a Jujutsu workspace (`jj root` succeeds): status, diff, log, commit/describe, bookmark, push/fetch, PR, rebase, split, squash, conflict, operation recovery, or workspace work. Use jj exclusively; this skill provides a non-interactive inspect-act-verify protocol and prevents agents from mutating the wrong working-copy commit."
 ---
 
 # Jujutsu Agent Protocol
@@ -16,7 +16,7 @@ Use this protocol whenever `jj root` succeeds from the current directory. Do not
 - Prefer stable change IDs (letters such as `nmwwolux`) over changing hexadecimal commit IDs.
 - After every history mutation, verify with `jj st`, `jj log`, and the relevant `jj diff`/`jj show`.
 - If syntax or behavior is uncertain, use `jj help` instead of guessing; the integrated help matches the active jj version.
-- If a mutation has an unexpected result, stop. Inspect `jj op log`; use `jj undo` only after identifying the operation to reverse.
+- If a mutation has an unexpected result, stop and inspect `jj op log`. Prefer an explicit `jj op revert <op-id>` or `jj op restore <op-id>` over the implicit target selected by `jj undo`.
 
 ## Built-in documentation
 
@@ -165,6 +165,9 @@ Push one named bookmark; never use bare `jj git push` or `--all`. Never move or 
 ## Conflicts and recovery
 
 - Resolve conflicts by editing markers directly, then verify with `jj st` and `jj log -r 'conflicts()'`.
-- For an unexpected mutation, inspect `jj op log` before choosing `jj undo` or `jj op restore <op-id>`.
+- For an unexpected mutation, inspect `jj op log` and the relevant historical state with `jj --at-op=<op-id> log` before recovering.
+- Use `jj op revert <op-id>` to invert one specific operation while preserving later operations. Revert additional explicitly selected operations separately if needed.
+- Use `jj op restore <op-id>` to return the repository to that operation's state, intentionally discarding the effects of all later operations.
+- Avoid `jj undo`: its implicit “last operation” target is less precise than either explicit recovery command.
 - For a stale workspace, run `jj workspace update-stale`, then inspect for divergence.
 - Never use raw Git as a recovery fallback.
