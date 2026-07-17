@@ -47,8 +47,8 @@ For example, run `jj help -k revsets`. Run `jj help --help` to list all supporte
 ## Mental model
 
 - The working copy is a mutable commit named `@`. jj snapshots file edits at the start of most jj commands; there is no staging area.
-- `jj new` creates a new empty child commit. It does **not** finish or commit the current work.
-- `jj commit -m ...` describes the current commit and creates a new empty `@`; completed content is then in `@-`.
+- `jj new` creates a new empty child commit. After completing and reviewing a described change, use it as a boundary so the completed content is in `@-` and future edits land in a clean `@`.
+- `jj commit -m ...` is equivalent to describing the current commit and then running `jj new`; completed content is then in `@-`.
 - Bookmarks are named pointers, not current branches. They follow rewrites of the change they point to but do not advance to newly created child changes.
 - Conflicts are stored in commits. A rebase may finish successfully while leaving conflicted commits.
 - Rewrites preserve the change ID and replace the commit ID. The operation log makes repo-level recovery possible.
@@ -75,7 +75,7 @@ Classify `@` before touching files:
 
 When existing work is ambiguous or unrelated, preserve it in place and start a fresh `@` with `jj new`. Never squash, abandon, restore, or redescribe existing work merely to obtain a clean state.
 
-## Blessed coding workflow: describe first
+## Blessed coding workflow: describe first, close with new
 
 Use one workflow consistently:
 
@@ -85,15 +85,46 @@ jj describe -m "<description>"
 
 # Edit files and run project checks
 
+# Review the completed change while it is still @
 jj st
 jj diff
 jj log -r '@ | @-' --no-graph
+
+# Only after checks and review pass, close it by moving to a clean child
+jj new
+jj st
+jj log -r '@ | @-' --no-graph
+jj show @-
 ```
 
 - Keep one logical change in `@`.
-- Review the complete diff before calling the task done or writing a final description.
-- Leave the completed, described change at `@`. Do **not** run `jj new` at the end; start the next task with it after inspecting state.
-- If the user explicitly requests `jj commit`, use `jj commit -m ...`, then remember that content moved to `@-`. Do not move bookmarks without inspecting them.
+- Review the complete diff before closing the change; do not use `jj new` to hide unfinished or unchecked work.
+- End the task with the completed, described change at `@-` and a new empty, undescribed `@` for future edits.
+- If the user explicitly requests `jj commit`, use `jj commit -m ...` instead of the separate `jj describe` and final `jj new`. Do not move bookmarks without inspecting them.
+
+## Stack cleanup recommendations
+
+Before the final response, inspect the nearby mutable history. If adjacent commits would be clearer as one logical review unit, suggest a cleanup plan; do not perform it without approval.
+
+Good squash candidates include fixups, tests or documentation inseparable from an implementation, and successive commits editing the same behavior. Keep commits separate when they are independently reviewable or revertible, even if they are small.
+
+A recommendation must include:
+
+- The shortened, unambiguous source and destination change IDs (as rendered by `change_id.short()`) with their current descriptions.
+- Why they belong together.
+- The proposed combined description, including required trailers.
+- An explicit statement that no rewrite has happened yet.
+
+Treat direct approval such as “do it” as authorization for exactly the proposed cleanup. Then re-run preflight, inspect every affected commit's full diff and graph relationship, confirm they are mutable, and apply the plan with explicit change IDs and non-interactive messages. For example:
+
+```bash
+jj squash --from '<source1> | <source2>' --into <destination> \
+  -m $'<combined description>\n\nAssisted-by: <harness> (<model>)'
+# For description-only cleanup:
+jj describe -r <change-id> -m $'<new description>\n\nAssisted-by: <harness> (<model>)'
+```
+
+Afterward, verify status, graph, destination diff, descriptions, bookmarks, and conflicts. If the result differs from the approved plan, stop and inspect `jj op log`.
 
 ## Safe mutation pattern
 
