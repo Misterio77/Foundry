@@ -14,7 +14,7 @@ This is adapted for Pi from Jeremy Theocharis's [intuition-probe](https://gist.g
 - Ordering is the experiment: freeze the blind prompt, then inspect reality, then launch probes.
 - Never expose artifact paths, implementation details, exact identifiers, or the answer key to a probe.
 - One sample produces candidates only. Call something a priority only when at least two independent samples converge.
-- The probes are isolated `pi -p` processes with tools, skills, context files, prompt templates, and sessions disabled. Extensions remain enabled so provider registrations and other runtime support still work. Do not use a subagent tool.
+- Launch probes through the `sub-agents` skill's runner. They are isolated `pi -p` processes with tools, skills, context files, prompt templates, and sessions disabled; extensions remain enabled for provider support.
 - Never edit the artifact under test as part of this skill; report recommendations only.
 
 ## Procedure
@@ -23,13 +23,13 @@ This is adapted for Pi from Jeremy Theocharis's [intuition-probe](https://gist.g
 2. Rewrite the outcome without leaked method names, keys, flags, labels, paths, or implementation clues. Ask the user to confirm the sanitized goal.
 3. Read [references/blind-prompt.md](references/blind-prompt.md). Fill its placeholders in a temporary prompt file. A read-set is allowed verbatim; fetch URL content and inline it rather than giving the probe a URL. Freeze this file now.
 4. Only now inspect the real API signatures, schema/examples, CLI help/definitions, or UI routes/components. This is the answer key and stays in the orchestrator context.
-5. Run the probes from this skill directory:
+5. Read the `sub-agents` skill, then run the probe wrapper from this skill directory:
 
    ```bash
    bash scripts/run-blind.sh /path/to/frozen-prompt.md N
    ```
 
-   The script uses `gpt-5.6-luna` by default and prints an output directory containing `probe-*.json` and logs. Read every result. If a probe emits invalid JSON, preserve it as a failed sample; do not quietly repair its design choices.
+   The wrapper reuses the generic sub-agent runner with a frozen repeated prompt, no tools, and probe-specific JSON validation. It uses `gpt-5.6-luna` by default and prints an output directory containing `probe-*.json` and logs. Read every result. If a probe emits invalid JSON, preserve it as a failed sample; do not quietly repair its design choices.
 
    Judge the batch unsatisfactory when it is malformed, empty, substantially hedged instead of committing to an interface, or fails to address the sanitized outcome. Do not reject it merely because its guess differs from reality—that divergence is the point. If unsatisfactory, retry the same frozen prompt and N with Terra:
 
