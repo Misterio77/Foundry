@@ -23,13 +23,32 @@
       jobset="''${2:-${cfg.jobset}}"
       job="''${3:-${cfg.job}}"
 
-      current_ts="$(nix flake metadata "self" --json | jq -r '.lastModified')"
+      fetch_json() {
+        curl \
+          --silent \
+          --show-error \
+          --fail-with-body \
+          --location \
+          --header 'accept: application/json' \
+          --connect-timeout 10 \
+          --max-time 30 \
+          --retry 3 \
+          --retry-all-errors \
+          --retry-max-time 120 \
+          "$1"
+      }
+
+      current_ts="$(nix flake metadata "self" --json | jq -er '.lastModified | select(type == "number")')"
       echo "Current flake modified at: $(date -d @"$current_ts")" >&2
 
-      eval="$(curl -sLH 'accept: application/json' "${cfg.instance}/job/${cfg.project}/$jobset/$job/latest" | jq -r '.jobsetevals[0]')"
-      new_flake="$(curl -sLH 'accept: application/json' "${cfg.instance}/eval/$eval" | jq -r '.flake')"
+      latest="$(fetch_json "${cfg.instance}/job/${cfg.project}/$jobset/$job/latest")"
+      eval="$(jq -er '.jobsetevals[0] | select((type == "number") or (type == "string")) | tostring' <<<"$latest")"
+      path="$(jq -er '.buildoutputs.out.path | select(type == "string" and startswith("/nix/store/"))' <<<"$latest")"
+
+      eval_data="$(fetch_json "${cfg.instance}/eval/$eval")"
+      new_flake="$(jq -er '.flake | select(type == "string" and length > 0)' <<<"$eval_data")"
       echo "New flake: $new_flake" >&2
-      new_ts="$(nix flake metadata "$new_flake" --json | jq -r '.lastModified')"
+      new_ts="$(nix flake metadata "$new_flake" --json | jq -er '.lastModified | select(type == "number")')"
       echo "Modified at: $(date -d @"$new_ts")" >&2
 
       if ! "''${IGNORE_TIMESTAMP:-false}" && ! [ "$new_ts" -gt "$current_ts" ]; then
@@ -37,7 +56,6 @@
         exit 0
       fi
 
-      path="$(curl -sLH 'accept: application/json' "${cfg.instance}/job/${cfg.project}/$jobset/$job/latest" | jq -r '.buildoutputs.out.path')"
       profile="/nix/var/nix/profiles/system"
       current="/run/current-system"
 
