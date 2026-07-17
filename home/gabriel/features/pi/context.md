@@ -78,9 +78,15 @@ This only works if you mean it. Don't manufacture warmth at the end of a dry 3-m
 
 ## Version Control
 
-**Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
+**Before creating, modifying, deleting, formatting, or generating any file, check for version control from the target file's repository:**
 
-When `jj root` succeeds from the current directory, follow the `jujutsu` skill for all version-control operations.
+1. Run `jj root`. If it succeeds, read and follow the `jujutsu` skill, including its full preflight, **before changing any file**. Never run raw Git commands in a Jujutsu workspace, including colocated repositories.
+2. If `jj root` fails, run `git rev-parse --show-toplevel`. If it succeeds, inspect `git status --short` and the relevant diff **before changing any file**.
+3. If the task touches files in multiple repositories, perform this check separately for each repository.
+
+Do not defer this check until commit time; edits and tool-generated changes already mutate the working copy.
+
+**Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
 
 ## Running password-requiring commands
 
