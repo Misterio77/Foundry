@@ -109,26 +109,22 @@ def diagnostic_for(item):
 
 def text_edits_for(item):
     edits = item.get("edits")
-    if isinstance(edits, list):
-        result = []
-        for edit in edits:
-            if not isinstance(edit, dict) or not isinstance(
-                edit.get("replacement"), str
-            ):
-                continue
-            result.append(
-                {
-                    "range": normalize_range(edit),
-                    "newText": edit["replacement"],
-                }
-            )
-        if result:
-            return result
-
-    replacement = item.get("replacement")
-    if not isinstance(replacement, str):
+    if not isinstance(edits, list):
         return []
-    return [{"range": normalize_range(item), "newText": replacement}]
+
+    result = []
+    for edit in edits:
+        if not isinstance(edit, dict) or not isinstance(
+            edit.get("replacement"), str
+        ):
+            continue
+        result.append(
+            {
+                "range": normalize_range(edit),
+                "newText": edit["replacement"],
+            }
+        )
+    return result
 
 
 def publish(uri):

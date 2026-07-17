@@ -31,10 +31,9 @@ type Suggestion = {
   file: string;
   title?: string;
   message: string;
-  replacement: string;
   severity: number;
   range: SuggestionEdit["range"];
-  edits?: SuggestionEdit[];
+  edits: SuggestionEdit[];
   createdAt: string;
 };
 
@@ -197,8 +196,6 @@ export default function suggestEdit(pi: ExtensionAPI) {
             : `Apply ${count} suggested edits`,
         message:
           count === 1 ? "LLM suggested edit" : `LLM suggested ${count} edits`,
-        // Keep the legacy fields so older readers can display the primary edit.
-        replacement: firstEdit.replacement,
         severity: 3,
         range: firstEdit.range,
         edits,
