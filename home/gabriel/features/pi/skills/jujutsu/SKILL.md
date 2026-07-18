@@ -87,6 +87,8 @@ jj describe -m "<description>"
 # Review the completed change while it is still @
 jj status
 jj show
+# Add more context to description after change is done
+jj describe -m "<description>\n<more description>"
 
 # Only after checks and review pass, close it by moving to a clean child
 jj new
