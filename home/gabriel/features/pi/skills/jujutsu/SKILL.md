@@ -59,7 +59,6 @@ Run from the repository, before making edits:
 
 ```bash
 jj root
-jj log -r '@ | @-' --no-graph
 jj diff
 jj status
 ```
@@ -87,12 +86,10 @@ jj describe -m "<description>"
 
 # Review the completed change while it is still @
 jj diff
-jj log -r '@ | @-' --no-graph
 jj status
 
 # Only after checks and review pass, close it by moving to a clean child
 jj new
-jj log -r '@ | @-' --no-graph
 jj status
 jj show @-
 ```
