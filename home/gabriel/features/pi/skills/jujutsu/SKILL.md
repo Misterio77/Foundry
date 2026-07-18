@@ -59,8 +59,8 @@ Run from the repository, before making edits:
 
 ```bash
 jj root
-jj diff
 jj status
+jj show
 ```
 
 Classify `@` before touching files:
@@ -85,8 +85,8 @@ jj describe -m "<description>"
 # Edit files and run project checks
 
 # Review the completed change while it is still @
-jj diff
 jj status
+jj show
 
 # Only after checks and review pass, close it by moving to a clean child
 jj new
