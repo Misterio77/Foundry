@@ -14,7 +14,7 @@ Use this protocol whenever `jj root` succeeds from the current directory. Do not
 - Never use interactive/editor forms (`-i`, `--interactive`, bare commands that open an editor, `jj resolve`, or `jj diffedit`). Supply messages with `-m`.
 - Before editing or mutating history, inspect the full status, graph position, and relevant diff. Do not assume `@` is where a previous agent left it.
 - Prefer stable change IDs (letters such as `nmwwolux`) over changing hexadecimal commit IDs.
-- After every history mutation, verify with `jj st`, `jj log`, and the relevant `jj diff`/`jj show`.
+- After every history mutation, verify with `jj status`, `jj log`, and the relevant `jj diff`/`jj show`.
 - If syntax or behavior is uncertain, use `jj help` instead of guessing; the integrated help matches the active jj version.
 - If a mutation has an unexpected result, stop and inspect `jj op log`. Prefer an explicit `jj op revert <op-id>` or `jj op restore <op-id>` over the implicit target selected by `jj undo`.
 
@@ -59,9 +59,9 @@ Run from the repository, before making edits:
 
 ```bash
 jj root
-jj st
 jj log -r '@ | @-' --no-graph
 jj diff
+jj status
 ```
 
 Classify `@` before touching files:
@@ -86,14 +86,14 @@ jj describe -m "<description>"
 # Edit files and run project checks
 
 # Review the completed change while it is still @
-jj st
 jj diff
 jj log -r '@ | @-' --no-graph
+jj status
 
 # Only after checks and review pass, close it by moving to a clean child
 jj new
-jj st
 jj log -r '@ | @-' --no-graph
+jj status
 jj show @-
 ```
 
@@ -130,7 +130,7 @@ Afterward, verify status, graph, destination diff, descriptions, bookmarks, and 
 
 For any rewrite or destructive-looking operation:
 
-1. Inspect `jj st`, `jj log`, and `jj show <change-id>`/`jj diff`.
+1. Inspect `jj status`, `jj log`, and `jj show <change-id>`/`jj diff`.
 2. State exactly which change(s) will move and where.
 3. Use explicit revisions and non-interactive flags.
 4. Verify graph, status, diff, bookmarks, and conflicts afterward.
@@ -153,7 +153,7 @@ Do not use a bare `jj squash` when both descriptions may be non-empty; it can re
 Only after the user explicitly says **push**:
 
 ```bash
-jj st
+jj status
 jj bookmark list --all
 jj log -r '<bookmark> | present(<bookmark>@origin)' --no-graph
 jj show <bookmark>
@@ -164,7 +164,7 @@ Push one named bookmark; never use bare `jj git push` or `--all`. Never move or 
 
 ## Conflicts and recovery
 
-- Resolve conflicts by editing markers directly, then verify with `jj st` and `jj log -r 'conflicts()'`.
+- Resolve conflicts by editing markers directly, then verify with `jj status` and `jj log -r 'conflicts()'`.
 - For an unexpected mutation, inspect `jj op log` and the relevant historical state with `jj --at-op=<op-id> log` before recovering.
 - Use `jj op revert <op-id>` to invert one specific operation while preserving later operations. Revert additional explicitly selected operations separately if needed.
 - Use `jj op restore <op-id>` to return the repository to that operation's state, intentionally discarding the effects of all later operations.
