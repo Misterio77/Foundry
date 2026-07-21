@@ -63,6 +63,20 @@ in {
       })
     ];
 
+    # Avoid refreshing the entire movie library when the real-time monitor sees
+    # a new sidecar file in an existing movie directory.
+    # https://github.com/jellyfin/jellyfin/pull/16228
+    jellyfin = addPatches prev.jellyfin [
+      (final.fetchpatch {
+        url = "https://github.com/jellyfin/jellyfin/commit/6dd862fc8465c7352a77bab0bf8f4386d4059f9b.diff";
+        hash = "sha256-8quKcz7VhqQGkd8ZTSqzhBKdAE/4Lc2avFFI/rIuUNc=";
+      })
+      (final.fetchpatch {
+        url = "https://github.com/jellyfin/jellyfin/commit/9605e182dbf0272d23891087111d38dfeee9a654.diff";
+        hash = "sha256-s9JBIWHwgLyralGKHUMWV5iTmdR1IIopCW7eI5HSY9Q=";
+      })
+    ];
+
     # Make the llama.cpp router's HF-cache scan opt-in (LLAMA_ROUTER_SCAN_CACHE)
     # so --models-preset is the single source of truth and models can be named
     # freely without untuned repo:tag twins. Patch the base so the -vulkan and
