@@ -6,7 +6,7 @@
     ./features/productivity
     ./features/pass
     ./features/games
-    ./features/pi
+    ./features/ai
   ];
 
   # Purple

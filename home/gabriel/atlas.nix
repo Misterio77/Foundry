@@ -1,7 +1,4 @@
-{
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   imports = [
     ./global
     ./features/desktop/hyprland
@@ -11,7 +8,7 @@
     ./features/pass
     ./features/games
     ./features/games/shadps4.nix
-    ./features/pi
+    ./features/ai
   ];
 
   # Red

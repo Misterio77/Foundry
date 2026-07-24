@@ -1,6 +1,6 @@
 ---
 name: pi-extension-authoring
-description: Workflow guidelines for durable Pi package, extension, skill, prompt, and theme changes in Gabs's Nix-managed Pi config. Use before editing ~/.pi/agent or home/gabriel/features/pi.
+description: Workflow guidelines for durable Pi package, extension, skill, prompt, and theme changes in Gabs's Nix-managed Pi config. Use before editing ~/.pi/agent or home/gabriel/features/ai/pi.
 ---
 
 # Pi Authoring for Gabs's Foundry
