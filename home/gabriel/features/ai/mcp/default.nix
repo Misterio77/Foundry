@@ -1,14 +1,8 @@
-{
-  pkgs,
-  lib,
-  ...
-}: let
-  osrsMcp = pkgs.callPackage ./osrs {};
-in {
+{...}: {
   programs.mcp = {
     enable = true;
     servers.osrs = {
-      command = lib.getExe osrsMcp;
+      url = "http://127.0.0.1:18471/mcp";
       lifecycle = "lazy";
     };
   };
