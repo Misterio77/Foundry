@@ -59,12 +59,15 @@ public class McpDispatcherTest
 	{
 		JsonObject listed = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}"));
 		JsonArray tools = listed.getAsJsonObject("result").getAsJsonArray("tools");
-		assertEquals(5, tools.size());
+		assertEquals(13, tools.size());
 		assertEquals("get_game_context", tools.get(0).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_skills", tools.get(1).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_status_effects", tools.get(2).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_carried_items", tools.get(3).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_events", tools.get(4).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_quests", tools.get(5).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_stored_items", tools.get(10).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_collection_log", tools.get(12).getAsJsonObject().get("name").getAsString());
 
 		JsonObject result = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}"));
 		assertEquals("active", result.get("state").getAsString());
@@ -182,6 +185,14 @@ public class McpDispatcherTest
 		assertInvalidArguments("get_events", "{\"generation\":\"stale\",\"afterSequence\":0}");
 		assertInvalidArguments("get_events", "{\"types\":[]}");
 		assertInvalidArguments("get_events", "{\"limit\":101}");
+		assertInvalidArguments("get_quests", "{\"states\":[]}");
+		assertInvalidArguments("get_quests", "{\"query\":\"\"}");
+		assertInvalidArguments("get_quests", "{\"limit\":101}");
+		assertInvalidArguments("get_achievement_diaries", "{\"regions\":[\"gielinor\"]}");
+		assertInvalidArguments("get_combat_achievements", "{\"completed\":\"yes\"}");
+		assertInvalidArguments("get_slayer", "{\"sections\":[\"social\"]}");
+		assertInvalidArguments("get_stored_items", "{\"itemId\":0}");
+		assertInvalidArguments("get_stored_items", "{\"containers\":[\"bank\",\"seed_vault\",\"looting_bag\",\"rune_pouch\",\"seed_box\"]}");
 	}
 
 	@Test

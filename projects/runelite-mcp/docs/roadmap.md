@@ -69,14 +69,20 @@
 - Omit nearby player identities by default and prohibit PvP scouting, boss
   prediction, prayer recommendations, and automatic safe-tile derivation.
 
-## M2 — progression and account state
+## M2 — progression and account state (implemented; verification pending)
 
-- Quests, diaries, combat achievements, Slayer, collection log, Grand Exchange,
-  bank, wealth, and auxiliary containers are ordinary gameplay data and require no
-  privacy gate.
-- Social/identity data remains omitted rather than mixed into account-state tools.
-- Search/pagination APIs replace context-sized dumps; cached container data carries
-  explicit source and freshness metadata.
+- Native tools expose quests, diaries, combat achievements, Slayer, Grand Exchange,
+  observed bank/auxiliary containers, rune-pouch contents, and wealth estimates.
+- All gameplay account state is ordinary product data with no privacy gate;
+  social/identity data remains omitted.
+- Search/pagination APIs replace context-sized dumps. In-memory container caches
+  carry source tick/time, survive same-player hops, and clear at account boundaries.
+- Collection-log totals and recent entries are available as an explicit summary;
+  detailed entries fail closed because RuneLite has no stable complete native model.
+- Runtime mapping checks, closed schemas, page limits, price-age declarations, and
+  rate-limited client-thread timing warnings bound failure and cost.
+- Gradle checks, reproducible Nix build, and packaged live verification are required
+  before closing the implementation change.
 
 ## M3 — knowledge services
 

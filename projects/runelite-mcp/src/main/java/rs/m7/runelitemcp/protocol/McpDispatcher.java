@@ -177,6 +177,46 @@ public class McpDispatcher
 			"Read bounded recent RuneLite state, skill, item, movement, and interaction changes. Omit cursors for the latest window.",
 			"{\"type\":\"object\",\"properties\":{\"generation\":{\"type\":\"string\"},\"afterSequence\":{\"type\":\"integer\",\"minimum\":0},\"beforeSequence\":{\"type\":\"integer\",\"minimum\":1},\"types\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"game_state_changed\",\"skill_changed\",\"inventory_changed\",\"equipment_changed\",\"movement_changed\",\"interaction_changed\"]},\"minItems\":1,\"maxItems\":6,\"uniqueItems\":true},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}},\"additionalProperties\":false}"
 		));
+		tools.add(tool(
+			"get_quests",
+			"Search current quest progression with quest-point and state totals.",
+			"{\"type\":\"object\",\"properties\":{\"states\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"not_started\",\"in_progress\",\"finished\",\"unknown\"]},\"minItems\":1,\"uniqueItems\":true},\"query\":{\"type\":\"string\",\"maxLength\":128},\"offset\":{\"type\":\"integer\",\"minimum\":0},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_achievement_diaries",
+			"Read current achievement-diary reward-tier completion. Omit regions for every region.",
+			"{\"type\":\"object\",\"properties\":{\"regions\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"ardougne\",\"desert\",\"falador\",\"fremennik\",\"kandarin\",\"karamja\",\"kourend_kebos\",\"lumbridge_draynor\",\"morytania\",\"varrock\",\"western_provinces\",\"wilderness\"]},\"minItems\":1,\"uniqueItems\":true}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_combat_achievements",
+			"Search current combat-achievement tasks and tier totals.",
+			"{\"type\":\"object\",\"properties\":{\"tiers\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"easy\",\"medium\",\"hard\",\"elite\",\"master\",\"grandmaster\"]},\"minItems\":1,\"uniqueItems\":true},\"completed\":{\"type\":\"boolean\"},\"query\":{\"type\":\"string\",\"maxLength\":128},\"offset\":{\"type\":\"integer\",\"minimum\":0},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_slayer",
+			"Read current Slayer assignment, reward progression, and per-master block lists.",
+			"{\"type\":\"object\",\"properties\":{\"sections\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"task\",\"rewards\",\"blocks\"]},\"minItems\":1,\"uniqueItems\":true}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_grand_exchange",
+			"Read all eight current Grand Exchange slots with quantities and RuneLite market-price estimates.",
+			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_stored_items",
+			"Search bank and auxiliary-container snapshots. Containers are cached only after RuneLite observes them and include freshness metadata.",
+			"{\"type\":\"object\",\"properties\":{\"containers\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"bank\",\"seed_vault\",\"looting_bag\",\"rune_pouch\",\"seed_box\",\"tackle_box\",\"forestry_kit\",\"huntsmans_kit\"]},\"minItems\":1,\"maxItems\":4,\"uniqueItems\":true},\"query\":{\"type\":\"string\",\"maxLength\":128},\"itemId\":{\"type\":\"integer\",\"minimum\":1},\"offset\":{\"type\":\"integer\",\"minimum\":0},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":100}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_account_wealth",
+			"Estimate known account wealth from observed bank, carried items, auxiliary containers, and Grand Exchange offers.",
+			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_collection_log",
+			"Read native collection-log totals and recent entries. Detailed per-entry data is explicitly unavailable without a stable RuneLite API.",
+			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
+		));
 
 		JsonObject result = new JsonObject();
 		result.add("tools", tools);
@@ -213,6 +253,43 @@ public class McpDispatcher
 			case "get_events":
 				rejectUnknownArguments(arguments, "generation", "afterSequence", "beforeSequence", "types", "limit");
 				return eventToolResult(eventQuery(arguments));
+			case "get_quests":
+				validatePagedArguments(arguments, "states", "not_started", "in_progress", "finished", "unknown");
+				return toolResult(snapshots.snapshot(SnapshotType.QUESTS, arguments));
+			case "get_achievement_diaries":
+				rejectUnknownArguments(arguments, "regions");
+				validateArray(arguments, "regions", 12, "ardougne", "desert", "falador", "fremennik",
+					"kandarin", "karamja", "kourend_kebos", "lumbridge_draynor", "morytania",
+					"varrock", "western_provinces", "wilderness");
+				return toolResult(snapshots.snapshot(SnapshotType.ACHIEVEMENT_DIARIES, arguments));
+			case "get_combat_achievements":
+				rejectUnknownArguments(arguments, "tiers", "completed", "query", "offset", "limit");
+				validateArray(arguments, "tiers", 6, "easy", "medium", "hard", "elite", "master", "grandmaster");
+				validateText(arguments, "query");
+				validatePage(arguments);
+				validateOptionalBoolean(arguments, "completed");
+				return toolResult(snapshots.snapshot(SnapshotType.COMBAT_ACHIEVEMENTS, arguments));
+			case "get_slayer":
+				rejectUnknownArguments(arguments, "sections");
+				validateArray(arguments, "sections", 3, "task", "rewards", "blocks");
+				return toolResult(snapshots.snapshot(SnapshotType.SLAYER, arguments));
+			case "get_grand_exchange":
+				rejectUnknownArguments(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.GRAND_EXCHANGE));
+			case "get_stored_items":
+				rejectUnknownArguments(arguments, "containers", "query", "itemId", "offset", "limit");
+				validateArray(arguments, "containers", 4, "bank", "seed_vault", "looting_bag", "rune_pouch",
+					"seed_box", "tackle_box", "forestry_kit", "huntsmans_kit");
+				validateText(arguments, "query");
+				validatePage(arguments);
+				validatePositive(arguments, "itemId");
+				return toolResult(snapshots.snapshot(SnapshotType.STORED_ITEMS, arguments));
+			case "get_account_wealth":
+				rejectUnknownArguments(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.ACCOUNT_WEALTH));
+			case "get_collection_log":
+				rejectUnknownArguments(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.COLLECTION_LOG));
 			default:
 				return toolError("Unknown tool: " + name);
 		}
@@ -306,6 +383,75 @@ public class McpDispatcher
 			}
 		}
 		return values;
+	}
+
+	private static void validatePagedArguments(JsonObject arguments, String selector, String... allowed)
+	{
+		rejectUnknownArguments(arguments, selector, "query", "offset", "limit");
+		validateArray(arguments, selector, allowed.length, allowed);
+		validateText(arguments, "query");
+		validatePage(arguments);
+	}
+
+	private static void validateArray(JsonObject arguments, String name, int maximum, String... allowed)
+	{
+		if (!arguments.has(name))
+		{
+			return;
+		}
+		Set<String> values = stringArray(arguments, name);
+		if (values.isEmpty() || values.size() > maximum)
+		{
+			throw new IllegalArgumentException(name + " must contain between 1 and " + maximum + " values");
+		}
+		Set<String> accepted = new HashSet<>();
+		java.util.Collections.addAll(accepted, allowed);
+		if (!accepted.containsAll(values))
+		{
+			throw new IllegalArgumentException(name + " contains an unknown value");
+		}
+	}
+
+	private static void validatePage(JsonObject arguments)
+	{
+		if (arguments.has("offset") && requiredInt(arguments, "offset") < 0)
+		{
+			throw new IllegalArgumentException("offset must be nonnegative");
+		}
+		if (arguments.has("limit"))
+		{
+			int limit = requiredInt(arguments, "limit");
+			if (limit < 1 || limit > 100)
+			{
+				throw new IllegalArgumentException("limit must be between 1 and 100");
+			}
+		}
+	}
+
+	private static void validateText(JsonObject arguments, String name)
+	{
+		String value = optionalString(arguments, name);
+		if (value != null && (value.isEmpty() || value.length() > 128))
+		{
+			throw new IllegalArgumentException(name + " must contain between 1 and 128 characters");
+		}
+	}
+
+	private static void validateOptionalBoolean(JsonObject arguments, String name)
+	{
+		if (arguments.has(name)
+			&& (!arguments.get(name).isJsonPrimitive() || !arguments.getAsJsonPrimitive(name).isBoolean()))
+		{
+			throw new IllegalArgumentException(name + " must be a boolean");
+		}
+	}
+
+	private static void validatePositive(JsonObject arguments, String name)
+	{
+		if (arguments.has(name) && optionalLong(arguments, name) <= 0)
+		{
+			throw new IllegalArgumentException(name + " must be positive");
+		}
 	}
 
 	private JsonObject eventToolResult(EventQuery query)

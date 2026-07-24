@@ -31,9 +31,13 @@ remote service between the MCP client and RuneLite.
   RuneLite API dependency.
 - `SnapshotProvider`: narrow boundary used by capabilities, parameterized by a
   focused `SnapshotType` so unrelated domains are not scanned together.
-- `RuneLiteSnapshotProvider`: schedules focused reads with `ClientThread`, produces
-  immutable JSON snapshots, bounds item output before serialization, and enforces
-  a timeout.
+- `RuneLiteSnapshotProvider`: schedules focused raw reads with `ClientThread`,
+  finishes account-state paging/valuation on the HTTP worker, bounds output before
+  serialization, and enforces a timeout.
+- `ProgressionSnapshotReader`: native quest, diary, combat-achievement, Slayer, and
+  collection-summary reads with bounded pages and session definition caches.
+- `AccountStateSnapshotReader` plus `AccountStateCache`: GE, wealth, rune-pouch,
+  bank, and auxiliary-container reads with account-bound in-memory freshness.
 - `EventHistory`: pure-Java, synchronized bounded ring owning generation,
   sequence, state metadata, and linearizable queries.
 - `RuneLiteEventCollector`: explicitly started/stopped lifecycle adapter that
@@ -49,7 +53,9 @@ RuneLite `Client`. `RuneLiteSnapshotProvider` queues a small read on
 result. Blocking I/O must never run on the client thread.
 
 Snapshots are preferred over holding references to RuneLite actors, widgets, or
-item containers after leaving the client thread. Event queries take immutable
+item containers after leaving the client thread. Account-state requests copy raw
+scalars/stacks into immutable caches first; paging, metadata, prices, and JSON are
+computed on the HTTP worker. Event queries take immutable
 record references and coherent metadata under the history lock, then filter and
 serialize on the HTTP worker without touching RuneLite state.
 

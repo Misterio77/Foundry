@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
@@ -26,11 +27,15 @@ import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemManager;
 
+@Slf4j
 @SuppressWarnings("deprecation")
 public class RuneLiteSnapshotProvider implements SnapshotProvider
 {
 	private static final long SNAPSHOT_TIMEOUT_SECONDS = 2;
+	private static final long SLOW_SNAPSHOT_NANOS = TimeUnit.MILLISECONDS.toNanos(5);
+	private static final long SLOW_WARNING_INTERVAL_NANOS = TimeUnit.MINUTES.toNanos(1);
 	private static final int INVENTORY_CAPACITY = 28;
 	private static final int EQUIPMENT_CAPACITY = 14;
 	private static final int VENOM_THRESHOLD = 1_000_000;
@@ -38,16 +43,33 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 
 	private final Client client;
 	private final ClientThread clientThread;
+	private final ProgressionSnapshotReader progression;
+	private final AccountStateSnapshotReader accountState;
+	private long lastSlowWarningNanos;
 
 	@Inject
-	public RuneLiteSnapshotProvider(Client client, ClientThread clientThread)
+	public RuneLiteSnapshotProvider(Client client, ClientThread clientThread,
+		ItemManager itemManager, AccountStateCache accountStateCache)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
+		this.progression = new ProgressionSnapshotReader(client);
+		this.accountState = new AccountStateSnapshotReader(client, itemManager, accountStateCache);
+	}
+
+	RuneLiteSnapshotProvider(Client client, ClientThread clientThread)
+	{
+		this(client, clientThread, null, new AccountStateCache());
 	}
 
 	@Override
 	public JsonObject snapshot(SnapshotType type) throws Exception
+	{
+		return snapshot(type, new JsonObject());
+	}
+
+	@Override
+	public JsonObject snapshot(SnapshotType type, JsonObject arguments) throws Exception
 	{
 		CompletableFuture<JsonObject> result = new CompletableFuture<>();
 		AtomicBoolean cancelled = new AtomicBoolean();
@@ -59,7 +81,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 			}
 			try
 			{
-				result.complete(readSnapshot(type));
+				result.complete(readSnapshot(type, arguments));
 			}
 			catch (RuntimeException ex)
 			{
@@ -69,7 +91,8 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 
 		try
 		{
-			return result.get(SNAPSHOT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			JsonObject snapshot = result.get(SNAPSHOT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			return finishSnapshot(type, arguments, snapshot);
 		}
 		catch (TimeoutException ex)
 		{
@@ -80,7 +103,13 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 
 	JsonObject readSnapshot(SnapshotType type)
 	{
+		return readSnapshot(type, new JsonObject());
+	}
+
+	JsonObject readSnapshot(SnapshotType type, JsonObject arguments)
+	{
 		assert client.isClientThread();
+		long started = System.nanoTime();
 
 		GameState gameState = client.getGameState();
 		Player player = gameState == GameState.LOGGED_IN ? client.getLocalPlayer() : null;
@@ -106,10 +135,101 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 			case CARRIED_ITEMS:
 				snapshot.add("containers", containers(active));
 				break;
+			case QUESTS:
+				snapshot.add("quests", active ? progression.quests(arguments) : unavailable());
+				break;
+			case ACHIEVEMENT_DIARIES:
+				snapshot.add("achievementDiaries", active ? progression.diaries(arguments) : unavailable());
+				break;
+			case COMBAT_ACHIEVEMENTS:
+				snapshot.add("combatAchievements", active ? progression.combatAchievements(arguments) : unavailable());
+				break;
+			case SLAYER:
+				snapshot.add("slayer", active ? progression.slayer(arguments) : unavailable());
+				break;
+			case GRAND_EXCHANGE:
+			case STORED_ITEMS:
+			case ACCOUNT_WEALTH:
+				if (active)
+				{
+					accountState.observeClientState(type);
+					snapshot.addProperty("_accountGeneration", accountState.generation());
+				}
+				snapshot.add(accountField(type), active ? JsonNull.INSTANCE : unavailable());
+				break;
+			case COLLECTION_LOG:
+				snapshot.add("collectionLog", active ? progression.collectionLog() : unavailable());
+				break;
 			default:
 				throw new IllegalArgumentException("Unsupported snapshot type: " + type);
 		}
+		long elapsed = System.nanoTime() - started;
+		if (elapsed >= SLOW_SNAPSHOT_NANOS
+			&& started - lastSlowWarningNanos >= SLOW_WARNING_INTERVAL_NANOS)
+		{
+			lastSlowWarningNanos = started;
+			log.warn("RuneLite MCP {} snapshot took {} ms on the client thread",
+				type, TimeUnit.NANOSECONDS.toMillis(elapsed));
+		}
 		return snapshot;
+	}
+
+	private JsonObject finishSnapshot(SnapshotType type, JsonObject arguments, JsonObject snapshot)
+	{
+		if (!"active".equals(snapshot.get("state").getAsString()))
+		{
+			return snapshot;
+		}
+		long accountGeneration = -1;
+		if (snapshot.has("_accountGeneration"))
+		{
+			accountGeneration = snapshot.remove("_accountGeneration").getAsLong();
+			if (accountGeneration != accountState.generation())
+			{
+				throw new IllegalStateException("RuneLite account state changed during the snapshot");
+			}
+		}
+		switch (type)
+		{
+			case GRAND_EXCHANGE:
+				snapshot.add("grandExchange", accountState.grandExchange());
+				break;
+			case STORED_ITEMS:
+				snapshot.add("containers", accountState.storedItems(arguments));
+				break;
+			case ACCOUNT_WEALTH:
+				snapshot.add("wealth", accountState.wealth());
+				break;
+			default:
+				break;
+		}
+		if (accountGeneration != -1 && accountGeneration != accountState.generation())
+		{
+			throw new IllegalStateException("RuneLite account state changed during the snapshot");
+		}
+		return snapshot;
+	}
+
+	private static String accountField(SnapshotType type)
+	{
+		switch (type)
+		{
+			case GRAND_EXCHANGE:
+				return "grandExchange";
+			case STORED_ITEMS:
+				return "containers";
+			case ACCOUNT_WEALTH:
+				return "wealth";
+			default:
+				throw new IllegalArgumentException("Not an account-state snapshot: " + type);
+		}
+	}
+
+	private static JsonObject unavailable()
+	{
+		JsonObject value = new JsonObject();
+		value.addProperty("availability", "not_logged_in");
+		return value;
 	}
 
 	private JsonObject sample(GameState gameState)

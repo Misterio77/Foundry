@@ -4,18 +4,22 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import rs.m7.runelitemcp.events.EventHistory;
 import rs.m7.runelitemcp.events.RuneLiteEventCollector;
 import rs.m7.runelitemcp.protocol.McpDispatcher;
 import rs.m7.runelitemcp.protocol.McpHttpServer;
+import rs.m7.runelitemcp.snapshot.AccountStateCache;
 import rs.m7.runelitemcp.snapshot.RuneLiteSnapshotProvider;
 
 @Slf4j
@@ -38,12 +42,22 @@ public class RuneLiteMcpPlugin extends Plugin
 	@Inject
 	private RuneLiteEventCollector eventCollector;
 
+	@Inject
+	private AccountStateCache accountStateCache;
+
+	@Inject
+	private Client client;
+
+	@Inject
+	private ItemManager itemManager;
+
 	private EventHistory eventHistory;
 	private McpHttpServer server;
 
 	@Override
 	protected void startUp() throws Exception
 	{
+		accountStateCache.clear();
 		eventHistory = new EventHistory();
 		eventCollector.start(eventHistory);
 		server = new McpHttpServer(new McpDispatcher(snapshots, eventHistory, gson));
@@ -72,6 +86,7 @@ public class RuneLiteMcpPlugin extends Plugin
 			server = null;
 		}
 		eventCollector.stop();
+		accountStateCache.clear();
 		if (eventHistory != null)
 		{
 			eventHistory.close();
@@ -82,6 +97,11 @@ public class RuneLiteMcpPlugin extends Plugin
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event)
 	{
+		GameState state = event.getGameState();
+		if (state == GameState.LOGIN_SCREEN || state == GameState.LOGIN_SCREEN_AUTHENTICATOR)
+		{
+			accountStateCache.clear();
+		}
 		eventCollector.onGameStateChanged(event);
 	}
 
@@ -94,12 +114,18 @@ public class RuneLiteMcpPlugin extends Plugin
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
+		accountStateCache.observe(event.getContainerId(), event.getItemContainer(), client.getTickCount());
 		eventCollector.onItemContainerChanged(event);
 	}
 
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
+		if (client.getLocalPlayer() != null)
+		{
+			accountStateCache.bindPlayer(client.getLocalPlayer().getName());
+		}
+		accountStateCache.enrichMetadata(client, itemManager, 8);
 		eventCollector.onGameTick();
 	}
 
