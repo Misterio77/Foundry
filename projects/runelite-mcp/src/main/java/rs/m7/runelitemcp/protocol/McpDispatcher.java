@@ -14,7 +14,7 @@ import rs.m7.runelitemcp.snapshot.SnapshotProvider;
 
 public class McpDispatcher
 {
-	private static final String PROTOCOL_VERSION = "2025-11-25";
+	static final String PROTOCOL_VERSION = "2025-11-25";
 
 	private final SnapshotProvider snapshots;
 	private final Gson gson;
@@ -22,7 +22,7 @@ public class McpDispatcher
 	public McpDispatcher(SnapshotProvider snapshots, Gson gson)
 	{
 		this.snapshots = snapshots;
-		this.gson = gson;
+		this.gson = gson.newBuilder().serializeNulls().create();
 	}
 
 	public DispatchResult dispatch(String body)
@@ -43,6 +43,10 @@ public class McpDispatcher
 		}
 
 		JsonElement id = request.has("id") ? request.get("id") : null;
+		if (!validId(id))
+		{
+			return error(JsonNull.INSTANCE, -32600, "JSON-RPC id must be a string, number, or null");
+		}
 		if (!request.has("jsonrpc") || !"2.0".equals(string(request.get("jsonrpc")))
 			|| !request.has("method") || !request.get("method").isJsonPrimitive()
 			|| !request.getAsJsonPrimitive("method").isString())
@@ -114,6 +118,10 @@ public class McpDispatcher
 		{
 			throw new IllegalArgumentException("Unsupported MCP protocol version; expected " + PROTOCOL_VERSION);
 		}
+		requiredObject(params, "capabilities");
+		JsonObject clientInfo = requiredObject(params, "clientInfo");
+		requiredString(clientInfo, "name");
+		requiredString(clientInfo, "version");
 
 		JsonObject capabilities = new JsonObject();
 		capabilities.add("tools", new JsonObject());
@@ -136,13 +144,13 @@ public class McpDispatcher
 	{
 		JsonArray tools = new JsonArray();
 		tools.add(tool(
-			"client_state",
-			"Read current RuneLite game state, world, player location, animation, and identity. This is informational and never controls gameplay.",
+			"get_game_context",
+			"Read a current RuneLite session and player snapshot, including location, movement, interaction, and core vitals. Returns active, loading, or logged_out state and never controls gameplay.",
 			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
 		));
 		tools.add(tool(
 			"skills",
-			"Read current real and boosted skill levels and XP. Omit names for every skill.",
+			"Read current real and boosted skill levels and XP. Omit the names argument to return every skill.",
 			"{\"type\":\"object\",\"properties\":{\"names\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"additionalProperties\":false}"
 		));
 
@@ -154,25 +162,34 @@ public class McpDispatcher
 	private JsonObject callTool(JsonObject params) throws Exception
 	{
 		String name = requiredString(params, "name");
-		JsonObject arguments = params.has("arguments") && params.get("arguments").isJsonObject()
-			? params.getAsJsonObject("arguments")
-			: new JsonObject();
-		JsonObject snapshot = snapshots.snapshot();
-		JsonElement data;
+		JsonObject arguments = new JsonObject();
+		if (params.has("arguments"))
+		{
+			if (!params.get("arguments").isJsonObject())
+			{
+				throw new IllegalArgumentException("arguments must be an object");
+			}
+			arguments = params.getAsJsonObject("arguments");
+		}
 
 		switch (name)
 		{
-			case "client_state":
-				data = snapshot.deepCopy();
-				data.getAsJsonObject().remove("skills");
-				break;
+			case "get_game_context":
+				rejectUnknownArguments(arguments);
+				return toolResult(gameContext(snapshots.snapshot()));
 			case "skills":
-				data = skills(snapshot, arguments);
-				break;
+				rejectUnknownArguments(arguments, "names");
+				return toolResult(skills(snapshots.snapshot(), arguments));
 			default:
 				return toolError("Unknown tool: " + name);
 		}
-		return toolResult(data);
+	}
+
+	private static JsonObject gameContext(JsonObject snapshot)
+	{
+		JsonObject context = snapshot.deepCopy();
+		context.remove("skills");
+		return context;
 	}
 
 	private JsonObject skills(JsonObject snapshot, JsonObject arguments)
@@ -205,7 +222,8 @@ public class McpDispatcher
 		}
 
 		JsonObject result = new JsonObject();
-		result.addProperty("gameState", snapshot.get("gameState").getAsString());
+		result.add("state", snapshot.get("state").deepCopy());
+		result.add("sample", snapshot.get("sample").deepCopy());
 		result.add("skills", filtered);
 		return result;
 	}
@@ -213,9 +231,9 @@ public class McpDispatcher
 	private JsonObject resourcesList()
 	{
 		JsonObject resource = new JsonObject();
-		resource.addProperty("uri", "runelite://client/state");
-		resource.addProperty("name", "RuneLite client state");
-		resource.addProperty("description", "Current informational client and local-player snapshot");
+		resource.addProperty("uri", "runelite://game/context");
+		resource.addProperty("name", "RuneLite game context");
+		resource.addProperty("description", "Current informational session and local-player snapshot");
 		resource.addProperty("mimeType", "application/json");
 
 		JsonArray resources = new JsonArray();
@@ -228,7 +246,7 @@ public class McpDispatcher
 	private JsonObject readResource(JsonObject params) throws Exception
 	{
 		String uri = requiredString(params, "uri");
-		if (!"runelite://client/state".equals(uri))
+		if (!"runelite://game/context".equals(uri))
 		{
 			throw new IllegalArgumentException("Unknown resource URI: " + uri);
 		}
@@ -236,7 +254,7 @@ public class McpDispatcher
 		JsonObject content = new JsonObject();
 		content.addProperty("uri", uri);
 		content.addProperty("mimeType", "application/json");
-		content.addProperty("text", gson.toJson(snapshots.snapshot()));
+		content.addProperty("text", gson.toJson(gameContext(snapshots.snapshot())));
 		JsonArray contents = new JsonArray();
 		contents.add(content);
 		JsonObject result = new JsonObject();
@@ -266,7 +284,7 @@ public class McpDispatcher
 
 		JsonObject text = new JsonObject();
 		text.addProperty("type", "text");
-		text.addProperty("text", "Read runelite://client/state, summarize the current session, and ask what help is wanted. Treat RuneLite state as observational only and never claim to perform gameplay actions.");
+		text.addProperty("text", "Call get_game_context, summarize the current session, and ask what help is wanted. Treat RuneLite state as observational only and never claim to perform gameplay actions.");
 		JsonObject message = new JsonObject();
 		message.addProperty("role", "user");
 		message.add("content", text);
@@ -339,6 +357,28 @@ public class McpDispatcher
 		return id == null ? JsonNull.INSTANCE : id;
 	}
 
+	private static boolean validId(JsonElement id)
+	{
+		return id == null || id.isJsonNull()
+			|| id.isJsonPrimitive() && (id.getAsJsonPrimitive().isString() || id.getAsJsonPrimitive().isNumber());
+	}
+
+	private static void rejectUnknownArguments(JsonObject arguments, String... allowed)
+	{
+		Set<String> names = new HashSet<>();
+		for (String name : allowed)
+		{
+			names.add(name);
+		}
+		for (String name : arguments.keySet())
+		{
+			if (!names.contains(name))
+			{
+				throw new IllegalArgumentException("Unknown argument: " + name);
+			}
+		}
+	}
+
 	private static String requiredString(JsonObject object, String name)
 	{
 		if (!object.has(name) || !object.get(name).isJsonPrimitive() || !object.getAsJsonPrimitive(name).isString())
@@ -346,6 +386,15 @@ public class McpDispatcher
 			throw new IllegalArgumentException(name + " must be a string");
 		}
 		return object.get(name).getAsString();
+	}
+
+	private static JsonObject requiredObject(JsonObject object, String name)
+	{
+		if (!object.has(name) || !object.get(name).isJsonObject())
+		{
+			throw new IllegalArgumentException(name + " must be an object");
+		}
+		return object.getAsJsonObject(name);
 	}
 
 	private static String string(JsonElement value)

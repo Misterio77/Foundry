@@ -85,7 +85,10 @@ The foundation has been exercised end to end with the packaged jar and Pi:
 - initialization and capability discovery;
 - tools, resource reads, and prompt retrieval;
 - filtered skill output;
-- logged-in and logged-out snapshots without stale player data;
+- active and logged-out snapshots without stale player data;
+- world-hop transitions through `HOPPING`, `LOADING`, logged-in-without-player,
+  and recovery to an active snapshot on the destination world;
+- movement, core vitals, account type, and filtered skills against the live client;
 - plugin disable, failed call while unavailable, re-enable, and automatic call
   recovery;
 - Home Manager sideload symlink and Nix-built jar contents.

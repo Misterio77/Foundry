@@ -14,20 +14,19 @@
 
 ## M1 — observational core
 
-### M1a — state and availability
+### M1a — state and availability (complete)
 
-- Run an intuition probe before choosing the replacement for the provisional
-  `client_state` interface.
-- Define one shared envelope for game state, sampling tick, availability,
-  truncation, and errors.
-- Add session/player identity, location, movement, animation, interaction target,
-  combat level, hitpoints, prayer points, run energy, and special attack.
-- Keep logged-out and loading responses useful without retaining player-bound
-  values.
-
-M1a exits when the probe results and chosen schema are documented, provisional
-interfaces are replaced rather than aliased, protocol fixtures cover every state,
-Pi verifies login/logout/loading transitions, and both Gradle and Nix checks pass.
+- A three-sample cold intuition probe informed the documented
+  [`get_game_context` interface](game-context.md).
+- One shared envelope carries normalized state, exact RuneLite game state, and
+  sampling tick.
+- Session/player identity, location, movement, animation, interaction target,
+  combat level, hitpoints, prayer points, run energy, and special attack are live.
+- Provisional interfaces were replaced rather than aliased.
+- Automated fixtures cover every RuneLite game state and stale-data transitions.
+- Pi verified active play, movement, world-hop `HOPPING`/`LOADING`, transient
+  logged-in-without-player, recovery, and logout against the packaged plugin.
+- Gradle checks and the reproducible Nix package build pass.
 
 ### M1b — skills, effects, and carried items
 

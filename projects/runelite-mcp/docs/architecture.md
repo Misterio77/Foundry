@@ -50,6 +50,8 @@ The first transport is stateless MCP Streamable HTTP:
 - fixed endpoint: `http://127.0.0.1:<port>/mcp`;
 - POST responses use `application/json`;
 - notifications return HTTP 202;
+- initialization is the only request that does not require the
+  `MCP-Protocol-Version: 2025-11-25` header;
 - GET currently returns 405 because the server emits no unsolicited messages;
 - no session ID is required;
 - request bodies are bounded at 1 MiB;

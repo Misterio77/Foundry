@@ -1,5 +1,8 @@
 package rs.m7.runelitemcp.protocol;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -102,7 +105,15 @@ public final class McpHttpServer implements AutoCloseable
 				return;
 			}
 
-			DispatchResult result = dispatcher.dispatch(new String(request, StandardCharsets.UTF_8));
+			String body = new String(request, StandardCharsets.UTF_8);
+			String protocolVersion = exchange.getRequestHeaders().getFirst("MCP-Protocol-Version");
+			if (!isInitialize(body) && !McpDispatcher.PROTOCOL_VERSION.equals(protocolVersion))
+			{
+				sendPlain(exchange, 400, "MCP-Protocol-Version must be " + McpDispatcher.PROTOCOL_VERSION);
+				return;
+			}
+
+			DispatchResult result = dispatcher.dispatch(body);
 			if (result.getBody() == null)
 			{
 				exchange.sendResponseHeaders(result.getStatus(), -1);
@@ -125,6 +136,23 @@ public final class McpHttpServer implements AutoCloseable
 	{
 		byte[] value = input.readNBytes(MAX_REQUEST_BYTES + 1);
 		return value.length > MAX_REQUEST_BYTES ? null : value;
+	}
+
+	private static boolean isInitialize(String body)
+	{
+		try
+		{
+			JsonElement request = new JsonParser().parse(body);
+			return request.isJsonObject()
+				&& request.getAsJsonObject().has("method")
+				&& request.getAsJsonObject().get("method").isJsonPrimitive()
+				&& request.getAsJsonObject().getAsJsonPrimitive("method").isString()
+				&& "initialize".equals(request.getAsJsonObject().get("method").getAsString());
+		}
+		catch (JsonParseException ex)
+		{
+			return false;
+		}
 	}
 
 	private static boolean isAllowedOrigin(String origin)

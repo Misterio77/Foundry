@@ -14,8 +14,8 @@ The foundation milestone is complete. The plugin currently provides:
 
 - MCP `2025-11-25` over Streamable HTTP at
   `http://127.0.0.1:18471/mcp`;
-- `client_state` and filterable `skills` tools;
-- a `runelite://client/state` resource;
+- `get_game_context` and filterable `skills` tools;
+- a `runelite://game/context` resource;
 - an `osrs_session_brief` prompt;
 - live reads marshalled onto RuneLite's client thread;
 - loopback-only binding, Origin checks, bounded request bodies, and bounded HTTP
@@ -24,7 +24,8 @@ The foundation milestone is complete. The plugin currently provides:
 
 Pi consumes the endpoint through the Foundry MCP registry as `osrs`. See the
 [requirements](docs/requirements.md), [architecture](docs/architecture.md),
-[test strategy](docs/test-strategy.md), and [roadmap](docs/roadmap.md).
+[game-context interface](docs/game-context.md), [test strategy](docs/test-strategy.md),
+and [roadmap](docs/roadmap.md).
 
 ## Installation
 
