@@ -36,12 +36,11 @@ const tool = (name, options, handler) =>
     try {
       return text(await handler(args));
     } catch (error) {
-      return {
-        ...text(
-          `Error: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-        isError: true,
-      };
+      return text({
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   });
 
@@ -62,7 +61,7 @@ const playerSchema = z
   .max(12)
   .regex(/^[A-Za-z0-9 _-]+$/)
   .describe(
-    "OSRS display name whose local export or Hiscores entry should be read. Use players to discover available local exports.",
+    "OSRS display name. Local snapshot tools require an export discoverable with players; hiscores accepts any player.",
   );
 
 tool(
@@ -82,14 +81,14 @@ tool(
       "Read a player's RuneLite snapshot and summarize account identity, freshness, quests, diaries, Combat Achievements, meaningful Slayer state, wealth, and which private sections are loaded. Old snapshots are explicitly marked stale. Call this before giving account-specific progression advice.",
     inputSchema: {
       player: playerSchema,
-      includeRaw: z
+      includeRawSlayer: z
         .boolean()
         .default(false)
         .describe("Include empty and zero-only raw Slayer data."),
     },
   },
-  async ({ player, includeRaw }) =>
-    accountSummary(await loadAccount(player), { includeRaw }),
+  async ({ player, includeRawSlayer }) =>
+    accountSummary(await loadAccount(player), { includeRawSlayer }),
 );
 
 tool(
@@ -102,7 +101,9 @@ tool(
       names: z
         .array(z.string())
         .optional()
-        .describe('Exact skill names, for example ["Prayer", "Ranged"].'),
+        .describe(
+          'Case-insensitive skill names, for example ["prayer", "Ranged"].',
+        ),
     },
   },
   async ({ player, names = [] }) => {
@@ -151,7 +152,7 @@ tool(
   "find_items",
   {
     description:
-      "Search a player's bank, inventory, equipment, and auxiliary containers by item name. Includes loaded/cache timestamps so absence is not mistaken for non-ownership.",
+      "Search a player's bank, inventory, equipment, and auxiliary containers by item name. Returns matching containers plus a compact summary of every searched container so absence is not mistaken for non-ownership.",
     inputSchema: {
       player: playerSchema,
       query: z
@@ -164,13 +165,22 @@ tool(
         .describe(
           "Containers to search; defaults to all supported containers.",
         ),
+      includeEmptyContainers: z
+        .boolean()
+        .default(false)
+        .describe("Return full result objects for containers without matches."),
     },
   },
-  async ({ player, query, containers = itemContainers }) => {
+  async ({
+    player,
+    query,
+    containers = itemContainers,
+    includeEmptyContainers,
+  }) => {
     const account = await loadAccount(player);
     return {
       freshness: freshness(account),
-      results: findItems(account, query, containers),
+      ...findItems(account, query, containers, { includeEmptyContainers }),
     };
   },
 );
@@ -186,9 +196,13 @@ tool(
         .boolean()
         .default(true)
         .describe("Include inventory and equipment item lists."),
+      includeRawAnimation: z
+        .boolean()
+        .default(false)
+        .describe("Include raw RuneLite animation and orientation IDs."),
     },
   },
-  async ({ player, includeItems }) => {
+  async ({ player, includeItems, includeRawAnimation }) => {
     const account = await loadAccount(player);
     const summarizeContainer = (name) => ({
       ...sectionMeta(account[name]),
@@ -205,7 +219,15 @@ tool(
       },
       status: account.status,
       combat: account.combat,
-      animation: account.animation,
+      animation: includeRawAnimation
+        ? account.animation
+        : {
+            state:
+              typeof account.animation?.current === "number" &&
+              account.animation.current >= 0
+                ? "ANIMATING"
+                : "IDLE",
+          },
       inventory: summarizeContainer("inventory"),
       equipment: summarizeContainer("equipment"),
     };
@@ -241,13 +263,21 @@ tool(
         .max(200)
         .default(50)
         .describe("Maximum Combat Achievement tasks across all tiers."),
-      includeRaw: z
+      includeRawSlayer: z
         .boolean()
         .default(false)
         .describe("Include empty and zero-only raw Slayer data."),
     },
   },
-  async ({ player, section, tier, completed, query, limit, includeRaw }) => {
+  async ({
+    player,
+    section,
+    tier,
+    completed,
+    query,
+    limit,
+    includeRawSlayer,
+  }) => {
     const account = await loadAccount(player);
     const data = {
       achievement_diaries: account.achievementDiaries,
@@ -257,7 +287,7 @@ tool(
         query,
         limit,
       }),
-      slayer: includeRaw ? account.slayer : compactSlayer(account.slayer),
+      slayer: includeRawSlayer ? account.slayer : compactSlayer(account.slayer),
       grand_exchange: account.grandExchange,
     }[section];
     return { freshness: freshness(account), section, data };
@@ -335,10 +365,19 @@ tool(
     description:
       "Read the user-authored RuneLite Notes plugin text from local profiles as an optional player-to-agent message channel.",
     inputSchema: {
+      profile: z
+        .string()
+        .optional()
+        .describe("Exact RuneLite profile name, with or without .properties."),
+      includeEmpty: z
+        .boolean()
+        .default(false)
+        .describe("Include profiles whose Notes text is empty."),
       maxCharacters: z.number().int().min(100).max(20_000).default(10_000),
     },
   },
-  async ({ maxCharacters }) => readRuneLiteNotes(undefined, maxCharacters),
+  async ({ profile, includeEmpty, maxCharacters }) =>
+    readRuneLiteNotes(undefined, maxCharacters, { profile, includeEmpty }),
 );
 
 await server.connect(new StdioServerTransport());

@@ -44,71 +44,93 @@ const MAP_AREAS = [
 ];
 let itemMapping;
 
-export async function discoverPlayers(directory = ACCOUNT_DIRECTORY) {
+export function canonicalPlayerName(player) {
+  return player.trim().replaceAll("_", " ").replace(/\s+/g, " ").toLowerCase();
+}
+
+async function readAccountExports(directory) {
   let files;
   try {
     files = (await readdir(directory)).filter((name) => name.endsWith(".json"));
-  } catch (error) {
+  } catch {
     throw new Error(
-      `RuneLite account export directory is unavailable at ${directory}. Start RuneLite with Account Data Exporter enabled. (${error.message})`,
+      "RuneLite account exports are unavailable. Start RuneLite with Account Data Exporter enabled.",
     );
   }
 
-  const players = [];
+  const exports = [];
   for (const file of files) {
     try {
       const account = JSON.parse(await readFile(join(directory, file), "utf8"));
-      if (typeof account.rsn !== "string" || !account.timestampIso) continue;
-      players.push({
-        player: account.rsn,
-        accountType: account.accountTypeName,
-        combatLevel: account.combatLevel,
-        totalLevel: account.totalLevel,
-        freshness: freshness(account),
-      });
+      if (
+        typeof account.rsn === "string" &&
+        Number.isFinite(Date.parse(account.timestampIso))
+      ) {
+        exports.push(account);
+      }
     } catch {
       // Ignore malformed or transiently incomplete exporter files.
     }
   }
-  return players.sort((left, right) => left.player.localeCompare(right.player));
+  return exports;
+}
+
+function newestAccount(left, right) {
+  return Date.parse(left.timestampIso) >= Date.parse(right.timestampIso)
+    ? left
+    : right;
+}
+
+export async function discoverPlayers(directory = ACCOUNT_DIRECTORY) {
+  const accounts = await readAccountExports(directory);
+  const byPlayer = new Map();
+  for (const account of accounts) {
+    const key = canonicalPlayerName(account.rsn);
+    const previous = byPlayer.get(key);
+    byPlayer.set(key, previous ? newestAccount(previous, account) : account);
+  }
+
+  return [...byPlayer.values()]
+    .map((account) => ({
+      player: account.rsn,
+      accountType: account.accountTypeName,
+      combatLevel: account.combatLevel,
+      totalLevel: account.totalLevel,
+      freshness: freshness(account),
+    }))
+    .sort((left, right) => left.player.localeCompare(right.player));
 }
 
 export async function loadAccount(player, directory = ACCOUNT_DIRECTORY) {
   if (!/^[A-Za-z0-9 _-]{1,12}$/.test(player)) {
     throw new Error(`Invalid OSRS player name: ${player}`);
   }
-  const path = join(directory, `${player}.json`);
-  let raw;
-  try {
-    raw = await readFile(path, "utf8");
-  } catch (error) {
+  const wanted = canonicalPlayerName(player);
+  const matches = (await readAccountExports(directory)).filter(
+    (account) => canonicalPlayerName(account.rsn) === wanted,
+  );
+  if (matches.length === 0) {
     throw new Error(
-      `RuneLite account export is unavailable at ${path}. Start RuneLite with Account Data Exporter enabled and log into ${player}. (${error.message})`,
+      `No local RuneLite account export found for ${player}. Call players to discover available exports.`,
     );
   }
 
-  const account = JSON.parse(raw);
-  if (!account.timestampIso || !account.skills || !account.quests) {
-    throw new Error(
-      `RuneLite account export at ${path} has an unsupported shape.`,
-    );
-  }
-  if (account.rsn?.toLowerCase() !== player.toLowerCase()) {
-    throw new Error(
-      `RuneLite account export belongs to ${account.rsn ?? "an unknown account"}, not ${player}.`,
-    );
+  const account = matches.reduce(newestAccount);
+  if (!account.skills || !account.quests) {
+    throw new Error(`The local RuneLite export for ${player} is unsupported.`);
   }
   return account;
 }
 
 export function freshness(account, now = Date.now()) {
-  const timestamp = Date.parse(account.timestampIso);
+  const timestampIso = timestampToIso(account.timestampIso);
+  const timestamp = Date.parse(timestampIso);
   const ageSeconds = Number.isFinite(timestamp)
     ? Math.max(0, Math.round((now - timestamp) / 1000))
     : null;
   const stale = ageSeconds === null || ageSeconds > STALE_AFTER_SECONDS;
   return {
-    timestampIso: account.timestampIso,
+    timestampIso: timestampIso ?? null,
     ageSeconds,
     snapshotStatus: stale ? "STALE" : "CURRENT",
     stale,
@@ -165,31 +187,44 @@ export function compactSlayer(slayer) {
   return compactValue(slayer);
 }
 
+export function timestampToIso(timestamp) {
+  if (timestamp === null || timestamp === undefined) return undefined;
+  const milliseconds =
+    typeof timestamp === "number" && Math.abs(timestamp) < 1_000_000_000_000
+      ? timestamp * 1000
+      : timestamp;
+  const date = new Date(milliseconds);
+  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
+}
+
 export function sectionMeta(section) {
   if (!section || typeof section !== "object") {
     return {
       available: false,
-      contentsCurrent: false,
+      currentAtSnapshot: false,
       absenceMeaning: "unknown_section_unavailable",
     };
   }
-  const contentsCurrent = section.loaded === true && section.fromCache !== true;
+  const currentAtSnapshot =
+    section.loaded === true && section.fromCache !== true;
   return {
     available: true,
     loaded: section.loaded,
     fromCache: section.fromCache,
-    lastSeenTimestamp: section.lastSeenTimestamp,
-    contentsCurrent,
-    absenceMeaning: contentsCurrent
-      ? "not_present_in_current_snapshot"
-      : "unknown_section_not_current",
+    lastSeenTimestampIso: timestampToIso(section.lastSeenTimestamp),
+    currentAtSnapshot,
+    absenceMeaning: currentAtSnapshot
+      ? "not_present_at_snapshot"
+      : "unknown_section_not_current_at_snapshot",
   };
 }
 
-export function accountSummary(account, { includeRaw = false } = {}) {
+export function accountSummary(account, { includeRawSlayer = false } = {}) {
   const diaries = account.achievementDiaries ?? {};
   const achievements = account.combatAchievements ?? {};
-  const slayer = includeRaw ? account.slayer : compactSlayer(account.slayer);
+  const slayer = includeRawSlayer
+    ? account.slayer
+    : compactSlayer(account.slayer);
   return {
     freshness: freshness(account),
     identity: {
@@ -210,7 +245,10 @@ export function accountSummary(account, { includeRaw = false } = {}) {
     achievementDiaries: {
       completedTiers: diaries.completedTierCount,
       totalTiers: diaries.totalTierCount,
-      completionPercent: diaries.completionPercent,
+      completionPercent:
+        typeof diaries.completionPercent === "number"
+          ? Math.round(diaries.completionPercent * 100) / 100
+          : diaries.completionPercent,
     },
     combatAchievements: {
       completed: achievements.completed,
@@ -260,9 +298,14 @@ export function filterQuests(account, states = [], query) {
   );
 }
 
-export function findItems(account, query, containers) {
+export function findItems(
+  account,
+  query,
+  containers,
+  { includeEmptyContainers = false } = {},
+) {
   const needle = query.toLowerCase();
-  return containers.map((container) => {
+  const searched = containers.map((container) => {
     const section = account[container];
     const matches = (section?.items ?? []).filter((item) =>
       item.name.toLowerCase().includes(needle),
@@ -275,6 +318,18 @@ export function findItems(account, query, containers) {
       matches,
     };
   });
+  return {
+    results: includeEmptyContainers
+      ? searched
+      : searched.filter(({ matches }) => matches.length > 0),
+    searchedContainers: searched.map(
+      ({ container, matches, itemCount, value, ...meta }) => ({
+        container,
+        ...meta,
+        matchCount: matches.length,
+      }),
+    ),
+  };
 }
 
 export function combatAchievements(account, { tier, completed, query, limit }) {
@@ -454,8 +509,18 @@ export async function itemPrices(query, limit) {
     buyLimit: item.limit,
     value: item.value,
     alch: { high: item.highalch, low: item.lowalch },
-    market: latest.data[String(item.id)] ?? null,
+    market: normalizeMarket(latest.data[String(item.id)]),
   }));
+}
+
+export function normalizeMarket(market) {
+  if (!market) return null;
+  const { highTime, lowTime, ...prices } = market;
+  return {
+    ...prices,
+    highTimeIso: timestampToIso(highTime),
+    lowTimeIso: timestampToIso(lowTime),
+  };
 }
 
 function decodeJavaProperty(value) {
@@ -470,16 +535,34 @@ function decodeJavaProperty(value) {
 export async function readRuneLiteNotes(
   directory = PROFILES_PATH,
   maxCharacters = 10_000,
+  { profile, includeEmpty = false } = {},
 ) {
-  const files = (await readdir(directory)).filter((name) =>
-    name.endsWith(".properties"),
-  );
+  const wantedProfile = profile?.toLowerCase().replace(/\.properties$/, "");
+  let files;
+  try {
+    files = (await readdir(directory)).filter(
+      (name) =>
+        name.endsWith(".properties") &&
+        (!wantedProfile ||
+          name.toLowerCase().replace(/\.properties$/, "") === wantedProfile),
+    );
+  } catch {
+    throw new Error("RuneLite Notes profiles are unavailable.");
+  }
   const notes = [];
   for (const file of files) {
-    const content = await readFile(join(directory, file), "utf8");
+    let content;
+    try {
+      content = await readFile(join(directory, file), "utf8");
+    } catch {
+      if (wantedProfile)
+        throw new Error("RuneLite Notes profile is unavailable.");
+      continue;
+    }
     const lines = content.match(/(?:^|\n)notes\.notesData=(.*(?:\\\n.*)*)/);
     if (lines) {
       const fullText = decodeJavaProperty(lines[1]);
+      if (!includeEmpty && fullText.trim().length === 0) continue;
       notes.push({
         profile: file,
         text: fullText.slice(0, maxCharacters),

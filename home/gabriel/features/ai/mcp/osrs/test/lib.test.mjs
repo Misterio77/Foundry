@@ -14,9 +14,12 @@ import {
   findItems,
   freshness,
   loadAccount,
+  normalizeMarket,
   paginateText,
   readRuneLiteNotes,
   resolveMapArea,
+  sectionMeta,
+  timestampToIso,
 } from "../lib.mjs";
 
 const account = {
@@ -46,7 +49,7 @@ const account = {
   achievementDiaries: {
     completedTierCount: 2,
     totalTierCount: 48,
-    completionPercent: 4.2,
+    completionPercent: 35.416666666666664,
   },
   combatAchievements: {
     completed: 1,
@@ -77,7 +80,7 @@ const account = {
   bank: {
     loaded: true,
     fromCache: false,
-    lastSeenTimestamp: 42,
+    lastSeenTimestamp: 1_700_000_000_000,
     itemCount: 2,
     value: 1000,
     items: [
@@ -89,18 +92,40 @@ const account = {
   equipment: { loaded: true, items: [] },
 };
 
-test("discovers, loads, and validates account exports", async () => {
+test("deduplicates and normalizes local account lookups", async () => {
   const directory = await mkdtemp(join(tmpdir(), "osrs-mcp-"));
-  const path = join(directory, "Test User.json");
-  await writeFile(path, JSON.stringify(account));
+  await writeFile(join(directory, "Test User.json"), JSON.stringify(account));
+  await writeFile(
+    join(directory, "latest.json"),
+    JSON.stringify({
+      ...account,
+      timestampIso: "2020-01-01T00:00:00.000Z",
+      totalLevel: 100,
+    }),
+  );
   await writeFile(join(directory, "broken.json"), "{");
+  await writeFile(
+    join(directory, "invalid-time.json"),
+    JSON.stringify({
+      ...account,
+      timestampIso: "eventually",
+      totalLevel: 9999,
+    }),
+  );
   await writeFile(join(directory, "ignore.txt"), "not an export");
 
-  assert.equal((await loadAccount("Test User", directory)).rsn, "Test User");
+  assert.equal((await loadAccount("test_user", directory)).rsn, "Test User");
   const players = await discoverPlayers(directory);
   assert.equal(players.length, 1);
   assert.equal(players[0].player, "Test User");
   assert.equal(players[0].totalLevel, 1500);
+
+  await assert.rejects(
+    loadAccount("Missing", directory),
+    (error) =>
+      error.message.includes("No local RuneLite account export found") &&
+      !error.message.includes(directory),
+  );
 });
 
 test("summarizes without item lists or empty Slayer data", () => {
@@ -109,9 +134,10 @@ test("summarizes without item lists or empty Slayer data", () => {
   assert.equal(summary.quests.questPoints, 200);
   assert.equal(summary.dataAvailability.bank.loaded, true);
   assert.equal("items" in summary.dataAvailability.bank, false);
+  assert.equal(summary.achievementDiaries.completionPercent, 35.42);
   assert.equal("slayer" in summary, false);
   assert.deepEqual(
-    accountSummary(account, { includeRaw: true }).slayer,
+    accountSummary(account, { includeRawSlayer: true }).slayer,
     account.slayer,
   );
 });
@@ -124,6 +150,16 @@ test("marks old snapshots stale instead of reporting a current login", () => {
   assert.equal(result.snapshotStatus, "STALE");
   assert.equal(result.gameState, "STALE_SNAPSHOT");
   assert.equal(result.recordedGameState, "LOGGED_IN");
+  assert.equal(
+    freshness(
+      {
+        timestampIso: "2026-01-01T01:00:00.000+01:00",
+        gameState: "LOGGED_IN",
+      },
+      Date.parse("2026-01-01T00:00:00.000Z"),
+    ).timestampIso,
+    "2026-01-01T00:00:00.000Z",
+  );
 });
 
 test("resolves coordinates to the most specific named map area", () => {
@@ -196,6 +232,27 @@ test("paginates Wiki extracts with a continuation offset", () => {
   });
 });
 
+test("normalizes snapshot-adjacent timestamps and section metadata", () => {
+  assert.equal(timestampToIso(1_700_000_000), "2023-11-14T22:13:20.000Z");
+  assert.equal(timestampToIso(1_700_000_000_000), "2023-11-14T22:13:20.000Z");
+  assert.deepEqual(sectionMeta(account.bank), {
+    available: true,
+    loaded: true,
+    fromCache: false,
+    lastSeenTimestampIso: "2023-11-14T22:13:20.000Z",
+    currentAtSnapshot: true,
+    absenceMeaning: "not_present_at_snapshot",
+  });
+  assert.deepEqual(
+    normalizeMarket({ high: 100, highTime: 1_700_000_000, lowTime: null }),
+    {
+      high: 100,
+      highTimeIso: "2023-11-14T22:13:20.000Z",
+      lowTimeIso: undefined,
+    },
+  );
+});
+
 test("filters skills and quest state case-insensitively", () => {
   assert.deepEqual(Object.keys(filterSkills(account, ["prayer"])), ["Prayer"]);
   assert.deepEqual(filterQuests(account, ["NOT_STARTED"], "ransom"), [
@@ -203,11 +260,27 @@ test("filters skills and quest state case-insensitively", () => {
   ]);
 });
 
-test("item searches retain container freshness metadata", () => {
-  const [bank, inventory] = findItems(account, "dragon", ["bank", "inventory"]);
-  assert.equal(bank.matches.length, 2);
-  assert.equal(bank.loaded, true);
-  assert.equal(inventory.loaded, false);
+test("item searches compact empty containers but summarize the search", () => {
+  const result = findItems(account, "dragon", ["bank", "inventory"]);
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].matches.length, 2);
+  assert.equal(result.results[0].loaded, true);
+  assert.deepEqual(
+    result.searchedContainers.map(({ container, matchCount }) => ({
+      container,
+      matchCount,
+    })),
+    [
+      { container: "bank", matchCount: 2 },
+      { container: "inventory", matchCount: 0 },
+    ],
+  );
+  assert.equal(
+    findItems(account, "dragon", ["bank", "inventory"], {
+      includeEmptyContainers: true,
+    }).results.length,
+    2,
+  );
 });
 
 test("combat achievement output is filtered and globally bounded", () => {
@@ -227,18 +300,39 @@ test("combat achievement output is filtered and globally bounded", () => {
   assert.equal(global.tiers[1].tasks.length, 0);
 });
 
-test("reads and decodes RuneLite notes without relying on a fixed profile name", async () => {
+test("filters and selects RuneLite Notes profiles", async () => {
   const directory = await mkdtemp(join(tmpdir(), "osrs-notes-"));
   await writeFile(
     join(directory, "Main.properties"),
     "other.value=x\nnotes.notesData=HELLO\\nWORLD\\u0021\n",
   );
-  assert.deepEqual(await readRuneLiteNotes(directory), [
-    {
-      profile: "Main.properties",
-      text: "HELLO\nWORLD!",
-      truncated: false,
-      totalCharacters: 12,
-    },
-  ]);
+  await writeFile(join(directory, "Empty.properties"), "notes.notesData=\n");
+  const expected = {
+    profile: "Main.properties",
+    text: "HELLO\nWORLD!",
+    truncated: false,
+    totalCharacters: 12,
+  };
+  assert.deepEqual(await readRuneLiteNotes(directory), [expected]);
+  assert.deepEqual(
+    await readRuneLiteNotes(directory, 10_000, { profile: "main" }),
+    [expected],
+  );
+  assert.equal(
+    (
+      await readRuneLiteNotes(directory, 10_000, {
+        profile: "Empty.properties",
+        includeEmpty: true,
+      })
+    ).length,
+    1,
+  );
+
+  const missing = join(directory, "missing");
+  await assert.rejects(
+    readRuneLiteNotes(missing),
+    (error) =>
+      error.message === "RuneLite Notes profiles are unavailable." &&
+      !error.message.includes(missing),
+  );
 });
