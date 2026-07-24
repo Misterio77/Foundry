@@ -25,7 +25,8 @@ The foundation milestone is complete. The plugin currently provides:
 Pi consumes the endpoint through the Foundry MCP registry as `osrs`. See the
 [requirements](docs/requirements.md), [architecture](docs/architecture.md),
 [game-context interface](docs/game-context.md),
-[observation tools](docs/observation-tools.md), [test strategy](docs/test-strategy.md),
+[observation tools](docs/observation-tools.md),
+[event-history draft](docs/event-history.md), [test strategy](docs/test-strategy.md),
 and [roadmap](docs/roadmap.md).
 
 ## Installation

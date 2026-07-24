@@ -40,8 +40,8 @@ The target tool families, in implementation order, are:
   energy, special attack, timers, and Slayer state;
 - carried items: inventory and equipment, with container availability and bounded
   item output;
-- bounded event history for state transitions, XP, loot, inventory changes, and
-  other contextual observations that polling can miss;
+- bounded event history for state transitions, XP, inventory changes, and only
+  explicitly attributable loot or other observations that polling can miss;
 - carefully bounded nearby NPC, object, ground-item, widget, and map queries;
 - progression and private state: quests, diaries, combat achievements, collection
   log, Grand Exchange, bank, and auxiliary containers;
@@ -50,7 +50,9 @@ The target tool families, in implementation order, are:
 
 Sensitive information must be opt-in or omitted: chat, friends, clan membership,
 private messages, notes, nearby player identities, and bank contents are not
-exposed merely because the client API can read them.
+exposed merely because the client API can read them. A direct player interaction
+may expose only that the target is a player and its combat level; names, IDs, and
+social relationships remain omitted.
 
 ### State semantics
 
@@ -60,8 +62,10 @@ exposed merely because the client API can read them.
    availability status such as `current`, `not_logged_in`, or `unavailable`.
 3. Cached data is returned only when a capability explicitly promises it and then
    includes its source tick or timestamp.
-4. Logout and loading transitions clear player-bound data rather than leaking the
-   previous session's snapshot.
+4. Logout and loading transitions clear current player-bound snapshots rather
+   than leaking stale values. Explicitly historical event records may remain
+   across transient hops/loading for the same player, but logout or player
+   identity change starts a new history generation.
 5. Lists report truncation and total counts whenever a configured bound is hit.
 
 ## Safety and Plugin Hub requirements

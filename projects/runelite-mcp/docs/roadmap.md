@@ -43,13 +43,15 @@
   open widget, container filtering, and packaged-client recovery.
 - Gradle checks and the reproducible Nix package build pass.
 
-### M1c — event history
+### M1c — event history (drafted)
 
-- Maintain a bounded in-memory ring of selected RuneLite events.
-- Cover state transitions, XP gains, loot, inventory/equipment changes, movement,
-  and interaction changes where RuneLite exposes reliable events.
-- Add filtered, paginated event queries with sequence/tick metadata.
-- Never persist history or include private chat/social events.
+- Implement the [event-history design](event-history.md): a 512-record in-memory
+  ring with generation-aware cursor pagination.
+- Cover state transitions, skill changes, inventory/equipment diffs, movement, and
+  interaction changes with typed, coalesced records.
+- Defer dedicated loot events until RuneLite can reliably attribute ownership and
+  cause rather than mislabelling ground spawns or inventory gains.
+- Clear player-bound history on logout and never include private chat/social data.
 
 ### M1d — bounded world context
 

@@ -8,12 +8,13 @@ local MCP client
       | Streamable HTTP / JSON-RPC
       v
 McpHttpServer -- McpDispatcher -- capability registries
-                                      |
-                                      v
-                           SnapshotProvider interface
-                                      |
-                            RuneLite client thread
-                                      |
+                                  |              |
+                                  v              v
+                        SnapshotProvider    EventHistory (M1c)
+                                  |              ^
+                                  v              |
+                           RuneLite client thread / EventCollector
+                                  |
                               RuneLite Client
 ```
 
@@ -33,7 +34,12 @@ remote service between the MCP client and RuneLite.
 - `RuneLiteSnapshotProvider`: schedules focused reads with `ClientThread`, produces
   immutable JSON snapshots, bounds item output before serialization, and enforces
   a timeout.
-- Future registries: typed tools, resources, prompts, and event history.
+- M1c `EventHistory`: pure-Java, synchronized bounded ring owning generation,
+  sequence, state metadata, and linearizable queries.
+- M1c `RuneLiteEventCollector`: explicitly started/stopped lifecycle adapter that
+  copies reviewed client fields, owns baselines/coalescing, and atomically appends
+  typed immutable records.
+- Future registries: typed tools, resources, and prompts.
 
 ## Threading
 
@@ -43,7 +49,9 @@ RuneLite `Client`. `RuneLiteSnapshotProvider` queues a small read on
 result. Blocking I/O must never run on the client thread.
 
 Snapshots are preferred over holding references to RuneLite actors, widgets, or
-item containers after leaving the client thread.
+item containers after leaving the client thread. M1c event queries take immutable
+record references and coherent metadata under the history lock, then filter and
+serialize on the HTTP worker without touching RuneLite state.
 
 ## Transport
 

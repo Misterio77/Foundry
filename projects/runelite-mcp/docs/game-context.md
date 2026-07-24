@@ -97,8 +97,9 @@ skill list. Other focused snapshots are documented in
   cached.
 - `movement.moving` means RuneLite currently has a local movement destination.
   Animation IDs are raw RuneLite IDs, with `-1` meaning no primary animation.
-- NPC interactions include type, ID, name, and combat level. Player interactions
-  omit identity by design and include only type and combat level.
+- NPC interactions include type, ID, name, and combat level. A direct player
+  interaction exposes only type and combat level; this is non-identifying context,
+  while names, IDs, and social relationships remain omitted by design.
 - Hitpoints and prayer report boosted/current and real/max levels. Run energy and
   special attack are percentages and may contain fractional values.
 - Tool results include identical JSON in `structuredContent` and the text fallback.

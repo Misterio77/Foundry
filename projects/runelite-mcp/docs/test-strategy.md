@@ -11,7 +11,8 @@ Run without RuneLite or sockets:
 - tool argument validation and output schemas;
 - filtering, pagination, truncation, freshness, and coordinate conversion;
 - privacy defaults and prohibited-operation deny lists;
-- event-ring ordering and capacity.
+- event-ring ordering and capacity; M1c's cursor, lifecycle, privacy, concurrency,
+  and bound matrix is specified in [event history](event-history.md).
 
 Use a fake `SnapshotProvider`; do not mock the broad RuneLite `Client` API in
 protocol tests.
