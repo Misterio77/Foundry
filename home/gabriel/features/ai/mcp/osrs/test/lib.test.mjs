@@ -6,11 +6,15 @@ import test from "node:test";
 import {
   accountSummary,
   combatAchievements,
+  compactHiscores,
+  compactSlayer,
   filterQuests,
   filterSkills,
   findItems,
+  freshness,
   loadAccount,
   readRuneLiteNotes,
+  resolveMapArea,
 } from "../lib.mjs";
 
 const account = {
@@ -55,6 +59,12 @@ const account = {
           { id: 2, name: "Another task", completed: false },
         ],
       },
+      {
+        name: "Medium",
+        completed: 0,
+        total: 1,
+        tasks: [{ id: 3, name: "Medium task", completed: false }],
+      },
     ],
   },
   slayer: {
@@ -84,12 +94,66 @@ test("loads and validates an account export", async () => {
   assert.equal((await loadAccount("Test User", directory)).rsn, "Test User");
 });
 
-test("summarizes without copying item lists", () => {
+test("summarizes without item lists or empty Slayer data", () => {
   const summary = accountSummary(account);
   assert.equal(summary.identity.rsn, "Test User");
   assert.equal(summary.quests.questPoints, 200);
   assert.equal(summary.dataAvailability.bank.loaded, true);
   assert.equal("items" in summary.dataAvailability.bank, false);
+  assert.equal("slayer" in summary, false);
+  assert.deepEqual(
+    accountSummary(account, { includeRaw: true }).slayer,
+    account.slayer,
+  );
+});
+
+test("marks old snapshots stale instead of reporting a current login", () => {
+  const result = freshness(
+    { timestampIso: "2026-01-01T00:00:00.000Z", gameState: "LOGGED_IN" },
+    Date.parse("2026-01-01T00:02:00.000Z"),
+  );
+  assert.equal(result.snapshotStatus, "STALE");
+  assert.equal(result.gameState, "STALE_SNAPSHOT");
+  assert.equal(result.recordedGameState, "LOGGED_IN");
+});
+
+test("resolves coordinates to the most specific named map area", () => {
+  assert.equal(
+    resolveMapArea({ loaded: true, worldX: 3222, worldY: 3218 }),
+    "Lumbridge",
+  );
+  assert.equal(
+    resolveMapArea({ loaded: true, worldX: 3165, worldY: 3490 }),
+    "Grand Exchange",
+  );
+  assert.equal(
+    resolveMapArea({ loaded: true, worldX: 10_000, worldY: 10_000 }),
+    null,
+  );
+  assert.equal(resolveMapArea({ loaded: false }), null);
+});
+
+test("compacts zero-only Slayer and Hiscores data", () => {
+  assert.equal(compactSlayer(account.slayer), undefined);
+  assert.deepEqual(
+    compactSlayer({ ...account.slayer, superiorCreaturesDefeated: 3 }),
+    { superiorCreaturesDefeated: 3 },
+  );
+  const raw = {
+    skills: [
+      { id: 0, name: "Overall", rank: 1, level: 1500, xp: 12_345_678 },
+      { id: 1, name: "Attack", rank: -1, level: 1, xp: 0 },
+    ],
+    activities: [
+      { id: 0, name: "Clue Scrolls", rank: -1, score: -1 },
+      { id: 1, name: "Vorkath", rank: 100, score: 25 },
+    ],
+    bosses: [{ id: 0, name: "Zulrah", rank: -1, score: -1 }],
+  };
+  assert.deepEqual(compactHiscores(raw), {
+    skills: [raw.skills[0]],
+    activities: [raw.activities[1]],
+  });
 });
 
 test("filters skills and quest state case-insensitively", () => {
@@ -106,15 +170,21 @@ test("item searches retain container freshness metadata", () => {
   assert.equal(inventory.loaded, false);
 });
 
-test("combat achievement output is filtered and bounded", () => {
-  const result = combatAchievements(account, {
+test("combat achievement output is filtered and globally bounded", () => {
+  const filtered = combatAchievements(account, {
     tier: "easy",
     completed: false,
     query: "task",
     limit: 1,
   });
-  assert.equal(result.tiers[0].matchedTaskCount, 1);
-  assert.equal(result.tiers[0].tasks[0].name, "Another task");
+  assert.equal(filtered.tiers[0].matchedTaskCount, 1);
+  assert.equal(filtered.tiers[0].tasks[0].name, "Another task");
+
+  const global = combatAchievements(account, { limit: 2 });
+  assert.equal(global.matchedTaskCount, 3);
+  assert.equal(global.returnedTaskCount, 2);
+  assert.equal(global.tiers[0].tasks.length, 2);
+  assert.equal(global.tiers[1].tasks.length, 0);
 });
 
 test("reads and decodes RuneLite notes without relying on a fixed profile name", async () => {

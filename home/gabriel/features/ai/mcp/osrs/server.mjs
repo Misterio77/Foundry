@@ -6,6 +6,7 @@ import * as z from "zod/v4";
 import {
   accountSummary,
   combatAchievements,
+  compactSlayer,
   fetchHiscores,
   filterQuests,
   filterSkills,
@@ -14,6 +15,7 @@ import {
   itemPrices,
   loadAccount,
   readRuneLiteNotes,
+  resolveMapArea,
   sectionMeta,
   wikiPage,
   wikiSearch,
@@ -66,10 +68,17 @@ tool(
   "account_summary",
   {
     description:
-      "Read a player's current RuneLite snapshot and summarize account identity, freshness, quests, diaries, Combat Achievements, Slayer, wealth, and which private sections are loaded. Call this before giving account-specific progression advice.",
-    inputSchema: { player: playerSchema },
+      "Read a player's RuneLite snapshot and summarize account identity, freshness, quests, diaries, Combat Achievements, meaningful Slayer state, wealth, and which private sections are loaded. Old snapshots are explicitly marked stale. Call this before giving account-specific progression advice.",
+    inputSchema: {
+      player: playerSchema,
+      includeRaw: z
+        .boolean()
+        .default(false)
+        .describe("Include empty and zero-only raw Slayer data."),
+    },
   },
-  async ({ player }) => accountSummary(await loadAccount(player)),
+  async ({ player, includeRaw }) =>
+    accountSummary(await loadAccount(player), { includeRaw }),
 );
 
 tool(
@@ -159,7 +168,7 @@ tool(
   "live_state",
   {
     description:
-      "Read current location coordinates, status, combat state, animation, inventory, and equipment from RuneLite for contextual play assistance. Read-only; never controls gameplay.",
+      "Read current coordinates and their named map area, status, combat state, animation, inventory, and equipment from RuneLite for contextual play assistance. Old snapshots are explicitly marked stale. Read-only; never controls gameplay.",
     inputSchema: {
       player: playerSchema,
       includeItems: z
@@ -179,7 +188,10 @@ tool(
     return {
       freshness: freshness(account),
       world: account.world,
-      location: account.location,
+      location: {
+        ...account.location,
+        mapArea: resolveMapArea(account.location),
+      },
       status: account.status,
       combat: account.combat,
       animation: account.animation,
@@ -211,10 +223,20 @@ tool(
         .string()
         .optional()
         .describe("Combat Achievement task-name substring."),
-      limit: z.number().int().min(1).max(200).default(50),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .default(50)
+        .describe("Maximum Combat Achievement tasks across all tiers."),
+      includeRaw: z
+        .boolean()
+        .default(false)
+        .describe("Include empty and zero-only raw Slayer data."),
     },
   },
-  async ({ player, section, tier, completed, query, limit }) => {
+  async ({ player, section, tier, completed, query, limit, includeRaw }) => {
     const account = await loadAccount(player);
     const data = {
       achievement_diaries: account.achievementDiaries,
@@ -224,7 +246,7 @@ tool(
         query,
         limit,
       }),
-      slayer: account.slayer,
+      slayer: includeRaw ? account.slayer : compactSlayer(account.slayer),
       grand_exchange: account.grandExchange,
     }[section];
     return { freshness: freshness(account), section, data };
@@ -235,10 +257,16 @@ tool(
   "hiscores",
   {
     description:
-      "Fetch public official OSRS Hiscores JSON for a player's current skills, activities, and ranked boss kill counts. This source works even when RuneLite is closed.",
-    inputSchema: { player: playerSchema },
+      "Fetch public official OSRS Hiscores JSON for a player's meaningful skills, activities, and ranked boss kill counts. Empty, zero-only, and unranked entries are omitted by default. This source works even when RuneLite is closed.",
+    inputSchema: {
+      player: playerSchema,
+      includeRaw: z
+        .boolean()
+        .default(false)
+        .describe("Return every raw Hiscores entry, including empty ones."),
+    },
   },
-  async ({ player }) => fetchHiscores(player),
+  async ({ player, includeRaw }) => fetchHiscores(player, { includeRaw }),
 );
 
 tool(

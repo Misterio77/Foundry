@@ -10,6 +10,38 @@ export const PROFILES_PATH =
   process.env.RUNELITE_PROFILES_PATH ?? join(homedir(), ".runelite/profiles2");
 
 const headers = { "User-Agent": USER_AGENT, Accept: "application/json" };
+const STALE_AFTER_SECONDS = 60;
+const MAP_AREAS = [
+  ["Grand Exchange", 3150, 3195, 3470, 3515],
+  ["Lumbridge", 3190, 3265, 3180, 3265],
+  ["Draynor Village", 3070, 3135, 3210, 3290],
+  ["Port Sarim", 2990, 3075, 3160, 3255],
+  ["Al Kharid", 3265, 3335, 3130, 3320],
+  ["Varrock", 3135, 3295, 3370, 3530],
+  ["Edgeville", 3060, 3135, 3470, 3525],
+  ["Falador", 2940, 3070, 3280, 3400],
+  ["Burthorpe", 2870, 2955, 3520, 3595],
+  ["Taverley", 2870, 2955, 3390, 3520],
+  ["Catherby", 2780, 2865, 3400, 3465],
+  ["Seers' Village", 2680, 2760, 3450, 3515],
+  ["Ardougne", 2490, 2675, 3250, 3345],
+  ["Yanille", 2520, 2625, 3060, 3135],
+  ["Tree Gnome Stronghold", 2400, 2505, 3380, 3520],
+  ["Rellekka", 2610, 2725, 3620, 3715],
+  ["Canifis", 3450, 3525, 3450, 3525],
+  ["Prifddinas", 2150, 2305, 3250, 3405],
+  ["Ape Atoll", 2680, 2825, 2680, 2825],
+  ["Fossil Island", 3600, 3900, 3700, 4000],
+  ["Karamja", 2750, 2985, 2800, 3200],
+  ["Wilderness", 2940, 3400, 3520, 3970],
+  ["Morytania", 3400, 3800, 3000, 3700],
+  ["Great Kourend", 1200, 2100, 3400, 4100],
+  ["Varlamore", 1200, 2100, 2750, 3400],
+  ["Tirannwn", 2100, 2400, 3000, 3600],
+  ["Kandarin", 2350, 2900, 3000, 3800],
+  ["Asgarnia", 2800, 3100, 3150, 3700],
+  ["Misthalin", 3050, 3400, 3100, 3550],
+];
 let itemMapping;
 
 export async function loadAccount(player, directory = ACCOUNT_DIRECTORY) {
@@ -40,15 +72,64 @@ export async function loadAccount(player, directory = ACCOUNT_DIRECTORY) {
   return account;
 }
 
-export function freshness(account) {
+export function freshness(account, now = Date.now()) {
   const timestamp = Date.parse(account.timestampIso);
+  const ageSeconds = Number.isFinite(timestamp)
+    ? Math.max(0, Math.round((now - timestamp) / 1000))
+    : null;
+  const stale = ageSeconds === null || ageSeconds > STALE_AFTER_SECONDS;
   return {
     timestampIso: account.timestampIso,
-    ageSeconds: Number.isFinite(timestamp)
-      ? Math.max(0, Math.round((Date.now() - timestamp) / 1000))
-      : null,
-    gameState: account.gameState,
+    ageSeconds,
+    snapshotStatus: stale ? "STALE" : "CURRENT",
+    stale,
+    gameState: stale ? "STALE_SNAPSHOT" : account.gameState,
+    recordedGameState: account.gameState,
+    ...(stale
+      ? {
+          warning:
+            "This is an old RuneLite snapshot; recorded login state, location, inventory, and combat context may no longer be current.",
+        }
+      : {}),
   };
+}
+
+export function resolveMapArea(location) {
+  if (location?.loaded !== true) return null;
+  const { worldX: x, worldY: y } = location;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return (
+    MAP_AREAS.find(
+      ([, minX, maxX, minY, maxY]) =>
+        x >= minX && x <= maxX && y >= minY && y <= maxY,
+    )?.[0] ?? null
+  );
+}
+
+function compactValue(value) {
+  if (value === null || value === undefined || value === false || value === 0) {
+    return undefined;
+  }
+  if (typeof value === "string" && value.length === 0) return undefined;
+  if (Array.isArray(value)) {
+    const compacted = value
+      .map((entry) => compactValue(entry))
+      .filter((entry) => entry !== undefined);
+    return compacted.length > 0 ? compacted : undefined;
+  }
+  if (typeof value === "object") {
+    const compacted = Object.fromEntries(
+      Object.entries(value)
+        .map(([key, entry]) => [key, compactValue(entry)])
+        .filter(([, entry]) => entry !== undefined),
+    );
+    return Object.keys(compacted).length > 0 ? compacted : undefined;
+  }
+  return value;
+}
+
+export function compactSlayer(slayer) {
+  return compactValue(slayer);
 }
 
 export function sectionMeta(section) {
@@ -72,9 +153,10 @@ export function sectionMeta(section) {
   };
 }
 
-export function accountSummary(account) {
+export function accountSummary(account, { includeRaw = false } = {}) {
   const diaries = account.achievementDiaries ?? {};
   const achievements = account.combatAchievements ?? {};
+  const slayer = includeRaw ? account.slayer : compactSlayer(account.slayer);
   return {
     freshness: freshness(account),
     identity: {
@@ -106,11 +188,7 @@ export function accountSummary(account) {
         total,
       })),
     },
-    slayer: {
-      points: account.slayer?.points,
-      streak: account.slayer?.tasksCompletedStreak,
-      currentTask: account.slayer?.currentTask,
-    },
+    ...(slayer === undefined ? {} : { slayer }),
     wealth: {
       knownAccountValue: account.knownAccountValue,
       grandExchangeEstimate: account.grandExchangeAccountValueEstimate,
@@ -168,6 +246,9 @@ export function findItems(account, query, containers) {
 
 export function combatAchievements(account, { tier, completed, query, limit }) {
   const needle = query?.toLowerCase();
+  let remaining = limit;
+  let matchedTaskCount = 0;
+  let returnedTaskCount = 0;
   const tiers = (account.combatAchievements?.tiers ?? [])
     .filter((entry) => !tier || entry.name.toLowerCase() === tier.toLowerCase())
     .map((entry) => {
@@ -180,17 +261,24 @@ export function combatAchievements(account, { tier, completed, query, limit }) {
           task.name.toLowerCase().includes(needle),
         );
       }
+      const matchedInTier = tasks.length;
+      const returned = tasks.slice(0, remaining);
+      remaining -= returned.length;
+      matchedTaskCount += matchedInTier;
+      returnedTaskCount += returned.length;
       return {
         name: entry.name,
         completed: entry.completed,
         total: entry.total,
-        tasks: tasks.slice(0, limit),
-        matchedTaskCount: tasks.length,
+        tasks: returned,
+        matchedTaskCount: matchedInTier,
       };
     });
   return {
     completed: account.combatAchievements?.completed,
     total: account.combatAchievements?.total,
+    matchedTaskCount,
+    returnedTaskCount,
     tiers,
   };
 }
@@ -215,12 +303,34 @@ export async function fetchJson(url) {
   return JSON.parse(body);
 }
 
-export async function fetchHiscores(player) {
+function meaningfulHiscore(entry) {
+  if (typeof entry.xp === "number") return entry.xp > 0;
+  if (typeof entry.score === "number") return entry.score > 0;
+  return Object.entries(entry).some(
+    ([key, value]) =>
+      !["id", "name", "rank"].includes(key) &&
+      typeof value === "number" &&
+      value > 0,
+  );
+}
+
+export function compactHiscores(hiscores) {
+  return Object.fromEntries(
+    Object.entries(hiscores).flatMap(([key, value]) => {
+      if (!Array.isArray(value)) return [[key, value]];
+      const entries = value.filter(meaningfulHiscore);
+      return entries.length > 0 ? [[key, entries]] : [];
+    }),
+  );
+}
+
+export async function fetchHiscores(player, { includeRaw = false } = {}) {
   const url = new URL(
     "https://secure.runescape.com/m=hiscore_oldschool/index_lite.json",
   );
   url.searchParams.set("player", player);
-  return fetchJson(url);
+  const hiscores = await fetchJson(url);
+  return includeRaw ? hiscores : compactHiscores(hiscores);
 }
 
 export async function wikiSearch(query, limit) {
