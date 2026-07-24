@@ -27,7 +27,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     data = ./deps.json;
   };
 
-  gradleFlags = ["-Dorg.gradle.java.home=${jdk11}"];
+  # JDK 11.0.32 can crash in Gradle's parallel report workers while inflating
+  # contended monitors; the package is small enough that serial workers are cheap.
+  gradleFlags = [
+    "-Dorg.gradle.java.home=${jdk11}"
+    "--max-workers=1"
+  ];
   gradleBuildTask = "jar";
   doCheck = true;
 

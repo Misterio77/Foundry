@@ -5,7 +5,18 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.junit.Test;
+import rs.m7.runelitemcp.events.EventHistory;
+import rs.m7.runelitemcp.events.EventMetadata;
+import rs.m7.runelitemcp.events.EventPayloads.ContainerChange;
+import rs.m7.runelitemcp.events.EventPayloads.GameStateChange;
+import rs.m7.runelitemcp.events.EventPayloads.ItemChange;
+import rs.m7.runelitemcp.events.EventPayloads.ItemValue;
+import rs.m7.runelitemcp.events.EventType;
+import rs.m7.runelitemcp.events.PendingEvent;
 import rs.m7.runelitemcp.snapshot.SnapshotType;
 
 import static org.junit.Assert.assertEquals;
@@ -15,7 +26,8 @@ import static org.junit.Assert.assertTrue;
 
 public class McpDispatcherTest
 {
-	private final McpDispatcher dispatcher = new McpDispatcher(McpDispatcherTest::activeSnapshot, new Gson());
+	private final EventHistory eventHistory = new EventHistory();
+	private final McpDispatcher dispatcher = new McpDispatcher(McpDispatcherTest::activeSnapshot, eventHistory, new Gson());
 
 	@Test
 	public void initializesWithReadCapabilities()
@@ -47,11 +59,12 @@ public class McpDispatcherTest
 	{
 		JsonObject listed = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}"));
 		JsonArray tools = listed.getAsJsonObject("result").getAsJsonArray("tools");
-		assertEquals(4, tools.size());
+		assertEquals(5, tools.size());
 		assertEquals("get_game_context", tools.get(0).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_skills", tools.get(1).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_status_effects", tools.get(2).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_carried_items", tools.get(3).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_events", tools.get(4).getAsJsonObject().get("name").getAsString());
 
 		JsonObject result = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}"));
 		assertEquals("active", result.get("state").getAsString());
@@ -103,6 +116,50 @@ public class McpDispatcherTest
 	}
 
 	@Test
+	public void queriesEventHistoryWithGenerationCursors()
+	{
+		eventHistory.appendBatch(new EventMetadata("active", "LOGGED_IN", 123),
+			Collections.singletonList(new PendingEvent(EventType.GAME_STATE_CHANGED, 123,
+				new GameStateChange("LOADING", "LOGGED_IN", "active"))));
+		JsonObject initial = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"get_events\",\"arguments\":{}}}"));
+		JsonObject history = initial.getAsJsonObject("history");
+		assertEquals(1, history.getAsJsonArray("events").size());
+		assertEquals("game_state_changed", history.getAsJsonArray("events").get(0)
+			.getAsJsonObject().get("type").getAsString());
+
+		String generation = history.get("generation").getAsString();
+		JsonObject polled = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"get_events\",\"arguments\":{\"generation\":\"" + generation + "\",\"afterSequence\":1}}}"));
+		assertEquals(0, polled.getAsJsonObject("history").getAsJsonArray("events").size());
+	}
+
+	@Test
+	public void trimsLargeEventResultsWithoutBreakingLatestPageCursors()
+	{
+		String name = String.join("", Collections.nCopies(64, "界"));
+		List<ItemChange> changes = new ArrayList<>();
+		for (int slot = 0; slot < 6; slot++)
+		{
+			changes.add(new ItemChange(slot, null,
+				new ItemValue(100 + slot, name, 1), new ItemValue(200 + slot, name, 1)));
+		}
+		for (int tick = 1; tick <= 100; tick++)
+		{
+			eventHistory.appendBatch(new EventMetadata("active", "LOGGED_IN", tick),
+				Collections.singletonList(new PendingEvent(EventType.INVENTORY_CHANGED, tick,
+					new ContainerChange(changes, false, 28))));
+		}
+
+		JsonObject history = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"get_events\",\"arguments\":{\"limit\":100}}}"))
+			.getAsJsonObject("history");
+		assertTrue(history.get("sizeLimited").getAsBoolean());
+		assertTrue(history.getAsJsonArray("events").size() > 0);
+		assertTrue(history.getAsJsonArray("events").size() < 100);
+		assertTrue(history.get("hasOlder").getAsBoolean());
+		assertEquals(100, history.get("pageLastSequence").getAsLong());
+		assertEquals(100, history.get("pollAfterSequence").getAsLong());
+	}
+
+	@Test
 	public void removesProvisionalInterfacesRatherThanAliasingThem()
 	{
 		for (String name : new String[]{"client_state", "skills"})
@@ -124,12 +181,16 @@ public class McpDispatcherTest
 		assertInvalidArguments("get_carried_items", "{\"containers\":[]}");
 		assertInvalidArguments("get_carried_items", "{\"containers\":[\"bank\"]}");
 		assertInvalidArguments("get_carried_items", "{\"containers\":[\"inventory\",\"inventory\"]}");
+		assertInvalidArguments("get_events", "{\"afterSequence\":0}");
+		assertInvalidArguments("get_events", "{\"generation\":\"stale\",\"afterSequence\":0}");
+		assertInvalidArguments("get_events", "{\"types\":[]}");
+		assertInvalidArguments("get_events", "{\"limit\":101}");
 	}
 
 	@Test
 	public void rejectsInvalidJsonRpcIds()
 	{
-		for (String id : new String[]{"true", "[]", "{}"})
+		for (String id : new String[]{"true", "[]", "{}", "1.5", "9223372036854775808"})
 		{
 			JsonObject response = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"ping\"}"));
 			assertTrue(response.get("id").isJsonNull());
@@ -174,7 +235,7 @@ public class McpDispatcherTest
 
 	private void assertUnavailableContext(JsonObject snapshot, String state, String gameState)
 	{
-		McpDispatcher stateDispatcher = new McpDispatcher(type -> snapshot, new Gson());
+		McpDispatcher stateDispatcher = new McpDispatcher(type -> snapshot, new EventHistory(), new Gson());
 		JsonObject result = structured(stateDispatcher.dispatch("{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}"));
 		assertEquals(state, result.get("state").getAsString());
 		assertEquals(gameState, result.getAsJsonObject("sample").get("gameState").getAsString());

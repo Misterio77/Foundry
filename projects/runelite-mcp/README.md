@@ -14,19 +14,22 @@ The foundation milestone is complete. The plugin currently provides:
 
 - MCP `2025-11-25` over Streamable HTTP at
   `http://127.0.0.1:18471/mcp`;
-- focused tools for game context, skills, status effects, inventory, and equipment;
+- focused tools for game context, skills, status effects, carried items, and
+  generation-aware event history;
 - a `runelite://game/context` resource;
 - an `osrs_session_brief` prompt;
 - live reads marshalled onto RuneLite's client thread;
 - loopback-only binding, Origin checks, bounded request bodies, and bounded HTTP
   concurrency;
+- a bounded 512-record in-memory ring for state, skill, item, movement, and
+  privacy-safe interaction changes;
 - clean logged-in/logged-out behavior and disable/re-enable recovery.
 
 Pi consumes the endpoint through the Foundry MCP registry as `osrs`. See the
 [requirements](docs/requirements.md), [architecture](docs/architecture.md),
 [game-context interface](docs/game-context.md),
 [observation tools](docs/observation-tools.md),
-[event-history draft](docs/event-history.md), [test strategy](docs/test-strategy.md),
+[event-history interface](docs/event-history.md), [test strategy](docs/test-strategy.md),
 and [roadmap](docs/roadmap.md).
 
 ## Installation

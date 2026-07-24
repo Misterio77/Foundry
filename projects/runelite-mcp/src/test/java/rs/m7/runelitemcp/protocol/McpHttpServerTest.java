@@ -9,6 +9,7 @@ import java.net.http.HttpResponse;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import rs.m7.runelitemcp.events.EventHistory;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -22,7 +23,7 @@ public class McpHttpServerTest
 	@Before
 	public void start() throws Exception
 	{
-		server = new McpHttpServer(new McpDispatcher(type -> new JsonObject(), new Gson()));
+		server = new McpHttpServer(new McpDispatcher(type -> new JsonObject(), new EventHistory(), new Gson()));
 		server.start(0);
 		client = HttpClient.newHttpClient();
 		endpoint = URI.create("http://127.0.0.1:" + server.getPort() + "/mcp");

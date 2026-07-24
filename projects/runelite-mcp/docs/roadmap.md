@@ -43,15 +43,23 @@
   open widget, container filtering, and packaged-client recovery.
 - Gradle checks and the reproducible Nix package build pass.
 
-### M1c — event history (drafted)
+### M1c — event history (complete)
 
-- Implement the [event-history design](event-history.md): a 512-record in-memory
-  ring with generation-aware cursor pagination.
-- Cover state transitions, skill changes, inventory/equipment diffs, movement, and
-  interaction changes with typed, coalesced records.
-- Defer dedicated loot events until RuneLite can reliably attribute ownership and
-  cause rather than mislabelling ground spawns or inventory gains.
-- Clear player-bound history on logout and never include private chat/social data.
+- `get_events` exposes a 512-record in-memory ring with generation-aware forward,
+  backward, filtered, gap-reporting cursor pagination and bounded wire output.
+- Typed client-thread reconciliation covers state transitions, skill/XP changes,
+  inventory/equipment diffs, movement, and privacy-safe interaction changes.
+- Logout/account boundaries clear player-bound history; plugin shutdown discards
+  it entirely. Player targets omit identity, and chat/social/bank data is absent.
+- Dedicated loot attribution remains deferred rather than mislabelling inventory
+  gains or ground spawns.
+- Tests cover ring capacity, rollover, reset, cursor/filter/gap behavior,
+  concurrency, payload bounds, response trimming, collector reconciliation, and
+  player-target privacy.
+- Pi verified generation cursors, backward pagination, filtered polling without
+  replay, movement, NPC interactions, equipment swaps, item gains/transforms, and
+  a correlated 17-XP Fletching change against the packaged plugin.
+- Gradle checks and the reproducible Nix package build pass.
 
 ### M1d — bounded world context
 

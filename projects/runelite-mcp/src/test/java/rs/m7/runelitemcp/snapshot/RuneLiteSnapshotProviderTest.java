@@ -17,6 +17,7 @@ import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import org.junit.Test;
+import rs.m7.runelitemcp.events.EventHistory;
 import rs.m7.runelitemcp.protocol.DispatchResult;
 import rs.m7.runelitemcp.protocol.McpDispatcher;
 
@@ -78,7 +79,7 @@ public class RuneLiteSnapshotProviderTest
 		assertEquals("weapon", weapon.get("slotName").getAsString());
 		assertEquals("Abyssal whip", weapon.get("name").getAsString());
 
-		McpDispatcher dispatcher = new McpDispatcher(provider::readSnapshot, new Gson());
+		McpDispatcher dispatcher = new McpDispatcher(provider::readSnapshot, new EventHistory(), new Gson());
 		DispatchResult response = dispatcher.dispatch("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}");
 		JsonObject serialized = new JsonParser().parse(response.getBody()).getAsJsonObject()
 			.getAsJsonObject("result").getAsJsonObject("structuredContent");

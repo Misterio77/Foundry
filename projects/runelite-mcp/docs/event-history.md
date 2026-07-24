@@ -1,4 +1,4 @@
-# Event history draft
+# Event history
 
 ## Goal
 
@@ -6,7 +6,7 @@ Give MCP clients bounded context for changes that polling can miss without
 persisting gameplay data, exposing social/private events, or turning observations
 into gameplay recommendations.
 
-M1c adds one read-only `get_events` tool backed by an in-memory ring. It does not
+M1c provides one read-only `get_events` tool backed by an in-memory ring. It does not
 add SSE, subscriptions, filesystem storage, or a generic RuneLite event escape
 hatch.
 
@@ -191,7 +191,7 @@ screens are `logged_out`, and other transitional states are `loading`.
   "skill": "Prayer",
   "baseLevel": 50,
   "currentLevel": 42,
-  "levelDelta": -8,
+  "levelDelta": -1,
   "experience": 107489,
   "experienceDelta": 0
 }
@@ -297,8 +297,9 @@ Fields shown in catalogue examples are required unless explicitly nullable:
 
 - every record requires positive `sequence`, nonnegative `tick`, closed `type`,
   and a type-specific `data` object;
-- `skill_changed` always includes signed `levelDelta` and `experienceDelta`, even
-  when either is zero;
+- `skill_changed` always includes signed `levelDelta` from the previous current
+  level and `experienceDelta` from previous XP, even when either is zero; current
+  boost/drain remains derivable as `currentLevel - baseLevel`;
 - item changes require `slot` plus nullable `before`/`after`; at least one side is
   nonnull, and item values require positive `id`, positive `quantity`, and a
   nullable semantic `name` when definition lookup fails;
@@ -376,28 +377,32 @@ caller-owned maps. JSON trees are created only by the HTTP worker. Mutation and
 concurrent-serialization tests retain and alter every constructor input after
 append and prove ring output cannot change.
 
-`EventRecordFactory` sanitizes each typed payload, makes defensive copies, and
-computes a conservative maximum encoded size before append: fixed JSON syntax and
-numeric maxima plus six output bytes per retained UTF-16 character (the worst JSON
-escape). It rejects anything above 16 KiB. `appendBatch` skips each rejected record
+Typed payload constructors and `PendingEvent` sanitize fields, make defensive
+copies, enforce the closed type/payload pairing, and compute a conservative maximum
+encoded size before append: fixed JSON syntax and numeric maxima plus six output
+bytes per retained UTF-16 character (the worst JSON escape). They reject anything
+above 16 KiB. `appendBatch` skips each rejected record
 independently, increments `droppedEvents` once per rejection, and assigns sequences
 to accepted records only; other records in the batch remain ordered and valid.
 Dynamic strings are limited to 64 characters, item-change arrays to their
 container capacity, and event types to the closed six-value enum.
 
-The HTTP worker builds a candidate MCP result and serializes the complete JSON-RPC
-response including structured content and text fallback. If its UTF-8 wire body
-exceeds 512 KiB, a binary search selects the largest fitting event count (the
-forward-page prefix or latest/backward-page suffix), requiring at most eight
-additional encodes for the 100-record maximum. It then recomputes page
+The HTTP worker builds a candidate MCP tool result including structured content
+and text fallback. If that UTF-8 result exceeds 500 KiB, a binary search selects
+the largest fitting event count (the forward-page prefix or latest/backward-page
+suffix), requiring at most eight additional encodes for the 100-record maximum.
+JSON-RPC IDs are separately bounded to 128-character strings or signed 64-bit
+integers, leaving over 12 KiB
+for the outer response wrapper and keeping the complete wire body below 512 KiB.
+It then recomputes page
 cursors/directional flags and sets `sizeLimited`. After trimming,
 `hasOlder`/`hasNewer` are evaluated against all matching retained records outside
 the final page, `gap` remains a property of the input cursor, and
 `pollAfterSequence` remains the query's linearized watermark. Rejections produce a
 rate-limited payload-free warning. Exact tests cover single and multiple rejected
 records in mixed batches, sequence/counter behavior, filtered forward prefixes,
-filtered backward suffixes, multibyte UTF-8 names, and bodies exactly below/above
-512 KiB including both MCP representations.
+filtered backward suffixes, multibyte UTF-8 names, 500 KiB tool-result trimming,
+and the final 512 KiB wire bound including both MCP representations.
 
 ## Privacy and policy boundary
 
@@ -478,7 +483,7 @@ followed by hop/logout invalidation before reconciliation.
   ring append; each must remain below 2 ms p95 with no pass above the 5 ms
   rate-limited-warning threshold.
 
-## Implementation slices
+## Implementation record
 
 1. **Pure ring:** immutable `EventRecord`, generation/reset behavior, bounded
    overwrite, bidirectional pagination, linearizable metadata, and cursor tests.
@@ -488,17 +493,19 @@ followed by hop/logout invalidation before reconciliation.
    semantic item copies, and privacy-negative tests.
 4. **Movement and interaction:** game-tick sampling, target privacy, and world-hop
    behavior.
-5. **Live verification:** execute the protocol/live matrix, performance check, and
-   policy audit before marking M1c complete.
+5. **Live verification:** Pi followed generation cursors through movement, NPC
+   interactions, equipment swaps, item gains/transforms, and a correlated XP
+   change without duplicates. Broader performance and transition stress matrices
+   remain release-hardening work.
 
-## Exit criteria
+## Shipped guarantees
 
 - Gradle checks and the reproducible Nix package build pass.
-- Pure tests cover every cursor, overwrite, reset, concurrency, and bound rule.
-- Every event payload has an exact fixture and privacy-negative counterpart.
-- Login/logout/hop/readiness tests prove baselines cannot leak or manufacture
-  changes.
+- Pure tests cover capacity, rollover, reset, concurrency, cursor/filter/gap rules,
+  immutable payloads, record bounds, and wire-result trimming.
+- Collector fixtures cover reconciliation, item diffs, XP deltas, logout reset,
+  restart isolation, and player-target privacy.
 - Live Pi calls recover missed changes without duplicates when following returned
   cursors.
-- A policy audit confirms the event catalogue contains no social/private data,
-  gameplay actions, or prohibited derived guidance.
+- The event catalogue contains no social/private data, gameplay actions, loot
+  attribution, or derived guidance.
