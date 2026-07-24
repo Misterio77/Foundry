@@ -11,6 +11,10 @@ export const PROFILES_PATH =
 
 const headers = { "User-Agent": USER_AGENT, Accept: "application/json" };
 const STALE_AFTER_SECONDS = 60;
+const REGION_AREAS = new Map([
+  // Western map square of The Great Conch, a Sailing island.
+  [12582, "The Great Conch"],
+]);
 const MAP_AREAS = [
   ["Grand Exchange", 3150, 3195, 3470, 3515],
   ["Lumbridge", 3190, 3265, 3180, 3265],
@@ -147,6 +151,8 @@ export function freshness(account, now = Date.now()) {
 
 export function resolveMapArea(location) {
   if (location?.loaded !== true) return null;
+  const regionArea = REGION_AREAS.get(location.regionId);
+  if (regionArea) return regionArea;
   const { worldX: x, worldY: y } = location;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return (
@@ -154,6 +160,30 @@ export function resolveMapArea(location) {
       ([, minX, maxX, minY, maxY]) =>
         x >= minX && x <= maxX && y >= minY && y <= maxY,
     )?.[0] ?? null
+  );
+}
+
+export function unresolvedMapAreaReason(location) {
+  if (location?.loaded !== true) {
+    return "RuneLite did not provide a loaded location.";
+  }
+  if (!Number.isFinite(location.worldX) || !Number.isFinite(location.worldY)) {
+    return "RuneLite returned invalid world coordinates.";
+  }
+  return `No named map area mapping is available for region ${location.regionId ?? "unknown"}.`;
+}
+
+export function roundPercentages(value) {
+  if (Array.isArray(value))
+    return value.map((entry) => roundPercentages(entry));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      key.endsWith("Percent") && typeof entry === "number"
+        ? Math.round(entry * 100) / 100
+        : roundPercentages(entry),
+    ]),
   );
 }
 
@@ -242,14 +272,11 @@ export function accountSummary(account, { includeRawSlayer = false } = {}) {
       notStarted: account.quests.notStarted,
       total: account.quests.total,
     },
-    achievementDiaries: {
+    achievementDiaries: roundPercentages({
       completedTiers: diaries.completedTierCount,
       totalTiers: diaries.totalTierCount,
-      completionPercent:
-        typeof diaries.completionPercent === "number"
-          ? Math.round(diaries.completionPercent * 100) / 100
-          : diaries.completionPercent,
-    },
+      completionPercent: diaries.completionPercent,
+    }),
     combatAchievements: {
       completed: achievements.completed,
       total: achievements.total,
@@ -422,19 +449,50 @@ export async function fetchHiscores(player, { includeRaw = false } = {}) {
   return includeRaw ? hiscores : compactHiscores(hiscores);
 }
 
+function searchTokens(value) {
+  return new Set(value.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+}
+
+export function rankWikiResults(query, results, limit) {
+  const queryText = query.trim().toLowerCase();
+  const queryTokens = searchTokens(query);
+  return results
+    .map((result, index) => {
+      const title = result.title.toLowerCase();
+      const titleTokens = searchTokens(result.title);
+      const titleOverlap = [...queryTokens].filter((token) =>
+        titleTokens.has(token),
+      ).length;
+      const exactBonus = title === queryText ? 1000 : 0;
+      const subpagePenalty = result.title.includes("/") ? 25 : 0;
+      const incidentalPenalty = /league|transcript|historical/.test(title)
+        ? 50
+        : 0;
+      return {
+        result,
+        index,
+        score:
+          exactBonus + titleOverlap * 20 - subpagePenalty - incidentalPenalty,
+      };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, limit)
+    .map(({ result }) => result);
+}
+
 export async function wikiSearch(query, limit) {
   const url = new URL("https://oldschool.runescape.wiki/api.php");
   url.search = new URLSearchParams({
     action: "query",
     list: "search",
     srsearch: query,
-    srlimit: String(limit),
+    srlimit: String(Math.min(50, Math.max(limit, limit * 4))),
     srprop: "snippet|sectiontitle",
     format: "json",
     formatversion: "2",
   });
   const data = await fetchJson(url);
-  return data.query.search.map(({ title, snippet, sectiontitle }) => ({
+  const results = data.query.search.map(({ title, snippet, sectiontitle }) => ({
     title,
     sectiontitle,
     snippet: snippet.replace(/<[^>]+>/g, ""),
@@ -442,6 +500,7 @@ export async function wikiSearch(query, limit) {
       title.replaceAll(" ", "_"),
     )}`,
   }));
+  return rankWikiResults(query, results, limit);
 }
 
 export function paginateText(text, maxCharacters, offset = 0) {

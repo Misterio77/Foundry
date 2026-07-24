@@ -17,7 +17,9 @@ import {
   loadAccount,
   readRuneLiteNotes,
   resolveMapArea,
+  roundPercentages,
   sectionMeta,
+  unresolvedMapAreaReason,
   wikiPage,
   wikiSearch,
 } from "./lib.mjs";
@@ -210,12 +212,20 @@ tool(
       value: account[name]?.value,
       ...(includeItems ? { items: account[name]?.items ?? [] } : {}),
     });
+    const mapArea = resolveMapArea(account.location);
     return {
       freshness: freshness(account),
       world: account.world,
       location: {
         ...account.location,
-        mapArea: resolveMapArea(account.location),
+        mapArea,
+        ...(mapArea === null
+          ? {
+              mapAreaUnresolvedReason: unresolvedMapAreaReason(
+                account.location,
+              ),
+            }
+          : {}),
       },
       status: account.status,
       combat: account.combat,
@@ -280,7 +290,7 @@ tool(
   }) => {
     const account = await loadAccount(player);
     const data = {
-      achievement_diaries: account.achievementDiaries,
+      achievement_diaries: roundPercentages(account.achievementDiaries),
       combat_achievements: combatAchievements(account, {
         tier,
         completed,
@@ -314,7 +324,7 @@ tool(
   "wiki_search",
   {
     description:
-      "Search the current Old School RuneScape Wiki for quests, mechanics, training methods, items, bosses, or guides before giving factual game advice.",
+      "Search the current Old School RuneScape Wiki for quests, mechanics, training methods, items, bosses, or guides before giving factual game advice. Results favor exact titles and main-game pages over incidental subpage matches.",
     inputSchema: {
       query: z.string().min(1),
       limit: z.number().int().min(1).max(20).default(8),

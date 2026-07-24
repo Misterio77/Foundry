@@ -16,10 +16,13 @@ import {
   loadAccount,
   normalizeMarket,
   paginateText,
+  rankWikiResults,
   readRuneLiteNotes,
   resolveMapArea,
+  roundPercentages,
   sectionMeta,
   timestampToIso,
+  unresolvedMapAreaReason,
 } from "../lib.mjs";
 
 const account = {
@@ -164,6 +167,15 @@ test("marks old snapshots stale instead of reporting a current login", () => {
 
 test("resolves coordinates to the most specific named map area", () => {
   assert.equal(
+    resolveMapArea({
+      loaded: true,
+      worldX: 3184,
+      worldY: 2455,
+      regionId: 12582,
+    }),
+    "The Great Conch",
+  );
+  assert.equal(
     resolveMapArea({ loaded: true, worldX: 3222, worldY: 3218 }),
     "Lumbridge",
   );
@@ -171,11 +183,22 @@ test("resolves coordinates to the most specific named map area", () => {
     resolveMapArea({ loaded: true, worldX: 3165, worldY: 3490 }),
     "Grand Exchange",
   );
+  const unresolved = {
+    loaded: true,
+    worldX: 10_000,
+    worldY: 10_000,
+    regionId: 99_999,
+  };
+  assert.equal(resolveMapArea(unresolved), null);
   assert.equal(
-    resolveMapArea({ loaded: true, worldX: 10_000, worldY: 10_000 }),
-    null,
+    unresolvedMapAreaReason(unresolved),
+    "No named map area mapping is available for region 99999.",
   );
   assert.equal(resolveMapArea({ loaded: false }), null);
+  assert.equal(
+    unresolvedMapAreaReason({ loaded: false }),
+    "RuneLite did not provide a loaded location.",
+  );
 });
 
 test("compacts zero-only Slayer and Hiscores data", () => {
@@ -209,6 +232,34 @@ test("compacts zero-only Slayer and Hiscores data", () => {
     skills: [raw.skills[0]],
     activities: [raw.activities[1]],
   });
+});
+
+test("ranks canonical Wiki titles above incidental subpage matches", () => {
+  const incidental = { title: "Demonic Pacts League/Areas/Morytania" };
+  const canonical = { title: "Hallowed Sepulchre" };
+  assert.deepEqual(
+    rankWikiResults(
+      "Hallowed Sepulchre agility requirements",
+      [incidental, canonical, { title: "Agility" }],
+      3,
+    )[0],
+    canonical,
+  );
+});
+
+test("rounds percentage fields recursively", () => {
+  assert.deepEqual(
+    roundPercentages({
+      completionPercent: 35.416666666666664,
+      tiers: [{ completionPercent: 1.2345 }],
+      exactValue: 1.2345,
+    }),
+    {
+      completionPercent: 35.42,
+      tiers: [{ completionPercent: 1.23 }],
+      exactValue: 1.2345,
+    },
+  );
 });
 
 test("paginates Wiki extracts with a continuation offset", () => {
