@@ -8,6 +8,7 @@ import {
   combatAchievements,
   compactHiscores,
   compactSlayer,
+  discoverPlayers,
   filterQuests,
   filterSkills,
   findItems,
@@ -88,11 +89,18 @@ const account = {
   equipment: { loaded: true, items: [] },
 };
 
-test("loads and validates an account export", async () => {
+test("discovers, loads, and validates account exports", async () => {
   const directory = await mkdtemp(join(tmpdir(), "osrs-mcp-"));
   const path = join(directory, "Test User.json");
   await writeFile(path, JSON.stringify(account));
+  await writeFile(join(directory, "broken.json"), "{");
+  await writeFile(join(directory, "ignore.txt"), "not an export");
+
   assert.equal((await loadAccount("Test User", directory)).rsn, "Test User");
+  const players = await discoverPlayers(directory);
+  assert.equal(players.length, 1);
+  assert.equal(players[0].player, "Test User");
+  assert.equal(players[0].totalLevel, 1500);
 });
 
 test("summarizes without item lists or empty Slayer data", () => {
@@ -137,13 +145,23 @@ test("resolves coordinates to the most specific named map area", () => {
 test("compacts zero-only Slayer and Hiscores data", () => {
   assert.equal(compactSlayer(account.slayer), undefined);
   assert.deepEqual(
-    compactSlayer({ ...account.slayer, superiorCreaturesDefeated: 3 }),
-    { superiorCreaturesDefeated: 3 },
+    compactSlayer({
+      ...account.slayer,
+      superiorCreaturesDefeated: 3,
+      blocks: [
+        { slot: 1, monster: "", active: false },
+        { slot: 2, monster: "Abyssal demon", active: true },
+      ],
+    }),
+    {
+      superiorCreaturesDefeated: 3,
+      blocks: [{ slot: 2, monster: "Abyssal demon", active: true }],
+    },
   );
   const raw = {
     skills: [
       { id: 0, name: "Overall", rank: 1, level: 1500, xp: 12_345_678 },
-      { id: 1, name: "Attack", rank: -1, level: 1, xp: 0 },
+      { id: 1, name: "Attack", rank: -1, level: 10, xp: 1_154 },
     ],
     activities: [
       { id: 0, name: "Clue Scrolls", rank: -1, score: -1 },

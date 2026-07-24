@@ -44,6 +44,35 @@ const MAP_AREAS = [
 ];
 let itemMapping;
 
+export async function discoverPlayers(directory = ACCOUNT_DIRECTORY) {
+  let files;
+  try {
+    files = (await readdir(directory)).filter((name) => name.endsWith(".json"));
+  } catch (error) {
+    throw new Error(
+      `RuneLite account export directory is unavailable at ${directory}. Start RuneLite with Account Data Exporter enabled. (${error.message})`,
+    );
+  }
+
+  const players = [];
+  for (const file of files) {
+    try {
+      const account = JSON.parse(await readFile(join(directory, file), "utf8"));
+      if (typeof account.rsn !== "string" || !account.timestampIso) continue;
+      players.push({
+        player: account.rsn,
+        accountType: account.accountTypeName,
+        combatLevel: account.combatLevel,
+        totalLevel: account.totalLevel,
+        freshness: freshness(account),
+      });
+    } catch {
+      // Ignore malformed or transiently incomplete exporter files.
+    }
+  }
+  return players.sort((left, right) => left.player.localeCompare(right.player));
+}
+
 export async function loadAccount(player, directory = ACCOUNT_DIRECTORY) {
   if (!/^[A-Za-z0-9 _-]{1,12}$/.test(player)) {
     throw new Error(`Invalid OSRS player name: ${player}`);
@@ -123,7 +152,11 @@ function compactValue(value) {
         .map(([key, entry]) => [key, compactValue(entry)])
         .filter(([, entry]) => entry !== undefined),
     );
-    return Object.keys(compacted).length > 0 ? compacted : undefined;
+    const keys = Object.keys(compacted);
+    if (keys.length === 0 || keys.every((key) => key === "slot")) {
+      return undefined;
+    }
+    return compacted;
   }
   return value;
 }
@@ -304,6 +337,7 @@ export async function fetchJson(url) {
 }
 
 function meaningfulHiscore(entry) {
+  if (entry.rank === -1) return false;
   if (typeof entry.xp === "number") return entry.xp > 0;
   if (typeof entry.score === "number") return entry.score > 0;
   return Object.entries(entry).some(

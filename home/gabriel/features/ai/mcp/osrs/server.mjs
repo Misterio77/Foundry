@@ -7,6 +7,7 @@ import {
   accountSummary,
   combatAchievements,
   compactSlayer,
+  discoverPlayers,
   fetchHiscores,
   filterQuests,
   filterSkills,
@@ -61,8 +62,18 @@ const playerSchema = z
   .max(12)
   .regex(/^[A-Za-z0-9 _-]+$/)
   .describe(
-    "OSRS display name whose local export or Hiscores entry should be read.",
+    "OSRS display name whose local export or Hiscores entry should be read. Use players to discover available local exports.",
   );
+
+tool(
+  "players",
+  {
+    description:
+      "Discover players with local RuneLite account exports. Call this before player-specific tools when the display name is unknown.",
+    inputSchema: {},
+  },
+  async () => ({ players: await discoverPlayers() }),
+);
 
 tool(
   "account_summary",
