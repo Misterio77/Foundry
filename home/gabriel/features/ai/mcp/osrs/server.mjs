@@ -286,16 +286,23 @@ tool(
   "wiki_page",
   {
     description:
-      "Read a current OSRS Wiki page as plain text. Use after wiki_search for requirements, mechanics, methods, and recommendations; long pages are truncated explicitly.",
+      "Read a current OSRS Wiki page as plain text. Use after wiki_search for requirements, mechanics, methods, and recommendations. Continue truncated pages by passing the returned nextOffset.",
     inputSchema: {
       title: z
         .string()
         .min(1)
         .describe("Exact or redirectable wiki page title."),
       maxCharacters: z.number().int().min(1000).max(50000).default(20000),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .default(0)
+        .describe("Character offset; use nextOffset to continue a page."),
     },
   },
-  async ({ title, maxCharacters }) => wikiPage(title, maxCharacters),
+  async ({ title, maxCharacters, offset }) =>
+    wikiPage(title, maxCharacters, offset),
 );
 
 tool(

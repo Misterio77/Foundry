@@ -355,7 +355,26 @@ export async function wikiSearch(query, limit) {
   }));
 }
 
-export async function wikiPage(title, maxCharacters) {
+export function paginateText(text, maxCharacters, offset = 0) {
+  const extract = text.slice(offset, offset + maxCharacters);
+  const nextOffset = offset + extract.length;
+  const hasMore = nextOffset < text.length;
+  return {
+    extract,
+    offset,
+    returnedCharacters: extract.length,
+    truncated: hasMore,
+    nextOffset: hasMore ? nextOffset : null,
+    ...(hasMore
+      ? {
+          continuationHint: `Call wiki_page again with the same title and offset=${nextOffset} to continue.`,
+        }
+      : {}),
+    totalCharacters: text.length,
+  };
+}
+
+export async function wikiPage(title, maxCharacters, offset = 0) {
   const url = new URL("https://oldschool.runescape.wiki/api.php");
   url.search = new URLSearchParams({
     action: "query",
@@ -374,9 +393,7 @@ export async function wikiPage(title, maxCharacters) {
   return {
     title: page.title,
     url: page.fullurl,
-    extract: extract.slice(0, maxCharacters),
-    truncated: extract.length > maxCharacters,
-    totalCharacters: extract.length,
+    ...paginateText(extract, maxCharacters, offset),
   };
 }
 

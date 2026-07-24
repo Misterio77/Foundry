@@ -13,6 +13,7 @@ import {
   findItems,
   freshness,
   loadAccount,
+  paginateText,
   readRuneLiteNotes,
   resolveMapArea,
 } from "../lib.mjs";
@@ -153,6 +154,27 @@ test("compacts zero-only Slayer and Hiscores data", () => {
   assert.deepEqual(compactHiscores(raw), {
     skills: [raw.skills[0]],
     activities: [raw.activities[1]],
+  });
+});
+
+test("paginates Wiki extracts with a continuation offset", () => {
+  assert.deepEqual(paginateText("abcdef", 2), {
+    extract: "ab",
+    offset: 0,
+    returnedCharacters: 2,
+    truncated: true,
+    nextOffset: 2,
+    continuationHint:
+      "Call wiki_page again with the same title and offset=2 to continue.",
+    totalCharacters: 6,
+  });
+  assert.deepEqual(paginateText("abcdef", 2, 4), {
+    extract: "ef",
+    offset: 4,
+    returnedCharacters: 2,
+    truncated: false,
+    nextOffset: null,
+    totalCharacters: 6,
   });
 });
 
