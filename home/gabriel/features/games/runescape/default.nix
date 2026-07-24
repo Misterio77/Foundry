@@ -11,6 +11,8 @@ in {
     pkgs.jagex-auth
   ];
 
+  home.file.".runelite/sideloaded-plugins/runelite-mcp.jar".source = "${pkgs.runelite-mcp}/share/runelite/sideloaded-plugins/runelite-mcp.jar";
+
   xdg.mimeApps.defaultApplications = {
     "x-scheme-handler/alt1" = "alt1lite.desktop";
     "x-scheme-handler/jagex" = "jagex-auth-handler.desktop";
