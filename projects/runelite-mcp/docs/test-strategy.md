@@ -21,7 +21,7 @@ protocol tests.
 
 Start `McpHttpServer` on loopback with an ephemeral port and use JDK `HttpClient`:
 
-- initialize, ping, list, call, resource read, and prompt get;
+- initialize, ping, tool list/call, unsupported resources, and prompt get;
 - content types, HTTP methods, notifications, malformed JSON, and unknown methods;
 - non-loopback Origin rejection;
 - 1 MiB body limit and concurrent requests;
@@ -43,7 +43,7 @@ Before release, run the same black-box suite against at least:
 - MCP Inspector;
 - one other independent Streamable HTTP client.
 
-Capture protocol fixtures for initialization, tools, resources, prompts, errors,
+Capture protocol fixtures for initialization, tools, prompts, errors,
 and notification responses. Fixtures contain synthetic account data only.
 
 ### Manual safety and gameplay-state matrix
@@ -84,7 +84,7 @@ request worker surviving plugin shutdown.
 The foundation has been exercised end to end with the packaged jar and Pi:
 
 - initialization and capability discovery;
-- tools, resource reads, and prompt retrieval;
+- tools, unsupported resource methods, and prompt retrieval;
 - filtered skill output;
 - active and logged-out snapshots without stale player data;
 - world-hop transitions through `HOPPING`, `LOADING`, logged-in-without-player,

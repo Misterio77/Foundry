@@ -82,8 +82,9 @@ Loading and logged-out states are successful results, not tool errors:
 }
 ```
 
-The same payload is available as the `runelite://game/context` resource. The
-`get_skills` tool remains separate and returns `state`, `sample`, and its filtered
+The former `runelite://game/context` resource was removed because MCP clients
+surfaced it as a duplicate tool. `get_skills` remains separate and returns
+`state`, `sample`, and its filtered
 skill list. Other focused snapshots are documented in
 [observation tools](observation-tools.md).
 

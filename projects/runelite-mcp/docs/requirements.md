@@ -22,7 +22,7 @@ for eventual RuneLite Plugin Hub review.
 
 1. Serve MCP Streamable HTTP on a configurable IPv4 loopback port and fixed
    `/mcp` path.
-2. Implement JSON-RPC initialization, ping, tools, resources, and prompts.
+2. Implement JSON-RPC initialization, ping, tools, and prompts.
 3. Return structured JSON plus text fallback from tools.
 4. Advertise only capabilities that are currently available.
 5. Before 1.0, prefer the best tool interface over compatibility: rename or
@@ -48,9 +48,11 @@ The target tool families, in implementation order, are:
 - OSRS Wiki search/pages and RuneLite price data where live client data is not the
   authoritative source.
 
-Sensitive information must be opt-in or omitted: chat, friends, clan membership,
-private messages, notes, nearby player identities, and bank contents are not
-exposed merely because the client API can read them. A direct player interaction
+Sensitive information must be omitted: chat, friends, clan membership, private
+messages, notes, credentials, account identifiers, and nearby player identities.
+Gameplay account state—including bank, Grand Exchange, wealth, quests, diaries,
+Slayer, achievements, and collection log—is ordinary product data and needs no
+privacy gate. A direct player interaction
 may expose only that the target is a player and its combat level; names, IDs, and
 social relationships remain omitted.
 
@@ -93,7 +95,7 @@ social relationships remain omitted.
   is the local user account and strict IPv4 loopback bind.
 - Reject non-local browser origins and non-JSON requests to reduce cross-origin
   abuse from web pages.
-- Default-deny sensitive data classes and document every field a tool returns.
+- Omit social, identity, and credential data; document every field a tool returns.
 - Keep no durable gameplay database. Event history is in-memory, bounded, and
   discarded when the plugin stops.
 - Do not expose filesystem paths, environment variables, credentials, session

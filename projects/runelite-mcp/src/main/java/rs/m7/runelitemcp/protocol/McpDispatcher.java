@@ -112,10 +112,6 @@ public class McpDispatcher
 				return toolsList();
 			case "tools/call":
 				return callTool(params);
-			case "resources/list":
-				return resourcesList();
-			case "resources/read":
-				return readResource(params);
 			case "prompts/list":
 				return promptsList();
 			case "prompts/get":
@@ -139,7 +135,6 @@ public class McpDispatcher
 
 		JsonObject capabilities = new JsonObject();
 		capabilities.add("tools", new JsonObject());
-		capabilities.add("resources", new JsonObject());
 		capabilities.add("prompts", new JsonObject());
 
 		JsonObject serverInfo = new JsonObject();
@@ -479,40 +474,6 @@ public class McpDispatcher
 			throw new IllegalArgumentException(name + " must be an integer");
 		}
 		return value.intValue();
-	}
-
-	private JsonObject resourcesList()
-	{
-		JsonObject resource = new JsonObject();
-		resource.addProperty("uri", "runelite://game/context");
-		resource.addProperty("name", "RuneLite game context");
-		resource.addProperty("description", "Current informational session and local-player snapshot");
-		resource.addProperty("mimeType", "application/json");
-
-		JsonArray resources = new JsonArray();
-		resources.add(resource);
-		JsonObject result = new JsonObject();
-		result.add("resources", resources);
-		return result;
-	}
-
-	private JsonObject readResource(JsonObject params) throws Exception
-	{
-		String uri = requiredString(params, "uri");
-		if (!"runelite://game/context".equals(uri))
-		{
-			throw new IllegalArgumentException("Unknown resource URI: " + uri);
-		}
-
-		JsonObject content = new JsonObject();
-		content.addProperty("uri", uri);
-		content.addProperty("mimeType", "application/json");
-		content.addProperty("text", gson.toJson(snapshots.snapshot(SnapshotType.GAME_CONTEXT)));
-		JsonArray contents = new JsonArray();
-		contents.add(content);
-		JsonObject result = new JsonObject();
-		result.add("contents", contents);
-		return result;
 	}
 
 	private JsonObject promptsList()

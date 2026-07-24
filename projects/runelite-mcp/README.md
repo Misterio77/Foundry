@@ -16,7 +16,6 @@ The foundation milestone is complete. The plugin currently provides:
   `http://127.0.0.1:18471/mcp`;
 - focused tools for game context, skills, status effects, carried items, and
   generation-aware event history;
-- a `runelite://game/context` resource;
 - an `osrs_session_brief` prompt;
 - live reads marshalled onto RuneLite's client thread;
 - loopback-only binding, Origin checks, bounded request bodies, and bounded HTTP

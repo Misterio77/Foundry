@@ -36,7 +36,7 @@ public class McpDispatcherTest
 		JsonObject result = response.getAsJsonObject("result");
 		assertEquals("2025-11-25", result.get("protocolVersion").getAsString());
 		assertTrue(result.getAsJsonObject("capabilities").has("tools"));
-		assertTrue(result.getAsJsonObject("capabilities").has("resources"));
+		assertFalse(result.getAsJsonObject("capabilities").has("resources"));
 		assertTrue(result.getAsJsonObject("capabilities").has("prompts"));
 	}
 
@@ -167,9 +167,6 @@ public class McpDispatcherTest
 			JsonObject oldTool = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"" + name + "\",\"arguments\":{}}}"));
 			assertTrue(oldTool.getAsJsonObject("result").get("isError").getAsBoolean());
 		}
-
-		JsonObject oldResource = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/read\",\"params\":{\"uri\":\"runelite://client/state\"}}"));
-		assertEquals(-32602, oldResource.getAsJsonObject("error").get("code").getAsInt());
 	}
 
 	@Test
@@ -217,14 +214,10 @@ public class McpDispatcherTest
 	}
 
 	@Test
-	public void readsGameContextResource()
+	public void doesNotAdvertiseOrServeResources()
 	{
 		JsonObject response = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"resources/read\",\"params\":{\"uri\":\"runelite://game/context\"}}"));
-		String text = response.getAsJsonObject("result").getAsJsonArray("contents")
-			.get(0).getAsJsonObject().get("text").getAsString();
-		JsonObject context = new JsonParser().parse(text).getAsJsonObject();
-		assertEquals("active", context.get("state").getAsString());
-		assertFalse(context.has("skills"));
+		assertEquals(-32601, response.getAsJsonObject("error").get("code").getAsInt());
 	}
 
 	private void assertInvalidArguments(String name, String arguments)

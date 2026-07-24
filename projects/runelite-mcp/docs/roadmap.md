@@ -4,7 +4,7 @@
 
 - Plugin Hub-shaped Java project with no additional runtime dependencies.
 - Stateless loopback Streamable HTTP transport and MCP `2025-11-25` support.
-- Client-thread snapshot boundary, basic tools/resource/prompt, and automated
+- Client-thread snapshot boundary, basic tools/prompts, and automated
   protocol/transport tests.
 - Reproducible Nix package, Home Manager sideload installation, and patched
   developer-mode RuneLite launch.
@@ -69,12 +69,14 @@
 - Omit nearby player identities by default and prohibit PvP scouting, boss
   prediction, prayer recommendations, and automatic safe-tile derivation.
 
-## M2 — progression and private state
+## M2 — progression and account state
 
 - Quests, diaries, combat achievements, Slayer, collection log, Grand Exchange,
-  bank, and auxiliary containers.
-- Explicit per-category privacy controls, disabled by default for sensitive data.
-- Search/pagination APIs rather than context-sized dumps.
+  bank, wealth, and auxiliary containers are ordinary gameplay data and require no
+  privacy gate.
+- Social/identity data remains omitted rather than mixed into account-state tools.
+- Search/pagination APIs replace context-sized dumps; cached container data carries
+  explicit source and freshness metadata.
 
 ## M3 — knowledge services
 
