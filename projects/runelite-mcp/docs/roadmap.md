@@ -28,13 +28,20 @@
   logged-in-without-player, recovery, and logout against the packaged plugin.
 - Gradle checks and the reproducible Nix package build pass.
 
-### M1b — skills, effects, and carried items
+### M1b — skills, effects, and carried items (complete)
 
-- Refine skill filtering and represent temporary boosts consistently.
-- Add active prayers, poison/venom, boosts, timers, and relevant status effects.
-- Add inventory and equipment with semantic item names, quantities, charges where
-  reliable, container availability, total counts, and hard output bounds.
-- Verify inventory/widget open and closed transitions through Pi.
+- `get_skills` provides case-insensitive filtering with consistent base/current
+  levels and XP.
+- `get_status_effects` provides signed boosts, active prayers, poison/venom, and
+  documented own-character buff timers.
+- `get_carried_items` provides inventory and equipment with semantic item names,
+  quantities, equipment slots, availability, counts, and hard output bounds.
+- Focused snapshot types avoid scanning unrelated domains for every tool call.
+- Generic charges are intentionally omitted because RuneLite has no reliable
+  item-independent source.
+- Pi verified drains, an active protection prayer, inventory/equipment without an
+  open widget, container filtering, and packaged-client recovery.
+- Gradle checks and the reproducible Nix package build pass.
 
 ### M1c — event history
 

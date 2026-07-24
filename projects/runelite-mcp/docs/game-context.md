@@ -83,8 +83,9 @@ Loading and logged-out states are successful results, not tool errors:
 ```
 
 The same payload is available as the `runelite://game/context` resource. The
-`skills` tool remains separate and returns `state`, `sample`, and its filtered
-skill list.
+`get_skills` tool remains separate and returns `state`, `sample`, and its filtered
+skill list. Other focused snapshots are documented in
+[observation tools](observation-tools.md).
 
 ## Field semantics
 

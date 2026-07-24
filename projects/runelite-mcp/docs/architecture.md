@@ -28,9 +28,11 @@ remote service between the MCP client and RuneLite.
   threads. It has no RuneLite API dependency.
 - `McpDispatcher`: JSON-RPC and MCP method handling. It has no transport or
   RuneLite API dependency.
-- `SnapshotProvider`: narrow boundary used by capabilities.
-- `RuneLiteSnapshotProvider`: schedules reads with `ClientThread`, produces an
-  immutable JSON snapshot, and enforces a timeout.
+- `SnapshotProvider`: narrow boundary used by capabilities, parameterized by a
+  focused `SnapshotType` so unrelated domains are not scanned together.
+- `RuneLiteSnapshotProvider`: schedules focused reads with `ClientThread`, produces
+  immutable JSON snapshots, bounds item output before serialization, and enforces
+  a timeout.
 - Future registries: typed tools, resources, prompts, and event history.
 
 ## Threading

@@ -3,6 +3,7 @@ package rs.m7.runelitemcp.snapshot;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -10,19 +11,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
+import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
+import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
-import net.runelite.api.VarPlayer;
 import net.runelite.api.Varbits;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 
 @SuppressWarnings("deprecation")
 public class RuneLiteSnapshotProvider implements SnapshotProvider
 {
 	private static final long SNAPSHOT_TIMEOUT_SECONDS = 2;
+	private static final int INVENTORY_CAPACITY = 28;
+	private static final int EQUIPMENT_CAPACITY = 14;
+	private static final int VENOM_THRESHOLD = 1_000_000;
+	private static final int VENOM_MAX_DAMAGE = 20;
 
 	private final Client client;
 	private final ClientThread clientThread;
@@ -35,7 +47,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 	}
 
 	@Override
-	public JsonObject snapshot() throws Exception
+	public JsonObject snapshot(SnapshotType type) throws Exception
 	{
 		CompletableFuture<JsonObject> result = new CompletableFuture<>();
 		AtomicBoolean cancelled = new AtomicBoolean();
@@ -47,7 +59,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 			}
 			try
 			{
-				result.complete(readSnapshot());
+				result.complete(readSnapshot(type));
 			}
 			catch (RuntimeException ex)
 			{
@@ -66,7 +78,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		}
 	}
 
-	JsonObject readSnapshot()
+	JsonObject readSnapshot(SnapshotType type)
 	{
 		assert client.isClientThread();
 
@@ -78,9 +90,25 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		JsonObject snapshot = new JsonObject();
 		snapshot.addProperty("state", state);
 		snapshot.add("sample", sample(gameState));
-		snapshot.add("session", session(active));
-		snapshot.add("player", active ? player(player) : JsonNull.INSTANCE);
-		snapshot.add("skills", skills(active));
+
+		switch (type)
+		{
+			case GAME_CONTEXT:
+				snapshot.add("session", session(active));
+				snapshot.add("player", active ? player(player) : JsonNull.INSTANCE);
+				break;
+			case SKILLS:
+				snapshot.add("skills", skills(active));
+				break;
+			case STATUS_EFFECTS:
+				snapshot.add("effects", effects(active));
+				break;
+			case CARRIED_ITEMS:
+				snapshot.add("containers", containers(active));
+				break;
+			default:
+				throw new IllegalArgumentException("Unsupported snapshot type: " + type);
+		}
 		return snapshot;
 	}
 
@@ -172,7 +200,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		vitals.add("hitpoints", level(Skill.HITPOINTS));
 		vitals.add("prayer", level(Skill.PRAYER));
 		vitals.addProperty("runEnergyPercent", client.getEnergy() / 100.0);
-		vitals.addProperty("specialAttackPercent", client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT) / 10.0);
+		vitals.addProperty("specialAttackPercent", client.getVarpValue(VarPlayerID.SA_ENERGY) / 10.0);
 		return vitals;
 	}
 
@@ -196,12 +224,211 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		{
 			JsonObject value = new JsonObject();
 			value.addProperty("name", skill.getName());
-			value.addProperty("realLevel", client.getRealSkillLevel(skill));
-			value.addProperty("boostedLevel", client.getBoostedSkillLevel(skill));
+			value.addProperty("baseLevel", client.getRealSkillLevel(skill));
+			value.addProperty("currentLevel", client.getBoostedSkillLevel(skill));
 			value.addProperty("experience", client.getSkillExperience(skill));
 			skills.add(value);
 		}
 		return skills;
+	}
+
+	private JsonObject effects(boolean active)
+	{
+		JsonObject effects = new JsonObject();
+		effects.addProperty("availability", active ? "current" : "not_logged_in");
+		effects.add("boosts", active ? boosts() : new JsonArray());
+		effects.add("activePrayers", active ? activePrayers() : new JsonArray());
+		effects.add("poison", active ? poison() : JsonNull.INSTANCE);
+		effects.add("timers", active ? timers() : new JsonArray());
+		return effects;
+	}
+
+	private JsonArray boosts()
+	{
+		JsonArray boosts = new JsonArray();
+		for (Skill skill : Skill.values())
+		{
+			if (skill == Skill.OVERALL)
+			{
+				continue;
+			}
+			int baseLevel = client.getRealSkillLevel(skill);
+			int currentLevel = client.getBoostedSkillLevel(skill);
+			if (baseLevel == currentLevel)
+			{
+				continue;
+			}
+
+			JsonObject boost = new JsonObject();
+			boost.addProperty("skill", skill.getName());
+			boost.addProperty("baseLevel", baseLevel);
+			boost.addProperty("currentLevel", currentLevel);
+			boost.addProperty("delta", currentLevel - baseLevel);
+			boosts.add(boost);
+		}
+		return boosts;
+	}
+
+	private JsonArray activePrayers()
+	{
+		JsonArray prayers = new JsonArray();
+		for (Prayer prayer : Prayer.values())
+		{
+			if (client.getVarbitValue(prayer.getVarbit()) == 1)
+			{
+				prayers.add(prayer.name().toLowerCase(Locale.ROOT));
+			}
+		}
+		return prayers;
+	}
+
+	private JsonObject poison()
+	{
+		return poison(client.getVarpValue(VarPlayerID.POISON));
+	}
+
+	static JsonObject poison(int value)
+	{
+		// Matches RuneLite's PoisonPlugin: venom starts at 6, rises by 2, and caps at 20.
+		JsonObject poison = new JsonObject();
+		if (value >= VENOM_THRESHOLD)
+		{
+			poison.addProperty("state", "venomed");
+			poison.addProperty("nextDamage", Math.min(VENOM_MAX_DAMAGE, (value - VENOM_THRESHOLD + 3) * 2));
+		}
+		else if (value > 0)
+		{
+			poison.addProperty("state", "poisoned");
+			poison.addProperty("nextDamage", (int) Math.ceil(value / 5.0));
+		}
+		else
+		{
+			poison.addProperty("state", "none");
+			poison.addProperty("nextDamage", 0);
+		}
+		return poison;
+	}
+
+	private JsonArray timers()
+	{
+		JsonArray timers = new JsonArray();
+		// RuneLite documents stamina, antifire, and super antifire in 10, 30, and
+		// 20-tick intervals respectively; divine potion values are already ticks.
+		addTimer(timers, "stamina", VarbitID.STAMINA_DURATION, 10);
+		addTimer(timers, "antifire", VarbitID.ANTIFIRE_POTION, 30);
+		addTimer(timers, "super_antifire", VarbitID.SUPER_ANTIFIRE_POTION, 20);
+		addTimer(timers, "divine_attack", VarbitID.DIVINEATTACK_POTION_TIME, 1);
+		addTimer(timers, "divine_strength", VarbitID.DIVINESTRENGTH_POTION_TIME, 1);
+		addTimer(timers, "divine_defence", VarbitID.DIVINEDEFENCE_POTION_TIME, 1);
+		addTimer(timers, "divine_ranging", VarbitID.DIVINERANGE_POTION_TIME, 1);
+		addTimer(timers, "divine_magic", VarbitID.DIVINEMAGIC_POTION_TIME, 1);
+		addTimer(timers, "divine_combat", VarbitID.DIVINECOMBAT_POTION_TIME, 1);
+		addTimer(timers, "divine_bastion", VarbitID.DIVINEBASTION_POTION_TIME, 1);
+		addTimer(timers, "divine_battlemage", VarbitID.DIVINEBATTLEMAGE_POTION_TIME, 1);
+		return timers;
+	}
+
+	private void addTimer(JsonArray timers, String name, int varbit, int tickMultiplier)
+	{
+		int value = client.getVarbitValue(varbit);
+		if (value <= 0)
+		{
+			return;
+		}
+		JsonObject timer = new JsonObject();
+		timer.addProperty("name", name);
+		timer.addProperty("remainingTicks", value * tickMultiplier);
+		timers.add(timer);
+	}
+
+	private JsonObject containers(boolean active)
+	{
+		JsonObject containers = new JsonObject();
+		containers.add("inventory", container("inventory", InventoryID.INV, INVENTORY_CAPACITY, active));
+		containers.add("equipment", container("equipment", InventoryID.WORN, EQUIPMENT_CAPACITY, active));
+		return containers;
+	}
+
+	private JsonObject container(String name, int inventoryId, int capacity, boolean active)
+	{
+		if (!active)
+		{
+			return unavailableContainer("not_logged_in", capacity);
+		}
+
+		ItemContainer container = client.getItemContainer(inventoryId);
+		if (container == null)
+		{
+			return unavailableContainer("unavailable", capacity);
+		}
+
+		Item[] source = container.getItems();
+		JsonArray items = new JsonArray();
+		int occupiedSlots = 0;
+		long totalQuantity = 0;
+		boolean truncated = false;
+		for (int slot = 0; slot < source.length; slot++)
+		{
+			Item item = source[slot];
+			if (item == null || item.getId() < 0 || item.getQuantity() <= 0)
+			{
+				continue;
+			}
+			occupiedSlots++;
+			totalQuantity += item.getQuantity();
+			if (slot >= capacity)
+			{
+				truncated = true;
+				continue;
+			}
+
+			ItemComposition definition = client.getItemDefinition(item.getId());
+			JsonObject value = new JsonObject();
+			value.addProperty("slot", slot);
+			if ("equipment".equals(name))
+			{
+				value.addProperty("slotName", equipmentSlotName(slot));
+			}
+			value.addProperty("id", item.getId());
+			value.addProperty("name", definition.getName());
+			value.addProperty("quantity", item.getQuantity());
+			value.addProperty("noted", definition.getNote() == 799);
+			value.addProperty("stackable", definition.isStackable());
+			items.add(value);
+		}
+
+		JsonObject result = new JsonObject();
+		result.addProperty("availability", "current");
+		result.addProperty("capacity", capacity);
+		result.addProperty("occupiedSlots", occupiedSlots);
+		result.addProperty("totalQuantity", totalQuantity);
+		result.addProperty("truncated", truncated);
+		result.add("items", items);
+		return result;
+	}
+
+	private static JsonObject unavailableContainer(String availability, int capacity)
+	{
+		JsonObject result = new JsonObject();
+		result.addProperty("availability", availability);
+		result.addProperty("capacity", capacity);
+		result.add("occupiedSlots", JsonNull.INSTANCE);
+		result.add("totalQuantity", JsonNull.INSTANCE);
+		result.addProperty("truncated", false);
+		result.add("items", new JsonArray());
+		return result;
+	}
+
+	private static String equipmentSlotName(int slot)
+	{
+		for (EquipmentInventorySlot value : EquipmentInventorySlot.values())
+		{
+			if (value.getSlotIdx() == slot)
+			{
+				return value.name().toLowerCase(Locale.ROOT);
+			}
+		}
+		return "unknown";
 	}
 
 	static String state(GameState gameState, boolean hasPlayer)

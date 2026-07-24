@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import rs.m7.runelitemcp.snapshot.SnapshotProvider;
+import rs.m7.runelitemcp.snapshot.SnapshotType;
 
 public class McpDispatcher
 {
@@ -149,9 +150,19 @@ public class McpDispatcher
 			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
 		));
 		tools.add(tool(
-			"skills",
-			"Read current real and boosted skill levels and XP. Omit the names argument to return every skill.",
+			"get_skills",
+			"Read current base and boosted skill levels and XP. Omit the names argument to return every skill.",
 			"{\"type\":\"object\",\"properties\":{\"names\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_status_effects",
+			"Read current skill boosts, active prayers, poison or venom, and supported buff timers.",
+			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
+			"get_carried_items",
+			"Read bounded inventory and equipment contents with explicit availability. Omit containers to return both.",
+			"{\"type\":\"object\",\"properties\":{\"containers\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"inventory\",\"equipment\"]},\"minItems\":1,\"uniqueItems\":true}},\"additionalProperties\":false}"
 		));
 
 		JsonObject result = new JsonObject();
@@ -176,20 +187,19 @@ public class McpDispatcher
 		{
 			case "get_game_context":
 				rejectUnknownArguments(arguments);
-				return toolResult(gameContext(snapshots.snapshot()));
-			case "skills":
+				return toolResult(snapshots.snapshot(SnapshotType.GAME_CONTEXT));
+			case "get_skills":
 				rejectUnknownArguments(arguments, "names");
-				return toolResult(skills(snapshots.snapshot(), arguments));
+				return toolResult(skills(snapshots.snapshot(SnapshotType.SKILLS), arguments));
+			case "get_status_effects":
+				rejectUnknownArguments(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.STATUS_EFFECTS));
+			case "get_carried_items":
+				rejectUnknownArguments(arguments, "containers");
+				return toolResult(carriedItems(snapshots.snapshot(SnapshotType.CARRIED_ITEMS), arguments));
 			default:
 				return toolError("Unknown tool: " + name);
 		}
-	}
-
-	private static JsonObject gameContext(JsonObject snapshot)
-	{
-		JsonObject context = snapshot.deepCopy();
-		context.remove("skills");
-		return context;
 	}
 
 	private JsonObject skills(JsonObject snapshot, JsonObject arguments)
@@ -228,6 +238,60 @@ public class McpDispatcher
 		return result;
 	}
 
+	private JsonObject carriedItems(JsonObject snapshot, JsonObject arguments)
+	{
+		boolean filtered = arguments.has("containers");
+		Set<String> requested = stringArray(arguments, "containers");
+		if (filtered && requested.isEmpty())
+		{
+			throw new IllegalArgumentException("containers must not be empty");
+		}
+		JsonObject available = snapshot.getAsJsonObject("containers");
+		JsonObject selected = new JsonObject();
+		for (String name : new String[]{"inventory", "equipment"})
+		{
+			if (!filtered || requested.contains(name))
+			{
+				selected.add(name, available.get(name).deepCopy());
+			}
+		}
+		if (selected.size() != (filtered ? requested.size() : 2))
+		{
+			throw new IllegalArgumentException("containers must contain only inventory or equipment");
+		}
+
+		JsonObject result = new JsonObject();
+		result.add("state", snapshot.get("state").deepCopy());
+		result.add("sample", snapshot.get("sample").deepCopy());
+		result.add("containers", selected);
+		return result;
+	}
+
+	private static Set<String> stringArray(JsonObject arguments, String name)
+	{
+		Set<String> values = new HashSet<>();
+		if (!arguments.has(name))
+		{
+			return values;
+		}
+		if (!arguments.get(name).isJsonArray())
+		{
+			throw new IllegalArgumentException(name + " must be an array of strings");
+		}
+		for (JsonElement value : arguments.getAsJsonArray(name))
+		{
+			if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+			{
+				throw new IllegalArgumentException(name + " must be an array of strings");
+			}
+			if (!values.add(value.getAsString()))
+			{
+				throw new IllegalArgumentException(name + " must not contain duplicates");
+			}
+		}
+		return values;
+	}
+
 	private JsonObject resourcesList()
 	{
 		JsonObject resource = new JsonObject();
@@ -254,7 +318,7 @@ public class McpDispatcher
 		JsonObject content = new JsonObject();
 		content.addProperty("uri", uri);
 		content.addProperty("mimeType", "application/json");
-		content.addProperty("text", gson.toJson(gameContext(snapshots.snapshot())));
+		content.addProperty("text", gson.toJson(snapshots.snapshot(SnapshotType.GAME_CONTEXT)));
 		JsonArray contents = new JsonArray();
 		contents.add(content);
 		JsonObject result = new JsonObject();

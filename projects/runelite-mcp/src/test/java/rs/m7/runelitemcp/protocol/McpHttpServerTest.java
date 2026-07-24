@@ -22,13 +22,7 @@ public class McpHttpServerTest
 	@Before
 	public void start() throws Exception
 	{
-		server = new McpHttpServer(new McpDispatcher(() ->
-		{
-			JsonObject snapshot = new JsonObject();
-			snapshot.addProperty("gameState", "LOGIN_SCREEN");
-			snapshot.add("skills", new com.google.gson.JsonArray());
-			return snapshot;
-		}, new Gson()));
+		server = new McpHttpServer(new McpDispatcher(type -> new JsonObject(), new Gson()));
 		server.start(0);
 		client = HttpClient.newHttpClient();
 		endpoint = URI.create("http://127.0.0.1:" + server.getPort() + "/mcp");

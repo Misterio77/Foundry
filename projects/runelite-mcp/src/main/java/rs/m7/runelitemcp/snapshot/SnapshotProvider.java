@@ -4,5 +4,5 @@ import com.google.gson.JsonObject;
 
 public interface SnapshotProvider
 {
-	JsonObject snapshot() throws Exception;
+	JsonObject snapshot(SnapshotType type) throws Exception;
 }

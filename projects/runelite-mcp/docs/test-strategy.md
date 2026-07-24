@@ -89,6 +89,8 @@ The foundation has been exercised end to end with the packaged jar and Pi:
 - world-hop transitions through `HOPPING`, `LOADING`, logged-in-without-player,
   and recovery to an active snapshot on the destination world;
 - movement, core vitals, account type, and filtered skills against the live client;
+- skill drains, an active protection prayer, poison-none state, inventory and
+  equipment contents, semantic item names, slot mapping, and container filtering;
 - plugin disable, failed call while unavailable, re-enable, and automatic call
   recovery;
 - Home Manager sideload symlink and Nix-built jar contents.
