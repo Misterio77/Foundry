@@ -1,6 +1,7 @@
 package rs.m7.runelitemcp.snapshot;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import java.util.Locale;
@@ -43,6 +44,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 
 	private final Client client;
 	private final ClientThread clientThread;
+	private final ItemManager itemManager;
 	private final ProgressionSnapshotReader progression;
 	private final AccountStateSnapshotReader accountState;
 	private long lastSlowWarningNanos;
@@ -53,6 +55,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 	{
 		this.client = client;
 		this.clientThread = clientThread;
+		this.itemManager = itemManager;
 		this.progression = new ProgressionSnapshotReader(client);
 		this.accountState = new AccountStateSnapshotReader(client, itemManager, accountStateCache);
 	}
@@ -160,6 +163,9 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 			case COLLECTION_LOG:
 				snapshot.add("collectionLog", active ? progression.collectionLog() : unavailable());
 				break;
+			case ITEM_PRICES:
+				snapshot.add("prices", itemPrices(arguments));
+				break;
 			default:
 				throw new IllegalArgumentException("Unsupported snapshot type: " + type);
 		}
@@ -172,6 +178,50 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 				type, TimeUnit.NANOSECONDS.toMillis(elapsed));
 		}
 		return snapshot;
+	}
+
+	private JsonArray itemPrices(JsonObject arguments)
+	{
+		JsonArray prices = new JsonArray();
+		for (JsonElement element : arguments.getAsJsonArray("itemIds"))
+		{
+			int id = element.getAsInt();
+			JsonObject value = new JsonObject();
+			value.addProperty("id", id);
+			if (itemManager == null)
+			{
+				value.add("name", JsonNull.INSTANCE);
+				value.add("price", JsonNull.INSTANCE);
+				value.addProperty("availability", "unavailable");
+			}
+			else
+			{
+				ItemComposition definition = itemManager.getItemComposition(id);
+				if (definition == null)
+				{
+					value.add("name", JsonNull.INSTANCE);
+					value.add("price", JsonNull.INSTANCE);
+					value.addProperty("availability", "unknown_item");
+				}
+				else
+				{
+					int price = Math.max(0, itemManager.getItemPrice(id));
+					value.addProperty("name", definition.getName());
+					if (price == 0)
+					{
+						value.add("price", JsonNull.INSTANCE);
+						value.addProperty("availability", "unpriced");
+					}
+					else
+					{
+						value.addProperty("price", price);
+						value.addProperty("availability", "current_cache");
+					}
+				}
+			}
+			prices.add(value);
+		}
+		return prices;
 	}
 
 	private JsonObject finishSnapshot(SnapshotType type, JsonObject arguments, JsonObject snapshot)

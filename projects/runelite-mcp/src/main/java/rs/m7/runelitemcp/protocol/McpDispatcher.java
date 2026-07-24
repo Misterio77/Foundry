@@ -20,6 +20,7 @@ import rs.m7.runelitemcp.events.EventPage;
 import rs.m7.runelitemcp.events.EventQuery;
 import rs.m7.runelitemcp.events.EventRecord;
 import rs.m7.runelitemcp.events.EventType;
+import rs.m7.runelitemcp.knowledge.WikiProvider;
 import rs.m7.runelitemcp.snapshot.SnapshotProvider;
 import rs.m7.runelitemcp.snapshot.SnapshotType;
 
@@ -30,12 +31,19 @@ public class McpDispatcher
 
 	private final SnapshotProvider snapshots;
 	private final EventHistory events;
+	private final WikiProvider wiki;
 	private final Gson gson;
 
 	public McpDispatcher(SnapshotProvider snapshots, EventHistory events, Gson gson)
 	{
+		this(snapshots, events, null, gson);
+	}
+
+	public McpDispatcher(SnapshotProvider snapshots, EventHistory events, WikiProvider wiki, Gson gson)
+	{
 		this.snapshots = snapshots;
 		this.events = events;
+		this.wiki = wiki;
 		this.gson = gson.newBuilder().serializeNulls().create();
 	}
 
@@ -217,6 +225,24 @@ public class McpDispatcher
 			"Read native collection-log totals and recent entries. Detailed per-entry data is explicitly unavailable without a stable RuneLite API.",
 			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
 		));
+		tools.add(tool(
+			"get_item_prices",
+			"Read RuneLite's current cached market-price estimate and item name for up to 8 item IDs.",
+			"{\"type\":\"object\",\"properties\":{\"itemIds\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1},\"minItems\":1,\"maxItems\":8,\"uniqueItems\":true}},\"required\":[\"itemIds\"],\"additionalProperties\":false}"
+		));
+		if (wiki != null && wiki.isEnabled())
+		{
+			tools.add(tool(
+				"search_osrs_wiki",
+				"Search OSRS Wiki page titles. This explicit call sends only the supplied query to oldschool.runescape.wiki.",
+				"{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128},\"limit\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":10}},\"required\":[\"query\"],\"additionalProperties\":false}"
+			));
+			tools.add(tool(
+				"get_osrs_wiki_page",
+				"Read bounded plain text from one OSRS Wiki page. This explicit call sends only the supplied title to oldschool.runescape.wiki.",
+				"{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":128},\"maxCharacters\":{\"type\":\"integer\",\"minimum\":1000,\"maximum\":50000}},\"required\":[\"title\"],\"additionalProperties\":false}"
+			));
+		}
 
 		JsonObject result = new JsonObject();
 		result.add("tools", tools);
@@ -290,6 +316,30 @@ public class McpDispatcher
 			case "get_collection_log":
 				rejectUnknownArguments(arguments);
 				return toolResult(snapshots.snapshot(SnapshotType.COLLECTION_LOG));
+			case "get_item_prices":
+				rejectUnknownArguments(arguments, "itemIds");
+				validateItemIds(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.ITEM_PRICES, arguments));
+			case "search_osrs_wiki":
+				requireWiki();
+				rejectUnknownArguments(arguments, "query", "limit");
+				String query = requiredText(arguments, "query");
+				int searchLimit = arguments.has("limit") ? requiredInt(arguments, "limit") : 5;
+				if (searchLimit < 1 || searchLimit > 10)
+				{
+					throw new IllegalArgumentException("limit must be between 1 and 10");
+				}
+				return toolResult(wiki.search(query, searchLimit));
+			case "get_osrs_wiki_page":
+				requireWiki();
+				rejectUnknownArguments(arguments, "title", "maxCharacters");
+				String title = requiredText(arguments, "title");
+				int maxCharacters = arguments.has("maxCharacters") ? requiredInt(arguments, "maxCharacters") : 12_000;
+				if (maxCharacters < 1_000 || maxCharacters > 50_000)
+				{
+					throw new IllegalArgumentException("maxCharacters must be between 1000 and 50000");
+				}
+				return toolResult(wiki.page(title, maxCharacters));
 			default:
 				return toolError("Unknown tool: " + name);
 		}
@@ -383,6 +433,57 @@ public class McpDispatcher
 			}
 		}
 		return values;
+	}
+
+	private void requireWiki()
+	{
+		if (wiki == null || !wiki.isEnabled())
+		{
+			throw new IllegalArgumentException("OSRS Wiki access is disabled in RuneLite MCP settings");
+		}
+	}
+
+	private static String requiredText(JsonObject arguments, String name)
+	{
+		String value = optionalString(arguments, name);
+		if (value == null || value.isEmpty() || value.length() > 128)
+		{
+			throw new IllegalArgumentException(name + " must contain between 1 and 128 characters");
+		}
+		return value;
+	}
+
+	private static void validateItemIds(JsonObject arguments)
+	{
+		if (!arguments.has("itemIds") || !arguments.get("itemIds").isJsonArray())
+		{
+			throw new IllegalArgumentException("itemIds must be an array");
+		}
+		JsonArray ids = arguments.getAsJsonArray("itemIds");
+		if (ids.size() < 1 || ids.size() > 8)
+		{
+			throw new IllegalArgumentException("itemIds must contain between 1 and 8 IDs");
+		}
+		Set<Integer> unique = new HashSet<>();
+		for (JsonElement element : ids)
+		{
+			if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber())
+			{
+				throw new IllegalArgumentException("itemIds must contain positive integers");
+			}
+			try
+			{
+				int id = new BigDecimal(element.getAsString()).toBigIntegerExact().intValueExact();
+				if (id <= 0 || !unique.add(id))
+				{
+					throw new IllegalArgumentException("itemIds must contain unique positive integers");
+				}
+			}
+			catch (ArithmeticException | NumberFormatException ex)
+			{
+				throw new IllegalArgumentException("itemIds must contain positive 32-bit integers");
+			}
+		}
 	}
 
 	private static void validatePagedArguments(JsonObject arguments, String selector, String... allowed)

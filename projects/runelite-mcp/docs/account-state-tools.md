@@ -52,14 +52,17 @@ one hour, or report `unavailable`; an unloaded container is never presented as
 empty or current.
 Caches survive transient loading/world hops for the same player, clear at login
 screens, direct player-identity changes, plugin shutdown, and RuneLite restart.
-Rune-pouch slots come from current named varbits and report `current`.
+Rune-pouch slots come from current named varbits and are copied into the same
+account-generation cache before worker-side serialization.
 
 ## `get_account_wealth`
 
 Returns a known-total estimate and separately labelled bank, carried-item,
 auxiliary-container, rune-pouch, and GE components. `partial` remains true while
-any component is unavailable. This is an estimate, not an authoritative account
-valuation.
+any component or item metadata is unavailable. Item names/prices are enriched in
+batches of eight per client tick; `metadataComplete` makes convergence explicit
+instead of stalling RuneLite on a large bank. This is an estimate, not an
+authoritative account valuation.
 
 ## `get_collection_log`
 
@@ -73,7 +76,9 @@ rather than scraping transient widgets or coupling to another plugin.
 
 Arguments are closed schemas. Query text is limited to 128 characters, arrays are
 unique and enum-bounded, offsets are nonnegative signed integers, and page limits
-are 1–100. Raw client state is copied on RuneLite's client thread with a two-second outer
-timeout. Container paging, item metadata, valuation, and JSON construction run on
-the HTTP worker; progression reads over 5 ms generate a rate-limited payload-free
-warning. No account-state data is written to disk by this plugin.
+are 1–100. Raw client state and at most eight queued item definitions/prices are copied on
+RuneLite's client thread with a two-second outer timeout. Container paging,
+valuation, and JSON construction run on the HTTP worker; progression reads over
+5 ms generate a rate-limited payload-free warning. Account generations are checked
+before and after worker serialization so logout/account changes cannot publish a
+mixed response. No account-state data is written to disk by this plugin.

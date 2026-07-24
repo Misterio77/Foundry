@@ -19,4 +19,15 @@ public interface RuneLiteMcpConfig extends Config
 	{
 		return 18471;
 	}
+
+	@ConfigItem(
+		keyName = "wikiAccess",
+		name = "Enable OSRS Wiki access",
+		description = "Allow explicit MCP Wiki search and page requests.",
+		warning = "Outbound summary: enabling this sends MediaWiki read parameters plus your requested search query/limit or page title to oldschool.runescape.wiki. Requests never follow HTTP redirects and include no account or gameplay state."
+	)
+	default boolean wikiAccess()
+	{
+		return false;
+	}
 }

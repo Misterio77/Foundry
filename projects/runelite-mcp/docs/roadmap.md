@@ -84,11 +84,18 @@
 - Gradle checks, reproducible Nix build, and packaged live verification are required
   before closing the implementation change.
 
-## M3 — knowledge services
+## M3 — knowledge services (implemented; verification pending)
 
-- OSRS Wiki search/page resources and item prices.
-- Visible configuration warnings for any third-party requests and their payloads.
-- Cache, timeout, rate-limit, and upstream attribution behavior.
+- `get_item_prices` exposes bounded RuneLite cached-price estimates without an
+  outbound request.
+- Optional OSRS Wiki search and bounded plain-text page tools replace duplicate
+  resource wrappers and are advertised only when outbound access is enabled.
+- RuneLite configuration warns exactly which query/title fields leave the machine;
+  no account or gameplay state is attached.
+- Fixed upstream, attribution, descriptive User-Agent, timeouts, one-MiB body cap,
+  one-request-per-second limit, and a 64-entry ten-minute memory cache bound I/O.
+- Gradle checks, reproducible Nix build, and packaged live verification are required
+  before closing the implementation change.
 
 ## M4 — release hardening
 

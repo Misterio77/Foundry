@@ -17,6 +17,7 @@ import rs.m7.runelitemcp.events.EventPayloads.ItemChange;
 import rs.m7.runelitemcp.events.EventPayloads.ItemValue;
 import rs.m7.runelitemcp.events.EventType;
 import rs.m7.runelitemcp.events.PendingEvent;
+import rs.m7.runelitemcp.knowledge.WikiProvider;
 import rs.m7.runelitemcp.snapshot.SnapshotType;
 
 import static org.junit.Assert.assertEquals;
@@ -59,7 +60,7 @@ public class McpDispatcherTest
 	{
 		JsonObject listed = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}"));
 		JsonArray tools = listed.getAsJsonObject("result").getAsJsonArray("tools");
-		assertEquals(13, tools.size());
+		assertEquals(14, tools.size());
 		assertEquals("get_game_context", tools.get(0).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_skills", tools.get(1).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_status_effects", tools.get(2).getAsJsonObject().get("name").getAsString());
@@ -68,6 +69,7 @@ public class McpDispatcherTest
 		assertEquals("get_quests", tools.get(5).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_stored_items", tools.get(10).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_collection_log", tools.get(12).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_item_prices", tools.get(13).getAsJsonObject().get("name").getAsString());
 
 		JsonObject result = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}"));
 		assertEquals("active", result.get("state").getAsString());
@@ -163,6 +165,34 @@ public class McpDispatcherTest
 	}
 
 	@Test
+	public void advertisesWikiToolsOnlyWhenOutboundAccessIsEnabled()
+	{
+		JsonObject disabled = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"tools/call\",\"params\":{\"name\":\"search_osrs_wiki\",\"arguments\":{\"query\":\"Barrows\"}}}"));
+		assertEquals(-32602, disabled.getAsJsonObject("error").get("code").getAsInt());
+
+		WikiProvider wiki = new WikiProvider()
+		{
+			@Override public boolean isEnabled() { return true; }
+			@Override public JsonObject search(String query, int limit)
+			{
+				JsonObject value = new JsonObject();
+				value.addProperty("query", query);
+				value.addProperty("limit", limit);
+				return value;
+			}
+			@Override public JsonObject page(String title, int maxCharacters) { return new JsonObject(); }
+		};
+		McpDispatcher enabled = new McpDispatcher(McpDispatcherTest::activeSnapshot,
+			new EventHistory(), wiki, new Gson());
+		JsonArray tools = response(enabled.dispatch("{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/list\"}"))
+			.getAsJsonObject("result").getAsJsonArray("tools");
+		assertEquals(16, tools.size());
+		JsonObject result = structured(enabled.dispatch("{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"tools/call\",\"params\":{\"name\":\"search_osrs_wiki\",\"arguments\":{\"query\":\"Barrows\",\"limit\":3}}}"));
+		assertEquals("Barrows", result.get("query").getAsString());
+		assertEquals(3, result.get("limit").getAsInt());
+	}
+
+	@Test
 	public void removesProvisionalInterfacesRatherThanAliasingThem()
 	{
 		for (String name : new String[]{"client_state", "skills"})
@@ -193,6 +223,9 @@ public class McpDispatcherTest
 		assertInvalidArguments("get_slayer", "{\"sections\":[\"social\"]}");
 		assertInvalidArguments("get_stored_items", "{\"itemId\":0}");
 		assertInvalidArguments("get_stored_items", "{\"containers\":[\"bank\",\"seed_vault\",\"looting_bag\",\"rune_pouch\",\"seed_box\"]}");
+		assertInvalidArguments("get_item_prices", "{}");
+		assertInvalidArguments("get_item_prices", "{\"itemIds\":[995,995]}");
+		assertInvalidArguments("get_item_prices", "{\"itemIds\":[1.5]}");
 	}
 
 	@Test

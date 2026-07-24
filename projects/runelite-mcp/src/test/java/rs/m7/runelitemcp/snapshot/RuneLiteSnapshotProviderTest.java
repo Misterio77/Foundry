@@ -1,6 +1,7 @@
 package rs.m7.runelitemcp.snapshot;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.lang.reflect.Proxy;
@@ -78,6 +79,15 @@ public class RuneLiteSnapshotProviderTest
 		JsonObject weapon = containers.getAsJsonObject("equipment").getAsJsonArray("items").get(0).getAsJsonObject();
 		assertEquals("weapon", weapon.get("slotName").getAsString());
 		assertEquals("Abyssal whip", weapon.get("name").getAsString());
+
+		JsonObject priceArguments = new JsonObject();
+		JsonArray itemIds = new JsonArray();
+		itemIds.add(995);
+		priceArguments.add("itemIds", itemIds);
+		JsonObject price = provider.readSnapshot(SnapshotType.ITEM_PRICES, priceArguments)
+			.getAsJsonArray("prices").get(0).getAsJsonObject();
+		assertEquals("unavailable", price.get("availability").getAsString());
+		assertTrue(price.get("price").isJsonNull());
 
 		McpDispatcher dispatcher = new McpDispatcher(provider::readSnapshot, new EventHistory(), new Gson());
 		DispatchResult response = dispatcher.dispatch("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}");

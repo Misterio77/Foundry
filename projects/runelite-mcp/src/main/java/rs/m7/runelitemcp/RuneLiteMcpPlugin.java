@@ -17,6 +17,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import rs.m7.runelitemcp.events.EventHistory;
 import rs.m7.runelitemcp.events.RuneLiteEventCollector;
+import rs.m7.runelitemcp.knowledge.OsrsWikiClient;
 import rs.m7.runelitemcp.protocol.McpDispatcher;
 import rs.m7.runelitemcp.protocol.McpHttpServer;
 import rs.m7.runelitemcp.snapshot.AccountStateCache;
@@ -51,6 +52,9 @@ public class RuneLiteMcpPlugin extends Plugin
 	@Inject
 	private ItemManager itemManager;
 
+	@Inject
+	private OsrsWikiClient wiki;
+
 	private EventHistory eventHistory;
 	private McpHttpServer server;
 
@@ -58,9 +62,10 @@ public class RuneLiteMcpPlugin extends Plugin
 	protected void startUp() throws Exception
 	{
 		accountStateCache.clear();
+		wiki.clear();
 		eventHistory = new EventHistory();
 		eventCollector.start(eventHistory);
-		server = new McpHttpServer(new McpDispatcher(snapshots, eventHistory, gson));
+		server = new McpHttpServer(new McpDispatcher(snapshots, eventHistory, wiki, gson));
 		try
 		{
 			server.start(config.port());
@@ -87,6 +92,7 @@ public class RuneLiteMcpPlugin extends Plugin
 		}
 		eventCollector.stop();
 		accountStateCache.clear();
+		wiki.clear();
 		if (eventHistory != null)
 		{
 			eventHistory.close();

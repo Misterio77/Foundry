@@ -38,6 +38,8 @@ remote service between the MCP client and RuneLite.
   collection-summary reads with bounded pages and session definition caches.
 - `AccountStateSnapshotReader` plus `AccountStateCache`: GE, wealth, rune-pouch,
   bank, and auxiliary-container reads with account-bound in-memory freshness.
+- `OsrsWikiClient`: optional fixed-upstream search/page client with explicit config
+  warning, rate/size/time bounds, attribution, and an in-memory LRU cache.
 - `EventHistory`: pure-Java, synchronized bounded ring owning generation,
   sequence, state metadata, and linearizable queries.
 - `RuneLiteEventCollector`: explicitly started/stopped lifecycle adapter that
