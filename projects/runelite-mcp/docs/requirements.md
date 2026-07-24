@@ -1,10 +1,14 @@
 # Requirements
 
+This document is normative for the intended product, not an inventory of already
+implemented behavior. The README records current capabilities and the roadmap
+tracks delivery and exit criteria.
+
 ## Product goal
 
 Expose useful live RuneLite and OSRS context to local MCP clients while remaining
-informational, predictable, private to the machine, and acceptable for RuneLite's
-Plugin Hub.
+informational, predictable, private to the machine, and designed conservatively
+for eventual RuneLite Plugin Hub review.
 
 ## Actors
 
@@ -28,23 +32,37 @@ Plugin Hub.
 
 ### Information
 
-The target tool families are:
+The target tool families, in implementation order, are:
 
-- client/session identity, game state, world, account type, and tick timing;
-- player location, movement, animation, interacting entity, and combat status;
-- skills, boosts, XP, quests, diaries, combat achievements, and collection log;
-- inventory, equipment, bank and other containers, with explicit availability and
-  freshness semantics;
-- nearby players, NPCs, objects, ground items, projectiles, widgets, and map state;
-- active effects such as prayers, boosts, poison, venom, run energy, special
-  attack, timers, and Slayer state;
-- bounded event history for contextual observations rather than polling races;
+- session and player state: game state, world, account type, tick, location,
+  movement, animation, interaction target, combat level, and core vitals;
+- skills and active effects: levels, XP, boosts, prayers, poison/venom, run
+  energy, special attack, timers, and Slayer state;
+- carried items: inventory and equipment, with container availability and bounded
+  item output;
+- bounded event history for state transitions, XP, loot, inventory changes, and
+  other contextual observations that polling can miss;
+- carefully bounded nearby NPC, object, ground-item, widget, and map queries;
+- progression and private state: quests, diaries, combat achievements, collection
+  log, Grand Exchange, bank, and auxiliary containers;
 - OSRS Wiki search/pages and RuneLite price data where live client data is not the
   authoritative source.
 
 Sensitive information must be opt-in or omitted: chat, friends, clan membership,
-private messages, notes, and bank contents are not exposed merely because the
-client API can read them.
+private messages, notes, nearby player identities, and bank contents are not
+exposed merely because the client API can read them.
+
+### State semantics
+
+1. Every live-state response identifies the RuneLite game state and sampling tick
+   so absence is not mistaken for an empty in-game value.
+2. Data whose visibility depends on a widget or container reports a small shared
+   availability status such as `current`, `not_logged_in`, or `unavailable`.
+3. Cached data is returned only when a capability explicitly promises it and then
+   includes its source tick or timestamp.
+4. Logout and loading transitions clear player-bound data rather than leaking the
+   previous session's snapshot.
+5. Lists report truncation and total counts whenever a configured bound is hit.
 
 ## Safety and Plugin Hub requirements
 
@@ -80,6 +98,7 @@ client API can read them.
 ## Non-functional requirements
 
 - Java 11 and RuneLite Plugin Hub `standard` build compatibility.
+- Reproducible Nix packaging with a committed Gradle dependency lock.
 - No perceptible client-thread stalls: snapshot collection target under 2 ms;
   expensive transformations happen off-thread.
 - A single slow MCP client cannot block RuneLite or other MCP requests.
@@ -87,10 +106,13 @@ client API can read them.
 - Core protocol and schema logic is testable without launching RuneLite.
 - Tool descriptions distinguish current, cached, unavailable, and stale data.
 
-## Acceptance criteria for the first usable release
+## Release acceptance criteria
 
-- Plugin Hub checks and `./gradlew test` pass.
+- Plugin Hub checks, `./gradlew check`, and the Nix package build pass.
 - At least two independent MCP clients initialize and call tools successfully.
 - Logged-out, hopping, loading, instanced, and logged-in states return valid data.
-- Port conflict and malformed/oversized request failures do not crash RuneLite.
+- Port conflict and malformed, oversized, or concurrent request failures do not
+  crash RuneLite.
+- Packaged installation, plugin disable/re-enable, and RuneLite restart all
+  recover without restarting the MCP client.
 - A manual policy audit finds no path from MCP input to a game action.

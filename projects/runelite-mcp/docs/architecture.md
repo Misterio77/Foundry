@@ -55,8 +55,12 @@ The first transport is stateless MCP Streamable HTTP:
 - request bodies are bounded at 1 MiB;
 - browser Origins other than loopback HTTP origins are rejected.
 
-SSE can be added when subscriptions or server-initiated notifications have a
-concrete use. Stdio does not fit an in-process GUI plugin lifecycle.
+Because the transport is stateless, disabling the plugin does not proactively
+remove tools already cached by an MCP client. Calls fail while the listener is
+down and recover after it returns; this behavior is verified with Pi. SSE and
+sessions should be added only when subscriptions or server-initiated
+notifications have a concrete use. Stdio does not fit an in-process GUI plugin
+lifecycle.
 
 ## Protocol implementation choice
 
@@ -87,7 +91,20 @@ Responses should include:
 - game state when absence could otherwise be misinterpreted.
 
 Large datasets use query/filter tools instead of dumping everything into model
-context.
+context. Capabilities should share one availability vocabulary rather than each
+inventing booleans for logged-out, closed-widget, and unavailable states.
+
+## Packaging and deployment
+
+The plugin source remains in `projects/runelite-mcp`; Nix-specific build machinery
+lives in `pkgs/runelite-mcp`. The package uses Gradle 8 with Java 11, runs tests,
+and installs a dependency-free plugin jar. Home Manager links that jar into
+`~/.runelite/sideloaded-plugins/` for the developer-mode RuneLite launcher.
+
+The separation is intentional: the project remains a conventional Plugin Hub
+repository, while Foundry owns reproducibility and local deployment. Updating
+Gradle or RuneLite dependencies requires regenerating
+`pkgs/runelite-mcp/deps.json` and rebuilding the package.
 
 ## Failure model
 

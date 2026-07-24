@@ -28,9 +28,11 @@ Start `McpHttpServer` on loopback with an ephemeral port and use JDK `HttpClient
 
 ### RuneLite API contract tests
 
-Compile against `latest.release` on every change. Focused tests cover snapshot
-mapping with RuneLite test fixtures where feasible. The development client smoke
-suite covers APIs that require a live client.
+Local Gradle development resolves `latest.release`; the Nix package pins the
+resolved dependency graph in `pkgs/runelite-mcp/deps.json`. Regenerate that lock
+deliberately when updating RuneLite rather than silently carrying compatibility
+code. Focused tests cover snapshot mapping with RuneLite fixtures where feasible;
+the development client smoke suite covers APIs that require a live client.
 
 ### MCP client compatibility
 
@@ -76,11 +78,33 @@ review page, and rejected/rolled-back feature list.
 Targets: p95 client-thread collection below 2 ms, no unbounded queues, and no
 request worker surviving plugin shutdown.
 
+## Verified baseline
+
+The foundation has been exercised end to end with the packaged jar and Pi:
+
+- initialization and capability discovery;
+- tools, resource reads, and prompt retrieval;
+- filtered skill output;
+- logged-in and logged-out snapshots without stale player data;
+- plugin disable, failed call while unavailable, re-enable, and automatic call
+  recovery;
+- Home Manager sideload symlink and Nix-built jar contents.
+
+Direct HTTP requests also verify the transport independently of Pi. This baseline
+must remain covered as observational capabilities grow.
+
 ## CI gates
 
+From the project directory:
+
 ```sh
-./gradlew test
-./gradlew check
+nix-shell --run './gradlew check'
+```
+
+From the Foundry root:
+
+```sh
+nix build .#nixosConfigurations.atlas.pkgs.runelite-mcp
 ```
 
 Release candidates additionally run Plugin Hub tooling/checks, MCP compatibility,
