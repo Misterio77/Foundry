@@ -66,8 +66,10 @@ authoritative account valuation.
 
 ## `get_collection_log`
 
-Returns native synchronized totals by top-level category and up to twelve recent
-item IDs/names. RuneLite has no stable complete account-level collection-log entry
+Returns native totals by top-level category when RuneLite has loaded them and up
+to twelve recent item IDs/names. `recent_only` plus `synchronization: unknown`
+prevents unloaded zero totals from looking authoritative. RuneLite has no stable
+complete account-level collection-log entry
 model; the tool therefore declares `completeness: summary`, exposes the recent
 item date encoding only as `dateValueRaw`, and marks detailed entries unavailable
 rather than scraping transient widgets or coupling to another plugin.

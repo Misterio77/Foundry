@@ -197,7 +197,8 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 			else
 			{
 				ItemComposition definition = itemManager.getItemComposition(id);
-				if (definition == null)
+				if (definition == null || definition.getId() != id || definition.getName() == null
+					|| "null".equalsIgnoreCase(definition.getName()))
 				{
 					value.add("name", JsonNull.INSTANCE);
 					value.add("price", JsonNull.INSTANCE);

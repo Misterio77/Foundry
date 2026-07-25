@@ -267,14 +267,16 @@ final class ProgressionSnapshotReader
 	JsonObject collectionLog()
 	{
 		JsonObject result = new JsonObject();
-		result.addProperty("availability", "current_summary");
+		int total = client.getVarpValue(VarPlayerID.COLLECTION_COUNT_MAX);
+		boolean totalsLoaded = total > 0;
+		result.addProperty("availability", totalsLoaded ? "current_summary" : "recent_only");
 		result.addProperty("completeness", "summary");
 		int unsynchronized = client.getVarpValue(VarPlayerID.COLLECTION_COUNT_UNSYNCED);
-		result.addProperty("synchronization", unsynchronized < 0 ? "unknown"
+		result.addProperty("synchronization", !totalsLoaded || unsynchronized < 0 ? "unknown"
 			: unsynchronized == 0 ? "current" : "unsynchronized");
 		JsonObject totals = new JsonObject();
 		totals.addProperty("obtained", client.getVarpValue(VarPlayerID.COLLECTION_COUNT));
-		totals.addProperty("total", client.getVarpValue(VarPlayerID.COLLECTION_COUNT_MAX));
+		totals.addProperty("total", total);
 		totals.add("bosses", countPair(VarPlayerID.COLLECTION_COUNT_BOSSES, VarPlayerID.COLLECTION_COUNT_BOSSES_MAX));
 		totals.add("raids", countPair(VarPlayerID.COLLECTION_COUNT_RAIDS, VarPlayerID.COLLECTION_COUNT_RAIDS_MAX));
 		totals.add("clues", countPair(VarPlayerID.COLLECTION_COUNT_CLUES, VarPlayerID.COLLECTION_COUNT_CLUES_MAX));

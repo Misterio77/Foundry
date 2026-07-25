@@ -46,6 +46,8 @@ public class ProgressionSnapshotReaderTest
 		assertEquals(100, collection.getAsJsonObject("totals").get("obtained").getAsInt());
 		assertEquals(500, collection.getAsJsonObject("totals").get("total").getAsInt());
 		assertEquals("summary", collection.get("completeness").getAsString());
+		assertEquals("current_summary", collection.get("availability").getAsString());
+		assertEquals("current", collection.get("synchronization").getAsString());
 	}
 
 	private static Client client()
