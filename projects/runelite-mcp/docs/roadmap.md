@@ -69,7 +69,7 @@
 - Omit nearby player identities by default and prohibit PvP scouting, boss
   prediction, prayer recommendations, and automatic safe-tile derivation.
 
-## M2 — progression and account state (implemented; verification pending)
+## M2 — progression and account state (complete)
 
 - Native tools expose quests, diaries, combat achievements, Slayer, Grand Exchange,
   observed bank/auxiliary containers, rune-pouch contents, and wealth estimates.
@@ -81,10 +81,13 @@
   detailed entries fail closed because RuneLite has no stable complete native model.
 - Runtime mapping checks, closed schemas, page limits, price-age declarations, and
   rate-limited client-thread timing warnings bound failure and cost.
-- Gradle checks, reproducible Nix build, and packaged live verification are required
-  before closing the implementation change.
+- Pi verified quest filtering/totals, all diaries, Slayer assignment/rewards,
+  combat-achievement mappings and paging, GE, six-slot rune pouch, bank capture and
+  search across 748 stacks, convergent wealth, item prices, cache freshness, and
+  honest unloaded/partial states against the packaged plugin.
+- Gradle checks and the reproducible Nix package build pass.
 
-## M3 — knowledge services (implemented; verification pending)
+## M3 — knowledge services (complete)
 
 - `get_item_prices` exposes bounded RuneLite cached-price estimates without an
   outbound request.
@@ -94,8 +97,10 @@
   no account or gameplay state is attached.
 - Fixed upstream, attribution, descriptive User-Agent, timeouts, one-MiB body cap,
   one-request-per-second limit, and a 64-entry ten-minute memory cache bound I/O.
-- Gradle checks, reproducible Nix build, and packaged live verification are required
-  before closing the implementation change.
+- Pi verified dynamic 14/16-tool discovery, search and page calls through MCP,
+  bounded text truncation, source attribution, and repeat-call cache hits; direct
+  upstream fixtures confirmed both MediaWiki query templates.
+- Gradle checks and the reproducible Nix package build pass.
 
 ## M4 — release hardening
 
