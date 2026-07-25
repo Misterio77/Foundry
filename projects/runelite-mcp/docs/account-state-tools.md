@@ -74,6 +74,30 @@ model; the tool therefore declares `completeness: summary`, exposes the recent
 item date encoding only as `dateValueRaw`, and marks detailed entries unavailable
 rather than scraping transient widgets or coupling to another plugin.
 
+## `get_poh_state`
+
+Returns recognized features from the house currently loaded in RuneLite. It scans
+only the active scene and reuses RuneLite's public `PohIcons` catalogue for portal
+destinations, pools, altars, jewellery boxes, nexus, transportation, and other
+supported fixtures. Results include object IDs/names, instance coordinates,
+feature counts, an `observedTick`, and at most 128 individual objects. The bounded
+scene state is maintained from RuneLite object spawn/despawn events, with one
+bounded fallback scan when observation begins mid-scene; ownership controls are
+re-read on every call.
+
+The scope is deliberately observational. Ownership is `self` only when RuneLite
+provides direct UI evidence (building mode or a visible expel-guests control), and
+`other` only when visible guest house options expose Leave House without that
+owner control; `ownershipEvidence` states which signal was used. Otherwise it is
+`unknown`, so a visited house is never guessed to belong to the logged-in player.
+After ownership is directly confirmed as `self`, the last serialized layout is
+retained in memory across scene changes as `availability: observed` with
+`scope: last_observed_self_house`, `observedTick`, and `observedAt`. Guest or
+unknown-ownership houses are never retained. The observation clears on logout,
+player-identity change, plugin shutdown, or RuneLite restart. With no confirmed
+self-house observation, outside a POH the tool returns `availability: not_in_house`.
+RuneLite does not expose a persistent account-level house model.
+
 ## Bounds and lifecycle
 
 Arguments are closed schemas. Query text is limited to 128 characters, arrays are

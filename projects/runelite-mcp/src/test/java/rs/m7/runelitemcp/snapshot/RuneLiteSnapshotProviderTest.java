@@ -113,6 +113,8 @@ public class RuneLiteSnapshotProviderTest
 		assertEquals(0, loadingEffects.getAsJsonArray("activePrayers").size());
 		assertTrue(loadingEffects.get("poison").isJsonNull());
 		assertEquals(0, loadingEffects.getAsJsonArray("timers").size());
+		assertEquals("not_logged_in", provider.readSnapshot(SnapshotType.POH_STATE)
+			.getAsJsonObject("poh").get("availability").getAsString());
 
 		gameState[0] = GameState.LOGGED_IN;
 		Item[] oversizedItems = new Item[30];
@@ -198,6 +200,8 @@ public class RuneLiteSnapshotProviderTest
 				{
 					case "isClientThread":
 						return true;
+					case "isInInstancedRegion":
+						return false;
 					case "getGameState":
 						return gameState[0];
 					case "getLocalPlayer":

@@ -6,6 +6,10 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.events.DecorativeObjectDespawned;
+import net.runelite.api.events.DecorativeObjectSpawned;
+import net.runelite.api.events.GameObjectDespawned;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
@@ -91,6 +95,7 @@ public class RuneLiteMcpPlugin extends Plugin
 			server = null;
 		}
 		eventCollector.stop();
+		snapshots.clearPohAccount();
 		accountStateCache.clear();
 		wiki.clear();
 		if (eventHistory != null)
@@ -104,11 +109,45 @@ public class RuneLiteMcpPlugin extends Plugin
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		GameState state = event.getGameState();
+		if (state == GameState.LOADING || state == GameState.LOGIN_SCREEN
+			|| state == GameState.LOGIN_SCREEN_AUTHENTICATOR)
+		{
+			snapshots.changePohScene();
+		}
+		else if (state == GameState.LOGGED_IN)
+		{
+			snapshots.completePohObservations();
+		}
 		if (state == GameState.LOGIN_SCREEN || state == GameState.LOGIN_SCREEN_AUTHENTICATOR)
 		{
+			snapshots.clearPohAccount();
 			accountStateCache.clear();
 		}
 		eventCollector.onGameStateChanged(event);
+	}
+
+	@Subscribe
+	public void onGameObjectSpawned(GameObjectSpawned event)
+	{
+		snapshots.observePohObjectSpawn(event.getGameObject(), "game_object");
+	}
+
+	@Subscribe
+	public void onGameObjectDespawned(GameObjectDespawned event)
+	{
+		snapshots.observePohObjectDespawn(event.getGameObject());
+	}
+
+	@Subscribe
+	public void onDecorativeObjectSpawned(DecorativeObjectSpawned event)
+	{
+		snapshots.observePohObjectSpawn(event.getDecorativeObject(), "decorative_object");
+	}
+
+	@Subscribe
+	public void onDecorativeObjectDespawned(DecorativeObjectDespawned event)
+	{
+		snapshots.observePohObjectDespawn(event.getDecorativeObject());
 	}
 
 	@Subscribe
@@ -129,7 +168,9 @@ public class RuneLiteMcpPlugin extends Plugin
 	{
 		if (client.getLocalPlayer() != null)
 		{
-			accountStateCache.bindPlayer(client.getLocalPlayer().getName());
+			String playerName = client.getLocalPlayer().getName();
+			accountStateCache.bindPlayer(playerName);
+			snapshots.bindPohPlayer(playerName);
 		}
 		accountStateCache.enrichMetadata(client, itemManager, 8);
 		eventCollector.onGameTick();

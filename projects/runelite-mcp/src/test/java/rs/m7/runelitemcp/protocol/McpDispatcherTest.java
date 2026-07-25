@@ -60,7 +60,7 @@ public class McpDispatcherTest
 	{
 		JsonObject listed = response(dispatch("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\"}"));
 		JsonArray tools = listed.getAsJsonObject("result").getAsJsonArray("tools");
-		assertEquals(14, tools.size());
+		assertEquals(15, tools.size());
 		assertEquals("get_game_context", tools.get(0).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_skills", tools.get(1).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_status_effects", tools.get(2).getAsJsonObject().get("name").getAsString());
@@ -69,7 +69,8 @@ public class McpDispatcherTest
 		assertEquals("get_quests", tools.get(5).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_stored_items", tools.get(10).getAsJsonObject().get("name").getAsString());
 		assertEquals("get_collection_log", tools.get(12).getAsJsonObject().get("name").getAsString());
-		assertEquals("get_item_prices", tools.get(13).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_poh_state", tools.get(13).getAsJsonObject().get("name").getAsString());
+		assertEquals("get_item_prices", tools.get(14).getAsJsonObject().get("name").getAsString());
 
 		JsonObject result = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_game_context\",\"arguments\":{}}}"));
 		assertEquals("active", result.get("state").getAsString());
@@ -77,6 +78,11 @@ public class McpDispatcherTest
 		assertEquals(123, result.getAsJsonObject("sample").get("tick").getAsInt());
 		assertEquals("Gabs", result.getAsJsonObject("player").get("name").getAsString());
 		assertFalse(result.has("skills"));
+
+		JsonObject poh = structured(dispatch("{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"get_poh_state\",\"arguments\":{}}}"))
+			.getAsJsonObject("poh");
+		assertEquals("not_in_house", poh.get("availability").getAsString());
+		assertEquals("unknown", poh.get("ownership").getAsString());
 	}
 
 	@Test
@@ -186,7 +192,7 @@ public class McpDispatcherTest
 			new EventHistory(), wiki, new Gson());
 		JsonArray tools = response(enabled.dispatch("{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"tools/list\"}"))
 			.getAsJsonObject("result").getAsJsonArray("tools");
-		assertEquals(16, tools.size());
+		assertEquals(17, tools.size());
 		JsonObject result = structured(enabled.dispatch("{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"tools/call\",\"params\":{\"name\":\"search_osrs_wiki\",\"arguments\":{\"query\":\"Barrows\",\"limit\":3}}}"));
 		assertEquals("Barrows", result.get("query").getAsString());
 		assertEquals(3, result.get("limit").getAsInt());
@@ -223,6 +229,7 @@ public class McpDispatcherTest
 		assertInvalidArguments("get_slayer", "{\"sections\":[\"social\"]}");
 		assertInvalidArguments("get_stored_items", "{\"itemId\":0}");
 		assertInvalidArguments("get_stored_items", "{\"containers\":[\"bank\",\"seed_vault\",\"looting_bag\",\"rune_pouch\",\"seed_box\"]}");
+		assertInvalidArguments("get_poh_state", "{\"cached\":true}");
 		assertInvalidArguments("get_item_prices", "{}");
 		assertInvalidArguments("get_item_prices", "{\"itemIds\":[995,995]}");
 		assertInvalidArguments("get_item_prices", "{\"itemIds\":[1.5]}");
@@ -323,6 +330,12 @@ public class McpDispatcherTest
 				break;
 			case CARRIED_ITEMS:
 				snapshot.add("containers", containers());
+				break;
+			case POH_STATE:
+				JsonObject poh = new JsonObject();
+				poh.addProperty("availability", "not_in_house");
+				poh.addProperty("ownership", "unknown");
+				snapshot.add("poh", poh);
 				break;
 			default:
 				throw new AssertionError(type);

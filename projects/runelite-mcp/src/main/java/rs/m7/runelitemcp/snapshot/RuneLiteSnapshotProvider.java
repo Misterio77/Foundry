@@ -22,6 +22,7 @@ import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
+import net.runelite.api.TileObject;
 import net.runelite.api.Varbits;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InventoryID;
@@ -47,6 +48,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 	private final ItemManager itemManager;
 	private final ProgressionSnapshotReader progression;
 	private final AccountStateSnapshotReader accountState;
+	private final PohSnapshotReader poh;
 	private long lastSlowWarningNanos;
 
 	@Inject
@@ -58,11 +60,42 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		this.itemManager = itemManager;
 		this.progression = new ProgressionSnapshotReader(client);
 		this.accountState = new AccountStateSnapshotReader(client, itemManager, accountStateCache);
+		this.poh = new PohSnapshotReader(client);
 	}
 
 	RuneLiteSnapshotProvider(Client client, ClientThread clientThread)
 	{
 		this(client, clientThread, null, new AccountStateCache());
+	}
+
+	public void observePohObjectSpawn(TileObject object, String objectType)
+	{
+		poh.observeSpawn(object, objectType);
+	}
+
+	public void observePohObjectDespawn(TileObject object)
+	{
+		poh.observeDespawn(object);
+	}
+
+	public void completePohObservations()
+	{
+		poh.observationsComplete();
+	}
+
+	public void bindPohPlayer(String playerName)
+	{
+		poh.bindPlayer(playerName);
+	}
+
+	public void changePohScene()
+	{
+		poh.sceneChanged();
+	}
+
+	public void clearPohAccount()
+	{
+		poh.clearAccount();
 	}
 
 	@Override
@@ -165,6 +198,9 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 				break;
 			case ITEM_PRICES:
 				snapshot.add("prices", itemPrices(arguments));
+				break;
+			case POH_STATE:
+				snapshot.add("poh", active ? poh.read() : unavailable());
 				break;
 			default:
 				throw new IllegalArgumentException("Unsupported snapshot type: " + type);
@@ -311,21 +347,27 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		JsonObject value = new JsonObject();
 		value.addProperty("name", player.getName());
 		value.addProperty("combatLevel", player.getCombatLevel());
-		value.add("location", location(player.getWorldLocation()));
+		value.add("location", location(player));
 		value.add("movement", movement(player));
 		value.add("interaction", interaction(player.getInteracting()));
 		value.add("vitals", vitals());
 		return value;
 	}
 
-	private static JsonObject location(WorldPoint worldPoint)
+	private JsonObject location(Player player)
 	{
+		WorldPoint worldPoint = player.getWorldLocation();
+		int semanticRegionId = RuneLiteAreaResolver.semanticRegionId(client, player);
 		JsonObject location = new JsonObject();
 		location.addProperty("x", worldPoint.getX());
 		location.addProperty("y", worldPoint.getY());
 		location.addProperty("plane", worldPoint.getPlane());
 		location.addProperty("regionId", worldPoint.getRegionID());
-		JsonObject area = RuneLiteAreaResolver.resolve(worldPoint.getRegionID());
+		if (semanticRegionId != worldPoint.getRegionID())
+		{
+			location.addProperty("templateRegionId", semanticRegionId);
+		}
+		JsonObject area = RuneLiteAreaResolver.resolve(semanticRegionId);
 		location.add("area", area == null ? JsonNull.INSTANCE : area);
 		return location;
 	}

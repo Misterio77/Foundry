@@ -15,8 +15,9 @@ The foundation milestone is complete. The plugin currently provides:
 - MCP `2025-11-25` over Streamable HTTP at
   `http://127.0.0.1:18471/mcp`;
 - focused tools for game context, skills, effects, carried/stored items,
-  progression, Slayer, Grand Exchange, wealth, collection-log summaries, item
-  prices, optional OSRS Wiki knowledge, and generation-aware event history;
+  progression, Slayer, Grand Exchange, wealth, loaded POH features,
+  collection-log summaries, item prices, optional OSRS Wiki knowledge, and
+  generation-aware event history;
 - an `osrs_session_brief` prompt;
 - live reads marshalled onto RuneLite's client thread;
 - loopback-only binding, Origin checks, bounded request bodies, and bounded HTTP

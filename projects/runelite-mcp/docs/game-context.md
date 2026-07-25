@@ -102,7 +102,9 @@ skill list. Other focused snapshots are documented in
   explicitly null during transitions and after logout; no previous snapshot is
   cached.
 - `location.area` reuses RuneLite's package-private Discord region catalogue and
-  is null where that catalogue has no match. `category` is RuneLite's own broad
+  is null where that catalogue has no match. In instanced content,
+  `templateRegionId` records the resolved template used for semantic lookup while
+  `regionId` and coordinates retain the live instance location. `category` is RuneLite's own broad
   grouping (`bosses`, `cities`, `dungeons`, `minigames`, `raids`, or `regions`),
   not an MCP-maintained geography. The narrow reflective adapter fails closed if
   RuneLite changes the internal interface.

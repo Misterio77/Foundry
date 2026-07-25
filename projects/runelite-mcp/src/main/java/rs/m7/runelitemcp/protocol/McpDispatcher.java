@@ -226,6 +226,11 @@ public class McpDispatcher
 			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
 		));
 		tools.add(tool(
+			"get_poh_state",
+			"Read RuneLite-recognized features from the currently loaded player-owned house. Ownership is reported only with direct RuneLite UI evidence; outside a loaded house no account layout is inferred.",
+			"{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}"
+		));
+		tools.add(tool(
 			"get_item_prices",
 			"Read RuneLite's current cached market-price estimate and item name for up to 8 item IDs.",
 			"{\"type\":\"object\",\"properties\":{\"itemIds\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1},\"minItems\":1,\"maxItems\":8,\"uniqueItems\":true}},\"required\":[\"itemIds\"],\"additionalProperties\":false}"
@@ -316,6 +321,9 @@ public class McpDispatcher
 			case "get_collection_log":
 				rejectUnknownArguments(arguments);
 				return toolResult(snapshots.snapshot(SnapshotType.COLLECTION_LOG));
+			case "get_poh_state":
+				rejectUnknownArguments(arguments);
+				return toolResult(snapshots.snapshot(SnapshotType.POH_STATE));
 			case "get_item_prices":
 				rejectUnknownArguments(arguments, "itemIds");
 				validateItemIds(arguments);
