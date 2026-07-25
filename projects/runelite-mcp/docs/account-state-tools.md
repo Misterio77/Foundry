@@ -86,9 +86,15 @@ bounded fallback scan when observation begins mid-scene; ownership controls are
 re-read on every call.
 
 The scope is deliberately observational. Ownership is `self` only when RuneLite
-provides direct UI evidence (building mode or a visible expel-guests control), and
-`other` only when visible guest house options expose Leave House without that
-owner control; `ownershipEvidence` states which signal was used. Otherwise it is
+provides direct UI evidence (building mode or a visible expel-guests control), or
+when a user-initiated Teleport to House spell, unredirected house tablet, or
+right-click portal **Home** action is followed by a loading transition that lands
+in a POH within twenty seconds. The left-click portal dialog does not emit its
+selected choice through RuneLite's menu event API, so it cannot reliably distinguish
+**Go to your house** from a friend's house and deliberately remains untrusted.
+`other` is reported only when visible guest house options expose Leave House
+without owner controls; `ownershipEvidence` states which signal was used.
+Outside/cancelled/failed teleports do not confirm anything. Otherwise ownership is
 `unknown`, so a visited house is never guessed to belong to the logged-in player.
 After ownership is directly confirmed as `self`, the last serialized layout is
 retained in memory across scene changes as `availability: observed` with

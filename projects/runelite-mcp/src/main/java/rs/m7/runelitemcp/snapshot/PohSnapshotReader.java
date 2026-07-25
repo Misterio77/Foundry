@@ -35,8 +35,12 @@ final class PohSnapshotReader
 	private Scene cachedScene;
 	private JsonObject cachedSnapshot;
 	private String currentOwnership = "unknown";
+	private String currentOwnershipEvidence;
 	private JsonObject lastSelfSnapshot;
 	private String boundPlayer;
+	private String pendingSelfEntryEvidence;
+	private long pendingSelfEntryDeadlineNanos;
+	private boolean pendingSelfEntrySawLoading;
 
 	PohSnapshotReader(Client client)
 	{
@@ -67,7 +71,6 @@ final class PohSnapshotReader
 				observed.addProperty("availability", "observed");
 				observed.addProperty("scope", "last_observed_self_house");
 				observed.addProperty("ownership", "self");
-				observed.addProperty("ownershipEvidence", "previously_confirmed_owner_controls");
 				return observed;
 			}
 			result.addProperty("availability", "not_in_house");
@@ -204,13 +207,14 @@ final class PohSnapshotReader
 		else if (!"unknown".equals(currentOwnership))
 		{
 			result.addProperty("ownership", currentOwnership);
-			result.addProperty("ownershipEvidence", "previously_confirmed_owner_controls");
+			result.addProperty("ownershipEvidence", currentOwnershipEvidence);
 		}
 	}
 
 	private void setCurrentOwnership(JsonObject result, String ownership, String evidence)
 	{
 		currentOwnership = ownership;
+		currentOwnershipEvidence = evidence;
 		result.addProperty("ownership", ownership);
 		result.addProperty("ownershipEvidence", evidence);
 	}
@@ -269,9 +273,29 @@ final class PohSnapshotReader
 		}
 	}
 
+	void observeSelfEntryAction(String evidence)
+	{
+		pendingSelfEntryEvidence = evidence;
+		pendingSelfEntryDeadlineNanos = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+		pendingSelfEntrySawLoading = false;
+	}
+
 	void observationsComplete()
 	{
 		observationsComplete = true;
+		if (pendingSelfEntryEvidence == null)
+		{
+			return;
+		}
+		if (pendingSelfEntrySawLoading && System.nanoTime() <= pendingSelfEntryDeadlineNanos
+			&& client.getLocalPlayer() != null
+			&& RuneLiteAreaResolver.isPlayerOwnedHouse(
+				RuneLiteAreaResolver.semanticRegionId(client, client.getLocalPlayer())))
+		{
+			currentOwnership = "self";
+			currentOwnershipEvidence = pendingSelfEntryEvidence;
+		}
+		clearPendingEntry();
 	}
 
 	void bindPlayer(String playerName)
@@ -292,6 +316,11 @@ final class PohSnapshotReader
 		cachedScene = null;
 		cachedSnapshot = null;
 		currentOwnership = "unknown";
+		currentOwnershipEvidence = null;
+		if (pendingSelfEntryEvidence != null)
+		{
+			pendingSelfEntrySawLoading = true;
+		}
 	}
 
 	void clearAccount()
@@ -299,6 +328,14 @@ final class PohSnapshotReader
 		sceneChanged();
 		lastSelfSnapshot = null;
 		boundPlayer = null;
+		clearPendingEntry();
+	}
+
+	private void clearPendingEntry()
+	{
+		pendingSelfEntryEvidence = null;
+		pendingSelfEntryDeadlineNanos = 0;
+		pendingSelfEntrySawLoading = false;
 	}
 
 	private static final class Accumulator

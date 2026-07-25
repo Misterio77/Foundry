@@ -62,6 +62,34 @@ public class PohSnapshotReaderTest
 	}
 
 	@Test
+	public void confirmsSelfHouseOnlyWhenArmedActionLoadsIntoPoh()
+	{
+		WorldPoint[] location = {new WorldPoint(3169, 3491, 0)};
+		PohSnapshotReader reader = new PohSnapshotReader(client(location, scene(new Tile[4][1][1]), 0));
+		reader.observeSelfEntryAction("teleport_to_house_spell");
+		reader.sceneChanged();
+		location[0] = new WorldPoint(1880, 7050, 0);
+		reader.observationsComplete();
+		JsonObject poh = reader.read();
+		assertEquals("self", poh.get("ownership").getAsString());
+		assertEquals("teleport_to_house_spell", poh.get("ownershipEvidence").getAsString());
+		reader.sceneChanged();
+		location[0] = new WorldPoint(3169, 3491, 0);
+		assertEquals("teleport_to_house_spell",
+			reader.read().get("ownershipEvidence").getAsString());
+	}
+
+	@Test
+	public void doesNotConfirmArmedActionWithoutLoadingTransition()
+	{
+		WorldPoint[] location = {new WorldPoint(1880, 7050, 0)};
+		PohSnapshotReader reader = new PohSnapshotReader(client(location, scene(new Tile[4][1][1]), 0));
+		reader.observeSelfEntryAction("teleport_to_house_spell");
+		reader.observationsComplete();
+		assertEquals("unknown", reader.read().get("ownership").getAsString());
+	}
+
+	@Test
 	public void reusesRuneLitePohFeaturesAndDeduplicatesSceneObjects()
 	{
 		int portalId = PohIcons.VARROCK.getIds()[0];

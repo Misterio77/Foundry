@@ -6,6 +6,7 @@ import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.MenuAction;
 import net.runelite.api.events.DecorativeObjectDespawned;
 import net.runelite.api.events.DecorativeObjectSpawned;
 import net.runelite.api.events.GameObjectDespawned;
@@ -13,10 +14,14 @@ import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.util.Text;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import rs.m7.runelitemcp.events.EventHistory;
@@ -28,6 +33,7 @@ import rs.m7.runelitemcp.snapshot.AccountStateCache;
 import rs.m7.runelitemcp.snapshot.RuneLiteSnapshotProvider;
 
 @Slf4j
+@SuppressWarnings("deprecation")
 @PluginDescriptor(
 	name = "RuneLite MCP",
 	description = "Exposes live, informational RuneLite state to local MCP clients",
@@ -148,6 +154,53 @@ public class RuneLiteMcpPlugin extends Plugin
 	public void onDecorativeObjectDespawned(DecorativeObjectDespawned event)
 	{
 		snapshots.observePohObjectDespawn(event.getDecorativeObject());
+	}
+
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked event)
+	{
+		String evidence = selfPohEntryEvidence(event.getMenuEntry().getParam1(),
+			event.getMenuEntry().getOption(), event.getMenuEntry().getTarget(),
+			event.getMenuEntry().getItemId(), event.getMenuEntry().getType());
+		if (evidence != null)
+		{
+			snapshots.observeSelfPohEntryAction(evidence);
+		}
+	}
+
+	static String selfPohEntryEvidence(int widgetId, String option, String target,
+		int itemId, MenuAction action)
+	{
+		String cleanOption = clean(option);
+		String cleanTarget = clean(target);
+		if (widgetId == InterfaceID.MagicSpellbook.TELEPORT_TO_YOUR_HOUSE
+			&& "cast".equals(cleanOption))
+		{
+			return "teleport_to_house_spell";
+		}
+		if (itemId == ItemID.POH_TABLET_TELEPORTTOHOUSE && action == MenuAction.ITEM_FIRST_OPTION)
+		{
+			return "house_teleport_tablet";
+		}
+		if ("home".equals(cleanOption) && "portal".equals(cleanTarget) && isObjectAction(action))
+		{
+			return "house_portal_home_option";
+		}
+		return null;
+	}
+
+	private static String clean(String value)
+	{
+		return value == null ? "" : Text.removeTags(value).trim().toLowerCase(java.util.Locale.ROOT);
+	}
+
+	private static boolean isObjectAction(MenuAction action)
+	{
+		return action == MenuAction.GAME_OBJECT_FIRST_OPTION
+			|| action == MenuAction.GAME_OBJECT_SECOND_OPTION
+			|| action == MenuAction.GAME_OBJECT_THIRD_OPTION
+			|| action == MenuAction.GAME_OBJECT_FOURTH_OPTION
+			|| action == MenuAction.GAME_OBJECT_FIFTH_OPTION;
 	}
 
 	@Subscribe

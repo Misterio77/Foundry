@@ -78,6 +78,11 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		poh.observeDespawn(object);
 	}
 
+	public void observeSelfPohEntryAction(String evidence)
+	{
+		poh.observeSelfEntryAction(evidence);
+	}
+
 	public void completePohObservations()
 	{
 		poh.observationsComplete();
