@@ -44,6 +44,10 @@ in {
           exportPdf = "onType";
           outputPath = "$root/$name";
         };
+        texlab.config.texlab = {
+          build.onSave = true;
+          latexFormatter = "latexindent";
+        };
 
         scls.command = lib.getExe pkgs.simple-completion-language-server;
         colors.command = lib.getExe pkgs.uwu-colors;
