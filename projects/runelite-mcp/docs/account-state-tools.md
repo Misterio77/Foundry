@@ -96,8 +96,9 @@ selected choice through RuneLite's menu event API, so it cannot reliably disting
 without owner controls; `ownershipEvidence` states which signal was used.
 Outside/cancelled/failed teleports do not confirm anything. Otherwise ownership is
 `unknown`, so a visited house is never guessed to belong to the logged-in player.
-After ownership is directly confirmed as `self`, the last serialized layout is
-retained in memory across scene changes as `availability: observed` with
+After ownership is directly confirmed as `self`, the object-event state is
+automatically serialized on the next game tick—no MCP call is required—and retained
+in memory across scene changes as `availability: observed` with
 `scope: last_observed_self_house`, `observedTick`, and `observedAt`. Guest or
 unknown-ownership houses are never retained. The observation clears on logout,
 player-identity change, plugin shutdown, or RuneLite restart. With no confirmed

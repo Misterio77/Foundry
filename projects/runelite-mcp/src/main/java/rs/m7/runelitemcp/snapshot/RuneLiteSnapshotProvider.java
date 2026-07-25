@@ -93,6 +93,11 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		poh.bindPlayer(playerName);
 	}
 
+	public void refreshConfirmedPohObservation()
+	{
+		poh.refreshConfirmedSelfObservation();
+	}
+
 	public void changePohScene()
 	{
 		poh.sceneChanged();

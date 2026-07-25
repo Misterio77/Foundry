@@ -224,6 +224,7 @@ public class RuneLiteMcpPlugin extends Plugin
 			String playerName = client.getLocalPlayer().getName();
 			accountStateCache.bindPlayer(playerName);
 			snapshots.bindPohPlayer(playerName);
+			snapshots.refreshConfirmedPohObservation();
 		}
 		accountStateCache.enrichMetadata(client, itemManager, 8);
 		eventCollector.onGameTick();

@@ -298,6 +298,17 @@ final class PohSnapshotReader
 		clearPendingEntry();
 	}
 
+	void refreshConfirmedSelfObservation()
+	{
+		Player player = client.getLocalPlayer();
+		if (!"self".equals(currentOwnership) || player == null || cachedSnapshot != null
+			|| !RuneLiteAreaResolver.isPlayerOwnedHouse(RuneLiteAreaResolver.semanticRegionId(client, player)))
+		{
+			return;
+		}
+		read();
+	}
+
 	void bindPlayer(String playerName)
 	{
 		if (boundPlayer != null && !boundPlayer.equals(playerName))

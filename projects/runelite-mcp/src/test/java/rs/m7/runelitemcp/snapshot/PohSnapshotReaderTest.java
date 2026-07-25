@@ -70,13 +70,12 @@ public class PohSnapshotReaderTest
 		reader.sceneChanged();
 		location[0] = new WorldPoint(1880, 7050, 0);
 		reader.observationsComplete();
-		JsonObject poh = reader.read();
-		assertEquals("self", poh.get("ownership").getAsString());
-		assertEquals("teleport_to_house_spell", poh.get("ownershipEvidence").getAsString());
+		reader.refreshConfirmedSelfObservation();
 		reader.sceneChanged();
 		location[0] = new WorldPoint(3169, 3491, 0);
-		assertEquals("teleport_to_house_spell",
-			reader.read().get("ownershipEvidence").getAsString());
+		JsonObject observed = reader.read();
+		assertEquals("observed", observed.get("availability").getAsString());
+		assertEquals("teleport_to_house_spell", observed.get("ownershipEvidence").getAsString());
 	}
 
 	@Test
