@@ -56,6 +56,9 @@ public class RuneLiteSnapshotProviderTest
 		JsonObject context = provider.readSnapshot(SnapshotType.GAME_CONTEXT);
 		assertEquals("active", context.get("state").getAsString());
 		assertEquals("Gabs", context.getAsJsonObject("player").get("name").getAsString());
+		JsonObject area = context.getAsJsonObject("player").getAsJsonObject("location").getAsJsonObject("area");
+		assertEquals("Lumbridge", area.get("name").getAsString());
+		assertEquals("cities", area.get("category").getAsString());
 		assertFalse(context.has("skills"));
 
 		JsonObject skills = provider.readSnapshot(SnapshotType.SKILLS);

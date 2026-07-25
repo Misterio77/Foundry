@@ -325,6 +325,8 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 		location.addProperty("y", worldPoint.getY());
 		location.addProperty("plane", worldPoint.getPlane());
 		location.addProperty("regionId", worldPoint.getRegionID());
+		JsonObject area = RuneLiteAreaResolver.resolve(worldPoint.getRegionID());
+		location.add("area", area == null ? JsonNull.INSTANCE : area);
 		return location;
 	}
 

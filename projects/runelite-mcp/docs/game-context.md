@@ -44,7 +44,12 @@ An active response has this structured content:
       "x": 3200,
       "y": 3200,
       "plane": 0,
-      "regionId": 12850
+      "regionId": 12850,
+      "area": {
+        "name": "Lumbridge",
+        "category": "cities",
+        "source": "runelite_discord_regions"
+      }
     },
     "movement": {
       "moving": false,
@@ -96,6 +101,11 @@ skill list. Other focused snapshots are documented in
 - Session and player values are current only when `state` is `active`. They are
   explicitly null during transitions and after logout; no previous snapshot is
   cached.
+- `location.area` reuses RuneLite's package-private Discord region catalogue and
+  is null where that catalogue has no match. `category` is RuneLite's own broad
+  grouping (`bosses`, `cities`, `dungeons`, `minigames`, `raids`, or `regions`),
+  not an MCP-maintained geography. The narrow reflective adapter fails closed if
+  RuneLite changes the internal interface.
 - `movement.moving` means RuneLite currently has a local movement destination.
   Animation IDs are raw RuneLite IDs, with `-1` meaning no primary animation.
 - NPC interactions include type, ID, name, and combat level. A direct player
