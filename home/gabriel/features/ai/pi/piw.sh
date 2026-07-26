@@ -2,6 +2,16 @@ root=$(jj root) || {
   echo "piw: not in a jj repository" >&2
   exit 1
 }
+invoking_dir=$(pwd -P)
+if [[ "$invoking_dir" == "$root" ]]; then
+  relative_dir=.
+elif [[ "$invoking_dir" == "$root/"* ]]; then
+  relative_dir=${invoking_dir#"$root"/}
+else
+  echo "piw: current directory is outside repository root: $invoking_dir" >&2
+  exit 1
+fi
+
 invoking_change=$(jj -R "$root" log --no-graph -r @ -T change_id)
 invoking_commit=$(jj -R "$root" log --no-graph -r @ -T commit_id)
 
@@ -18,11 +28,13 @@ fi
 mkdir -p "$workspace_base"
 jj -R "$root" workspace add "$workspace_path" --name "$workspace_name"
 
-echo "piw: workspace $workspace_name ready at $workspace_path" >&2
+workspace_dir="$workspace_path/$relative_dir"
+mkdir -p "$workspace_dir"
+echo "piw: workspace $workspace_name ready at $workspace_dir" >&2
 
 set +e
 (
-  cd "$workspace_path"
+  cd "$workspace_dir"
   pi "$@"
 )
 pi_status=$?
