@@ -1,5 +1,32 @@
 #!/usr/bin/env bash
 
+# Synchronization contract:
+#
+# - Run from the project root. `.overleafproject` must contain exactly one
+#   24-character Overleaf project ID, and `.overleafignore` must exist.
+# - `.overleafignore` is evaluated by Git itself and therefore supports the full
+#   gitignore grammar, including `!` negation, anchored patterns, directory
+#   patterns, and escapes. The two `.overleaf*` files and all `.git`/`.jj`
+#   metadata are always local-only regardless of those rules.
+# - Authentication uses `pass git.overleaf.com` through a temporary Git
+#   credential helper. The password is never embedded in a URL or remote.
+# - `push` replaces the remote tree with all non-ignored local files, so local
+#   additions, changes, and deletions are mirrored. Local symlinks are
+#   dereferenced because their targets may live outside the Overleaf project.
+#   The resulting temporary commit is shown and pushed only after confirmation;
+#   if there is no diff, nothing is committed or pushed.
+# - `pull` requires Jujutsu. It applies non-ignored remote additions, changes,
+#   and deletions in an isolated jj workspace while leaving ignored local files
+#   untouched. If a remote regular file matches the resolved contents of an
+#   existing local symlink, the symlink is preserved. If the contents differ,
+#   the symlink is replaced by the remote regular file.
+# - A pulled change is shown before integration. Confirmation rebases the
+#   invoking working-copy change onto it; declining leaves the import as a
+#   separate jj head. A no-op pull creates no change.
+# - Temporary clones, matcher repositories, workspaces, and disposable jj
+#   changes are cleaned up on both success and failure. Overleaf compilation is
+#   never triggered or checked by this command.
+
 set -euo pipefail
 
 usage() {
