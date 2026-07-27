@@ -10,11 +10,14 @@
 #   metadata are always local-only regardless of those rules.
 # - Authentication uses `pass git.overleaf.com` through a temporary Git
 #   credential helper. The password is never embedded in a URL or remote.
-# - `push` replaces the remote tree with all non-ignored local files, so local
-#   additions, changes, and deletions are mirrored. Local symlinks are
-#   dereferenced because their targets may live outside the Overleaf project.
-#   The resulting temporary commit is shown and pushed only after confirmation;
-#   if there is no diff, nothing is committed or pushed.
+# - `push` replaces the remote tree with all files allowed by `.overleafignore`,
+#   so local additions, changes, and deletions are mirrored. The subsequent
+#   `git add` also honors the copied project `.gitignore` and the user's global
+#   Git excludes, but not `.gitignore` files above the project root. Because the
+#   old remote tree is removed first, newly ignored tracked files are deleted.
+#   Local symlinks are dereferenced because their targets may live outside the
+#   Overleaf project. The temporary commit is shown and pushed only after
+#   confirmation; if there is no diff, nothing is committed or pushed.
 # - `pull` requires Jujutsu. It applies non-ignored remote additions, changes,
 #   and deletions in an isolated jj workspace while leaving ignored local files
 #   untouched. If a remote regular file matches the resolved contents of an
