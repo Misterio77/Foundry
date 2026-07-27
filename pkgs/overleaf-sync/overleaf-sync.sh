@@ -114,6 +114,27 @@ delete_missing_files() {
   done < "$local_manifest"
 }
 
+filter_unchanged_symlinks() {
+  local remote_root="$1"
+  local project_copy="$2"
+  local remote_manifest="$3"
+  local copy_manifest="$4"
+  local relative remote_path local_path
+
+  : > "$copy_manifest"
+  while IFS= read -r -d '' relative; do
+    remote_path="$remote_root/$relative"
+    local_path="$project_copy/$relative"
+
+    if [[ -L "$local_path" && -f "$remote_path" && ! -L "$remote_path" ]] \
+      && cmp -s -- "$remote_path" "$local_path"; then
+      continue
+    fi
+
+    printf '%s\0' "$relative" >> "$copy_manifest"
+  done < "$remote_manifest"
+}
+
 overleaf_git() {
   git "${credential_args[@]}" "$@"
 }
@@ -158,7 +179,7 @@ push_project() {
 pull_project() {
   local repo_root project_path project_name default_change
   local temp_root workspace_dir workspace_name overleaf_dir
-  local remote_matcher local_matcher remote_manifest local_manifest project_copy
+  local remote_matcher local_matcher remote_manifest local_manifest copy_manifest project_copy
   local imported_change disposable_change confirm
 
   repo_root="$(jj root)" || die "pull requires a Jujutsu workspace"
@@ -175,6 +196,7 @@ pull_project() {
   local_matcher="$temp_root/local-matcher"
   remote_manifest="$temp_root/remote-manifest"
   local_manifest="$temp_root/local-manifest"
+  copy_manifest="$temp_root/copy-manifest"
   project_copy="$workspace_dir/$project_path"
   cleanup_temp_root="$temp_root"
   cleanup_repo_root="$repo_root"
@@ -189,7 +211,8 @@ pull_project() {
   generate_manifest "$overleaf_dir" "$remote_matcher" "$remote_manifest"
   generate_manifest "$project_copy" "$local_matcher" "$local_manifest"
   delete_missing_files "$project_copy" "$remote_manifest" "$local_manifest"
-  rsync -a --from0 --files-from="$remote_manifest" "$overleaf_dir/" "$project_copy/"
+  filter_unchanged_symlinks "$overleaf_dir" "$project_copy" "$remote_manifest" "$copy_manifest"
+  rsync -a --from0 --files-from="$copy_manifest" "$overleaf_dir/" "$project_copy/"
   rm -rf -- "$overleaf_dir"
 
   if [[ "$(jj -R "$workspace_dir" log --no-graph -r @ -T 'empty')" == "true" ]]; then

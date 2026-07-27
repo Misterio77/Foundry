@@ -2,6 +2,7 @@
   lib,
   writeShellApplication,
   coreutils,
+  diffutils,
   findutils,
   git,
   jujutsu,
@@ -12,6 +13,7 @@
   name = "overleaf-sync";
   runtimeInputs = [
     coreutils
+    diffutils
     findutils
     git
     jujutsu
