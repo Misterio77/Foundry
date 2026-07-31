@@ -1,4 +1,8 @@
-{pkgs, ...}: let
+{
+  outputs,
+  pkgs,
+  ...
+}: let
   cgit = pkgs.cgit-pink.overrideAttrs (_: {
     pname = "scgit";
     version = "0.1";
@@ -14,7 +18,7 @@
     pkgs.runCommand "sass" {buildInputs = [pkgs.sass];} ''
       sass ${file} > $out
     '';
-  partials = "${pkgs.inputs.website.default}/public/cgit_partials";
+  partials = "${outputs.packages.${pkgs.stdenv.hostPlatform.system}.website}/public/cgit_partials";
 in {
   services = {
     nginx.virtualHosts."m7.rs" = {

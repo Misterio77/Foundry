@@ -59,12 +59,6 @@
       url = "github:TNAZEP/HytaleLauncherFlake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # My own programs, packaged with nix
-    website = {
-      url = "path:./projects/website";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.systems.follows = "systems";
-    };
   };
 
   outputs = {
@@ -99,7 +93,11 @@
     overlays = import ./overlays {inherit inputs outputs;};
     hydraJobs = import ./hydra.nix {inherit inputs outputs;};
 
-    packages = forEachSystem (pkgs: import ./pkgs {inherit pkgs;});
+    packages = forEachSystem (pkgs:
+      import ./pkgs {inherit pkgs;}
+      // {
+        website = pkgs.callPackage ./projects/website {};
+      });
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});
     formatter = forEachSystem (pkgs: pkgs.alejandra);
 

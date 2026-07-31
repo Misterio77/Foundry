@@ -2,7 +2,7 @@
 
 ## About
 [![built with nix](https://img.shields.io/static/v1?logo=nixos&logoColor=white&label=&message=Built%20with%20Nix&color=41439a)](https://nixos.org)
-[![hydra status](https://hydra.m7.rs/shield/job/website/main/x86_64-linux.main)](https://hydra.m7.rs/jobset/website/main)
+[![hydra status](https://img.shields.io/endpoint?url=https://hydra.m7.rs/job/foundry/main/pkgs.x86_64-linux.website/shield)](https://hydra.m7.rs/jobset/foundry/main#tabs-jobs)
 
 My personal website.
 
@@ -17,8 +17,5 @@ serve` to serve locally.
 
 ### Nix
 
-If you're using Nix, just run `nix develop` to get a shell with everything you
-need.
-
-You can also use `nix build` to build the site, ready for deployment. You can
-serve it locally using `nix run`.
+Within the Foundry monorepo, run `nix build .#website` to build the site ready
+for deployment.

@@ -415,8 +415,7 @@
         "nixos-mailserver": "nixos-mailserver",
         "nixpkgs": "nixpkgs",
         "sops-nix": "sops-nix",
-        "systems": "systems_2",
-        "website": "website"
+        "systems": "systems_2"
       }
     },
     "rust-overlay": {
@@ -489,25 +488,6 @@
         "repo": "default-linux",
         "type": "github"
       }
-    },
-    "website": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "systems": [
-          "systems"
-        ]
-      },
-      "locked": {
-        "path": "./projects/website",
-        "type": "path"
-      },
-      "original": {
-        "path": "./projects/website",
-        "type": "path"
-      },
-      "parent": []
     }
   },
   "root": "root",
