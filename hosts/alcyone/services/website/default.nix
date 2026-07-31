@@ -1,9 +1,5 @@
-{
-  outputs,
-  pkgs,
-  ...
-}: let
-  website = outputs.packages.${pkgs.stdenv.hostPlatform.system}.website;
+{pkgs, ...}: let
+  website = pkgs.website;
   pgpKey = ../../../../home/gabriel/pgp.asc;
   sshKey = ../../../../home/gabriel/ssh.pub;
   redir = {

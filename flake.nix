@@ -93,11 +93,7 @@
     overlays = import ./overlays {inherit inputs outputs;};
     hydraJobs = import ./hydra.nix {inherit inputs outputs;};
 
-    packages = forEachSystem (pkgs:
-      import ./pkgs {inherit pkgs;}
-      // {
-        website = pkgs.callPackage ./projects/website {};
-      });
+    packages = forEachSystem (pkgs: import ./pkgs {inherit pkgs;});
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});
     formatter = forEachSystem (pkgs: pkgs.alejandra);
 

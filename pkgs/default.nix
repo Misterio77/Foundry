@@ -5,6 +5,7 @@
   alt1 = pkgs.callPackage ./alt1 {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
+  website = pkgs.callPackage ../projects/website {};
   runelite-mcp = pkgs.callPackage ../projects/runelite-mcp {};
   runescape = pkgs.callPackage ./runescape {};
 
