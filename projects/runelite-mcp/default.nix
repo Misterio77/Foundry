@@ -9,11 +9,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   version = "0.1.0";
 
   src = lib.fileset.toSource {
-    root = ../../projects/runelite-mcp;
+    root = ./.;
     fileset = lib.fileset.unions [
-      ../../projects/runelite-mcp/build.gradle
-      ../../projects/runelite-mcp/settings.gradle
-      ../../projects/runelite-mcp/src
+      ./build.gradle
+      ./settings.gradle
+      ./src
     ];
   };
 
