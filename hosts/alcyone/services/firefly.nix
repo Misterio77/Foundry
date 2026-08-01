@@ -42,6 +42,11 @@
     enableNginx = true;
     virtualHost = "firefly.m7.rs";
   };
+  systemd.services = {
+    firefly-iii-cron.environment.TZ = config.time.timeZone;
+    firefly-iii-setup.environment.TZ = config.time.timeZone;
+    phpfpm-firefly-iii.environment.TZ = config.time.timeZone;
+  };
 
   services.nginx.virtualHosts.${config.services.firefly-iii.virtualHost} = {
     forceSSL = true;
