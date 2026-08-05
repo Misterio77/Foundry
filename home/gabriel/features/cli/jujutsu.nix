@@ -1,4 +1,15 @@
-{config, lib, ...}: {
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  jjw = pkgs.writeShellApplication {
+    name = "jjw";
+    runtimeInputs = [pkgs.jujutsu];
+    text = builtins.readFile ./jjw.sh;
+  };
+in {
   programs.jujutsu = {
     enable = true;
     settings = {
@@ -14,7 +25,10 @@
         gitCfg = config.programs.git.settings;
       in {
         backend = "gpg";
-        behaviour = if gitCfg.commit.gpgSign then "own" else "never";
+        behaviour =
+          if gitCfg.commit.gpgSign
+          then "own"
+          else "never";
         key = gitCfg.user.signing.key;
       };
       revsets = {
@@ -51,4 +65,6 @@
       };
     };
   };
+
+  home.packages = [jjw];
 }
