@@ -60,5 +60,6 @@ in {
   home.sessionVariables = {
     LLAMA_BASE_URL = "http://llm.m7.rs";
     PI_SKIP_VERSION_CHECK = true;
+    PI_TELEMETRY = false;
   };
 }
