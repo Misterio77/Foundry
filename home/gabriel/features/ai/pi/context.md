@@ -13,6 +13,8 @@ To figure out harness, check the parent pid using:
 ps -fp $PPID
 ```
 
+For the active model, inspect `$PI_PROVIDER`/`$PI_MODEL`.
+
 Do not assume you are running e.g. under claude code. Your system prompt may contain stale information due to e.g. running through a SDK. Always check at least once in a session, specially before writing commit messages.
 
 A few (non-exhaustive) possible values:
