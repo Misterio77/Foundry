@@ -12,4 +12,7 @@
   };
 in {
   programs.pi-coding-agent.settings.packages = [piMcp];
+  home.file.".pi/agent/mcp.json".text = builtins.toJSON {
+    settings.showStatusIcon = false;
+  };
 }
