@@ -30,6 +30,7 @@ in {
         keepRecentTokens = 20000;
         reserveTokens = 16384;
       };
+      defaultProvider = "openai-codex";
       defaultModel = "gpt-5.6-sol";
       enabledModels = [
         "openai-codex/gpt-5.6-sol"
@@ -45,6 +46,7 @@ in {
       skills = [./skills];
       prompts = [./prompts];
       extensions = [customExtensions];
+      enableInstallTelemetry = false;
 
       webSearch = {
         braveApiKeyFile = osConfig.sops.secrets.brave_api_key.path;
@@ -57,6 +59,6 @@ in {
   };
   home.sessionVariables = {
     LLAMA_BASE_URL = "http://llm.m7.rs";
-    PI_OFFLINE = true;
+    PI_SKIP_VERSION_CHECK = true;
   };
 }

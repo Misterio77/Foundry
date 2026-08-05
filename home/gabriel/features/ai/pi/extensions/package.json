@@ -8,7 +8,7 @@
     "format:check": "prettier --check \"*.ts\""
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "latest",
+    "@earendil-works/pi-coding-agent": "0.83.0",
     "@types/node": "latest",
     "prettier": "latest",
     "typescript": "latest"

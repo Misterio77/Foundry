@@ -131,17 +131,15 @@ in {
     });
 
     pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
-      version = "0.80.6";
-      src = final.fetchFromGitHub {
-        owner = "earendil-works";
-        repo = "pi";
-        tag = "v${finalAttrs.version}";
-        hash = "sha256-e/wcHruEcBAHDF5tKvwew7LXjVp0eraHh2k+QaL2sCA=";
+      version = "0.83.0";
+      src = final.fetchzip {
+        url = "https://github.com/earendil-works/pi/releases/download/v${finalAttrs.version}/pi-${finalAttrs.version}-source.tar.gz";
+        hash = "sha256-6gN1KVzpEGI8wx5oYmoNwtU4sfw4ZCAWanXmmnlLQ2E=";
       };
       npmDeps = final.fetchNpmDeps {
         name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
         inherit (finalAttrs) src;
-        hash = "sha256-xXEOR0epZcfbXayYGyJdBiFVliamBexqA+1Sd7wlGhU=";
+        hash = "sha256-AbSfP1Ion8bN309NUBQb1QSn2cIIUjNONmZgls9vnYE=";
       };
     });
 
