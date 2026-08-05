@@ -39,8 +39,8 @@ in {
         "claude-bridge/claude-opus-4-8"
         "claude-bridge/claude-sonnet-4-6"
         "claude-bridge/claude-haiku-4-5"
-        "qwen3.6"
-        "gemma-4"
+        "llama.cpp/qwen3.6-35b-a3b"
+        "llama.cpp/gemma-4-26b-a4b"
       ];
 
       skills = [./skills];
@@ -73,5 +73,8 @@ in {
       "app.editor.external" = ["alt+e"];
     };
   };
-  home.sessionVariables.PI_OFFLINE = true;
+  home.sessionVariables = {
+    LLAMA_BASE_URL = "http://llm.m7.rs";
+    PI_OFFLINE = true;
+  };
 }
