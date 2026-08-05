@@ -1,0 +1,43 @@
+{
+  "name": "@narumitw/pi-btw",
+  "version": "0.49.3",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "@narumitw/pi-btw",
+      "version": "0.49.3",
+      "license": "MIT",
+      "dependencies": {
+        "@narumitw/pi-tui-kit": "^0.49.1"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*",
+        "@earendil-works/pi-tui": "*"
+      }
+    },
+    "node_modules/@narumitw/pi-tui-kit": {
+      "version": "0.49.3",
+      "resolved": "https://registry.npmjs.org/@narumitw/pi-tui-kit/-/pi-tui-kit-0.49.3.tgz",
+      "integrity": "sha512-ha4MybnoJgAiNpW83Ap7EftfOuO8oNf3mIY3baPO0RFrBPyAUuxSlz7hcs9qh+9daDUMxg3sRPsvzYqFsEQKHg==",
+      "license": "MIT",
+      "dependencies": {
+        "highlight.js": "11.11.1"
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "@earendil-works/pi-tui": "*"
+      }
+    },
+    "node_modules/highlight.js": {
+      "version": "11.11.1",
+      "resolved": "https://registry.npmjs.org/highlight.js/-/highlight.js-11.11.1.tgz",
+      "integrity": "sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==",
+      "license": "BSD-3-Clause",
+      "engines": {
+        "node": ">=12.0.0"
+      }
+    }
+  }
+}
