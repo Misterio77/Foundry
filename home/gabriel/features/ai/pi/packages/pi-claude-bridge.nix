@@ -1,14 +1,18 @@
-{pkgs, lib, ...}: let
+{
+  pkgs,
+  lib,
+  ...
+}: let
   piClaudeBridge = pkgs.buildPiPackage {
     pname = "pi-claude-bridge";
-    version = "unstable";
+    version = "0.6.3";
     src = pkgs.fetchFromGitHub {
       owner = "elidickinson";
       repo = "pi-claude-bridge";
-      rev = "0c0feef83284b71a7cf2b5779e86ca2e8f75ce4c";
-      hash = "sha256-N6hRLcbOlQyQ0coP6YTqn1k5JQlwP/qx/m8tWfySxyI=";
+      rev = "066767393a0efe4be09632f63dc046c2190231b7";
+      hash = "sha256-vn2geva8IVwR+sloFp+wUt1f16iGVs10vIn2PAtCSWk=";
     };
-    npmDepsHash = "sha256-cE6NKQZFwZxyr1MjbT8FXlrNyVwMxbN5mHAynmSJEVA=";
+    npmDepsHash = "sha256-N3HUbMT9YNR3ZTfmRFcLEpWv/0PrcdYr9LDSmAiGZjY=";
   };
 in {
   programs.pi-coding-agent.settings.packages = [piClaudeBridge];
