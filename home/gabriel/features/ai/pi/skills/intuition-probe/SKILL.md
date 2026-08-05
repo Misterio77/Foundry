@@ -29,12 +29,12 @@ This is adapted for Pi from Jeremy Theocharis's [intuition-probe](https://gist.g
    bash scripts/run-blind.sh /path/to/frozen-prompt.md N
    ```
 
-   The wrapper reuses the generic sub-agent runner with a frozen repeated prompt, no tools, and probe-specific JSON validation. It uses `gpt-5.6-luna` by default and prints an output directory containing `probe-*.json` and logs. Read every result. If a probe emits invalid JSON, preserve it as a failed sample; do not quietly repair its design choices.
+   The wrapper reuses the generic sub-agent runner with a frozen repeated prompt, no tools, and probe-specific JSON validation. It uses `openai-codex/gpt-5.6-luna` by default and prints an output directory containing `probe-*.json` and logs. Read every result. If a probe emits invalid JSON, preserve it as a failed sample; do not quietly repair its design choices.
 
    Judge the batch unsatisfactory when it is malformed, empty, substantially hedged instead of committing to an interface, or fails to address the sanitized outcome. Do not reject it merely because its guess differs from reality—that divergence is the point. If unsatisfactory, retry the same frozen prompt and N with Terra:
 
    ```bash
-   PI_INTUITION_MODEL=gpt-5.6-terra bash scripts/run-blind.sh /path/to/frozen-prompt.md N
+   PI_INTUITION_MODEL=openai-codex/gpt-5.6-terra bash scripts/run-blind.sh /path/to/frozen-prompt.md N
    ```
 
    Keep both batches and report that fallback occurred. If Terra is also unsatisfactory, stop and report the failed probe rather than silently changing the prompt.

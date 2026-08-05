@@ -143,7 +143,6 @@ in {
         inherit (finalAttrs) src;
         hash = "sha256-xXEOR0epZcfbXayYGyJdBiFVliamBexqA+1Sd7wlGhU=";
       };
-      patches = (oldAttrs.patches or []) ++ [./pi-cli-model-scope.patch];
     });
 
     buildPiPackage = let

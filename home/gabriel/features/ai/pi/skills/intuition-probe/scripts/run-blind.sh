@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   echo "usage: $0 FROZEN_PROMPT [COUNT]" >&2
-  echo "optional env: PI_INTUITION_MODEL=gpt-5.6-luna, PI_INTUITION_CONCURRENCY=4" >&2
+  echo "optional env: PI_INTUITION_MODEL=openai-codex/gpt-5.6-luna, PI_INTUITION_CONCURRENCY=4" >&2
   exit 2
 }
 
@@ -11,7 +11,7 @@ usage() {
 prompt_file=$(realpath "$1")
 count=${2:-1}
 concurrency=${PI_INTUITION_CONCURRENCY:-4}
-model=${PI_INTUITION_MODEL:-gpt-5.6-luna}
+model=${PI_INTUITION_MODEL:-openai-codex/gpt-5.6-luna}
 [[ -f $prompt_file ]] || { echo "prompt not found: $prompt_file" >&2; exit 2; }
 [[ $count =~ ^[1-9][0-9]*$ ]] || usage
 [[ $concurrency =~ ^[1-9][0-9]*$ ]] || usage

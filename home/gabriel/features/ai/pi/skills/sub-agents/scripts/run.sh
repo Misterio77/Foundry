@@ -11,7 +11,7 @@ prompt N times.
 options:
   --repeat N          repeat one prompt (default: 1)
   --concurrency N     maximum parallel agents (default: 4)
-  --model MODEL       Pi model (default: gpt-5.6-luna)
+  --model MODEL       Pi model (default: openai-codex/gpt-5.6-luna)
   --tools LIST        comma-separated tool allowlist (default: no tools)
   --no-tools          explicitly disable every tool
   --system-prompt S   sub-agent system prompt
@@ -25,7 +25,7 @@ EOF
 
 repeat=1
 concurrency=${PI_SUBAGENT_CONCURRENCY:-4}
-model=${PI_SUBAGENT_MODEL:-gpt-5.6-luna}
+model=${PI_SUBAGENT_MODEL:-openai-codex/gpt-5.6-luna}
 tools=
 system_prompt='Complete the bounded task in the user prompt. Do not spawn sub-agents. Return only the requested deliverable.'
 cwd=$PWD

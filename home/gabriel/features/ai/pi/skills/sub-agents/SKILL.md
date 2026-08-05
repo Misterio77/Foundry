@@ -36,4 +36,4 @@ Repeat one frozen prompt for independent samples:
 bash scripts/run.sh --repeat 3 --concurrency 3 sample.md
 ```
 
-The default model is `gpt-5.6-luna`; override it with `--model` or `PI_SUBAGENT_MODEL`. Run `bash scripts/run.sh --help` for all options. The runner prints an output directory containing copied prompts, `agent-N.raw`, `agent-N.stderr`, and run metadata. Read every result and report failed or malformed agents instead of silently discarding them.
+The default model is `openai-codex/gpt-5.6-luna`; override it with `--model` or `PI_SUBAGENT_MODEL`. Use provider-qualified model IDs so selection does not depend on catalog order. Run `bash scripts/run.sh --help` for all options. The runner prints an output directory containing copied prompts, `agent-N.raw`, `agent-N.stderr`, and run metadata. Read every result and report failed or malformed agents instead of silently discarding them.
