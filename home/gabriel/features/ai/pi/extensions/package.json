@@ -7,9 +7,6 @@
     "format": "prettier --write \"*.ts\"",
     "format:check": "prettier --check \"*.ts\""
   },
-  "dependencies": {
-    "@earendil-works/gondolin": "0.12.0"
-  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "latest",
     "@types/node": "latest",

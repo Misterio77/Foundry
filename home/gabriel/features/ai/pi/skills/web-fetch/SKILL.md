@@ -5,10 +5,8 @@ description: Fetch a web page or HTTP(S) URL and read it as text/Markdown. Use w
 
 # Fetching web pages
 
-There is no `web_fetch` tool on purpose: fetching runs through the `bash` tool so
-it inherits the active environment. When the Gondolin sandbox is on, the request
-goes through the VM and its HTTP proxy (host allowlist); when it's off, it runs on
-the host. A dedicated tool would bypass that, so use `bash` instead.
+There is no `web_fetch` tool on purpose: fetching runs through `bash` so it
+inherits the active environment and proxy configuration.
 
 ## HTML pages → Markdown
 
