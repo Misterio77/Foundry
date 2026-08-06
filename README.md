@@ -46,18 +46,18 @@ Home-manager is used as a NixOS module, integrated via `home-manager.users`.
 
 ### Ubuntu work host
 
-`mgc` starts from Ubuntu Server and is bootstrapped in two stages:
+`mgc` starts from Ubuntu Server and is bootstrapped in two stages. With an
+existing Foundry checkout at `~/Foundry`, run:
 
 ```sh
-curl -fsSLo /tmp/mgc-install.sh \
-  https://raw.githubusercontent.com/Misterio77/Foundry/main/hosts/system-manager/mgc/install.sh
-bash /tmp/mgc-install.sh
+~/Foundry/hosts/system-manager/mgc/install.sh
 ```
 
-The first stage installs the Ubuntu runtime dependencies and multi-user Nix,
-clones Foundry, and prints the host's age recipient. After adding that recipient
-to `.sops.yaml` and rekeying `hosts/secrets.yaml` from an authorized machine,
-update the checkout on `mgc` and run:
+Set `FOUNDRY_DIR` if the checkout lives elsewhere. The first stage installs the
+Ubuntu runtime dependencies and multi-user Nix, then prints the host's age
+recipient. After adding that recipient to `.sops.yaml` and rekeying
+`hosts/secrets.yaml` from an authorized machine, update the checkout on `mgc`
+and run:
 
 ```sh
 ~/Foundry/hosts/system-manager/mgc/install.sh --activate

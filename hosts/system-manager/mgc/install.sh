@@ -3,8 +3,7 @@ set -euo pipefail
 
 readonly target_user="gabriel"
 readonly target_home="/home/$target_user"
-readonly repo_dir="$target_home/Foundry"
-readonly repo_url="https://github.com/misterio77/Foundry.git"
+readonly repo_dir="${FOUNDRY_DIR:-$target_home/Foundry}"
 activate=false
 
 usage() {
@@ -13,11 +12,12 @@ Bootstrap mgc from a fresh Ubuntu Server installation.
 
 Usage: install.sh [--activate]
 
-The first run installs Ubuntu prerequisites and multi-user Nix, clones Foundry,
-and prints mgc's age recipient. Add that recipient to .sops.yaml and rekey
-hosts/secrets.yaml from an already-authorized machine before activating.
+The first run installs Ubuntu prerequisites and multi-user Nix, then prints
+mgc's age recipient. It expects Foundry at ~/Foundry; set FOUNDRY_DIR to use a
+different checkout. Add the recipient to .sops.yaml and rekey hosts/secrets.yaml
+from an already-authorized machine before activating.
 
-Run again with --activate after the rekeyed repository is present on mgc.
+Run again with --activate after updating the checkout on mgc.
 EOF
 }
 
@@ -60,6 +60,11 @@ fi
 
 if [[ $(uname -m) != x86_64 ]]; then
   echo "mgc is configured for x86_64-linux; found $(uname -m)." >&2
+  exit 1
+fi
+
+if [[ ! -f "$repo_dir/flake.nix" ]]; then
+  echo "Foundry checkout not found at $repo_dir; clone or restore it first." >&2
   exit 1
 fi
 
@@ -115,13 +120,6 @@ source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 export NIX_CONFIG="${NIX_CONFIG:+$NIX_CONFIG
 }experimental-features = nix-command flakes"
 
-if [[ ! -e "$repo_dir" ]]; then
-  nix run nixpkgs#jujutsu -- git clone --colocate "$repo_url" "$repo_dir"
-elif [[ ! -d "$repo_dir/.jj" ]]; then
-  echo "$repo_dir exists but is not a Jujutsu checkout; refusing to replace it." >&2
-  exit 1
-fi
-
 recipient=$(
   nix shell nixpkgs#ssh-to-age --command ssh-to-age \
     < /etc/ssh/ssh_host_ed25519_key.pub
@@ -129,7 +127,7 @@ recipient=$(
 
 cat <<EOF
 
-Ubuntu prerequisites, Nix, and Foundry are ready.
+Ubuntu prerequisites and Nix are ready.
 
 mgc age recipient:
 
