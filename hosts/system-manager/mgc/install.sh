@@ -150,11 +150,6 @@ EOF
   exit 0
 fi
 
-if ! grep --fixed-strings --quiet -- "$recipient" "$repo_dir/hosts/secrets.yaml"; then
-  echo "hosts/secrets.yaml is not encrypted for this mgc host key yet; refusing activation." >&2
-  exit 1
-fi
-
 cat <<'EOF'
 
 Activating mgc. Run this from a recoverable TTY: greetd will replace any existing

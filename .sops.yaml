@@ -11,8 +11,7 @@ keys:
     - &taygeta age1szxq4pz3wuxrs5ynqt3gys4wxslg27lr67smsqvg5guhap800szs3y73vd
     - &maia age150kp4hx4qzfpcxayyfh8xcv8nf0uudppsknwgzgj724djqup2qvqz2gwj5
     - &pleione age1mhlh8lj8jv58xy9mdhsarfyanckyx8c2xdu09xrn23nrc56e94xserztxx
-    # Replace after reinstalling mgc:
-    # - &mgc age1...
+    - &mgc age1znn83s2w8s6manxmfj488kmrrmp49s2497qvz5kk25xajfyn7cfqk8meu5
 creation_rules:
   - path_regex: hosts/secrets.ya?ml$
     key_groups:
@@ -24,8 +23,7 @@ creation_rules:
       - *taygeta
       - *maia
       - *pleione
-      # Enable after adding mgc's recipient above:
-      # - *mgc
+      - *mgc
       pgp:
       - *misterio
 
