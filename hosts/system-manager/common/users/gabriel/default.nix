@@ -23,5 +23,16 @@
     };
   };
 
+  sops.secrets = {
+    brave_api_key = {
+      sopsFile = ../../../../secrets.yaml;
+      owner = "gabriel";
+    };
+    kagi_session_token = {
+      sopsFile = ../../../../secrets.yaml;
+      owner = "gabriel";
+    };
+  };
+
   home-manager.users.gabriel = import ../../../../../home/gabriel/${systemManagerHostName}.nix;
 }

@@ -11,7 +11,24 @@ keys:
     - &taygeta age1szxq4pz3wuxrs5ynqt3gys4wxslg27lr67smsqvg5guhap800szs3y73vd
     - &maia age150kp4hx4qzfpcxayyfh8xcv8nf0uudppsknwgzgj724djqup2qvqz2gwj5
     - &pleione age1mhlh8lj8jv58xy9mdhsarfyanckyx8c2xdu09xrn23nrc56e94xserztxx
+    # Replace after reinstalling mgc:
+    # - &mgc age1...
 creation_rules:
+  - path_regex: hosts/secrets.ya?ml$
+    key_groups:
+    - age:
+      - *atlas
+      - *merope
+      - *alcyone
+      - *celaeno
+      - *taygeta
+      - *maia
+      - *pleione
+      # Enable after adding mgc's recipient above:
+      # - *mgc
+      pgp:
+      - *misterio
+
   - path_regex: hosts/nixos/taygeta/secrets.ya?ml$
     key_groups:
     - age:

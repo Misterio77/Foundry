@@ -9,6 +9,7 @@
 
     ./greetd.nix
     ./nix.nix
+    ./sops.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
