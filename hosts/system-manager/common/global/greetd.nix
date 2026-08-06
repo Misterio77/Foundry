@@ -88,8 +88,12 @@ in {
     };
     "pam.d/hyprlock" = {
       replaceExisting = true;
+      # hyprlock only authenticates (to unlock) and runs unprivileged, so
+      # pam_unix reaches /etc/shadow via the setuid unix_chkpwd wrapper.
       text = ''
-        auth include login
+        auth      [success=1 default=ignore] ${pamSecurity}/pam_unix.so nullok
+        auth      requisite                  ${pamSecurity}/pam_deny.so
+        auth      required                   ${pamSecurity}/pam_permit.so
       '';
     };
   };
