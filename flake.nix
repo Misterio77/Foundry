@@ -23,6 +23,14 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    system-manager = {
+      url = "github:numtide/system-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-system-graphics = {
+      url = "github:soupglasses/nix-system-graphics";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     impermanence = {
       url = "github:nix-community/impermanence";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -65,6 +73,7 @@
     self,
     nixpkgs,
     home-manager,
+    system-manager,
     systems,
     ...
   } @ inputs: let
@@ -146,6 +155,14 @@
         specialArgs = {
           inherit inputs outputs;
         };
+      };
+    };
+
+    systemConfigs.mgc = system-manager.lib.makeSystemConfig {
+      modules = [./hosts/system-manager/mgc];
+      overlays = builtins.attrValues outputs.overlays;
+      specialArgs = {
+        inherit inputs outputs;
       };
     };
 
