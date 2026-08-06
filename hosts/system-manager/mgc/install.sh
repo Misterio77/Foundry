@@ -74,7 +74,6 @@ ubuntu_packages=(
   git
   libpam-systemd
   libspa-0.2-bluetooth
-  network-manager
   openssh-client
   pcscd
   pipewire
@@ -85,6 +84,7 @@ ubuntu_packages=(
   rtkit
   upower
   wireplumber
+  wpasupplicant
 )
 
 sudo env DEBIAN_FRONTEND=noninteractive apt-get update

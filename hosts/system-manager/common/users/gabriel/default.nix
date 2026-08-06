@@ -15,6 +15,7 @@
       ignoreShellProgramCheck = true;
       extraGroups = [
         "audio"
+        "netdev"
         "render"
         "sudo"
         "video"

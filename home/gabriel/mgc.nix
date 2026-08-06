@@ -2,6 +2,7 @@
   imports = [
     ./generic.nix
     ./features/desktop/hyprland
+    ./features/desktop/wireless
     ./features/productivity
     ./features/pass
     ./features/ai
