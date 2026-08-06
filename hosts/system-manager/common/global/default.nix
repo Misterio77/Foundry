@@ -9,6 +9,7 @@
 
     ./greetd.nix
     ./nix.nix
+    ./pam.nix
     ./sops.nix
   ];
 
