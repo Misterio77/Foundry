@@ -93,14 +93,27 @@ sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes "${ubuntu_packages
 # sops-nix uses this key after its public recipient is added to .sops.yaml.
 sudo ssh-keygen -A
 
+if [[ -x /nix/nix-installer ]]; then
+  cat >&2 <<'EOF'
+A Determinate Nix installation already exists. Remove it before continuing:
+
+  /nix/nix-installer uninstall
+EOF
+  exit 1
+fi
+
 if [[ ! -x /nix/var/nix/profiles/default/bin/nix ]]; then
   curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location \
-    https://install.determinate.systems/nix \
-    | sh -s -- install linux --no-confirm
+    https://nixos.org/nix/install \
+    | sh -s -- --daemon
 fi
 
 # shellcheck disable=SC1091
 source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+# The upstream installer does not enable flakes; System Manager will persist
+# these settings in /etc/nix/nix.conf during activation.
+export NIX_CONFIG="${NIX_CONFIG:+$NIX_CONFIG
+}experimental-features = nix-command flakes"
 
 if [[ ! -e "$repo_dir" ]]; then
   nix run nixpkgs#jujutsu -- git clone --colocate "$repo_url" "$repo_dir"
