@@ -3,8 +3,6 @@
   systemManagerHostName,
   ...
 }: {
-  environment.systemPackages = [pkgs.fish];
-
   users = {
     mutableUsers = true;
     groups.gabriel = {};
@@ -13,7 +11,8 @@
       group = "gabriel";
       home = "/home/gabriel";
       createHome = false;
-      shell = "/run/system-manager/sw/bin/fish";
+      shell = pkgs.fish;
+      ignoreShellProgramCheck = true;
       extraGroups = [
         "audio"
         "render"
