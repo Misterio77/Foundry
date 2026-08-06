@@ -36,15 +36,25 @@ in {
   };
 
   environment.etc = {
-    "pam.d/greetd".text = ''
-      auth      include login
-      account   include login
-      password  include login
-      session   include login
-    '';
-    "pam.d/hyprlock".text = ''
-      auth include login
-    '';
+    # These paths are ours (Ubuntu ships no greetd/hyprlock), but a prior
+    # System Manager activation can leave them on disk without recording them
+    # in its etc state, so a re-activation sees them as unmanaged and aborts.
+    # replaceExisting backs the stale file up and relinks instead of erroring.
+    "pam.d/greetd" = {
+      replaceExisting = true;
+      text = ''
+        auth      include login
+        account   include login
+        password  include login
+        session   include login
+      '';
+    };
+    "pam.d/hyprlock" = {
+      replaceExisting = true;
+      text = ''
+        auth include login
+      '';
+    };
   };
 
   systemd = {
