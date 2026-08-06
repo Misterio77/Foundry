@@ -8,7 +8,7 @@
       rev = "1dbdef96f674410ac37067de70f10a3de3d48d98";
       sha256 = "0ql9jwq6xfxrg2mphas9l2ymnzb0d3lgqpb331laqz3arzbpmlcv";
     };
-    npmDepsHash = "sha256-5lNYe9Y/LFGBRcLQ2DX3R1S8vbJcA8fmuwl64V9lJfE=";
+    npmDepsHash = "sha256-q/37Exaaiqf3J55OqiPywE6uItlTsaPkyXlvQ8kUvVA=";
   };
 in {
   programs.pi-coding-agent.settings.packages = [piMcp];
