@@ -162,7 +162,15 @@ in {
       # deterministic because prefetch-npm-deps verifies every tarball against it.
       fetchRealIntegrity = ''
         for url in $(${lib.getExe jq} -r '[.. | objects | select(has("resolved") and (has("integrity") | not)) | .resolved] | unique | .[]' package-lock.json); do
-          integrity="sha512-$(${lib.getExe curl} -sSL --cacert "${cacert}/etc/ssl/certs/ca-bundle.crt" "$url" | ${lib.getExe openssl} dgst -sha512 -binary | base64 -w0)"
+          tarball="$(mktemp)"
+          # Download to a file (not a pipe) so a failed fetch aborts the build
+          # instead of silently yielding an empty digest; time out and retry so a
+          # stalled connection can't hang the build forever.
+          ${lib.getExe curl} -sSL --fail --connect-timeout 15 --max-time 300 \
+            --retry 5 --retry-all-errors --retry-delay 2 \
+            --cacert "${cacert}/etc/ssl/certs/ca-bundle.crt" -o "$tarball" "$url"
+          integrity="sha512-$(${lib.getExe openssl} dgst -sha512 -binary "$tarball" | base64 -w0)"
+          rm -f "$tarball"
           ${lib.getExe jq} --arg url "$url" --arg integrity "$integrity" \
             '(.. | objects | select(.resolved? == $url and (has("integrity") | not))) |= (. + {integrity: $integrity})' \
             package-lock.json > fixed-package-lock.json
