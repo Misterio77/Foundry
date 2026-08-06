@@ -6,6 +6,14 @@
 }: let
   sessionPackages = lib.flatten (lib.mapAttrsToList (_: user: user.home.exportedSessionPackages) config.home-manager.users);
   sessionDirectories = lib.makeSearchPath "share/wayland-sessions" sessionPackages;
+  # Run the selected session in a login shell so /etc/profile (PATH,
+  # XDG_DATA_DIRS, ...) is sourced. Kept as a script rather than an inline
+  # `bash --login -c 'exec "$@"'`: greetd's command tokenizer rejects the
+  # nested POSIX quoting that lib.escapeShellArgs would emit for it.
+  sessionWrapper = pkgs.writeScript "greetd-session-wrapper" ''
+    #!${lib.getExe pkgs.bashInteractive} --login
+    exec "$@"
+  '';
   tuigreetCommand = lib.escapeShellArgs [
     (lib.getExe pkgs.tuigreet)
     "--time"
@@ -15,7 +23,7 @@
     "--sessions"
     sessionDirectories
     "--session-wrapper"
-    "${lib.getExe pkgs.bashInteractive} --login -c 'exec \"$@\"' --"
+    "${sessionWrapper}"
     "--cmd"
     (lib.getExe pkgs.bashInteractive)
   ];
