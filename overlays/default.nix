@@ -144,12 +144,7 @@ in {
     });
 
     buildPiPackage = let
-      inherit (final) lib buildNpmPackage jq stdenvNoCC;
-      fakeSha512 = lib.convertHash {
-        hash = lib.fakeSha512;
-        toHashFormat = "sri";
-        hashAlgo = "sha512";
-      };
+      inherit (final) lib buildNpmPackage fetchNpmDeps jq curl openssl cacert stdenvNoCC;
       commonDefaults = {
         pname = "pi-extension";
         version = "unstable";
@@ -158,15 +153,25 @@ in {
           cp -r . $out/
         '';
       };
+      # Some pi deps ship without a lockfile integrity field
+      # (https://github.com/earendil-works/pi/issues/5653). A single shared
+      # placeholder integrity makes every such dep collide on one npm cache
+      # entry, so a fetch race decides the winner and the FOD is
+      # non-deterministic. Instead fetch each dep's real registry integrity. This
+      # runs only inside the FOD, where network is available, and is
+      # deterministic because prefetch-npm-deps verifies every tarball against it.
+      fetchRealIntegrity = ''
+        for url in $(${lib.getExe jq} -r '[.. | objects | select(has("resolved") and (has("integrity") | not)) | .resolved] | unique | .[]' package-lock.json); do
+          integrity="sha512-$(${lib.getExe curl} -sSL --cacert "${cacert}/etc/ssl/certs/ca-bundle.crt" "$url" | ${lib.getExe openssl} dgst -sha512 -binary | base64 -w0)"
+          ${lib.getExe jq} --arg url "$url" --arg integrity "$integrity" \
+            '(.. | objects | select(.resolved? == $url and (has("integrity") | not))) |= (. + {integrity: $integrity})' \
+            package-lock.json > fixed-package-lock.json
+          mv fixed-package-lock.json package-lock.json
+        done
+      '';
       npmDefaults =
         commonDefaults
         // {
-          # Pi dev deps lack integrity, put fake hash to make them work
-          # https://github.com/earendil-works/pi/issues/5653
-          prePatch = ''
-            ${lib.getExe jq} 'walk(if type == "object" and has("resolved") and (has("integrity") | not) then . + {"integrity": "${fakeSha512}"} else . end)' package-lock.json >> fixed-package-lock.json
-            mv fixed-package-lock.json package-lock.json
-          '';
           npmInstallFlags = ["--omit=dev"];
           npmDepsFetcherVersion = 2;
           dontNpmBuild = true;
@@ -175,6 +180,35 @@ in {
       args:
         if args.dontNpmInstall or false
         then stdenvNoCC.mkDerivation (commonDefaults // args)
-        else buildNpmPackage (npmDefaults // args);
+        else if args ? npmDeps
+        then buildNpmPackage (npmDefaults // args)
+        else let
+          npmDeps = fetchNpmDeps {
+            inherit (args) src;
+            name = "${args.pname or commonDefaults.pname}-${args.version or commonDefaults.version}-npm-deps";
+            hash = args.npmDepsHash;
+            fetcherVersion = 2;
+            nativeBuildInputs = [jq curl openssl];
+            # Run any package-specific prePatch (e.g. vendoring a lockfile)
+            # before backfilling integrity for deps that still lack it.
+            prePatch = (args.prePatch or "") + "\n" + fetchRealIntegrity;
+          };
+        in
+          buildNpmPackage (npmDefaults
+            // (builtins.removeAttrs args ["npmDepsHash"])
+            // {
+              inherit npmDeps;
+              # The main build has no network, so reuse the integrity-patched
+              # lockfile the FOD already produced; npmConfigHook requires it to
+              # match ${npmDeps}/package-lock.json exactly, and to stay writable
+              # for its own --fixup-lockfile pass.
+              postPatch =
+                ''
+                  rm -f package-lock.json
+                  cp ${npmDeps}/package-lock.json package-lock.json
+                  chmod u+w package-lock.json
+                ''
+                + (args.postPatch or "");
+            });
   };
 }

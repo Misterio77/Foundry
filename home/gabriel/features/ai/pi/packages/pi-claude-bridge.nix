@@ -12,7 +12,7 @@
       rev = "066767393a0efe4be09632f63dc046c2190231b7";
       hash = "sha256-vn2geva8IVwR+sloFp+wUt1f16iGVs10vIn2PAtCSWk=";
     };
-    npmDepsHash = "sha256-N3HUbMT9YNR3ZTfmRFcLEpWv/0PrcdYr9LDSmAiGZjY=";
+    npmDepsHash = "sha256-dRg+b3wOWwYiro+E6hzRc+uefHfNPu2xMiavu+yQKyk=";
   };
 in {
   programs.pi-coding-agent.settings.packages = [piClaudeBridge];
