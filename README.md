@@ -12,7 +12,8 @@ Looking for something simpler to start out with flakes? Try [my starter config r
 ## Repository layout
 
 ```text
-hosts/          per-machine NixOS configurations (atlas, alcyone, ...)
+hosts/nixos/   per-machine NixOS configurations (atlas, alcyone, ...)
+hosts/system-manager/ configurations for non-NixOS Linux systems
 home/           home-manager configuration (feature-flagged)
 modules/        reusable nixos/ and home-manager/ modules
 overlays/, pkgs/ package overlays and custom packages (including wallpapers)

@@ -1,7 +1,7 @@
 {pkgs, ...}: let
   website = pkgs.website;
-  pgpKey = ../../../../home/gabriel/pgp.asc;
-  sshKey = ../../../../home/gabriel/ssh.pub;
+  pgpKey = ../../../../../home/gabriel/pgp.asc;
+  sshKey = ../../../../../home/gabriel/ssh.pub;
   redir = {
     forceSSL = true;
     enableACME = true;

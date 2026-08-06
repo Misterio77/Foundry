@@ -51,7 +51,7 @@ in {
       "wireshark"
     ];
 
-    openssh.authorizedKeys.keys = lib.splitString "\n" (builtins.readFile ../../../../home/gabriel/ssh.pub);
+    openssh.authorizedKeys.keys = lib.splitString "\n" (builtins.readFile ../../../../../home/gabriel/ssh.pub);
     hashedPasswordFile = config.sops.secrets.gabriel-password.path;
     packages = [pkgs.home-manager];
   };
@@ -71,7 +71,7 @@ in {
     };
   };
 
-  home-manager.users.gabriel = import ../../../../home/gabriel/${config.networking.hostName}.nix;
+  home-manager.users.gabriel = import ../../../../../home/gabriel/${config.networking.hostName}.nix;
 
   systemd.services.home-manager-gabriel.serviceConfig.ExecStart = lib.mkForce activateHomeForTime;
 

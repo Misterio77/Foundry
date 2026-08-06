@@ -1,4 +1,3 @@
-nixos/hosts/*/secrets/*.yaml diff=sopsdiffer
-nixos/common/secrets/*.yaml diff=sopsdiffer
+hosts/nixos/**/secrets.yaml diff=sopsdiffer
 home/gabriel/**/*/*.yaml diff=sopsdiffer
 nix linguist-generated=true

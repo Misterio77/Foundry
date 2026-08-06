@@ -100,49 +100,49 @@
     nixosConfigurations = {
       # Main desktop
       atlas = lib.nixosSystem {
-        modules = [./hosts/atlas];
+        modules = [./hosts/nixos/atlas];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Living room desktop
       pleione = lib.nixosSystem {
-        modules = [./hosts/pleione];
+        modules = [./hosts/nixos/pleione];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Personal laptop (Framework 13)
       maia = lib.nixosSystem {
-        modules = [./hosts/maia];
+        modules = [./hosts/nixos/maia];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Core server (Vultr)
       alcyone = lib.nixosSystem {
-        modules = [./hosts/alcyone];
+        modules = [./hosts/nixos/alcyone];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Build and game server (Oracle)
       celaeno = lib.nixosSystem {
-        modules = [./hosts/celaeno];
+        modules = [./hosts/nixos/celaeno];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Build and game server (Magalu Cloud)
       taygeta = lib.nixosSystem {
-        modules = [./hosts/taygeta];
+        modules = [./hosts/nixos/taygeta];
         specialArgs = {
           inherit inputs outputs;
         };
       };
       # Media server (RPi)
       merope = lib.nixosSystem {
-        modules = [./hosts/merope];
+        modules = [./hosts/nixos/merope];
         specialArgs = {
           inherit inputs outputs;
         };

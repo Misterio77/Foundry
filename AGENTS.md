@@ -64,15 +64,17 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 │   ├── global/            #   Always-imported config (xdg, etc.)
 │   ├── {hostname}.nix     #   Per-host home-manager config
 │   └── generic.nix        #   Non-impermanence fallback
-├── hosts/                 # NixOS host configs
-│   ├── common/            #   Shared across hosts
-│   │   ├── global/        #     Always-imported
-│   │   ├── optional/      #     Opt-in modules
-│   │   └── secrets.yaml   #     SOPS-encrypted shared secrets
-│   └── {hostname}/        #   Per-host (atlas, maia, alcyone, celaeno, merope, pleione, taygeta)
-│       ├── default.nix    #     NixOS module
-│       ├── hardware-configuration.nix
-│       └── secrets.yaml   #     Host-specific secrets (optional)
+├── hosts/
+│   ├── nixos/             # NixOS host configs
+│   │   ├── common/        #   Shared across hosts
+│   │   │   ├── global/    #     Always-imported
+│   │   │   ├── optional/  #     Opt-in modules
+│   │   │   └── secrets.yaml #   SOPS-encrypted shared secrets
+│   │   └── {hostname}/    #   Per-host (atlas, maia, alcyone, celaeno, merope, pleione, taygeta)
+│   │       ├── default.nix #    NixOS module
+│   │       ├── hardware-configuration.nix
+│   │       └── secrets.yaml #   Host-specific secrets (optional)
+│   └── system-manager/    # Non-NixOS System Manager host configs
 ├── modules/               # Custom NixOS & HM modules
 │   ├── nixos/
 │   └── home-manager/
@@ -109,8 +111,8 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 
 - Managed with **sops-nix**, keys defined in `.sops.yaml`.
 - Two types of secret files:
-  - `hosts/common/secrets.yaml` -- shared across hosts, encrypted to all host age keys.
-  - `hosts/{hostname}/secrets.yaml` -- per-host, encrypted to that host only.
+  - `hosts/nixos/common/secrets.yaml` -- shared across hosts, encrypted to all host age keys.
+  - `hosts/nixos/{hostname}/secrets.yaml` -- per-host, encrypted to that host only.
 - Both are also encrypted to the PGP key `7088C7421873E0DB97FF17C2245CAB70B4C225E9`. It lives on misterio's yubikey.
 - **Never** read secrets into context. Ask the user to do it.
 

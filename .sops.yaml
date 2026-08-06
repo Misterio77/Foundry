@@ -12,32 +12,32 @@ keys:
     - &maia age150kp4hx4qzfpcxayyfh8xcv8nf0uudppsknwgzgj724djqup2qvqz2gwj5
     - &pleione age1mhlh8lj8jv58xy9mdhsarfyanckyx8c2xdu09xrn23nrc56e94xserztxx
 creation_rules:
-  - path_regex: hosts/taygeta/secrets.ya?ml$
+  - path_regex: hosts/nixos/taygeta/secrets.ya?ml$
     key_groups:
     - age:
       - *taygeta
       pgp:
       - *misterio
-  - path_regex: hosts/celaeno/secrets.ya?ml$
+  - path_regex: hosts/nixos/celaeno/secrets.ya?ml$
     key_groups:
     - age:
       - *celaeno
       pgp:
       - *misterio
-  - path_regex: hosts/alcyone/secrets.ya?ml$
+  - path_regex: hosts/nixos/alcyone/secrets.ya?ml$
     key_groups:
     - age:
       - *alcyone
       pgp:
       - *misterio
-  - path_regex: hosts/merope/secrets.ya?ml$
+  - path_regex: hosts/nixos/merope/secrets.ya?ml$
     key_groups:
     - age:
       - *merope
       pgp:
       - *misterio
 
-  - path_regex: hosts/common/.*secrets.ya?ml$
+  - path_regex: hosts/nixos/common/.*secrets.ya?ml$
     key_groups:
     - age:
       - *atlas
