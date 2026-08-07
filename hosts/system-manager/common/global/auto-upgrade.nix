@@ -1,0 +1,16 @@
+{
+  inputs,
+  systemManagerHostName,
+  ...
+}: {
+  system.hydraAutoUpgrade = {
+    enable = true;
+    dates = "*:0/10"; # Every 10 minutes
+    instance = "https://hydra.m7.rs";
+    project = "foundry";
+    jobset = "main";
+    job = "hosts.${systemManagerHostName}";
+  };
+  # Disable timer if flake is dirty
+  systemd.timers.system-manager-upgrade.enable = inputs.self ? rev;
+}
