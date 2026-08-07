@@ -104,12 +104,6 @@
     hydraJobs = import ./hydra.nix {inherit inputs outputs;};
 
     packages = forEachSystem (pkgs: import ./pkgs {inherit pkgs;});
-    apps = forEachSystem (pkgs: {
-      system-manager = {
-        type = "app";
-        program = lib.getExe' inputs.system-manager.packages.${pkgs.stdenv.hostPlatform.system}.default "system-manager";
-      };
-    });
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});
     formatter = forEachSystem (pkgs: pkgs.alejandra);
 

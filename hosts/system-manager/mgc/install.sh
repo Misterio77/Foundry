@@ -156,8 +156,12 @@ Activating mgc. Run this from a recoverable TTY: greetd will replace any existin
 display manager, and the first Home Manager activation may back up dotfiles.
 EOF
 
-nix run --accept-flake-config "$repo_dir#system-manager" -- \
-  switch --flake "$repo_dir#mgc" --sudo
+config="$(nix build --accept-flake-config --no-link --print-out-paths "$repo_dir#systemConfigs.mgc")"
+# No system-manager CLI on PATH yet (this is the first activation), so drive the
+# built generation's own scripts. env PATH= carries nix into the sudo'd engine
+# (sudo's secure_path would otherwise drop it).
+sudo env PATH="$PATH" "$config/bin/register-profile"
+sudo env PATH="$PATH" "$config/bin/activate"
 
 cat <<'EOF'
 
