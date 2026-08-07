@@ -4,7 +4,6 @@
     ./khard.nix
     ./todoman.nix
     ./oama.nix
-    ./syncthing.nix
 
     ./mail.nix
     ./calendar.nix
