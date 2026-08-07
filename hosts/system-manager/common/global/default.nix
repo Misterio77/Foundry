@@ -4,15 +4,17 @@
   pkgs,
   ...
 }: {
-  imports = [
-    inputs.home-manager.nixosModules.home-manager
-    inputs.nix-system-graphics.systemModules.default
+  imports =
+    [
+      inputs.home-manager.nixosModules.home-manager
+      inputs.nix-system-graphics.systemModules.default
 
-    ./greetd.nix
-    ./nix.nix
-    ./pam.nix
-    ./sops.nix
-  ];
+      ./greetd.nix
+      ./nix.nix
+      ./pam.nix
+      ./sops.nix
+    ]
+    ++ (builtins.attrValues outputs.systemManagerModules);
 
   nixpkgs.config.allowUnfree = true;
   system-graphics.enable = true;

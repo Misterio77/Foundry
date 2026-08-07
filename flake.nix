@@ -97,6 +97,7 @@
   in {
     inherit lib;
     nixosModules = import ./modules/nixos;
+    systemManagerModules = import ./modules/system-manager;
     homeManagerModules = import ./modules/home-manager;
 
     overlays = import ./overlays {inherit inputs outputs;};
