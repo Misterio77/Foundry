@@ -16,6 +16,8 @@
     pkgs;
 in {
   pkgs = lib.mapAttrs filterValidPkgs outputs.packages;
-  hosts = lib.mapAttrs (_: cfg: cfg.config.system.build.toplevel) outputs.nixosConfigurations;
+  hosts =
+    lib.mapAttrs (_: cfg: cfg.config.system.build.toplevel) outputs.nixosConfigurations
+    // outputs.systemConfigs;
   homes = lib.mapAttrs (_: cfg: cfg.activationPackage) outputs.homeConfigurations;
 }
