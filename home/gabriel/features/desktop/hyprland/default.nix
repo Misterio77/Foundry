@@ -205,7 +205,9 @@ in {
       ];
       misc = {
         close_special_on_empty = true;
-        focus_on_activate = true;
+        # Off by default: almost everything that asks for focus is being rude.
+        # Opted back in per-window below, for browsers opening links.
+        focus_on_activate = false;
         # Unfullscreen when opening something
         on_focus_under_fullscreen = 2;
         disable_hyprland_logo = true;
@@ -221,6 +223,7 @@ in {
         rsiLauncher = "match:class rsi launcher.exe";
         runescape = "match:class (?i)^runescape$";
         linoffice = "match:class (?i)^Microsoft (Excel|Word|PowerPoint|Outlook|OneNote)$";
+        browsers = "match:class (?i)^(firefox|org\\.qutebrowser\\.qutebrowser)$";
         steamBigPicture = "match:title Steam Big Picture Mode";
         firefoxPictureInPicture = "match:class firefox, match:title Picture-in-Picture";
         floatingVlc = "match:float 1, match:class vlc";
@@ -239,10 +242,11 @@ in {
           "suppress_event activate, ${runescape}"
           "render_unfocused on, ${runescape}"
 
-          # RemoteApp windows mirror the Windows-side focus state, so each
-          # activation request ping-pongs against follow_mouse and carries a
-          # maximize request along with it.
-          "focus_on_activate off, ${linoffice}"
+          # So that opening a link from elsewhere actually brings the browser up.
+          "focus_on_activate on, ${browsers}"
+
+          # RemoteApp windows carry a maximize request on every activation,
+          # which reads as the window fullscreening whenever it regains focus.
           "suppress_event maximize, ${linoffice}"
 
           "float on, ${alt1}"
