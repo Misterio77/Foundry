@@ -44,7 +44,7 @@ in
       executable = package.meta.mainProgram or package.pname;
     in
       symlinkJoin {
-        name = "${package.name}-jagex-auth-wrapped";
+        inherit (package) pname version;
         paths = [package];
         nativeBuildInputs = [makeWrapper];
         postBuild = ''
