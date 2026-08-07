@@ -105,20 +105,6 @@ in {
           tooltip-format = "<tt><small>{calendar}</small></tt>";
         };
 
-        cpu = {
-          interval = 5;
-          format = "  {usage}%";
-        };
-        "custom/gpu" = {
-          interval = 5;
-          exec = mkScript {script = "cat /sys/class/drm/card*/device/gpu_busy_percent | head -1";};
-          format = "󰒋  {}%";
-        };
-        memory = {
-          format = "  {}%";
-          interval = 5;
-        };
-
         "pulseaudio" = {
           format = "{icon}{format_source}";
           format-bluetooth = "{icon} 󰂯{format_source}";
@@ -139,13 +125,6 @@ in {
           };
           on-click = lib.getExe pkgs.pavucontrol;
         };
-        idle_inhibitor = {
-          format = "{icon}";
-          format-icons = {
-            activated = "󰒳";
-            deactivated = "󰒲";
-          };
-        };
         battery = {
           interval = 10;
           format-icons = [
@@ -164,9 +143,6 @@ in {
           format-charging = "󰂄";
           tooltip-format = "{capacity}% ({time})";
           onclick = "";
-        };
-        "sway/window" = {
-          max-length = 20;
         };
         network = {
           interval = 3;
