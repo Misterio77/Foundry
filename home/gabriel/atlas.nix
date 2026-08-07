@@ -5,11 +5,18 @@
     ./features/desktop/wireless
     ./features/rgb
     ./features/productivity
+    ./features/productivity/accounts/personal.nix
+    ./features/productivity/accounts/usp.nix
     ./features/pass
     ./features/games
     ./features/games/shadps4.nix
     ./features/ai
   ];
+
+  accounts = {
+    email.accounts.personal.primary = true;
+    calendar.accounts.personal.primary = true;
+  };
 
   # Red
   wallpaper = pkgs.wallpapers.aenami-dawn;

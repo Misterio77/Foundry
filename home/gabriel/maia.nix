@@ -4,10 +4,17 @@
     ./features/desktop/hyprland
     ./features/desktop/wireless
     ./features/productivity
+    ./features/productivity/accounts/personal.nix
+    ./features/productivity/accounts/usp.nix
     ./features/pass
     ./features/games
     ./features/ai
   ];
+
+  accounts = {
+    email.accounts.personal.primary = true;
+    calendar.accounts.personal.primary = true;
+  };
 
   # Purple
   wallpaper = pkgs.wallpapers.deer-lunar-fantasy;
