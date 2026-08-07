@@ -88,6 +88,7 @@ ubuntu_packages=(
   power-profiles-daemon
   rtkit
   upower
+  wireguard-tools
   wireplumber
   wpasupplicant
 )
