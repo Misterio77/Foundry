@@ -48,8 +48,14 @@ in {
     tmpfiles.rules = ["d /var/cache/tuigreet 0755 greeter greeter - -"];
     services.greetd = {
       wantedBy = ["multi-user.target"];
-      wants = ["systemd-user-sessions.service"];
-      requires = ["userborn.service"];
+      # Wants (not Requires) userborn: System Manager restarts the oneshot
+      # userborn.service on every activation, and a Requires= would propagate
+      # that restart to greetd, tearing down the live session on every switch.
+      # After= still orders userborn before greetd at boot.
+      wants = [
+        "systemd-user-sessions.service"
+        "userborn.service"
+      ];
       after = [
         "systemd-user-sessions.service"
         "getty@tty1.service"
