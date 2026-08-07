@@ -13,7 +13,9 @@ repositories {
 	mavenCentral()
 }
 
-def runeLiteVersion = 'latest.release'
+// Pin a concrete release, not a dynamic version: the deps lockfile is a FOD,
+// and net.runelite SNAPSHOTs get pruned from repo.runelite.net (404 on refetch).
+def runeLiteVersion = '1.12.35'
 def pluginMainClass = 'rs.m7.runelitemcp.RuneLiteMcpPluginTest'
 
 dependencies {
