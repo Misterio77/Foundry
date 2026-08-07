@@ -8,8 +8,6 @@
     [
       inputs.home-manager.nixosModules.home-manager
       inputs.nix-system-graphics.systemModules.default
-
-      ./auto-upgrade.nix
       ./greetd.nix
       ./nix.nix
       ./pam.nix
