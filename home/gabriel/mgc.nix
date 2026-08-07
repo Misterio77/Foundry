@@ -26,6 +26,8 @@
 
   wallpaper = pkgs.wallpapers.island-birds-eye;
 
+  home.packages = [pkgs.wireguard-tools pkgs.sshuttle];
+
   # System Manager and the upstream Nix installer only ship POSIX
   # /etc/profile.d fragments to set up PATH / XDG_DATA_DIRS; fish never sources
   # /etc/profile, and SM's own fish support is an unfinished upstream TODO. So a
