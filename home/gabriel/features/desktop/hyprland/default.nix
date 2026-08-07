@@ -220,6 +220,7 @@ in {
         wineTray = "match:class explorer.exe";
         rsiLauncher = "match:class rsi launcher.exe";
         runescape = "match:class (?i)^runescape$";
+        linoffice = "match:class (?i)^Microsoft (Excel|Word|PowerPoint|Outlook|OneNote)$";
         steamBigPicture = "match:title Steam Big Picture Mode";
         firefoxPictureInPicture = "match:class firefox, match:title Picture-in-Picture";
         floatingVlc = "match:float 1, match:class vlc";
@@ -237,6 +238,12 @@ in {
 
           "suppress_event activate, ${runescape}"
           "render_unfocused on, ${runescape}"
+
+          # RemoteApp windows mirror the Windows-side focus state, so each
+          # activation request ping-pongs against follow_mouse and carries a
+          # maximize request along with it.
+          "focus_on_activate off, ${linoffice}"
+          "suppress_event maximize, ${linoffice}"
 
           "float on, ${alt1}"
           "pin on, ${alt1}"
