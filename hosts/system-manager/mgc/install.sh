@@ -95,6 +95,21 @@ ubuntu_packages=(
 sudo env DEBIAN_FRONTEND=noninteractive apt-get update
 sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes "${ubuntu_packages[@]}"
 
+# Tailscale, from its official apt repo (kept apt-managed: updates via apt and
+# comes up on boot, independent of the nix config). mgc needs the tailnet to
+# reach hydra.m7.rs, which is write-enabled and therefore locked behind it.
+# Run after the repo is added, so curl/ca-certificates from above are present.
+tailscale_keyring=/usr/share/keyrings/tailscale-archive-keyring.gpg
+if [[ ! -f "$tailscale_keyring" ]]; then
+  curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location \
+    "https://pkgs.tailscale.com/stable/ubuntu/${VERSION_CODENAME}.noarmor.gpg" \
+    | sudo tee "$tailscale_keyring" >/dev/null
+fi
+echo "deb [signed-by=$tailscale_keyring] https://pkgs.tailscale.com/stable/ubuntu ${VERSION_CODENAME} main" \
+  | sudo tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+sudo env DEBIAN_FRONTEND=noninteractive apt-get update
+sudo env DEBIAN_FRONTEND=noninteractive apt-get install --yes tailscale
+
 # sops-nix uses this key after its public recipient is added to .sops.yaml.
 sudo ssh-keygen -A
 
@@ -167,4 +182,8 @@ cat <<'EOF'
 
 Activation complete. Reboot to verify greetd, logind, graphics, audio, and the
 Home Manager session from a clean boot.
+
+Join the tailnet so hydra.m7.rs (and the hosts.mgc auto-upgrade) is reachable:
+
+  sudo tailscale up
 EOF
