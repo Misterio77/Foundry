@@ -40,6 +40,10 @@ in {
   programs.git = {
     enable = true;
     package = pkgs.gitFull;
+    signing = {
+      format = "openpgp";
+      signByDefault = false;
+    };
     settings = {
       user = {
         name = "Gabriel Fontes";
@@ -53,11 +57,6 @@ in {
         add-nowhitespace = "!git diff -U0 -w --no-color | git apply --cached --ignore-whitespace --unidiff-zero -";
       };
       init.defaultBranch = "main";
-      user.signing = {
-        format = "openpgp";
-        key = "CE707A2C17FAAC97907FF8EF2E54EA7BFE630916";
-      };
-      commit.gpgSign = lib.mkDefault true;
       gpg.program = "${config.programs.gpg.package}/bin/gpg2";
 
       merge.conflictStyle = "zdiff3";

@@ -21,16 +21,6 @@ in {
         pager = "less -FRX";
         show-cryptographic-signatures = true;
       };
-      signing = let
-        gitCfg = config.programs.git.settings;
-      in {
-        backend = "gpg";
-        behaviour =
-          if gitCfg.commit.gpgSign
-          then "own"
-          else "never";
-        key = gitCfg.user.signing.key;
-      };
       revsets = {
         # Pick @ parents reachable from the nearest bookmarks.
         # Errors out if ambiguous, by design
