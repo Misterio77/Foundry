@@ -47,5 +47,8 @@
     mode = "0755";
   };
 
-  systemd.services.sonarr.serviceConfig.Nice = 10;
+  systemd.services.sonarr.serviceConfig = {
+    CPUWeight = 50;
+    IOWeight = 50;
+  };
 }

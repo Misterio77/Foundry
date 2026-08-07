@@ -38,5 +38,8 @@
     ];
   };
 
-  systemd.services.bazarr.serviceConfig.Nice = 10;
+  systemd.services.bazarr.serviceConfig = {
+    CPUWeight = 50;
+    IOWeight = 50;
+  };
 }

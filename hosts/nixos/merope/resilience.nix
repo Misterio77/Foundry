@@ -29,6 +29,16 @@
     kernel.sysctl."vm.swappiness" = lib.mkForce 10;
   };
 
+  # The media units carry a lowered IOWeight, which mq-deadline (the default
+  # here) ignores outright -- it has no notion of I/O weights or priorities at
+  # all. BFQ is the only scheduler on this kernel that honours them, and it is
+  # what actually lets system and interactive I/O preempt a bulk import on the
+  # shared USB bus. Without this rule that half of the tuning is decoration.
+  boot.kernelModules = ["bfq"];
+  services.udev.extraRules = ''
+    ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/scheduler}="bfq"
+  '';
+
   # Userspace last resort. Note this would NOT have caught the 2026-08-07 stall,
   # which was I/O starvation rather than memory exhaustion; it covers the
   # adjacent case where something genuinely runs away with RAM and the kernel

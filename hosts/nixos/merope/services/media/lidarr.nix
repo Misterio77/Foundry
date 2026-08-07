@@ -46,5 +46,8 @@
     mode = "0755";
   };
 
-  systemd.services.lidarr.serviceConfig.Nice = 10;
+  systemd.services.lidarr.serviceConfig = {
+    CPUWeight = 50;
+    IOWeight = 50;
+  };
 }

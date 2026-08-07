@@ -14,7 +14,8 @@
     serviceConfig = {
       User = "jellysearch";
       Group = "jellysearch";
-      Nice = 15;
+      CPUWeight = 50;
+      IOWeight = 50;
     };
   };
 

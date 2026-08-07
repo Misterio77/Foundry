@@ -60,6 +60,13 @@
     ];
   };
 
+  # Continuous background writes to /srv/torrents on the same device as the
+  # rootfs and swapfile. Half the I/O load during the 2026-08-07 stall.
+  systemd.services.deluged.serviceConfig = {
+    CPUWeight = 50;
+    IOWeight = 50;
+  };
+
   systemd.tmpfiles.settings.srv-torrents."/srv/torrents".d = {
     user = config.services.deluge.user;
     group = config.services.deluge.group;

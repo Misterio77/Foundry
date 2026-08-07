@@ -47,5 +47,8 @@
     mode = "0755";
   };
 
-  systemd.services.radarr.serviceConfig.Nice = 10;
+  systemd.services.radarr.serviceConfig = {
+    CPUWeight = 50;
+    IOWeight = 50;
+  };
 }
