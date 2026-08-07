@@ -10,17 +10,6 @@
     auth      required                   ${pamSecurity}/pam_permit.so
   '';
 in {
-  # nixpkgs' pam_unix execs its verification helper from the fixed path
-  # /run/wrappers/bin/unix_chkpwd, so pam_unix auth silently fails until that
-  # setuid wrapper exists. Provide it (as NixOS does) so pam_unix works for
-  # both root callers (greetd) and unprivileged ones (hyprlock).
-  security.wrappers.unix_chkpwd = {
-    setuid = true;
-    owner = "root";
-    group = "root";
-    source = "${pkgs.linux-pam}/bin/unix_chkpwd";
-  };
-
   environment.etc = {
     # Ours (Ubuntu ships no greetd/hyprlock), but a prior System Manager
     # activation can leave them on disk without recording them in its etc
