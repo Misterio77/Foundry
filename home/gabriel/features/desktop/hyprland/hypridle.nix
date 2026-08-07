@@ -24,11 +24,11 @@
         }
         {
           timeout = 50;
-          on-timeout = "brightnessctl set 50%-";
+          on-timeout = "brightnessctl set 25%- -n 1";
         }
         {
           timeout = 110;
-          on-timeout = "brightnessctl set 50%-";
+          on-timeout = "brightnessctl set 50%- -n 1";
         }
         {
           timeout = 120;
@@ -43,7 +43,7 @@
         # If already locked
         {
           timeout = 15;
-          on-timeout = "if ${isLocked}; then brightnessctl set 75%-; fi";
+          on-timeout = "if ${isLocked}; then brightnessctl set 75%- -n 1; fi";
         }
         {
           timeout = 20;
