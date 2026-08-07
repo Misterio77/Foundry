@@ -5,31 +5,12 @@
 }: let
   flakeInputs = lib.filterAttrs (_: lib.isType "flake") inputs;
 in {
-  # system-manager's nix module has no nix.registry option (unlike NixOS), so
-  # generate the system flake registry directly, mirroring nixpkgs' generator.
-  # Registers every flake input, including `self` — the hydra auto-upgrade
-  # resolves `nix flake metadata self` through this.
-  environment.etc."nix/registry.json".text = builtins.toJSON {
-    version = 2;
-    flakes =
-      lib.mapAttrsToList (name: flake: {
-        exact = true;
-        from = {
-          id = name;
-          type = "indirect";
-        };
-        to =
-          {
-            type = "path";
-            path = flake.outPath;
-          }
-          // lib.filterAttrs (n: _: n == "lastModified" || n == "rev" || n == "narHash") flake;
-      })
-      flakeInputs;
-  };
-
   nix = {
     enable = true;
+    # Register every flake input (incl. `self`, which the hydra auto-upgrade
+    # resolves via `nix flake metadata self`). Uses the nix.registry option
+    # from modules/system-manager/nix-registry.nix.
+    registry = lib.mapAttrs (_: flake: {inherit flake;}) flakeInputs;
     settings = {
       auto-optimise-store = true;
       experimental-features = [
