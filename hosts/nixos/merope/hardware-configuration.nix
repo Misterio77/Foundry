@@ -143,5 +143,8 @@
 
   nixpkgs.hostPlatform.system = "aarch64-linux";
 
-  powerManagement.cpuFreqGovernor = "powersave";
+  # powersave pins all four cores to the 600MHz minimum -- merope never once
+  # reached its 1500MHz maximum, including through 4h of sustained 100% load
+  # before the 2026-08-07 stall.
+  powerManagement.cpuFreqGovernor = "ondemand";
 }

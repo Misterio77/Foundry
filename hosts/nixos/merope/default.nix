@@ -4,6 +4,7 @@
 
     ./services
     ./hardware-configuration.nix
+    ./resilience.nix
 
     ../common/global
     ../common/optional/wireless.nix
