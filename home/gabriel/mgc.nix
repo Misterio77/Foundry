@@ -3,9 +3,16 @@
     ./generic.nix
     ./features/desktop/hyprland
     ./features/desktop/wireless
+    ./features/productivity
+    ./features/productivity/accounts/mgc.nix
     ./features/pass
     ./features/ai
   ];
+
+  accounts = {
+    email.accounts.mgc.primary = true;
+    calendar.accounts.mgc.primary = true;
+  };
 
   targets.genericLinux = {
     enable = true;
