@@ -1,9 +1,12 @@
-{config, ...}: {
+{config, lib, ...}: {
   programs.todoman = {
     enable = true;
     glob = "*/*";
-    extraConfig = ''
-      default_list = "${config.accounts.calendar.accounts.personal.primaryCollection}"
+    extraConfig = let
+      mainAccount = config.accounts.calendar.accounts.personal or {};
+      defaultList = mainAccount.primaryCollection or null;
+    in ''
+      ${lib.optionalString (defaultList != null) ''default_list = "${defaultList}"''}
       date_format = "%d/%m/%Y"
       time_format = "%H:%M"
       humanize = True
