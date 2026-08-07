@@ -189,7 +189,7 @@ in {
           format = "{icon}";
           format-icons = {
             "nix-snowflake" = "";
-            "ubuntu-logo" = "󰕈";
+            "ubuntu-logo" = "";
           };
         };
         "custom/unread-mail" = {
