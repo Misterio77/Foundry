@@ -24,7 +24,7 @@
     }
   ];
 
-  wallpaper = pkgs.wallpapers.cubist-crystal-brown-teal;
+  wallpaper = pkgs.wallpapers.island-birds-eye;
 
   # System Manager and the upstream Nix installer only ship POSIX
   # /etc/profile.d fragments to set up PATH / XDG_DATA_DIRS; fish never sources
