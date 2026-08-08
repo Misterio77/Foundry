@@ -525,10 +525,6 @@
               {
                 "color": "red",
                 "value": 90
-              },
-              {
-                "color": "text",
-                "value": 100
               }
             ]
           },
@@ -561,17 +557,17 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
-          "expr": "sum by (job, instance, uuid) (node_btrfs_used_bytes{instance=\"$hosts\"}) * on(uuid) group_left(label) node_btrfs_info{instance=\"$hosts\"}",
-          "range": true,
+          "expr": "sum by (instance, uuid) (node_btrfs_used_bytes{instance=\"$hosts\"}) * on(instance, uuid) group_left(label) node_btrfs_info{instance=\"$hosts\"}",
+          "range": false,
           "legendFormat": "device={{label}},type=used",
-          "instant": false,
+          "instant": true,
           "refId": "Used Space"
         },
         {
-          "expr": "sum by (job, instance, uuid) (node_btrfs_device_size_bytes{instance=\"$hosts\"}) * on(uuid) group_left(label) node_btrfs_info{instance=\"$hosts\"}",
-          "range": true,
+          "expr": "sum by (instance, uuid) (node_btrfs_device_size_bytes{instance=\"$hosts\"}) * on(instance, uuid) group_left(label) node_btrfs_info{instance=\"$hosts\"}",
+          "range": false,
           "legendFormat": "device={{label}},type=total",
-          "instant": false,
+          "instant": true,
           "refId": "Total Space"
         }
       ],
