@@ -345,7 +345,7 @@
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
           "hideZeros": false,
@@ -356,9 +356,10 @@
       "pluginVersion": "12.3.1",
       "targets": [
         {
+          "editorMode": "code",
           "expr": "sum(node_memory_MemTotal_bytes{instance=\"$hosts\"} - node_memory_MemAvailable_bytes{instance=\"$hosts\"})",
           "instant": false,
-          "legendFormat": "Used Memory",
+          "legendFormat": "Memory",
           "range": true,
           "refId": "Used Memory"
         },
@@ -366,6 +367,14 @@
           "expr": "node_memory_MemTotal_bytes{instance=\"$hosts\"}",
           "legendFormat": "Total Memory",
           "refId": "Total Memory"
+        },
+        {
+          "editorMode": "code",
+          "expr": "node_memory_SwapTotal_bytes{instance=\"$hosts\"} - node_memory_SwapFree_bytes{instance=\"$hosts\"}",
+          "instant": false,
+          "legendFormat": "Swap",
+          "range": true,
+          "refId": "Used Swap"
         }
       ],
       "title": "RAM Usage",
@@ -374,8 +383,8 @@
           "id": "configFromData",
           "options": {
             "applyTo": {
-              "id": "byFrameRefID",
-              "options": "Used Memory"
+              "id": "byType",
+              "options": "number"
             },
             "configRefId": "Total Memory",
             "mappings": [
@@ -571,7 +580,7 @@
           "refId": "Total Space"
         }
       ],
-      "title": "Storage",
+      "title": "Disk Usage",
       "transformations": [
         {
           "id": "seriesToRows",
@@ -608,6 +617,96 @@
         }
       ],
       "type": "gauge"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 8,
+        "y": 8
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "   rate(node_disk_io_time_weighted_seconds_total{instance=\"$hosts\"}[$__rate_interval])\n   * on(instance, device) group_left(label)\n     group by (instance, device, label) (\n       label_replace(\n         node_btrfs_device_size_bytes{instance=\"$hosts\"}\n           * on(instance, uuid) group_left(label) node_btrfs_info{instance=\"$hosts\"},\n         \"device\", \"$1\", \"device\", \"([a-z]+)[0-9]*\"\n       )\n     )\n",
+          "legendFormat": "{{label}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Disk IO",
+      "type": "timeseries"
     }
   ],
   "preload": false,
