@@ -1,4 +1,4 @@
-{inputs, config, ...}: {
+{inputs, config, pkgs, ...}: {
   imports = [
     ../common/optional/ephemeral-btrfs.nix
     inputs.disko.nixosModules.disko
@@ -11,7 +11,6 @@
     loader.timeout = 5;
   };
 
-  # TODO: migrate to UEFI using (https://github.com/pftf/RPi4), https://wiki.adtya.xyz/nix/nix-on-pi.html
   disko.devices.disk = {
     main = {
       device = "/dev/sdb";
@@ -19,15 +18,6 @@
       content = {
         type = "gpt";
         partitions = {
-          firmware = {
-            size = "30M";
-            content = {
-              type = "filesystem";
-              format = "vfat";
-              extraArgs = ["-F" "16"]; # FAT16
-              mountpoint = "/firmware";
-            };
-          };
           root = {
             size = "100%-512M";
             content = {
@@ -69,6 +59,21 @@
               format = "vfat";
               mountpoint = "/boot";
             };
+          };
+        };
+      };
+    };
+    sd-card = {
+      device = "/dev/mmcblk0";
+      type = "disk";
+      content = {
+        type = "gpt";
+        partitions.firmware = {
+          size = "512M";
+          content = {
+            type = "filesystem";
+            format = "vfat";
+            mountpoint = "/firmware";
           };
         };
       };
@@ -117,6 +122,18 @@
             };
           };
         };
+      };
+    };
+  };
+
+  hardware.raspberry-pi = {
+    configtxt.settings.all.avoid_warnings = true;
+    firmware = {
+      enable = true;
+      path = "/firmware";
+      uboot = {
+        enable = true;
+        package = pkgs.ubootRaspberryPi4_64bit;
       };
     };
   };
