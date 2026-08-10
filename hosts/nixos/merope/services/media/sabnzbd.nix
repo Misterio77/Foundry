@@ -17,7 +17,6 @@
       admin_dir = /var/lib/sabnzbd/admin
       backup_dir = /var/lib/sabnzbd/backup
       permissions = 770
-      pause_on_post_processing = 1
 
       [categories]
       [[music]]
