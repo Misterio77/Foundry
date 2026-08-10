@@ -131,7 +131,7 @@ in {
   };
 
   # If memory spikes, prioritize reclaiming from its own page caches
-  systemd.services.sabnzbd.serviceConfig.MemoryHigh = "5G";
+  systemd.services.sabnzbd.serviceConfig.MemoryHigh = "4G";
 
   sops.secrets = {
     sabnzbd-key.sopsFile = ../../secrets.yaml;
