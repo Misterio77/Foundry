@@ -1115,46 +1115,59 @@
                         "collapse": false,
                         "hideHeader": true,
                         "layout": {
-                          "kind": "AutoGridLayout",
+                          "kind": "GridLayout",
                           "spec": {
-                            "maxColumnCount": 4,
-                            "columnWidthMode": "narrow",
-                            "rowHeightMode": "standard",
                             "items": [
                               {
-                                "kind": "AutoGridLayoutItem",
+                                "kind": "GridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-3"
-                                  }
+                                  },
+                                  "height": 6,
+                                  "width": 4,
+                                  "x": 0,
+                                  "y": 0
                                 }
                               },
                               {
-                                "kind": "AutoGridLayoutItem",
+                                "kind": "GridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-4"
-                                  }
+                                  },
+                                  "height": 6,
+                                  "width": 4,
+                                  "x": 4,
+                                  "y": 0
                                 }
                               },
                               {
-                                "kind": "AutoGridLayoutItem",
-                                "spec": {
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-5"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "AutoGridLayoutItem",
+                                "kind": "GridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-6"
-                                  }
+                                  },
+                                  "height": 6,
+                                  "width": 8,
+                                  "x": 8,
+                                  "y": 0
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-5"
+                                  },
+                                  "height": 6,
+                                  "width": 8,
+                                  "x": 16,
+                                  "y": 0
                                 }
                               }
                             ]
@@ -1169,28 +1182,33 @@
                         "collapse": false,
                         "hideHeader": true,
                         "layout": {
-                          "kind": "AutoGridLayout",
+                          "kind": "GridLayout",
                           "spec": {
-                            "maxColumnCount": 3,
-                            "columnWidthMode": "narrow",
-                            "rowHeightMode": "short",
                             "items": [
                               {
-                                "kind": "AutoGridLayoutItem",
+                                "kind": "GridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-7"
-                                  }
+                                  },
+                                  "height": 6,
+                                  "width": 8,
+                                  "x": 0,
+                                  "y": 0
                                 }
                               },
                               {
-                                "kind": "AutoGridLayoutItem",
+                                "kind": "GridLayoutItem",
                                 "spec": {
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-8"
-                                  }
+                                  },
+                                  "height": 6,
+                                  "width": 8,
+                                  "x": 8,
+                                  "y": 0
                                 }
                               }
                             ]
@@ -1219,28 +1237,33 @@
                                     "value": "disk"
                                   },
                                   "layout": {
-                                    "kind": "AutoGridLayout",
+                                    "kind": "GridLayout",
                                     "spec": {
-                                      "maxColumnCount": 4,
-                                      "columnWidthMode": "narrow",
-                                      "rowHeightMode": "short",
                                       "items": [
                                         {
-                                          "kind": "AutoGridLayoutItem",
+                                          "kind": "GridLayoutItem",
                                           "spec": {
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-1"
-                                            }
+                                            },
+                                            "height": 6,
+                                            "width": 7,
+                                            "x": 0,
+                                            "y": 0
                                           }
                                         },
                                         {
-                                          "kind": "AutoGridLayoutItem",
+                                          "kind": "GridLayoutItem",
                                           "spec": {
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-2"
-                                            }
+                                            },
+                                            "height": 6,
+                                            "width": 9,
+                                            "x": 7,
+                                            "y": 0
                                           }
                                         }
                                       ]
