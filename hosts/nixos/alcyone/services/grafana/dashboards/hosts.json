@@ -1292,7 +1292,7 @@
                       "text": "All",
                       "value": "$__all"
                     },
-                    "hide": "dontHide",
+                    "hide": "hideVariable",
                     "refresh": "onDashboardLoad",
                     "skipUrlSync": false,
                     "query": {
@@ -1350,7 +1350,7 @@
             "text": "All",
             "value": "$__all"
           },
-          "hide": "hideLabel",
+          "hide": "hideVariable",
           "refresh": "onDashboardLoad",
           "skipUrlSync": false,
           "query": {
