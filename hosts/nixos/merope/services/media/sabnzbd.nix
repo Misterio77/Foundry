@@ -138,4 +138,15 @@ in {
     blocknews-key.sopsFile  = ../../secrets.yaml;
     eweka-key.sopsFile  = ../../secrets.yaml;
   };
+
+  environment.persistence = {
+    "/persist".directories = [
+      {
+        directory = sabnzbdDir;
+        user = config.services.sabnzbd.user;
+        group = config.services.sabnzbd.group;
+        mode = "0700";
+      }
+    ];
+  };
 }
