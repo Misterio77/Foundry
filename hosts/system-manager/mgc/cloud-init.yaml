@@ -1,0 +1,103 @@
+#cloud-config
+hostname: mgc
+manage_etc_hosts: true
+
+users:
+  - name: gabriel
+    gecos: Gabriel Fontes
+    groups:
+      - adm
+      - sudo
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_import_id:
+      - gh:misterio77
+
+package_update: true
+package_upgrade: false
+packages:
+  - bluez
+  - brightnessctl
+  - ca-certificates
+  - curl
+  - dbus-user-session
+  - git
+  - libpam-systemd
+  - libspa-0.2-bluetooth
+  - openssh-client
+  - pcscd
+  - pipewire
+  - pipewire-pulse
+  - policykit-1
+  - policykit-1-gnome
+  - power-profiles-daemon
+  - rtkit
+  - upower
+  - wireguard-tools
+  - wireplumber
+  - wpasupplicant
+
+runcmd:
+  # sops-nix derives this machine's age identity from its SSH host key.
+  - ssh-keygen -A
+
+  - |
+    if [ ! -e /home/gabriel/Foundry ]; then
+      sudo --user=gabriel --set-home \
+        git clone https://github.com/misterio77/Foundry.git /home/gabriel/Foundry
+    fi
+
+  # Install upstream multi-user Nix as the target user. System Manager will
+  # persist flake support in nix.conf during its first activation.
+  - |
+    if [ ! -x /nix/var/nix/profiles/default/bin/nix ]; then
+      sudo --user=gabriel --set-home sh -c \
+        "curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location https://nixos.org/nix/install | sh -s -- --daemon"
+    fi
+
+  # Bootstrap the declarative config before rekeying SOPS. Secret installation
+  # may fail, but the rest of the system and Home Manager config can activate.
+  - |
+    config=$(
+      sudo --user=gabriel --set-home \
+        env NIX_CONFIG='experimental-features = nix-command flakes' \
+        /nix/var/nix/profiles/default/bin/nix build \
+          --accept-flake-config --no-link --print-out-paths \
+          /home/gabriel/Foundry#systemConfigs.mgc
+    )
+    activation_path="/nix/var/nix/profiles/default/bin:$PATH"
+    env PATH="$activation_path" "$config/bin/register-profile"
+    env PATH="$activation_path" "$config/bin/activate"
+
+  # Leave the recipient and rekey instructions somewhere visible after
+  # cloud-init has finished.
+  - |
+    recipient=$(
+      cat /etc/ssh/ssh_host_ed25519_key.pub \
+        | sudo --user=gabriel --set-home \
+          env NIX_CONFIG='experimental-features = nix-command flakes' \
+          /nix/var/nix/profiles/default/bin/nix shell nixpkgs#ssh-to-age \
+            --command ssh-to-age
+    )
+    cat > /home/gabriel/mgc-bootstrap.txt <<EOF
+    Ubuntu prerequisites, Foundry, Nix, and the System Manager config are ready.
+
+    mgc age recipient:
+
+      ${recipient}
+
+    With the YubiKey connected, finish the SOPS setup in /home/gabriel/Foundry:
+      1. Replace mgc's placeholder in .sops.yaml with this recipient.
+      2. Uncomment mgc in the hosts/secrets.yaml creation rule.
+      3. Run: sops updatekeys hosts/secrets.yaml
+      4. Commit and push the rekeyed configuration.
+      5. Build and activate the updated config:
+         system-manager switch --flake .
+      6. Reboot and verify the session from a clean boot.
+    EOF
+    chown gabriel:gabriel /home/gabriel/mgc-bootstrap.txt
+
+final_message: >-
+  mgc bootstrap complete. Read /home/gabriel/mgc-bootstrap.txt for the age
+  recipient and post-bootstrap rekey steps.
