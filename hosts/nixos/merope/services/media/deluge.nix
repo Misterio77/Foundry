@@ -7,9 +7,9 @@
       enabled_plugins = ["Label"];
       copy_torrent_file = true;
       move_completed = true;
-      torrentfiles_location = "/srv/torrents/files";
-      download_location = "/srv/torrents/downloading";
-      move_completed_path = "/srv/torrents/completed";
+      torrentfiles_location = "/srv/media/incoming/torrent/files";
+      download_location = "/srv/media/incoming/torrent/downloading";
+      move_completed_path = "/srv/media/incoming/torrent/completed";
       dont_count_slow_torrents = true;
       max_active_seeding = -1;
       max_active_limit = -1;
@@ -60,14 +60,12 @@
     ];
   };
 
-  # Continuous background writes to /srv/torrents on the same device as the
-  # rootfs and swapfile. Half the I/O load during the 2026-08-07 stall.
   systemd.services.deluged.serviceConfig = {
     CPUWeight = 50;
     IOWeight = 50;
   };
 
-  systemd.tmpfiles.settings.srv-torrents."/srv/torrents".d = {
+  systemd.tmpfiles.settings.srv-media-incoming-torrent."/srv/media/incoming/torrent".d = {
     user = config.services.deluge.user;
     group = config.services.deluge.group;
     mode = "0770"; # So that others in the group (e.g. *arr) can move/hardlink completed torrents

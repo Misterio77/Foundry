@@ -88,17 +88,9 @@
           content = {
             type = "btrfs";
             subvolumes = {
-              "/tv" = {
+              "/media" = {
                 mountOptions = ["noatime"];
-                mountpoint = "/srv/media/tv";
-              };
-              "/movies" = {
-                mountOptions = ["noatime"];
-                mountpoint = "/srv/media/movies";
-              };
-              "/photos" = {
-                mountOptions = ["noatime"];
-                mountpoint = "/srv/media/photos";
+                mountpoint = "/srv/media";
               };
             };
           };

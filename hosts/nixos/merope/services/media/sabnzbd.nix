@@ -11,8 +11,8 @@
       local_ranges = 127.0.0.1/32
       api_key = ${config.sops.placeholder.sabnzbd-key}
       inet_exposure = 2
-      download_dir = /var/lib/sabnzbd/downloading
-      complete_dir = /var/lib/sabnzbd/complete
+      download_dir = /srv/media/incoming/usenet/downloading
+      complete_dir = /srv/media/incoming/usenet/completed
       log_dir = /var/lib/sabnzbd/logs
       admin_dir = /var/lib/sabnzbd/admin
       backup_dir = /var/lib/sabnzbd/backup
@@ -31,7 +31,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 150
+      connections = 30
       priority = 0
       [[frugal-secondary]]
       enable = 1
@@ -41,7 +41,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 75
+      connections = 15
       priority = 0
       [[frugal-bonus]]
       enable = 1
@@ -51,7 +51,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 50
+      connections = 10
       priority = 1
       [[eweka]]
       enable = 1
@@ -61,7 +61,7 @@
       port = 563
       username = 043b11d25e1d9f6f
       password = ${config.sops.placeholder.eweka-key}
-      connections = 50
+      connections = 10
       priority = 2
       [[blocknews]]
       enable = 1
@@ -71,7 +71,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 50
+      connections = 10
       priority = 3
       [[blocknews-secondary]]
       enable = 1
@@ -81,13 +81,19 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 50
+      connections = 10
       priority = 3
     '';
     owner = config.services.sabnzbd.user;
     group = config.services.sabnzbd.group;
     mode = "0600";
     restartUnits = ["sabnzbd.service"];
+  };
+
+  systemd.tmpfiles.settings.srv-media-incoming-usenet."/srv/media/incoming/usenet".d = {
+    user = config.services.sabnzbd.user;
+    group = config.services.sabnzbd.group;
+    mode = "0770"; # So that others in the group (e.g. *arr) can move/hardlink completed files
   };
 
   sops.secrets = {
