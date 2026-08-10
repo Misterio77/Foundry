@@ -22,12 +22,24 @@
       [[music]]
       name = music
 
+      # This Pi's Cortex-A72 has no ARMv8 crypto extensions, so TLS is decrypted
+      # in software: AES-256-GCM manages 53 MB/s per core against 208 MB/s for
+      # ChaCha20-Poly1305. Every provider defaults to AES and all six accept
+      # ChaCha20, so asking for it moves most of a core off decryption.
+      #
+      # Setting ssl_ciphers makes SABnzbd cap the connection at TLS 1.2, because
+      # Python does not expose SSL_CTX_set_ciphersuites() for the 1.3 suites.
+      # ECDHE keeps forward secrecy and ChaCha20-Poly1305 is the same AEAD that
+      # 1.3 would use, so the downgrade costs an extra handshake round trip and
+      # an unencrypted certificate, nothing more. Drop these lines once upstream
+      # can select 1.3 ciphersuites.
       [servers]
       [[frugal]]
       enable = 1
       name = frugal
       host = sanews.frugalusenet.com
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
@@ -38,6 +50,7 @@
       name = frugal-secondary
       host = news.frugalusenet.com
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
@@ -48,6 +61,7 @@
       name = frugal-bonus
       host = bonus.frugalusenet.com
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
@@ -58,6 +72,7 @@
       name = eweka
       host = news.eweka.nl
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = 043b11d25e1d9f6f
       password = ${config.sops.placeholder.eweka-key}
@@ -68,6 +83,7 @@
       name = blocknews
       host = sanews.blocknews.net
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
@@ -78,6 +94,7 @@
       name = blocknews-secondary
       host = usnews.blocknews.net
       ssl = 1
+      ssl_ciphers = ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
