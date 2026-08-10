@@ -1301,7 +1301,7 @@
                       "version": "v0",
                       "spec": {
                         "qryType": 3,
-                        "query": "query_result(last_over_time(node_btrfs_info{instance=\"$hostname\"}[30d]))",
+                        "query": "query_result(last_over_time(node_btrfs_info{instance=\"$hostname\"}[$__range]))",
                         "refId": "PrometheusVariableQueryEditor-VariableQuery"
                       }
                     },
