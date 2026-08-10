@@ -1,131 +1,57 @@
 # merope disk reorganization
 
-Consolidate all media onto the **media** disk in one btrfs subvolume so every
-import becomes a rename or hardlink instead of a cross-device copy, and the M.2
-— which holds the swapfile — sees no media I/O at all.
+Consolidate all media onto the **media** disk in one btrfs subvolume, so every
+import is a rename or hardlink instead of a cross-device copy, and the M.2 —
+which holds the swapfile — sees no media I/O.
 
-## Device naming: use labels, never letters
+## Disks
 
-Kernel device letters on this host are **not stable**. They are assigned in USB
-enumeration order, which changes when a drive is re-plugged, moved between
-ports, or hot-plugged after boot. On 2026-08-08 the 12 TB and the 932 GB swapped
-letters simply by being plugged in a different order.
+Kernel letters are not stable here; they follow USB enumeration order and have
+changed repeatedly. Address disks by label or UUID.
 
-| label      | size   | role                    | filesystem UUID prefix |
-|------------|--------|-------------------------|------------------------|
-| `merope`   | 465 GB | M.2 NVMe, root + swap   | `1660ec93`             |
-| `media`    | 12 TB  | tv, movies, photos      | `b8126efa`             |
-| `backups`  | 932 GB | backup target           | `6d8471ca`             |
+| label     | size   | allocated | role                          |
+|-----------|--------|-----------|-------------------------------|
+| `merope`  | 465 GB | 250 GiB   | M.2, root + `/persist` + swap |
+| `media`   | 12 TB  | 4.03 TiB  | tv, movies, photos            |
+| `backups` | 932 GB | 92 GiB    | backup target (music mirror)  |
 
-Everything below refers to these labels. Use `/dev/disk/by-label/<label>` or
-`/dev/disk/by-uuid/` in commands. Any instruction naming `sdb` or `sdc` is a bug.
+Both `merope` and `media` are on USB 3 behind one VL805 / PCIe Gen2 x1 lane:
+212 and 197 MB/s alone, 165 and 170 concurrent, ~335 MB/s combined. Separate
+request queues on a shared path — which is what matters, since the failure this
+fixes was swap page-ins queued behind bulk writes on one device, not bandwidth.
 
-## Background
+## Prerequisites
 
-On 2026-08-07 merope hung for ~48 minutes under a single 1.1 GB movie import.
-No OOM, no panic, no thermal event: `/swap/swapfile` shares the M.2 with the
-rootfs, and a Radarr cross-device import saturated that disk, so page-ins queued
-behind bulk I/O indefinitely.
+- [ ] **Scrub `merope`** — 250 GiB, ~25 min. It reports 2233 `corruption_errs`
+      and has never been scrubbed.
+- [ ] **Scrub `media`** — 4.03 TiB, ~9–10 h. 4 TB should not be reflinked into a
+      new subvolume on the assumption it is intact.
 
-That was mitigated in `e5ae4001` (watchdog, ondemand governor, swappiness, PSI)
-and `e5e1048a` (cgroup weights, BFQ), which turned the failure from a hang into
-graceful degradation.
-
-### What 2026-08-08 changed
-
-At 04:42 the host reset again, and the cause was **not** swap. The USB bridge
-backing the M.2 (ASMedia ASM2362, `174c:2362`) stopped answering SCSI commands:
-
-```
-sda uas_eh_abort_handler ... inflight: CMD OUT
-scsi host0: uas_eh_device_reset_handler start
-usb 2-2: reset SuperSpeed USB device number 2
+```bash
+btrfs scrub start -c 3 /      # -c 3 = idle I/O class; root required
+btrfs scrub status /
 ```
 
-Swap sat flat at 2.27 GiB throughout and 4.4 GiB stayed available — memory was
-never involved. The watchdog from `e5ae4001` caught it: **105 seconds of
-downtime, self-recovered**, against 48 minutes and a manual power cycle the day
-before.
+Neither filesystem is redundant, so a scrub reports rather than repairs. The
+line that matters is `csum errors`: zero means the 2233 are historical, non-zero
+means it is ongoing and `dmesg` names the files.
 
-On the reboot that followed, the SuperSpeed link failed to train
-(`usb2-port2: Cannot enable. Maybe the USB cable is bad?`) and all three drives
-enumerated on the USB 2.0 bus at 480 Mbps. A cold power cycle — full power
-removal, not a reboot — restored it.
+It runs in kernel threads, so it outlives the SSH session that started it. An
+unmount cancels it, but progress is saved — `btrfs scrub resume <mountpoint>`
+continues, while `start` begins again from zero. It is also cancellable at any
+time, which makes it cheap to abort if it is in the way.
 
-### The 28 MiB/s figure was wrong
+Cost, measured on the M.2 at 176 MiB/s with services running: `io some avg10`
+around 14 and load ~2.3, with playback unaffected. On the HDD the cost is seek
+latency rather than bandwidth; streaming absorbs it, concurrent unpacking or
+imports will not.
 
-Measured during a four-season download on 2026-08-07:
+After a clean scrub, zero the counter so it becomes a dated baseline instead of
+an ever-growing mystery:
 
-| device | queue depth | throughput  | note                     |
-|--------|-------------|-------------|--------------------------|
-| M.2    | ~3          | 70–82 MiB/s | SuperSpeed, coping       |
-| media  | 20–29       | ~28 MiB/s   | 95% utilised             |
-
-That was read as a seek-bound spinning disk. It was not. The 12 TB was plugged
-into a **USB 2.0 port**, and 28 MiB/s is a saturated 480 Mbps link. On USB 3,
-measured 2026-08-09 with the boot problems resolved:
-
+```bash
+btrfs device stats -z /
 ```
-1258291200 bytes (1.3 GB) copied, 6.88015 s, 183 MB/s
-```
-
-**6.5× faster**, and the drive was never the constraint. Every capacity argument
-in this document was originally sized against the wrong number; the migration is
-now clearly worth doing rather than a careful trade.
-
-### New caveat: shared PCIe lane
-
-With the media disk on USB 3, it and the M.2 both sit on the SuperSpeed side of
-the VL805 — one PCIe Gen2 x1 lane, roughly 440 MB/s usable **shared**. Before,
-the M.2 had that lane to itself. This is still vastly better than 40 MB/s, but
-the premise is *separate spindles, shared path*, not fully independent I/O.
-
-### Boot order — resolved 2026-08-09
-
-Putting the media disk in USB 3 broke booting, in two separate stages. Both are
-fixed; both live in firmware, outside this flake, so they survive a reinstall
-and will not reappear in a `nixos-rebuild`.
-
-**Stage 1 — the EEPROM bootloader.** It walks USB devices in port order and, on
-finding no bootable partition on the drive in 2-1, falls through to the SD slot
-and then loops (the default `BOOT_ORDER` ends in `f`). Fixed by excluding the two
-data drives by VID:PID so it never considers them:
-
-```
-USB_MSD_EXCLUDE_VID_PID=174c:55aa,152d:0580
-```
-
-Applied by rebuilding the EEPROM image with `rpi-eeprom-config --config`, then
-copying it to `/firmware/pieeprom.upd` with a matching `pieeprom.sig` from
-`rpi-eeprom-digest`. Note `--apply` does **not** work on NixOS: the nixpkgs
-wrapper points `FIRMWARE_ROOT` at a directory that does not exist.
-
-**Stage 2 — U-Boot.** The EEPROM then handed off cleanly, but U-Boot failed the
-same way for a different reason. The installed binary was **U-Boot 2021.04**,
-which predates `bootstd` and uses legacy `distro_bootcmd`. There, `rpi.h`
-declares USB as a single instance:
-
-```c
-#define BOOT_TARGET_USB(func) func(USB, usb, 0)
-```
-
-so `boot_targets` contains exactly one `usb0`, and `usb_boot` only ever tries
-`devnum=0`. With the media disk in 2-1 it enumerated first, had no
-`extlinux.conf`, and U-Boot moved on to `mmc0`/`pxe`/`dhcp` without ever looking
-at the M.2.
-
-Fixed by replacing `/firmware/u-boot-rpi4.bin` with a current build
-(`nixpkgs#ubootRaspberryPi4_64bit`, U-Boot 2026.04), which uses `bootstd` and
-enumerates every bootdev rather than a single hardcoded index. The 2021.04
-binary is kept beside it as `u-boot-rpi4.bin.bak`.
-
-> **Recovery note.** `/firmware` is on the M.2 *inside* the Argon case. If a
-> future U-Boot or EEPROM change fails to boot, recovery means opening the case
-> and mounting that partition elsewhere — there is no SD card in the slot. Keep
-> a copy of `u-boot-rpi4.bin.bak` off-machine before touching either again.
-
-Result: both drives negotiate 5000 Mbps and the host boots unattended, so the
-watchdog is safe again.
 
 ## Target layout
 
@@ -138,32 +64,53 @@ media    subvolume "srv" -> /srv
 backups  -> /backups
 ```
 
-Every app-visible path is unchanged: `/srv/media/tv`, `/srv/media/music`,
-`/srv/torrents/completed`. Deluge, Lidarr, Sonarr, Radarr, Bazarr, Immich and
-Jellyfin need no reconfiguration — only the device underneath changes. Deluge in
-particular stores an absolute save path per torrent, so path stability is what
-avoids re-adding and rechecking every torrent.
+Every app-visible path is unchanged, so deluge, the `*arr`s, bazarr, immich and
+jellyfin need no reconfiguration — only the device underneath moves. Deluge
+stores an absolute save path per torrent, so path stability is what avoids
+re-adding and rechecking everything. Only SABnzbd's two directories move, and it
+keeps no per-item path history.
 
-Only SABnzbd's two directories move, and it keeps no per-item path history.
+## Before the window
 
-## Prep
+No downtime; all of this can be done in advance.
 
-Safe to do at any time, before the maintenance window.
-
-1. Confirm the Sonarr/Radarr queues are empty; nothing mid-import.
-2. Remove video torrents through deluge ("remove torrent and delete data"), not
-   `rm`, so deluge's state stays consistent. Their library copies on sdb are
-   independent inodes — those imports were cross-device copies — so this cannot
-   touch them. Shrinks the migration payload and frees space on sda.
-3. Measure, and check for existing inode flags, since neither `cp` nor `rsync`
-   carries them:
+1. **Confirm the `merope` scrub finished clean**, then zero the counter so it
+   becomes a dated baseline instead of a cumulative mystery:
 
    ```bash
-   du -sh /srv/media/music /srv/torrents
+   btrfs scrub status /
+   btrfs device stats -z /
+   ```
+
+2. **Write the config changes** (see "Config changes" below) so the rebuild
+   inside the window is one step: the disko `srv` subvolume and the `/backups`
+   move, the removed `environment.persistence` entries and disko mountpoints for
+   `/srv/media/{tv,movies,photos}`, and the sabnzbd and deluge settings.
+
+3. Confirm the Sonarr/Radarr queues are empty; nothing mid-import.
+4. Remove finished video torrents through deluge ("remove torrent and delete
+   data"), not `rm`, so its state stays consistent. Library copies on `media` are
+   separate inodes, so this cannot touch them. Shrinks the payload.
+5. Check for inode flags, which neither `cp` nor `rsync` carries:
+
+   ```bash
    lsattr -d /mnt/{tv,movies,photos} /srv/media/music /srv/torrents /srv/torrents/*
    ```
 
-## Migration
+6. Re-measure with a btrfs-aware tool. `du` and `find -links` are both blind to
+   reflinks — reflinked files are separate inodes with `nlink=1`, and `du`
+   counts each one's blocks in full:
+
+   ```bash
+   btrfs filesystem du -s /srv/media/music /srv/torrents
+   ```
+
+   `Exclusive` plus one copy of `Set shared` is what the data actually costs
+   today; `Total` is what it will cost after the move.
+
+## The window
+
+Roughly an hour with the media stack down, most of it step 3.
 
 ### 1. Stop the media stack
 
@@ -174,51 +121,36 @@ systemctl stop \
   jellyfin jellysearch \
   immich-server immich-machine-learning
 
-systemctl is-active <same list>   # verify, do not assume
+systemctl is-active <same list>    # verify, do not assume
 ```
 
-Two distinct reasons, same list. The `*arr`s, bazarr, deluge, sabnzbd and immich
-**write** into the tree and would leave the copy inconsistent — immich most
-dangerously, since its database stays on sda and would end up referencing a
-photo that never made it across. Jellyfin and jellysearch are read-only here
-(jellyfin's metadata lives in `/var/lib/jellyfin`) but hold **open file
-handles**, which block the unmounts below.
+The `*arr`s, bazarr, deluge, sabnzbd and immich **write** into the tree — immich
+most dangerously, since its database stays on `merope` and would end up
+referencing a photo that never made it across. Jellyfin and jellysearch are
+read-only but hold **open handles**, which block the unmounts below.
 
-Leave `postgresql`, `redis-immich` and `meilisearch` running — all on sda, none
-touch `/srv`, and immich returns without a database restart.
+Leave `postgresql`, `redis-immich` and `meilisearch` running: all on `merope`,
+none touch `/srv`, and immich returns without a database restart.
 
-### 2. Back music up to the backups disk
-
-92 GB onto a 932 GB disk currently holding 5.9 MB. Makes the whole migration
-reversible.
-
-### 3. Build the new subvolume (reflink — no data moves)
+### 2. Build the new subvolume — minutes, no data moves
 
 ```bash
-mount -o subvolid=5 /dev/disk/by-label/media /mnt   # fs root, not the default subvol
+mount -o subvolid=5 /dev/disk/by-label/media /mnt   # fs root, not default subvol
 btrfs subvolume create /mnt/srv
 mkdir -p /mnt/srv/media
 cp -a --reflink=always /mnt/{tv,movies,photos} /mnt/srv/media/
 ```
 
-Run as root, or `cp -a` silently drops ownership. `--reflink=always` errors out
-rather than falling back to a real 4.6 TB copy.
-
-Verify immediately — a silent deep copy looks exactly like success:
+Root, or `cp -a` silently drops ownership. `--reflink=always` errors out rather
+than falling back to a real 4 TB copy. Verify immediately — a silent deep copy
+looks exactly like success:
 
 ```bash
 btrfs filesystem usage /mnt                        # free space should barely move
 du -sh --apparent-size /mnt/tv /mnt/srv/media/tv   # should match
 ```
 
-Expect minutes to an hour of metadata work, but no data movement and no bus
-traffic.
-
-### 4. Migrate music and torrents (the one slow step)
-
-Unmount the sdb subvolumes from `/srv` first. Leave them mounted and rsync
-descends into them and hauls 4.6 TB back across the bus into the subvolume that
-already holds it via reflink:
+### 3. Migrate music and torrents — ~20–30 min, ~170 GiB
 
 ```bash
 umount /srv/media/tv /srv/media/movies /srv/media/photos
@@ -228,51 +160,105 @@ rsync -aHAX -x --info=progress2 \
   /mnt/srv/
 ```
 
-Both trees in a **single** invocation. `-H` only preserves links within one
-transfer set, so separate runs turn every hardlinked music pair into two files
-and 92 GB into 184.
+**Unmount first**, or rsync descends into the `media` subvolumes and hauls 4 TB
+back across the bus into the subvolume that already holds it via reflink.
 
-`-x` is a second line of defence, but note each btrfs subvolume reports a
-distinct `st_dev`, so it stops at subvolume boundaries as well as filesystem
-ones. The unmount is the real guard.
+**Both trees in one invocation**, so `-H` sees them together — it only preserves
+links within a single transfer set. Only 17 files in `/srv/torrents` are actually
+hardlinked, so this is cheap insurance rather than a crisis averted.
 
-### 5. Verify before deleting anything
+#### Expect this to grow by ~46 GiB
 
-```bash
-find /mnt/srv -links +1 | wc -l   # must match the source count
+Music and torrents currently **share ~46 GiB of extents via reflink**, because
+Lidarr imported from the torrent data on the same filesystem:
+
+| | total | exclusive | shared |
+|---|---|---|---|
+| `/srv/media/music` | 92.75 GiB | 46.85 GiB | 45.75 GiB |
+| `/srv/torrents`    | 77.50 GiB | 31.49 GiB | 45.99 GiB |
+
+Reflinks cannot cross filesystems, so this copy destroys that sharing no matter
+which tool is used — there is no rsync or `cp` flag that preserves it across
+devices. Both trees occupy ~124 GiB on `merope` today and will occupy ~170 GiB
+on `media` afterwards.
+
+That is 0.7% of free space, so it is affordable — but it is worth reclaiming,
+because the sharing is whole-file rather than scattered. Measured over 150
+random music files, the distribution is strictly bimodal:
+
+| share ratio | files | meaning |
+|---|---|---|
+| 0%       | 69% | no counterpart in the current seeding set |
+| 1–89%    | 0%  | nothing partial — no file is fragmentarily shared |
+| 90–99%   | 23% | clone plus a rewritten tag block, ~115 KiB of a 25.7 MiB file |
+| 100%     |  8% | pure clone, byte-identical |
+
+Lidarr reflink-imports from the torrent and then rewrites tags, so the audio
+extents stay shared while only the metadata block (tags plus embedded art)
+diverges. Because that divergence is 0.45% of a file rather than scattered
+through it, block-level dedupe recovers essentially all of the 46 GiB.
+
+The unshared majority is not stale. Of 426 seeded album payloads, **87% of FLAC
+releases are reflinked into the library and 2% of MP3 releases are** — the MP3
+torrents are seeded for ratio and never imported, since the library keeps
+lossless. So both sides carry a large exclusive share by design:
+
+```
+torrents  77.5 GiB = 46.0 shared (FLAC, imported) + 31.5 excl (MP3, ratio only)
+music    92.75 GiB = 45.8 shared (from those)     + 46.9 excl (predates/outside seeds)
 ```
 
-### 6. Repoint mounts
+Both trees must migrate whole. Neither exclusive portion is redundant.
 
-Subvolume `srv` mounts directly at `/srv` — no bind mount and no `/persist/srv`,
-since nothing about the media disk is ephemeral. The backups disk moves to
-`/backups`.
-
-Before unmounting the old `/srv`:
+**Re-dedupe after the migration** to restore it:
 
 ```bash
-fuser -vm /srv     # must be empty
+duperemove -rdh /srv/media/music /srv/torrents
 ```
 
-If something still holds it the unmount fails, and reaching for a lazy unmount
-leaves processes quietly reading the old sda inodes while appearing to have
-migrated. That is how the source gets deleted in step 8 with data still in use.
+Future imports reflink on their own again, since both trees land on the same
+filesystem — which is the point of the migration. Only the copied-across history
+needs the one-off pass.
 
-### 7. Remove dead config and restart
+> **Do not run a file-level duplicate remover here.** `rmlint` and friends
+> compare content, not extents, so they report ~8.65 GB of "removable
+> duplicates" that are already shared and would free nothing — while deleting
+> the torrent-side copies and destroying 564 seeds. Dedupe, never delete.
+
+### 4. Verify before deleting anything
+
+```bash
+find /mnt/srv -links +1 | wc -l    # must match the source count
+```
+
+### 5. Repoint mounts
+
+Subvolume `srv` mounts directly at `/srv` — no bind mount, no `/persist/srv`.
+The backups disk moves to `/backups`.
+
+```bash
+fuser -vm /srv     # must be empty before unmounting
+```
+
+Never resort to a lazy unmount: processes keep reading the old inodes while
+appearing to have migrated, and step 7 then deletes data still in use.
+
+### 6. Remove dead config and restart
 
 Delete the `environment.persistence` entries and disko mountpoints for
 `/srv/media/{tv,movies,photos}` — stale persistence entries quietly resurrect
-directory structures that were meant to be gone.
+directory structures meant to be gone. Create the sabnzbd directories, rebuild,
+start services, confirm deluge shows everything seeding. Fast-resume should hold,
+since `rsync -a` preserves mtime — otherwise it is 92 GB of software SHA-1 on an
+A72 without crypto extensions.
 
-Create the sabnzbd directories. Rebuild, start services, and confirm deluge
-shows everything seeding. Fast-resume should hold since `rsync -a` preserves
-mtime, avoiding 92 GB of software SHA-1 on an A72 without crypto extensions.
+## After it is proven
 
-### 8. Clean up last
+Only once deluge is seeding, Jellyfin plays and immich resolves its library:
 
 ```bash
-btrfs subvolume delete /mnt/{tv,movies,photos}   # old sdb subvolumes
-# then the old /srv contents on sda2
+btrfs subvolume delete /mnt/{tv,movies,photos}
+# then the old /srv contents on `merope`
 ```
 
 ## Config changes
@@ -283,9 +269,8 @@ download_dir = /srv/incoming/downloading
 complete_dir = /srv/incoming/complete
 ```
 
-Keeping `download_dir` on sda would reintroduce the burst: SABnzbd unpacks in
-`download_dir` and then *moves* to `complete_dir`, which across filesystems is a
-full-size copy.
+Split across filesystems, SABnzbd's move from `download_dir` to `complete_dir`
+becomes a full-size copy.
 
 ```nix
 # deluge.nix — spinning disk now
@@ -293,51 +278,30 @@ max_active_downloading = 3;     # was 8
 max_connections_global = 200;   # was -1
 ```
 
-Eight concurrent torrents was survivable on flash and is a seek generator on
-rust. Note this is about *seeks*, not bandwidth — at 175 MB/s the link is no
-longer the limit, but random access on a 12 TB drive still is. Also in SABnzbd: enable pause-downloading-during-post-processing, and cut
-usenet connections from 225 to ~50 — a Pi 4 cannot use anywhere near that, and
-each is a TLS socket with its own buffers and softirq cost.
+This is about *seeks*, not bandwidth. Also in SABnzbd: enable
+pause-during-post-processing and cut usenet connections from 225 to ~50 — even at
+1.8 GHz a Pi 4 cannot use anywhere near that, and each is a TLS socket with its
+own buffers and softirq cost.
 
-## Deliberately not doing: `chattr +C`
+## Decisions
 
-`+C` disables data checksums as well as COW, and both hardlinks (torrents) and
-renames (usenet) carry the flag into the library — so the entire collection
-would end up without `btrfs scrub` bitrot detection. On a single-device
-filesystem corruption is not repairable anyway, but it is still worth detecting.
+**No `chattr +C`.** It disables checksums as well as COW, and both hardlinks and
+renames carry the flag into the library, so the whole collection would lose
+bitrot detection. The fragmentation it prevents is mostly a torrent problem;
+usenet writes sequentially. Measure with `filefrag` afterwards and revisit only
+if it is genuinely bad.
 
-The fragmentation `+C` prevents is mostly a *torrent* problem, from out-of-order
-piece writes; usenet writes sequentially. Measure with `filefrag` on a few
-imported files after the migration and only revisit if it is genuinely bad.
+**`tv`, `movies` and `photos` become plain directories**, so per-library
+snapshots are no longer possible — `srv` would be snapshotted whole. Nothing
+snapshots them today.
 
 ## Rollback
 
-Nothing is deleted until step 8, music is backed up on the backups disk, and
-reverting is a disko change plus a generation switch.
+Nothing is deleted until step 7, music is mirrored on `backups`, and reverting is
+a disko change plus a generation switch.
 
 ## Verify afterwards
 
-- `stat` a freshly imported episode in both staging and library: same inode,
-  link count 2. If it is still copying, that shows up immediately rather than in
-  three weeks.
-- Watch queue depth on the media disk during the next import. The 26–29 spikes
-  should stop existing — though note they were largely a USB 2.0 artifact and
-  may already be gone before any of this work happens.
-
-## Prerequisites
-
-- [x] **The host boots unattended** with both drives on USB 3 — EEPROM exclusion
-      plus U-Boot 2026.04, done 2026-08-09.
-- [x] **Music is copied off the M.2** — 92 GB to the `backups` disk, verified.
-      That was the only irreplaceable data on the disk with 2233 checksum
-      failures; everything else there is regenerable service state.
-- [ ] **A scrub has run** on both the M.2 and the media disk. 4.6 TB should not
-      be reflinked into a new subvolume on the assumption it is intact, and the
-      2233 errors on the M.2 are still unexplained — cumulative, undated, and
-      never verified. At 183 MB/s this is now affordable.
-
-## Known trade
-
-`tv`, `movies` and `photos` stop being subvolumes and become plain directories,
-so per-library btrfs snapshots are no longer possible — `srv` would be
-snapshotted as a whole. Nothing snapshots them today.
+`stat` a freshly imported episode in staging and library: same inode, link
+count 2. If it is still copying, that shows up immediately rather than in three
+weeks.
