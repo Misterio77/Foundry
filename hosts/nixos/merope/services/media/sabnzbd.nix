@@ -43,7 +43,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 150
+      connections = 30
       priority = 0
       [[frugal-secondary]]
       enable = 1
@@ -54,7 +54,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 75
+      connections = 15
       priority = 0
       [[frugal-bonus]]
       enable = 1
@@ -65,7 +65,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 50
+      connections = 10
       priority = 1
       [[eweka]]
       enable = 1
@@ -76,7 +76,7 @@
       port = 563
       username = 043b11d25e1d9f6f
       password = ${config.sops.placeholder.eweka-key}
-      connections = 50
+      connections = 10
       priority = 2
       [[blocknews]]
       enable = 1
@@ -87,7 +87,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 50
+      connections = 10
       priority = 3
       [[blocknews-secondary]]
       enable = 1
@@ -98,7 +98,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 50
+      connections = 10
       priority = 3
     '';
     owner = config.services.sabnzbd.user;
