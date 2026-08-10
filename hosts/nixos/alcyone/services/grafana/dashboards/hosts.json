@@ -511,7 +511,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "exemplar": false,
-                        "expr": "1 - rate(node_cpu_seconds_total{mode=\"idle\",instance=\"$hosts\"}[1m])",
+                        "expr": "1 - rate(node_cpu_seconds_total{mode=\"idle\",instance=\"$hosts\"}[$__rate_interval])",
                         "instant": false,
                         "legendFormat": "{{cpu}}",
                         "range": true
@@ -899,7 +899,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(node_network_receive_bytes_total{instance=\"$hosts\"}[1m])",
+                        "expr": "rate(node_network_receive_bytes_total{instance=\"$hosts\"}[$__rate_interval])",
                         "legendFormat": "{{device}}",
                         "range": true
                       },
@@ -1010,7 +1010,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(node_network_transmit_bytes_total{instance=\"$hosts\"}[1m])",
+                        "expr": "rate(node_network_transmit_bytes_total{instance=\"$hosts\"}[$__rate_interval])",
                         "legendFormat": "{{device}}",
                         "range": true
                       },
