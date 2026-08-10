@@ -899,7 +899,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(node_network_receive_bytes_total{instance=\"$hosts\"}[$__rate_interval])",
+                        "expr": "rate(node_network_receive_bytes_total{instance=\"$hosts\"}[$__rate_interval]) * 8",
                         "legendFormat": "{{device}}",
                         "range": true
                       },
@@ -972,7 +972,7 @@
                       }
                     ]
                   },
-                  "unit": "Bps"
+                  "unit": "bps"
                 },
                 "overrides": []
               },
@@ -1010,7 +1010,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "rate(node_network_transmit_bytes_total{instance=\"$hosts\"}[$__rate_interval])",
+                        "expr": "rate(node_network_transmit_bytes_total{instance=\"$hosts\"}[$__rate_interval]) * 8",
                         "legendFormat": "{{device}}",
                         "range": true
                       },
@@ -1083,7 +1083,7 @@
                       }
                     ]
                   },
-                  "unit": "Bps"
+                  "unit": "bps"
                 },
                 "overrides": []
               },
