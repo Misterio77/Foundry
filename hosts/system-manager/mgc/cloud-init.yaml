@@ -2,17 +2,8 @@
 hostname: mgc
 manage_etc_hosts: true
 
-users:
-  - name: gabriel
-    gecos: Gabriel Fontes
-    groups:
-      - adm
-      - sudo
-    shell: /bin/bash
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: true
-    ssh_import_id:
-      - gh:misterio77
+# The Ubuntu installer creates gabriel with an interactive password.
+users: []
 
 package_update: true
 package_upgrade: false
@@ -39,6 +30,13 @@ packages:
   - wpasupplicant
 
 runcmd:
+  # This laptop must not expose an SSH server. Keep the client for Git and
+  # ssh-keygen, but remove and mask the server even if the image included it.
+  - |
+    systemctl disable --now ssh.service ssh.socket 2>/dev/null || true
+    DEBIAN_FRONTEND=noninteractive apt-get purge --yes openssh-server
+    systemctl mask ssh.service ssh.socket
+
   # sops-nix derives this machine's age identity from its SSH host key.
   - ssh-keygen -A
 
