@@ -46,20 +46,19 @@ autoinstall:
       # sops-nix derives this machine's age identity from its SSH host key.
       - ssh-keygen -A
 
-      # Install upstream multi-user Nix as the target user. System Manager will
-      # persist flake support in nix.conf during its first activation.
+      # Cloud-init runs as root, which lets the multi-user installer create its
+      # build users without prompting for sudo. System Manager persists flakes.
       - |
         if [ ! -x /nix/var/nix/profiles/default/bin/nix ]; then
-          sudo --user=gabriel --set-home sh -c \
-            "curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location https://nixos.org/nix/install | sh -s -- --daemon"
+          curl --proto '=https' --tlsv1.2 --fail --show-error --silent --location \
+            https://nixos.org/nix/install | sh -s -- --daemon
         fi
 
       # Bootstrap directly from Foundry without leaving a checkout behind.
       # Secret installation may fail until the host's age recipient is added.
       - |
         config=$(
-          sudo --user=gabriel --set-home \
-            env NIX_CONFIG='experimental-features = nix-command flakes' \
+          env NIX_CONFIG='experimental-features = nix-command flakes' \
             /nix/var/nix/profiles/default/bin/nix build \
               --accept-flake-config --no-link --print-out-paths \
               github:misterio77/foundry#systemConfigs.mgc
