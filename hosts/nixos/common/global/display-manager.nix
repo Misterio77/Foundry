@@ -11,7 +11,7 @@
     seatd.enable = true;
     greetd = {
       enable = true;
-      settings.default_session.command = lib.mkOverride 1499 "${pkgs.tuigreet}/bin/tuigreet --time --asterisks --remember --cmd \\$SHELL";
+      settings.default_session.command = lib.mkOverride 1499 "${pkgs.tuigreet}/bin/tuigreet --time --asterisks --remember --cmd $SHELL";
     };
     displayManager = {
       enable = true;
