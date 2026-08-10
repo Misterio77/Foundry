@@ -16,6 +16,7 @@ in {
         admin_dir = "${sabnzbdDir}/sabnzbd/admin";
         backup_dir = "${sabnzbdDir}/sabnzbd/backup";
         permissions = 770;
+        cache_limit = "1G";
       };
       categories = {
         music.name = "music";
