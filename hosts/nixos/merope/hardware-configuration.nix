@@ -1,4 +1,4 @@
-{inputs, config, pkgs, ...}: {
+{inputs, config, pkgs, lib, ...}: {
   imports = [
     ../common/optional/ephemeral-btrfs.nix
     inputs.disko.nixosModules.disko
@@ -126,6 +126,7 @@
     };
   };
 
+  fileSystems."/firmware".neededForBoot = lib.mkDefault true;
   hardware.raspberry-pi = {
     configtxt.settings.all.avoid_warnings = true;
     firmware = {
