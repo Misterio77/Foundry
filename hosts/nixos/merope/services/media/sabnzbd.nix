@@ -17,6 +17,7 @@
       admin_dir = /var/lib/sabnzbd/admin
       backup_dir = /var/lib/sabnzbd/backup
       permissions = 770
+      pause_on_post_processing = 1
 
       [categories]
       [[music]]
@@ -43,7 +44,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 30
+      connections = 150
       priority = 0
       [[frugal-secondary]]
       enable = 1
@@ -54,7 +55,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 15
+      connections = 75
       priority = 0
       [[frugal-bonus]]
       enable = 1
@@ -65,7 +66,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.frugalusenet-key}
-      connections = 10
+      connections = 50
       priority = 1
       [[eweka]]
       enable = 1
@@ -76,7 +77,7 @@
       port = 563
       username = 043b11d25e1d9f6f
       password = ${config.sops.placeholder.eweka-key}
-      connections = 10
+      connections = 50
       priority = 2
       [[blocknews]]
       enable = 1
@@ -87,7 +88,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 10
+      connections = 50
       priority = 3
       [[blocknews-secondary]]
       enable = 1
@@ -98,7 +99,7 @@
       port = 563
       username = misterio
       password = ${config.sops.placeholder.blocknews-key}
-      connections = 10
+      connections = 50
       priority = 3
     '';
     owner = config.services.sabnzbd.user;
