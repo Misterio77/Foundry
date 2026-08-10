@@ -6,5 +6,6 @@
 
     ./media
     ./immich.nix
+    ./speedtest.nix
   ];
 }
