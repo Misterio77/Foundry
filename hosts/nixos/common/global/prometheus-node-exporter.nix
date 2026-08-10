@@ -3,6 +3,9 @@
     node = {
       enable = true;
       enabledCollectors = ["systemd"];
+      extraFlags = [
+        "--collector.diskstats.device-exclude=^(z?ram|loop|fd)[0-9]+$"
+      ];
     };
     nix-registry.enable = true;
   };
