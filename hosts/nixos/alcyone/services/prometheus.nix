@@ -53,19 +53,6 @@ in {
           ];
         }
         {
-          job_name = "speedtest";
-          scrape_interval = "5m";
-          scrape_timeout = "60s";
-          static_configs = [
-            {
-              targets = [
-                "merope:${toString outputs.nixosConfigurations.merope.config.services.prometheus.exporters.speedtest.port}"
-              ];
-              labels.instance = "merope";
-            }
-          ];
-        }
-        {
           job_name = "hosts";
           scheme = "http";
           static_configs =
