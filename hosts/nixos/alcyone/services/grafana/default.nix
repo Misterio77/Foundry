@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   sops.secrets = {
     grafana-gabriel-password = {
       sopsFile = ../../secrets.yaml;
@@ -22,6 +26,7 @@
         server.http_port = 3000;
         users.default_theme = "system";
         dashboards.default_home_dashboard_path = "${./dashboards}/hosts.json";
+        feature_toggles.enable = "dashboardSectionVariables";
         security = {
           admin_user = "gabriel";
           admin_email = "hi@m7.rs";
@@ -42,164 +47,180 @@
       };
       provision = {
         enable = true;
-        dashboards.settings.providers = [{
-          options.path = ./dashboards;
-        }];
+        dashboards.settings.providers = [
+          {
+            options.path = ./dashboards;
+          }
+        ];
         datasources.settings = {
           apiVersion = 1;
-          datasources = [{
-            name = "Prometheus";
-            type = "prometheus";
-            access = "proxy";
-            url = "https://metrics.m7.rs";
-            uid = "prometheus-default";
-            isDefault = true;
-          }];
+          datasources = [
+            {
+              name = "Prometheus";
+              type = "prometheus";
+              access = "proxy";
+              url = "https://metrics.m7.rs";
+              uid = "prometheus-default";
+              isDefault = true;
+            }
+          ];
         };
         alerting = {
           contactPoints.settings = {
             apiVersion = 1;
-            contactPoints = [{
-              name = "default";
-              receivers = [{
-                uid = "alerts-email";
-                type = "email";
-                settings.addresses = "<alerts@m7.rs>";
-              }];
-            }];
+            contactPoints = [
+              {
+                name = "default";
+                receivers = [
+                  {
+                    uid = "alerts-email";
+                    type = "email";
+                    settings.addresses = "<alerts@m7.rs>";
+                  }
+                ];
+              }
+            ];
           };
           policies.settings = {
             apiVersion = 1;
-            policies = [{
-              receiver = "default";
-              group_wait = "10s"; # Time to wait for others in group before sending (for batching)
-              group_interval = "1m"; # Time to wait before sending update about changes in the same group
-              repeat_interval = "4h"; # Time to wait before re-emiting notifications already sent
-            }];
+            policies = [
+              {
+                receiver = "default";
+                group_wait = "10s"; # Time to wait for others in group before sending (for batching)
+                group_interval = "1m"; # Time to wait before sending update about changes in the same group
+                repeat_interval = "4h"; # Time to wait before re-emiting notifications already sent
+              }
+            ];
           };
           rules.settings = {
             apiVersion = 1;
-            groups = [{
-              name = "default";
-              folder = "alerts";
-              interval = "30s"; # Interval to check rules
-              orgId = 1;
-              rules = [
-                {
-                  title = "Low disk";
-                  uid = "low-disk-alert";
-                  notification_settings.receiver = "default";
-                  annotations = {
-                    summary = "{{ $labels.instance }} is low on storage";
-                    description = "{{ $labels.label }} at {{ $labels.instance }} is below 10% capacity.";
-                  };
-                  condition = "B";
-                  execErrState = "KeepLast";
-                  noDataState = "KeepLast";
-                  data = [
-                    {
-                      refId = "A";
-                      datasourceUid = "prometheus-default";
-                      model = {
+            groups = [
+              {
+                name = "default";
+                folder = "alerts";
+                interval = "30s"; # Interval to check rules
+                orgId = 1;
+                rules = [
+                  {
+                    title = "Low disk";
+                    uid = "low-disk-alert";
+                    notification_settings.receiver = "default";
+                    annotations = {
+                      summary = "{{ $labels.instance }} is low on storage";
+                      description = "{{ $labels.label }} at {{ $labels.instance }} is below 10% capacity.";
+                    };
+                    condition = "B";
+                    execErrState = "KeepLast";
+                    noDataState = "KeepLast";
+                    data = [
+                      {
                         refId = "A";
-                        intervalMs = 1000;
-                        expr = "sum by (job, instance, uuid) (node_btrfs_used_bytes) / sum by (job, instance, uuid) (node_btrfs_device_size_bytes) * on(uuid) group_left(label) node_btrfs_info";
-                        instant = true;
-                        range = false;
-                        legendFormat = "__auto";
-                        maxDataPoints = 43200;
-                      };
-                      relativeTimeRange = {
-                        from = 600;
-                        to = 0;
-                      };
-                    }
-                    {
-                      refId = "B";
-                      datasourceUid = "__expr__";
-                      model = {
-                        refId = "B";
-                        intervalMs = 1000;
-                        maxDataPoints = 43200;
-                        type = "threshold";
-                        expression = "A";
-                        datasource = {
-                          type = "__expr__";
-                          uid = "__expr__";
+                        datasourceUid = "prometheus-default";
+                        model = {
+                          refId = "A";
+                          intervalMs = 1000;
+                          expr = "sum by (job, instance, uuid) (node_btrfs_used_bytes) / sum by (job, instance, uuid) (node_btrfs_device_size_bytes) * on(uuid) group_left(label) node_btrfs_info";
+                          instant = true;
+                          range = false;
+                          legendFormat = "__auto";
+                          maxDataPoints = 43200;
                         };
-                        conditions = [{
-                          type = "query";
-                          query.params = ["B"];
-                          evaluator = {
-                            type = "gt";
-                            params = [ 0.9 ];
+                        relativeTimeRange = {
+                          from = 600;
+                          to = 0;
+                        };
+                      }
+                      {
+                        refId = "B";
+                        datasourceUid = "__expr__";
+                        model = {
+                          refId = "B";
+                          intervalMs = 1000;
+                          maxDataPoints = 43200;
+                          type = "threshold";
+                          expression = "A";
+                          datasource = {
+                            type = "__expr__";
+                            uid = "__expr__";
                           };
-                          operator.type = "and";
-                          reducer.type = "last";
-                        }];
-                      };
-                    }
-                  ];
-                }
-                {
-                  title = "Service down";
-                  uid = "service-down";
-                  notification_settings.receiver = "default";
-                  annotations = {
-                    summary = "{{ $labels.instance }} down";
-                    description = "{{ $labels.instance }} ({{ $labels.job }}) is not reachable.";
-                  };
-                  condition = "B";
-                  execErrState = "KeepLast";
-                  noDataState = "KeepLast";
-                  for = "1m"; # Higher than 'interval' (30s), to avoid blips generating notifications
-                  data = [
-                    {
-                      refId = "A";
-                      datasourceUid = "prometheus-default";
-                      model = {
+                          conditions = [
+                            {
+                              type = "query";
+                              query.params = ["B"];
+                              evaluator = {
+                                type = "gt";
+                                params = [0.9];
+                              };
+                              operator.type = "and";
+                              reducer.type = "last";
+                            }
+                          ];
+                        };
+                      }
+                    ];
+                  }
+                  {
+                    title = "Service down";
+                    uid = "service-down";
+                    notification_settings.receiver = "default";
+                    annotations = {
+                      summary = "{{ $labels.instance }} down";
+                      description = "{{ $labels.instance }} ({{ $labels.job }}) is not reachable.";
+                    };
+                    condition = "B";
+                    execErrState = "KeepLast";
+                    noDataState = "KeepLast";
+                    for = "1m"; # Higher than 'interval' (30s), to avoid blips generating notifications
+                    data = [
+                      {
                         refId = "A";
-                        intervalMs = 1000;
-                        expr = "up{job!=\"hosts\"}"; # Hosts can be down sometimes, but not services
-                        instant = true;
-                        range = false;
-                        legendFormat = "__auto";
-                        maxDataPoints = 43200;
-                      };
-                      relativeTimeRange = {
-                        from = 600;
-                        to = 0;
-                      };
-                    }
-                    {
-                      refId = "B";
-                      datasourceUid = "__expr__";
-                      model = {
-                        refId = "B";
-                        intervalMs = 1000;
-                        maxDataPoints = 43200;
-                        type = "threshold";
-                        expression = "A";
-                        datasource = {
-                          type = "__expr__";
-                          uid = "__expr__";
+                        datasourceUid = "prometheus-default";
+                        model = {
+                          refId = "A";
+                          intervalMs = 1000;
+                          expr = "up{job!=\"hosts\"}"; # Hosts can be down sometimes, but not services
+                          instant = true;
+                          range = false;
+                          legendFormat = "__auto";
+                          maxDataPoints = 43200;
                         };
-                        conditions = [{
-                          type = "query";
-                          query.params = ["B"];
-                          evaluator = {
-                            type = "ne";
-                            params = [ 1 ];
+                        relativeTimeRange = {
+                          from = 600;
+                          to = 0;
+                        };
+                      }
+                      {
+                        refId = "B";
+                        datasourceUid = "__expr__";
+                        model = {
+                          refId = "B";
+                          intervalMs = 1000;
+                          maxDataPoints = 43200;
+                          type = "threshold";
+                          expression = "A";
+                          datasource = {
+                            type = "__expr__";
+                            uid = "__expr__";
                           };
-                          operator.type = "and";
-                          reducer.type = "last";
-                        }];
-                      };
-                    }
-                  ];
-                }
-              ];
-            }];
+                          conditions = [
+                            {
+                              type = "query";
+                              query.params = ["B"];
+                              evaluator = {
+                                type = "ne";
+                                params = [1];
+                              };
+                              operator.type = "and";
+                              reducer.type = "last";
+                            }
+                          ];
+                        };
+                      }
+                    ];
+                  }
+                ];
+              }
+            ];
           };
         };
       };
