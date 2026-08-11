@@ -36,7 +36,6 @@ in {
           username = "misterio";
           connections = 30;
           priority = 0;
-          timeout = 20;
         };
         frugal-secondary = {
           enable = true;
@@ -49,7 +48,6 @@ in {
           username = "misterio";
           connections = 15;
           priority = 0;
-          timeout = 20;
         };
         frugal-bonus = {
           enable = true;
@@ -62,7 +60,6 @@ in {
           username = "misterio";
           connections = 10;
           priority = 1;
-          timeout = 20;
         };
         eweka = {
           enable = true;
@@ -76,7 +73,6 @@ in {
           password = "@eweka-key";
           connections = 10;
           priority = 2;
-          timeout = 20;
         };
         blocknews = {
           enable = true;
@@ -89,7 +85,6 @@ in {
           username = "misterio";
           connections = 10;
           priority = 3;
-          timeout = 20;
         };
         blocknews-secondary = {
           enable = true;
@@ -102,7 +97,6 @@ in {
           username = "misterio";
           connections = 10;
           priority = 3;
-          timeout = 20;
         };
       };
     };
