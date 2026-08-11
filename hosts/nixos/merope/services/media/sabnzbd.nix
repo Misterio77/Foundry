@@ -12,9 +12,9 @@ in {
         inet_exposure = 2;
         download_dir = "/srv/media/incoming/usenet/downloading";
         complete_dir = "/srv/media/incoming/usenet/completed";
-        log_dir = "${sabnzbdDir}/sabnzbd/logs";
-        admin_dir = "${sabnzbdDir}/sabnzbd/admin";
-        backup_dir = "${sabnzbdDir}/sabnzbd/backup";
+        log_dir = "${sabnzbdDir}/logs";
+        admin_dir = "${sabnzbdDir}/admin";
+        backup_dir = "${sabnzbdDir}/backup";
         permissions = 770;
         cache_limit = "1G";
         # Six servers x three rounds is a lot of round trips to spend before
