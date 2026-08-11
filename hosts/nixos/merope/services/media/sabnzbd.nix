@@ -134,6 +134,9 @@ in {
   };
 
   systemd.services.sabnzbd.serviceConfig = {
+    # A SIGTERM'd sabnzbd saves its queue and exits 0, so `on-failure` would
+    # leave it dead after an out-of-memory kill
+    Restart = "always";
     # Yield to playback and library scans; par2/unrar inherit this as children
     CPUWeight = 20;
     IOWeight = 20;
