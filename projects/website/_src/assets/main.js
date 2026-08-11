@@ -2,79 +2,88 @@
 layout: null
 ---
 
-function setCookie(name,value,days) {
+var schemes = {{ site.data.colorscheme.schemes | jsonify }};
+var schemeNames = Object.keys(schemes).filter(function (name) {
+    return name !== "print";
+});
+var chosenSchemeStyle = null;
+
+function setCookie(name, value, days) {
     var expires = "";
     if (days) {
-        if (days < 0) {
-            expires = "; Expires=Thu, 01 Jan 1970 00:00:01 GMT"
-        } else {
-            var date = new Date();
-            date.setTime(date.getTime() + (days*24*60*60*1000));
-            expires = "; Expires=" + date.toUTCString();
-        }
+        var date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; Expires=" + date.toUTCString();
     }
-    document.cookie = name + "=" + (value || "")  + expires + "; Path=/";
+    document.cookie = name + "=" + encodeURIComponent(value) + expires + "; Path=/; SameSite=Lax";
 }
+
 function getCookie(name) {
-    var nameEQ = name + "=";
-    var ca = document.cookie.split(';');
-    for(var i=0;i < ca.length;i++) {
-        var c = ca[i];
-        while (c.charAt(0)==' ') c = c.substring(1,c.length);
-        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    var prefix = name + "=";
+    var cookies = document.cookie.split(";");
+    for (var i = 0; i < cookies.length; i++) {
+        var cookie = cookies[i].trim();
+        if (cookie.indexOf(prefix) === 0) {
+            return decodeURIComponent(cookie.substring(prefix.length));
+        }
     }
     return null;
 }
+
 function eraseCookie(name) {
-    setCookie(name, "", -1);
+    document.cookie = name + "=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; SameSite=Lax";
 }
 
-var schemes = {{ site.data.colorscheme.schemes | jsonify }};
-var chosen_scheme_style = null;
-
-// Set a given scheme
-function setTheme(scheme) {
+function setTheme(scheme, persist) {
     var colors = schemes[scheme];
-    if (!colors) return;
+    if (!colors || scheme === "print") return;
 
-    if (!chosen_scheme_style) {
-        chosen_scheme_style = document.createElement("style");
-        chosen_scheme_style.id = "theme-css";
-        document.head.appendChild(chosen_scheme_style);
+    if (!chosenSchemeStyle) {
+        chosenSchemeStyle = document.createElement("style");
+        chosenSchemeStyle.id = "theme-css";
+        document.head.appendChild(chosenSchemeStyle);
     }
+
     var css = ":root {\n";
     for (var key in colors) {
-        if (colors.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(colors, key)) {
             css += "  --" + key + ": " + colors[key] + ";\n";
         }
     }
     css += "}";
-    chosen_scheme_style.textContent = css;
-    setCookie("fontes_theme", scheme);
+    chosenSchemeStyle.textContent = css;
+
+    var picker = document.getElementById("scheme-select");
+    if (picker) picker.value = scheme;
+    if (persist !== false) setCookie("fontes_theme", scheme, 365);
 }
 
-// Get currently applied scheme
 function getTheme() {
     var theme = getCookie("fontes_theme");
-
-    if (theme != "null") {
-        return theme;
-    } else {
-        return null;
-    }
+    return schemeNames.indexOf(theme) >= 0 ? theme : null;
 }
 
-// Reset scheme to default
 function resetTheme() {
-    if (chosen_scheme_style) {
-        chosen_scheme_style.remove();
-        chosen_scheme_style = null;
+    if (chosenSchemeStyle) {
+        chosenSchemeStyle.remove();
+        chosenSchemeStyle = null;
     }
     eraseCookie("fontes_theme");
+
+    var picker = document.getElementById("scheme-select");
+    if (picker) picker.value = "{{ site.default_scheme }}";
 }
 
-// Get stored scheme from cookies and reapply it
-var stored = getTheme();
-if (stored) {
-    setTheme(stored);
-}
+var storedTheme = getTheme();
+if (storedTheme) setTheme(storedTheme, false);
+
+document.addEventListener("DOMContentLoaded", function () {
+    var picker = document.getElementById("scheme-select");
+    if (!picker) return;
+
+    picker.parentElement.hidden = false;
+    picker.value = storedTheme || "{{ site.default_scheme }}";
+    picker.addEventListener("change", function () {
+        setTheme(picker.value);
+    });
+});

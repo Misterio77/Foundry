@@ -9,13 +9,16 @@ permalink: /blog/
 {% for post in site.posts %}
   <article>
     <header>
-      <h2><a href="{{ post.url }}">{{ post.title }}</a> ({{ post.language }})</h2>
+      <p>
+        <time datetime="{{ post.date | date_to_xmlschema }}">
+          {{ post.date | date_to_long_string: "ordinal" }}
+        </time>
+        <small>({{ post.language }})</small>
+      </p>
+      <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
     </header>
-    <p>
-      <time datetime="{{ post.date | date_to_xmlschema }}">
-        {{ post.date | date_to_long_string: "ordinal" }}
-      </time>
-    </p>
-    <p>{{ post.excerpt | strip_html }}</p>
+    <section>
+      <p>{{ post.excerpt | strip_html }}</p>
+    </section>
   </article>
 {% endfor %}

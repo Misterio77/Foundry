@@ -1,7 +1,3 @@
-- label: Change colorscheme
-  class: colorscheme
-  link: /colorscheme/
-
 - text: about
   link: /
 - text: blog

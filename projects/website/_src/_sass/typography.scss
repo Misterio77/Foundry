@@ -1,99 +1,48 @@
-@font-face {
-  font-family: 'Fira Sans';
-  font-style: normal;
-  font-weight: normal;
-  src: url('/assets/FiraSans/Regular.woff2') format('woff2');
+@mixin font-face($family, $file, $style: normal, $weight: 400) {
+  @font-face {
+    font-family: $family;
+    font-style: $style;
+    font-weight: $weight;
+    src: url("/assets/#{$file}.woff2") format("woff2");
+  }
 }
 
-@font-face {
-  font-family: 'Fira Sans';
-  font-style: italic;
-  font-weight: normal;
-  src: url('/assets/FiraSans/Italic.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Fira Sans';
-  font-style: normal;
-  font-weight: bold;
-  src: url('/assets/FiraSans/Bold.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Fira Sans';
-  font-style: italic;
-  font-weight: bold;
-  src: url('/assets/FiraSans/BoldItalic.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Fira Code';
-  font-style: normal;
-  font-weight: normal;
-  src: url('/assets/FiraCode/Regular.woff2') format('woff2');
-}
+@include font-face("Fira Sans", "FiraSans/Regular");
+@include font-face("Fira Sans", "FiraSans/Italic", italic);
+@include font-face("Fira Sans", "FiraSans/Bold", normal, 700);
+@include font-face("Fira Sans", "FiraSans/BoldItalic", italic, 700);
+@include font-face("Fira Code", "FiraCode/Regular");
+@include font-face("Fira Sans Condensed", "FiraSansCondensed/SemiBold", normal, 600);
 
 body {
-  font-family: "Fira Sans", sans-serif;
+  font-family: "Fira Sans", system-ui, sans-serif;
 }
 
-// Code font
-code {
+code,
+kbd,
+pre,
+samp {
   font-family: "Fira Code", monospace;
-  font-size: .90em;
 }
 
-// Site logo
-.title {
-  // Name itself
-  a {
-    color: var(--primary);
-    text-decoration: none;
-  }
-  // Decorations around
-  color: var(--text-muted);
-  &:hover {
-    color: var(--orange);
-  }
-
-  font-size: 2.2em;
+h1,
+h2 {
+  font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
   font-weight: 600;
-  @media(max-width: 325px) {
-    font-size: 2em;
-  }
 }
 
-// Headings
 h1 {
-  font-size: 2em;
-  font-style: italic;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
+  font-size: clamp(2.65rem, 4.25vw, 3.8rem);
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+
   &::before {
+    color: var(--primary);
     content: "> ";
   }
-}
-h2 {
-  font-size: 1.9em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-h3 {
-  font-size: 1.6em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-h4 {
-  font-size: 1.3em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-h5 {
-  font-size: 1.1em;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-h6 {
-  font-size: 1em;
-  margin-top: 1em;
+
+  &::after {
+    color: var(--text-muted);
+    content: "_";
+  }
 }
