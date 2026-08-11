@@ -17,6 +17,9 @@ in {
         backup_dir = "${sabnzbdDir}/sabnzbd/backup";
         permissions = 770;
         cache_limit = "1G";
+        # Six servers x three rounds is a lot of round trips to spend before
+        # concluding an article is gone; two rounds is enough
+        max_art_tries = 2;
       };
       categories = {
         music.name = "music";
@@ -33,6 +36,7 @@ in {
           username = "misterio";
           connections = 30;
           priority = 0;
+          timeout = 20;
         };
         frugal-secondary = {
           enable = true;
@@ -45,6 +49,7 @@ in {
           username = "misterio";
           connections = 15;
           priority = 0;
+          timeout = 20;
         };
         frugal-bonus = {
           enable = true;
@@ -57,6 +62,7 @@ in {
           username = "misterio";
           connections = 10;
           priority = 1;
+          timeout = 20;
         };
         eweka = {
           enable = true;
@@ -70,6 +76,7 @@ in {
           password = "@eweka-key";
           connections = 10;
           priority = 2;
+          timeout = 20;
         };
         blocknews = {
           enable = true;
@@ -82,6 +89,7 @@ in {
           username = "misterio";
           connections = 10;
           priority = 3;
+          timeout = 20;
         };
         blocknews-secondary = {
           enable = true;
@@ -94,6 +102,7 @@ in {
           username = "misterio";
           connections = 10;
           priority = 3;
+          timeout = 20;
         };
       };
     };
