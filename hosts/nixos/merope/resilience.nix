@@ -39,13 +39,22 @@
     ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/scheduler}="bfq"
   '';
 
-  # Userspace last resort. Note this would NOT have caught the 2026-08-07 stall,
-  # which was I/O starvation rather than memory exhaustion; it covers the
-  # adjacent case where something genuinely runs away with RAM and the kernel
-  # OOM killer engages too late to keep the box reachable.
-  services.earlyoom = {
-    enable = true;
-    freeMemThreshold = 5;
-    freeSwapThreshold = 5;
-  };
+  # Userspace last resort, replacing earlyoom after the 2026-08-11 swap
+  # exhaustion. earlyoom only acts when available memory AND free swap are both
+  # under their thresholds: swap crossed 5% at 02:14 but RAM did not until
+  # 06:10, so it watched the swapfile drain to zero for four hours. It then sent
+  # 88 SIGTERMs without landing a kill -- its SIGKILL escalation is gated at
+  # half the threshold (2.5%) and RAM bottomed out at 4.74%, while sabnzbd's
+  # graceful shutdown took 12 minutes to finish under thrash.
+  #
+  # systemd-oomd acts on PSI stall time, which does not distinguish waiting on
+  # reclaim from waiting on swap I/O, and it SIGKILLs the cgroup outright.
+  # Candidates are ranked by reclaim activity, so a service merely holding cold
+  # pages in swap (jellyfin sits on ~1.2G of them) is picked last rather than
+  # first -- which is what ranking by swap usage would have done.
+  #
+  # Set here rather than via systemd.oomd.enableSystemSlice, which hardcodes
+  # ManagedOOMSwap=kill. oomd.conf defaults apply: act once the slice is fully
+  # stalled for 60% of a 10s window, sustained over 30s.
+  systemd.slices.system.sliceConfig.ManagedOOMMemoryPressure = "kill";
 }
