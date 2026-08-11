@@ -130,8 +130,13 @@ in {
     mode = "0770"; # So that others in the group (e.g. *arr) can move/hardlink completed files
   };
 
-  # If memory spikes, prioritize reclaiming from its own page caches
-  systemd.services.sabnzbd.serviceConfig.MemoryHigh = "4G";
+  systemd.services.sabnzbd.serviceConfig = {
+    # Yield to playback and library scans; par2/unrar inherit this as children
+    CPUWeight = 20;
+    IOWeight = 20;
+    # If memory spikes, prioritize reclaiming from its own page caches
+    MemoryHigh = "4G";
+  };
 
   sops.secrets = {
     sabnzbd-key.sopsFile = ../../secrets.yaml;
