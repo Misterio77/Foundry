@@ -234,6 +234,8 @@ in {
     };
     extraConfig = ''
       c.tabs.padding = {"bottom": 10, "left": 10, "right": 10, "top": 10}
+      # Let Jagex hand authentication back to the rshub URL handler.
+      config.set("content.unknown_url_scheme_policy", "allow-all", "https://account.jagex.com/*/launcher/successful-login*")
     '';
   };
 }

@@ -8,12 +8,11 @@
   stdenvNoCC,
   symlinkJoin,
 }: let
-  python = python3.withPackages (ps: [ps.requests]);
   desktopItem = makeDesktopItem {
     name = "jagex-auth-handler";
     desktopName = "Jagex Auth URL Handler";
     exec = "jagex-auth handle-url %u";
-    mimeTypes = ["x-scheme-handler/jagex"];
+    mimeTypes = ["x-scheme-handler/rshub"];
     noDisplay = true;
   };
 in
@@ -34,7 +33,7 @@ in
       runHook preInstall
 
       install -Dm644 $src $out/share/jagex-auth/jagex-auth.py
-      makeWrapper ${lib.getExe python} $out/bin/jagex-auth \
+      makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
         --add-flags $out/share/jagex-auth/jagex-auth.py \
 
       runHook postInstall
@@ -58,7 +57,7 @@ in
       };
 
     meta = {
-      description = "Small CLI for Jagex launcher OAuth tokens";
+      description = "Authenticate RuneScape clients with a Jagex account";
       mainProgram = "jagex-auth";
       license = lib.licenses.mit;
       platforms = lib.platforms.linux;

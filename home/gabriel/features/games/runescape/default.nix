@@ -15,7 +15,7 @@ in {
 
   xdg.mimeApps.defaultApplications = {
     "x-scheme-handler/alt1" = "alt1lite.desktop";
-    "x-scheme-handler/jagex" = "jagex-auth-handler.desktop";
+    "x-scheme-handler/rshub" = "jagex-auth-handler.desktop";
   };
 
   home.persistence = {
