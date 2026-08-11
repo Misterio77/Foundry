@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import secrets
+import select
 import stat
 import sys
 import time
@@ -84,31 +85,63 @@ def open_browser(url: str) -> None:
         print(f"Open this URL manually:\n{url}", file=sys.stderr)
 
 
-def callback_params(url: str) -> dict[str, str]:
-    parsed = urllib.parse.urlparse(url.strip())
-    if (
-        parsed.scheme != "rshub"
-        or parsed.netloc != "auth"
-        or parsed.path != "/callback"
-    ):
-        raise SystemExit("Invalid Jagex authentication callback URL")
-    return {
+def is_handler_callback(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    return (
+        parsed.scheme == "rshub"
+        and parsed.netloc == "auth"
+        and parsed.path == "/callback"
+    )
+
+
+def authentication_params(value: str, expected_state: str) -> dict[str, str]:
+    value = value.strip()
+    if value.count(".") == 2 and "://" not in value:
+        return {"id_token": value}
+
+    parsed = urllib.parse.urlparse(value)
+    is_success_page = (
+        parsed.scheme == "https"
+        and parsed.netloc == "account.jagex.com"
+        and parsed.path.endswith("/launcher/successful-login")
+    )
+    if not is_handler_callback(value) and not is_success_page:
+        raise SystemExit("Invalid Jagex authentication response")
+    params = {
         key: values[0]
         for key, values in urllib.parse.parse_qs(parsed.fragment).items()
         if values
     }
+    if params.get("state") != expected_state:
+        raise SystemExit("OAuth state mismatch")
+    return params
 
 
-def wait_for_callback() -> str:
-    print("Waiting for the browser callback...", file=sys.stderr)
+def wait_for_authentication() -> str:
+    print(
+        "Waiting for the browser callback. You can also paste the successful-login "
+        "URL or ID token:",
+        file=sys.stderr,
+    )
+    watch_stdin = True
     while True:
         try:
             callback = CALLBACK_FILE.read_text().strip()
         except FileNotFoundError:
+            pass
+        else:
+            CALLBACK_FILE.unlink(missing_ok=True)
+            return callback
+
+        if watch_stdin:
+            readable, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if readable:
+                line = sys.stdin.readline()
+                if line:
+                    return line.strip()
+                watch_stdin = False
+        else:
             time.sleep(0.1)
-            continue
-        CALLBACK_FILE.unlink(missing_ok=True)
-        return callback
 
 
 def decode_jwt_payload(token: str) -> dict:
@@ -195,12 +228,10 @@ def authorize(_args: argparse.Namespace) -> None:
     print("Opening Jagex login in your browser.", file=sys.stderr)
     open_browser(make_auth_url(state, nonce))
 
-    params = callback_params(wait_for_callback())
-    if params.get("state") != state:
-        raise SystemExit("OAuth state mismatch")
+    params = authentication_params(wait_for_authentication(), state)
     id_token = params.get("id_token")
     if not id_token:
-        raise SystemExit("Jagex callback did not contain an ID token")
+        raise SystemExit("Jagex authentication response did not contain an ID token")
 
     payload = decode_jwt_payload(id_token)
     if payload.get("nonce") != nonce:
@@ -218,7 +249,8 @@ def authorize(_args: argparse.Namespace) -> None:
 
 
 def handle_url(args: argparse.Namespace) -> None:
-    callback_params(args.url)
+    if not is_handler_callback(args.url):
+        raise SystemExit("Invalid Jagex authentication callback URL")
     ensure_data_dir()
     temporary = CALLBACK_FILE.with_suffix(".tmp")
     temporary.write_text(args.url + "\n")
