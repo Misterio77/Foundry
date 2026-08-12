@@ -309,12 +309,14 @@ a {
   text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.14em;
-  transition: color 130ms linear, text-shadow 130ms linear;
+  transition: color 130ms linear, text-decoration-color 130ms linear, text-decoration-thickness 130ms linear, text-underline-offset 130ms ease-out;
 
   &:hover,
   &:focus-visible {
     color: var(--primary);
-    text-shadow: 0 0 0.7rem color-mix(in srgb, currentColor 55%, transparent);
+    text-decoration-color: var(--primary);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.2em;
   }
 
   &:focus-visible {
@@ -436,11 +438,10 @@ body > header {
     font-weight: 600;
     letter-spacing: 0.015em;
     text-decoration: none;
-    transition: color 130ms linear, text-shadow 130ms linear, transform 130ms ease-out;
+    transition: color 130ms linear, transform 130ms ease-out;
 
     &:hover,
     &:focus-visible {
-      text-shadow: var(--glow-strong);
       transform: translateY(-1px);
     }
 
@@ -500,20 +501,44 @@ body > header nav {
   }
 
   a {
+    position: relative;
     display: inline-block;
     padding: 0.25rem 0.1rem;
     color: var(--primary);
+    background-image: linear-gradient(var(--primary), var(--primary));
+    background-position: left calc(100% - 0.1rem);
+    background-repeat: no-repeat;
+    background-size: 0 1px;
     font-size: 0.95rem;
     font-weight: 700;
     letter-spacing: 0.01em;
     line-height: 1.5;
     text-decoration: none;
-    transition: color 130ms linear, text-shadow 130ms linear, transform 130ms ease-out;
+    transition: color 130ms linear, background-size 130ms ease-out, transform 130ms ease-out;
+
+    &::after {
+      position: absolute;
+      right: -0.1rem;
+      bottom: 0;
+      width: 0.2rem;
+      height: 0.2rem;
+      background: currentColor;
+      content: "";
+      opacity: 0;
+      pointer-events: none;
+      transform: rotate(45deg) scale(0);
+      transition: opacity 100ms linear, transform 130ms ease-out;
+    }
 
     &:hover,
     &:focus-visible {
-      text-shadow: var(--glow-strong);
+      background-size: 100% 1px;
       transform: translateY(-1px);
+
+      &::after {
+        opacity: 1;
+        transform: rotate(45deg) scale(1);
+      }
     }
 
     &:active {
@@ -522,10 +547,7 @@ body > header nav {
 
     &[aria-current="page"] {
       color: var(--text-main);
-      text-decoration: underline;
-      text-decoration-color: var(--primary);
-      text-decoration-thickness: 2px;
-      text-underline-offset: 0.35em;
+      background-size: 100% 1px;
     }
   }
 }
@@ -584,11 +606,13 @@ main > article:has(> section > article) {
 
       a {
         color: var(--primary);
-        text-decoration: none;
+        text-decoration-color: transparent;
 
-        &:hover {
-          text-decoration: underline;
-          text-underline-offset: 0.16em;
+        &:hover,
+        &:focus-visible {
+          text-decoration-color: var(--primary);
+          text-decoration-thickness: 2px;
+          text-underline-offset: 0.2em;
         }
       }
     }
@@ -898,6 +922,7 @@ body > footer {
   :is(h1, h2, h3, h4, h5, h6):target,
   a,
   .heading-permalink,
+  body > header nav a::after,
   button,
   input,
   select,
