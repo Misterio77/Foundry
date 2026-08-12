@@ -2,10 +2,8 @@
 layout: null
 ---
 
-var schemes = {{ site.data.colorscheme.schemes | jsonify }};
-var schemeNames = Object.keys(schemes).filter(function (name) {
-    return name !== "print";
-});
+var schemes = {{ site.data.colorscheme | jsonify }};
+var schemeNames = Object.keys(schemes);
 var chosenSchemeStyle = null;
 
 function setCookie(name, value, days) {
@@ -34,9 +32,19 @@ function eraseCookie(name) {
     document.cookie = name + "=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; SameSite=Lax";
 }
 
+function colorDeclarations(colors) {
+    var css = "";
+    for (var key in colors) {
+        if (Object.prototype.hasOwnProperty.call(colors, key)) {
+            css += "    --" + key + ": " + colors[key] + ";\n";
+        }
+    }
+    return css;
+}
+
 function setTheme(scheme, persist) {
-    var colors = schemes[scheme];
-    if (!colors || scheme === "print") return;
+    var colors = schemes[scheme] && schemes[scheme].colors;
+    if (!colors) return;
 
     if (!chosenSchemeStyle) {
         chosenSchemeStyle = document.createElement("style");
@@ -44,14 +52,10 @@ function setTheme(scheme, persist) {
         document.head.appendChild(chosenSchemeStyle);
     }
 
-    var css = ":root {\n";
-    for (var key in colors) {
-        if (Object.prototype.hasOwnProperty.call(colors, key)) {
-            css += "  --palette-" + key + ": " + colors[key] + ";\n";
-        }
-    }
-    css += "}";
-    chosenSchemeStyle.textContent = css;
+    chosenSchemeStyle.textContent =
+        ":root {\n" + colorDeclarations(colors.dark) + "}\n" +
+        "@media (prefers-color-scheme: light) {\n  :root {\n" + colorDeclarations(colors.light) + "  }\n}\n" +
+        "@media print {\n  :root {\n" + colorDeclarations(colors.light) + "  }\n}";
 
     updateThemeControls(scheme);
     if (persist !== false) setCookie("fontes_theme", scheme, 365);
@@ -78,7 +82,6 @@ function updateThemeControls(scheme) {
         var active = buttons[i].getAttribute("data-scheme") === scheme;
         buttons[i].setAttribute("aria-pressed", active ? "true" : "false");
     }
-
 }
 
 var storedTheme = getTheme();

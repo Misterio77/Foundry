@@ -7,10 +7,8 @@ permalink: /colorscheme/
 
 <fieldset>
   <datalist id="scheme-list">
-    {%- for scheme in site.data.colorscheme.schemes %}
-      {%- if scheme[0] != "print" %}
-        <option value="{{ scheme[0] }}">
-      {%- endif %}
+    {%- for scheme in site.data.colorscheme %}
+      <option value="{{ scheme[0] }}">
     {%- endfor %}
   </datalist>
 
@@ -49,8 +47,8 @@ var scheme_input = document.getElementById("scheme-input");
 var scheme_random_button = document.getElementById("scheme-random");
 var scheme_default_button = document.getElementById("scheme-default");
 
-var schemes = {{ site.data.colorscheme.schemes | jsonify }};
-var scheme_names = Object.keys(schemes).filter(function(s) { return s !== "print"; });
+var schemes = {{ site.data.colorscheme | jsonify }};
+var scheme_names = Object.keys(schemes);
 
 // Add click event for random button
 scheme_random_button.addEventListener("click", function () {

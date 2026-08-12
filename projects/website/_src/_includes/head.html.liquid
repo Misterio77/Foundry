@@ -6,16 +6,23 @@
 <link rel="stylesheet" href="/assets/style.css" />
 <style id="default-css">
 :root {
-{%- for color in site.data.colorscheme.schemes[site.default_scheme] %}
-  --palette-{{ color[0] }}: {{ color[1] }};
+{%- for color in site.data.colorscheme[site.default_scheme].colors.dark %}
+  --{{ color[0] }}: {{ color[1] }};
 {%- endfor %}
 }
-</style>
-<style id="print-css" media="print">
-:root {
-{%- for color in site.data.colorscheme.schemes[site.printing_scheme] %}
-  --palette-{{ color[0] }}: {{ color[1] }};
-{%- endfor %}
+@media (prefers-color-scheme: light) {
+  :root {
+  {%- for color in site.data.colorscheme[site.default_scheme].colors.light %}
+    --{{ color[0] }}: {{ color[1] }};
+  {%- endfor %}
+  }
+}
+@media print {
+  :root {
+  {%- for color in site.data.colorscheme[site.default_scheme].colors.light %}
+    --{{ color[0] }}: {{ color[1] }};
+  {%- endfor %}
+  }
 }
 </style>
 

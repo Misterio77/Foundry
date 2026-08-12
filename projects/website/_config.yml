@@ -3,7 +3,6 @@ description: "My personal website and projects"
 url: "https://gsfontes.com"
 
 default_scheme: atlas
-printing_scheme: print
 
 
 plugins:
