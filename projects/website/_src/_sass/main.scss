@@ -25,6 +25,9 @@
   --surface-container: var(--surface_container);
   --surface-container-low: var(--surface_container_low);
   --surface-container-high: var(--surface_container_high);
+  --glow-soft: 0 0 0.75rem color-mix(in srgb, var(--primary) 30%, transparent);
+  --glow-strong: 0 0 1rem color-mix(in srgb, var(--primary) 65%, transparent);
+  --starlight-rule: linear-gradient(90deg, var(--border), color-mix(in srgb, var(--primary) 75%, var(--border)), var(--border)) 1;
   --page-width: min(56.25rem, calc(100vw - 3rem));
   --content-width: 56.25rem;
   --document-width: 72ch;
@@ -55,19 +58,33 @@ textarea {
   color: var(--text-main);
   background: var(--surface-container);
   font: inherit;
+  transition: border-color 130ms linear, box-shadow 130ms linear, background-color 130ms linear;
 
   &:hover {
     border-color: var(--primary);
+    box-shadow: var(--glow-soft);
   }
 
   &:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+    box-shadow: var(--glow-strong);
   }
 }
 
 button {
   cursor: pointer;
+  transition: border-color 130ms linear, box-shadow 130ms linear, background-color 130ms linear, transform 130ms ease-out;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: var(--glow-soft);
+    transform: translateY(0) scale(0.97);
+  }
 }
 
 h2,
@@ -215,15 +232,21 @@ body {
   background: var(--background-alt);
 }
 
+:is(h1, h2, h3, h4, h5, h6):target {
+  animation: target-glint 700ms ease-out;
+}
+
 a {
   color: var(--links);
   text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.14em;
+  transition: color 130ms linear, text-shadow 130ms linear;
 
   &:hover,
   &:focus-visible {
     color: var(--primary);
+    text-shadow: 0 0 0.7rem color-mix(in srgb, currentColor 55%, transparent);
   }
 
   &:focus-visible {
@@ -272,6 +295,7 @@ main > article {
       margin: 2.6rem 0 1rem;
       padding-top: 1rem;
       border-top: 1px solid var(--border);
+      border-image: var(--starlight-rule);
       color: var(--primary);
       font-family: "Fira Sans", system-ui, sans-serif;
       font-size: 2rem;
@@ -332,6 +356,7 @@ body > header {
   margin: 0;
   padding: 0 0 0.75rem;
   border-bottom: 1px solid var(--border);
+  border-image: var(--starlight-rule);
 
   > a[rel="home"] {
     color: var(--primary);
@@ -340,6 +365,17 @@ body > header {
     font-weight: 600;
     letter-spacing: 0.015em;
     text-decoration: none;
+    transition: color 130ms linear, text-shadow 130ms linear, transform 130ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      text-shadow: var(--glow-strong);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0) scale(0.98);
+    }
   }
 
   @media (max-width: 700px) {
@@ -387,6 +423,17 @@ body > header nav {
     letter-spacing: 0.01em;
     line-height: 1.5;
     text-decoration: none;
+    transition: color 130ms linear, text-shadow 130ms linear, transform 130ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      text-shadow: var(--glow-strong);
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0) scale(0.96);
+    }
 
     &[aria-current="page"] {
       color: var(--text-main);
@@ -533,6 +580,7 @@ body > footer {
   margin-top: 1.4rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--border);
+  border-image: var(--starlight-rule);
   color: var(--text-muted);
   font-size: 0.875rem;
 
@@ -545,6 +593,7 @@ body > footer {
     grid-row: 2;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+    border-image: var(--starlight-rule);
     font-style: normal;
   }
 
@@ -593,6 +642,7 @@ body > footer {
     }
     padding-top: 1rem;
     border-top: 1px solid var(--border);
+    border-image: var(--starlight-rule);
 
     &[hidden] {
       display: none;
@@ -737,12 +787,24 @@ body > footer {
   }
 }
 
+@keyframes target-glint {
+  35% {
+    color: var(--primary);
+    text-shadow: var(--glow-strong);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .theme-constellation .stars button,
+  :is(h1, h2, h3, h4, h5, h6):target,
+  a,
+  button,
+  input,
+  select,
+  textarea,
   .theme-constellation .stars button::before,
   .theme-constellation .stars button span {
-    animation: none;
-    transition: none;
+    animation: none !important;
+    transition: none !important;
   }
 }
 
