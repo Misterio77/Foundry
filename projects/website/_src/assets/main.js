@@ -47,7 +47,7 @@ function setTheme(scheme, persist) {
     var css = ":root {\n";
     for (var key in colors) {
         if (Object.prototype.hasOwnProperty.call(colors, key)) {
-            css += "  --" + key + ": " + colors[key] + ";\n";
+            css += "  --palette-" + key + ": " + colors[key] + ";\n";
         }
     }
     css += "}";

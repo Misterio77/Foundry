@@ -4,26 +4,70 @@
 
 // Color roles
 :root {
-  --background-body: color-mix(in srgb, var(--surface_container_low) 85%, var(--primary) 15%);
-  --background: var(--surface_container);
-  --background-alt: var(--surface_container_high);
-  --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
-  --text-main: var(--on_background);
-  --text-bright: var(--on_surface);
-  --text-muted: var(--on_surface_variant);
-  --links: var(--blue);
+  color-scheme: light dark;
+  --background-body: var(--palette-surface_container_lowest);
+  --background: var(--palette-surface_container);
+  --background-alt: var(--palette-surface_container_high);
+  --selection: color-mix(in srgb, var(--palette-primary) 30%, transparent 70%);
+  --text-main: var(--palette-on_background);
+  --text-bright: var(--palette-on_surface);
+  --text-muted: var(--palette-on_surface_variant);
+  --links: var(--palette-blue);
+  --primary: var(--palette-primary);
   --focus: var(--primary);
-  --border: color-mix(in srgb, var(--outline_variant) 80%, var(--primary) 20%);
-  --code: var(--on_background);
-  --scrollbar-thumb: color-mix(in srgb, var(--outline) 30%, var(--primary) 70%);
+  --border: color-mix(in srgb, var(--palette-outline_variant) 80%, var(--primary) 20%);
+  --code: var(--text-main);
+  --scrollbar-thumb: color-mix(in srgb, var(--palette-outline) 30%, var(--primary) 70%);
   --scrollbar-thumb-hover: var(--primary);
-  --form-placeholder: var(--outline);
-  --form-text: var(--on_background);
-  --variable: var(--green);
-  --highlight: var(--magenta);
+  --form-placeholder: var(--palette-outline);
+  --form-text: var(--text-main);
+  --variable: var(--palette-green);
+  --highlight: var(--palette-magenta);
+  --surface-container: var(--palette-surface_container);
+  --surface-container-low: var(--palette-surface_container_low);
+  --surface-container-high: var(--palette-surface_container_high);
+  --error: var(--palette-error);
+  --red: var(--palette-red);
+  --green: var(--variable);
+  --blue: var(--links);
+  --yellow: var(--palette-yellow);
+  --magenta: var(--highlight);
+  --secondary: var(--palette-secondary);
+  --tertiary: var(--palette-tertiary);
+  --orange: var(--palette-orange);
+  --cyan: var(--palette-cyan);
+  --surface: var(--surface-container);
+  --surface_container_low: var(--surface-container-low);
+  --surface_container_high: var(--surface-container-high);
+  --on_surface: var(--text-bright);
+  --on_surface_variant: var(--text-muted);
   --page-width: min(56.25rem, calc(100vw - 3rem));
   --content-width: 56.25rem;
   --document-width: 72ch;
+
+  @media (prefers-color-scheme: light) {
+    --background-body: var(--palette-inverse_surface);
+    --background: color-mix(in srgb, var(--palette-inverse_surface) 94%, var(--palette-inverse_primary) 6%);
+    --background-alt: color-mix(in srgb, var(--palette-inverse_surface) 88%, var(--palette-inverse_primary) 12%);
+    --text-main: var(--palette-inverse_on_surface);
+    --text-bright: var(--palette-on_primary_fixed);
+    --text-muted: var(--palette-on_primary_fixed_variant);
+    --links: var(--palette-inverse_primary);
+    --primary: var(--palette-inverse_primary);
+    --border: color-mix(in srgb, var(--palette-outline) 65%, transparent);
+    --code: var(--palette-inverse_on_surface);
+    --scrollbar-thumb: color-mix(in srgb, var(--palette-outline) 75%, transparent);
+    --form-placeholder: var(--palette-outline);
+    --form-text: var(--palette-inverse_on_surface);
+    --variable: var(--palette-green_container);
+    --highlight: var(--palette-magenta_container);
+    --surface-container: var(--background);
+    --surface-container-low: var(--palette-inverse_surface);
+    --surface-container-high: var(--background-alt);
+    --error: var(--palette-error_container);
+    --red: var(--palette-red_container);
+    --yellow: var(--palette-yellow_container);
+  }
 
   @media (max-width: 700px) {
     --page-width: calc(100vw - 2rem);
@@ -43,7 +87,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 0;
   color: var(--text-main);
-  background: var(--surface_container);
+  background: var(--surface-container);
   font: inherit;
 
   &:hover {
@@ -107,7 +151,7 @@ code,
 kbd,
 samp {
   padding: 0.15rem 0.3rem;
-  background: var(--surface_container);
+  background: var(--surface-container);
   color: var(--text-main);
   font-size: 0.9em;
 }
@@ -115,7 +159,7 @@ samp {
 pre {
   overflow-x: auto;
   padding: 1rem;
-  background: var(--surface_container_low);
+  background: var(--surface-container-low);
 
   code {
     padding: 0;
@@ -634,7 +678,7 @@ body > footer {
           padding: 0.15rem 0.35rem;
           border: 1px solid var(--border);
           color: var(--text-main);
-          background: var(--surface_container_high);
+          background: var(--surface-container-high);
           content: attr(data-label);
           opacity: 0;
           pointer-events: none;
@@ -720,6 +764,22 @@ body > footer {
 
 // Printing
 @media print {
+  :root {
+    color-scheme: light;
+    --background-body: var(--palette-background);
+    --background: var(--palette-surface_container);
+    --background-alt: var(--palette-surface_container_high);
+    --text-main: var(--palette-on_background);
+    --text-bright: var(--palette-on_surface);
+    --text-muted: var(--palette-on_surface_variant);
+    --links: var(--palette-blue);
+    --primary: var(--palette-primary);
+    --border: var(--palette-outline_variant);
+    --surface-container: var(--palette-surface_container);
+    --surface-container-low: var(--palette-surface_container_low);
+    --surface-container-high: var(--palette-surface_container_high);
+  }
+
   * {
     print-color-adjust: exact;
   }
