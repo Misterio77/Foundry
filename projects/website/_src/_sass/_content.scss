@@ -1,0 +1,82 @@
+// Content
+h1 {
+  max-width: 56.25rem;
+  margin: 0 0 1rem;
+  color: var(--text-bright);
+}
+
+p {
+  margin-top: 0;
+}
+
+main > article {
+  max-width: var(--content-width);
+  margin: 0 auto;
+
+  > header {
+    margin: 0;
+    padding: 2.25rem 0 1.5rem;
+
+    p {
+      margin: 0.2rem 0 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  }
+
+  > section {
+    > p {
+      margin-bottom: 1.15rem;
+    }
+
+    > h2 {
+      margin: 2.6rem 0 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      border-image: var(--starlight-rule);
+      color: var(--primary);
+      font-family: "Fira Sans", system-ui, sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+
+      &:first-of-type {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+        border-image: none;
+      }
+    }
+
+    > h3 {
+      margin: 2rem 0 0.7rem;
+      color: var(--primary);
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    > h4 {
+      margin: 1.6rem 0 0.55rem;
+      color: var(--text-main);
+      font-size: 1.05rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    > ul {
+      margin: 1rem 0 1.5rem;
+      padding-left: 1.35rem;
+
+      li + li {
+        margin-top: 0.7rem;
+      }
+    }
+
+  }
+}
+
+main > article:not(:has(> section > article)) > section {
+  max-width: var(--document-width);
+  margin-inline: auto;
+}

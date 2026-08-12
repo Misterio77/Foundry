@@ -1,0 +1,127 @@
+// Site header
+body > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0 0 0.75rem;
+  border-bottom: 1px solid var(--border);
+  border-image: var(--starlight-rule);
+
+  > a[rel="home"] {
+    color: var(--primary);
+    font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
+    font-size: 1.7rem;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+    text-decoration: none;
+    transition: color 130ms linear, transform 130ms ease-out;
+
+    &:hover,
+    &:focus-visible {
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    > span {
+      display: inline-block;
+      font-size: 0.65em;
+      text-shadow: var(--glow-soft);
+      transition: text-shadow 130ms linear, transform 130ms ease-out;
+      vertical-align: 0.12em;
+    }
+
+    &:hover > span,
+    &:focus-visible > span {
+      text-shadow: var(--glow-strong);
+      transform: scale(1.2);
+    }
+  }
+
+  @media (max-width: 700px) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+}
+
+body > header nav {
+  margin: 0;
+
+  @media (max-width: 700px) {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  ul {
+    display: flex;
+    gap: clamp(1.25rem, 2.5vw, 2.2rem);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    @media (max-width: 700px) {
+      justify-content: flex-start;
+      gap: clamp(1rem, 4vw, 1.5rem);
+    }
+  }
+
+  li {
+    margin: 0;
+  }
+
+  a {
+    position: relative;
+    display: inline-block;
+    padding: 0.25rem 0.1rem;
+    color: var(--primary);
+    background-image: linear-gradient(var(--primary), var(--primary));
+    background-position: left calc(100% - 0.1rem);
+    background-repeat: no-repeat;
+    background-size: 0 1px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    text-decoration: none;
+    transition: color 130ms linear, background-size 130ms ease-out, transform 130ms ease-out;
+
+    &::after {
+      position: absolute;
+      right: -0.1rem;
+      bottom: 0;
+      width: 0.2rem;
+      height: 0.2rem;
+      background: currentColor;
+      content: "";
+      opacity: 0;
+      pointer-events: none;
+      transform: rotate(45deg) scale(0);
+      transition: opacity 100ms linear, transform 130ms ease-out;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background-size: 100% 1px;
+      transform: translateY(-1px);
+
+      &::after {
+        opacity: 1;
+        transform: rotate(45deg) scale(1);
+      }
+    }
+
+    &:active {
+      transform: translateY(0) scale(0.96);
+    }
+
+    &[aria-current="page"] {
+      color: var(--text-main);
+      background-size: 100% 1px;
+    }
+  }
+}

@@ -1,0 +1,49 @@
+// Motion
+@keyframes ambient-sparks {
+  0%,
+  18% {
+    opacity: 0.24;
+    transform: translate(0);
+  }
+
+  48% {
+    opacity: 0.5;
+  }
+
+  72%,
+  100% {
+    opacity: 0.32;
+    transform: translate(0.18rem, -0.12rem);
+  }
+}
+
+@keyframes star-glint {
+  50% {
+    transform: translate(-50%, -50%) scale(1.55);
+  }
+}
+
+@keyframes target-glint {
+  35% {
+    color: var(--primary);
+    text-shadow: var(--glow-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
+  :is(h1, h2, h3, h4, h5, h6):target,
+  a,
+  .heading-permalink,
+  body > header nav a::after,
+  button,
+  input,
+  select,
+  textarea,
+  .theme-constellation .stars button::before,
+  .theme-constellation .stars button span {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,30 @@
+// Color roles
+:root {
+  color-scheme: light dark;
+  --background-body: color-mix(in srgb, var(--surface_container_lowest) 88%, var(--primary_container) 12%);
+  --background-alt: color-mix(in srgb, var(--surface_container_high) 82%, var(--primary_container) 18%);
+  --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
+  --text-main: var(--on_background);
+  --text-bright: var(--on_surface);
+  --text-muted: var(--on_surface_variant);
+  --links: var(--blue);
+  --border: color-mix(in srgb, var(--outline_variant) 80%, var(--primary) 20%);
+  --surface-container: var(--surface_container);
+  --surface-container-low: var(--surface_container_low);
+  --surface-container-high: var(--surface_container_high);
+  --glow-soft: 0 0 0.75rem color-mix(in srgb, var(--primary) 30%, transparent);
+  --glow-strong: 0 0 1rem color-mix(in srgb, var(--primary) 65%, transparent);
+  --starlight-rule: linear-gradient(90deg, var(--border), color-mix(in srgb, var(--primary) 75%, var(--border)), var(--border)) 1;
+  --page-width: min(56.25rem, calc(100vw - 3rem));
+  --content-width: 56.25rem;
+  --document-width: 72ch;
+
+  @media (prefers-color-scheme: light) {
+    --background-body: color-mix(in srgb, var(--surface_container_lowest) 89%, var(--primary) 11%);
+    --background-alt: color-mix(in srgb, var(--surface_container_high) 79%, var(--primary) 21%);
+  }
+
+  @media (max-width: 700px) {
+    --page-width: calc(100vw - 2rem);
+  }
+}
