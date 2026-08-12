@@ -88,6 +88,16 @@ var storedTheme = getTheme();
 if (storedTheme) setTheme(storedTheme, false);
 
 document.addEventListener("DOMContentLoaded", function () {
+    var headings = document.querySelectorAll("main :is(h2, h3, h4, h5, h6)[id]");
+    for (var i = 0; i < headings.length; i++) {
+        var permalink = document.createElement("a");
+        permalink.className = "heading-permalink";
+        permalink.href = "#" + encodeURIComponent(headings[i].id);
+        permalink.setAttribute("aria-label", "Permalink to " + headings[i].textContent.trim());
+        permalink.textContent = "✦";
+        headings[i].appendChild(permalink);
+    }
+
     var constellation = document.querySelector(".theme-constellation");
     if (!constellation) return;
 
@@ -95,8 +105,8 @@ document.addEventListener("DOMContentLoaded", function () {
     updateThemeControls(storedTheme || "{{ site.default_scheme }}");
 
     var buttons = constellation.querySelectorAll("[data-scheme]");
-    for (var i = 0; i < buttons.length; i++) {
-        buttons[i].addEventListener("click", function () {
+    for (var j = 0; j < buttons.length; j++) {
+        buttons[j].addEventListener("click", function () {
             setTheme(this.getAttribute("data-scheme"));
         });
     }
