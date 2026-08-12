@@ -29,6 +29,12 @@
   --content-width: 56.25rem;
   --document-width: 72ch;
 
+  @media (prefers-color-scheme: light) {
+    --background-body: color-mix(in srgb, var(--surface_container_lowest) 89%, var(--primary) 11%);
+    --background: color-mix(in srgb, var(--surface_container) 85%, var(--primary) 15%);
+    --background-alt: color-mix(in srgb, var(--surface_container_high) 79%, var(--primary) 21%);
+  }
+
   @media (max-width: 700px) {
     --page-width: calc(100vw - 2rem);
   }
