@@ -159,8 +159,8 @@
       };
     };
 
-    systemConfigs.mgc = system-manager.lib.makeSystemConfig {
-      modules = [./hosts/system-manager/mgc];
+    systemConfigs.electra = system-manager.lib.makeSystemConfig {
+      modules = [./hosts/system-manager/electra];
       overlays = builtins.attrValues outputs.overlays;
       specialArgs = {
         inherit inputs outputs;

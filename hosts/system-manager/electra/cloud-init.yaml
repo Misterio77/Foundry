@@ -7,7 +7,7 @@ autoinstall:
   # Run the bootstrap on the installed system's first boot. The attended
   # installer creates gabriel with an interactive password.
   user-data:
-    hostname: mgc
+    hostname: electra
     manage_etc_hosts: true
     users: []
 
@@ -61,10 +61,10 @@ autoinstall:
           env HOME=/root NIX_CONFIG='experimental-features = nix-command flakes' \
             /nix/var/nix/profiles/default/bin/nix build \
               --accept-flake-config --no-link --print-out-paths \
-              github:misterio77/foundry#systemConfigs.mgc
+              github:misterio77/foundry#systemConfigs.electra
         )
         activation_path="/nix/var/nix/profiles/default/bin:$PATH"
         env PATH="$activation_path" "$config/bin/register-profile"
         env PATH="$activation_path" "$config/bin/activate"
 
-    final_message: mgc bootstrap complete.
+    final_message: electra bootstrap complete.
