@@ -244,7 +244,7 @@ main > article {
 
   > header {
     margin: 0;
-    padding: 2.25rem 0 0.3rem;
+    padding: 2.25rem 0 1.5rem;
 
     p {
       margin: 0.2rem 0 0;
@@ -391,10 +391,6 @@ body > header nav {
 // Article listings
 main > article:has(> section > article) {
   position: relative;
-
-  > header {
-    padding-bottom: 2rem;
-  }
 
   > section {
     > p:first-child {
