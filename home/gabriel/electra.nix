@@ -31,7 +31,8 @@
     }
   ];
 
-  wallpaper = pkgs.wallpapers.island-birds-eye;
+  # Green (160°)
+  wallpaper = pkgs.wallpapers.aenami-northern-lights;
 
   home.packages = [pkgs.wireguard-tools pkgs.sshuttle];
 

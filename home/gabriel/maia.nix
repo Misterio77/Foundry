@@ -16,7 +16,7 @@
     calendar.accounts.personal.primary = true;
   };
 
-  # Purple
+  # Periwinkle (280°)
   wallpaper = pkgs.wallpapers.deer-lunar-fantasy;
 
   monitors = [

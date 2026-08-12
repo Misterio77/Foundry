@@ -157,6 +157,8 @@
           inherit inputs outputs;
         };
       };
+      # Reserved for the next host: asterope, turquoise (200°) in the even hue
+      # spread the other hosts follow. Use pkgs.wallpapers.castle-mountains.
     };
 
     systemConfigs.electra = system-manager.lib.makeSystemConfig {

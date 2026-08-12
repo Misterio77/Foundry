@@ -1,5 +1,5 @@
 {pkgs, ...}: {
   imports = [./global];
-  # Cyan
-  wallpaper = pkgs.wallpapers.samurai-cyberpunk-pink-green;
+  # Purple (320°)
+  wallpaper = pkgs.wallpapers.nebula-purple-pink;
 }

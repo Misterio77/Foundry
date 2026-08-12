@@ -18,7 +18,7 @@
     calendar.accounts.personal.primary = true;
   };
 
-  # Red
+  # Pink-red (0°)
   wallpaper = pkgs.wallpapers.aenami-dawn;
 
   #  ------   -----   ------
