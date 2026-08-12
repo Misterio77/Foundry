@@ -128,21 +128,23 @@ h6 {
     transition: opacity 130ms linear, text-shadow 130ms linear, transform 130ms ease-out;
     vertical-align: middle;
 
-    @media (hover: none) {
-      opacity: 0.65;
-      transform: scale(0.9);
-    }
-
     @media print {
       display: none;
     }
   }
 
-  &:hover .heading-permalink,
   .heading-permalink:focus-visible {
     opacity: 1;
     text-shadow: var(--glow-strong);
     transform: scale(1);
+  }
+
+  @media (hover: hover) {
+    &:hover .heading-permalink {
+      opacity: 1;
+      text-shadow: var(--glow-strong);
+      transform: scale(1);
+    }
   }
 }
 
@@ -370,6 +372,9 @@ main > article {
 
       &:first-of-type {
         margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+        border-image: none;
       }
     }
 
