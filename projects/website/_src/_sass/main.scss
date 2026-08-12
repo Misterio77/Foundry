@@ -247,11 +247,45 @@ body {
     padding-top: 1.1rem;
   }
 
+  &::before,
+  &::after {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image:
+      radial-gradient(circle, color-mix(in srgb, var(--primary) 32%, transparent) 0 0.045rem, transparent 0.09rem),
+      radial-gradient(circle, color-mix(in srgb, var(--primary) 24%, transparent) 0 0.035rem, transparent 0.08rem);
+    background-position: 2rem 3rem, 11rem 8rem;
+    background-size: 23rem 19rem, 31rem 29rem;
+    content: "";
+    opacity: 0.18;
+    pointer-events: none;
+    animation: ambient-sparks 9s ease-in-out infinite alternate;
+  }
+
+  &::after {
+    background-position: 7rem 13rem, 19rem 4rem;
+    background-size: 37rem 31rem, 29rem 41rem;
+    opacity: 0.1;
+    animation-delay: -4.5s;
+    animation-duration: 13s;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+
   @media print {
     width: 100%;
     margin: 0 auto;
     padding: 0;
     font-size: 11pt;
+
+    &::before,
+    &::after {
+      display: none;
+    }
   }
 }
 
@@ -834,6 +868,24 @@ body > footer {
   }
 }
 
+@keyframes ambient-sparks {
+  0%,
+  18% {
+    opacity: 0.08;
+    transform: translate(0);
+  }
+
+  48% {
+    opacity: 0.2;
+  }
+
+  72%,
+  100% {
+    opacity: 0.11;
+    transform: translate(0.18rem, -0.12rem);
+  }
+}
+
 @keyframes star-glint {
   50% {
     transform: translate(-50%, -50%) scale(1.55);
@@ -848,6 +900,8 @@ body > footer {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
   :is(h1, h2, h3, h4, h5, h6):target,
   a,
   .heading-permalink,
