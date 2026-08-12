@@ -14,7 +14,7 @@ published_date: 2026-04-12
 venue: 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS '26)
 ---
 
-[← Publications](/publications/) · [PDF](/assets/docs/fontes-sesos-2026.pdf) · [DOI](https://doi.org/10.1145/3786163.3788453)
+[PDF](/assets/docs/fontes-sesos-2026.pdf) · [10.1145/3786163.3788453](https://doi.org/10.1145/3786163.3788453)
 
 Gabriel Silva Fontes · Vasilios Andrikopoulos · Elisa Yumi Nakagawa  
 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS ’26) · April 12–18, 2026 · Rio de Janeiro, Brazil

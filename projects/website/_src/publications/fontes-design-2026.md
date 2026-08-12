@@ -14,7 +14,7 @@ published_date: 2026-04-13
 venue: 3rd International Workshop on Designing Software (Designing '26)
 ---
 
-[← Publications](/publications/) · [PDF](/assets/docs/fontes-design-2026.pdf) · [DOI](https://doi.org/10.1145/3786152.3788587)
+[PDF](/assets/docs/fontes-design-2026.pdf) · [10.1145/3786152.3788587](https://doi.org/10.1145/3786152.3788587)
 
 Gabriel Silva Fontes · Vinicius dos Santos · Elisa Yumi Nakagawa  
 3rd International Workshop on Designing Software (Designing ’26) · April 12–18, 2026 · Rio de Janeiro, Brazil

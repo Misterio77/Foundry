@@ -46,6 +46,11 @@ defaults:
       author: "Gabriel Fontes"
   -
     scope:
+      path: "publications"
+    values:
+      nav_current: "/publications/"
+  -
+    scope:
       path: "cgit_partials/**/*"
     values:
       sitemap: false
