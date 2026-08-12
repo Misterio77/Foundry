@@ -79,8 +79,6 @@ function updateThemeControls(scheme) {
         buttons[i].setAttribute("aria-pressed", active ? "true" : "false");
     }
 
-    var output = document.getElementById("current-scheme");
-    if (output) output.textContent = scheme.charAt(0).toUpperCase() + scheme.slice(1);
 }
 
 var storedTheme = getTheme();

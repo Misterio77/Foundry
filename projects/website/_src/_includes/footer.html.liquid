@@ -22,12 +22,7 @@
 
 <p class="copyleft">Copyleft <a href="/">Gabriel Fontes</a> (<a href="https://github.com/Misterio77/website">source code</a>)</p>
 
-<section class="theme-constellation" aria-labelledby="theme-constellation-title" hidden>
-  <header>
-    <h2 id="theme-constellation-title">Pleiades</h2>
-    <p>Choose a star, change the sky. Current: <output id="current-scheme" aria-live="polite">{{ site.default_scheme | capitalize }}</output></p>
-  </header>
-
+<section class="theme-constellation" aria-label="Choose a color scheme" hidden>
   <div class="stars">
     <svg viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
       <path d="M18 44 L26 36 L50 28 L61 19 L72 10 M50 28 L46 43 M50 28 L76 26" />
@@ -41,6 +36,7 @@
     <button type="button" data-scheme="celaeno" data-label="Celaeno" style="--x: 72%; --y: 17%; --star-color: {{ site.data.colorscheme.schemes.celaeno.primary }}" aria-label="Use Celaeno theme" aria-pressed="false"><span></span></button>
     <button type="button" data-scheme="taygeta" data-label="Taygeta" style="--x: 76%; --y: 43%; --star-color: {{ site.data.colorscheme.schemes.taygeta.primary }}" aria-label="Use Taygeta theme" aria-pressed="false"><span></span></button>
   </div>
+  <p><small>Choose a star, change the sky</small></p>
 </section>
 
 <p class="print-site-link"><small>Also available at <a href="{{ site.url }}{{ page.url }}">my website</a>.</small></p>

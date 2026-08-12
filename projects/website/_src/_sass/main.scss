@@ -592,40 +592,15 @@ body > footer {
       display: none;
     }
 
-    > header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 1rem;
-
-      @media (max-width: 700px) {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 0.25rem;
-      }
-    }
-
-    h2,
-    p {
-      margin: 0;
-    }
-
-    h2 {
-      color: var(--primary);
-      font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
-      font-size: 1.35rem;
-      font-weight: 600;
-    }
-
-    output {
-      color: var(--text-main);
+    > p {
+      margin: -0.35rem 0 0;
+      text-align: center;
     }
 
     .stars {
       position: relative;
       width: 100%;
       height: clamp(10rem, 22vw, 13rem);
-      margin-top: 0.5rem;
 
       svg {
         position: absolute;
