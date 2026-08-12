@@ -15,7 +15,7 @@ textarea {
   color: var(--text-main);
   background: var(--surface-container);
   font: inherit;
-  transition: border-color var(--duration-normal) var(--ease-linear), box-shadow var(--duration-normal) var(--ease-linear), background-color var(--duration-normal) var(--ease-linear);
+  transition: border-color var(--duration-normal) var(--ease-linear), box-shadow var(--duration-normal) var(--ease-linear), background-color var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
 
   &:hover {
     border-color: var(--primary);
@@ -31,7 +31,6 @@ textarea {
 
 button {
   cursor: pointer;
-  transition: border-color var(--duration-normal) var(--ease-linear), box-shadow var(--duration-normal) var(--ease-linear), background-color var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
 
   &:hover,
   &:focus-visible {
@@ -71,33 +70,31 @@ h6 {
   font-size: 1rem;
 }
 
-:is(h2, h3, h4, h5, h6) {
-  .heading-permalink {
-    display: inline-block;
-    margin-left: 0.4em;
-    color: var(--primary);
-    font-size: 0.55em;
-    line-height: 1;
-    opacity: 0;
-    text-decoration: none;
-    text-shadow: var(--glow-soft);
-    transform: scale(0.75);
-    transition: opacity var(--duration-normal) var(--ease-linear), text-shadow var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
-    vertical-align: middle;
-  }
+.heading-permalink {
+  display: inline-block;
+  margin-left: 0.4em;
+  color: var(--primary);
+  font-size: 0.55em;
+  line-height: 1;
+  opacity: 0;
+  text-decoration: none;
+  text-shadow: var(--glow-soft);
+  transform: scale(0.75);
+  transition: opacity var(--duration-normal) var(--ease-linear), text-shadow var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
+  vertical-align: middle;
 
-  .heading-permalink:focus-visible {
+  &:focus-visible {
     opacity: 1;
     text-shadow: var(--glow-strong);
     transform: scale(1);
   }
+}
 
-  @media (hover: hover) {
-    &:hover .heading-permalink {
-      opacity: 1;
-      text-shadow: var(--glow-strong);
-      transform: scale(1);
-    }
+@media (hover: hover) {
+  :is(h2, h3, h4, h5, h6):hover > .heading-permalink {
+    opacity: 1;
+    text-shadow: var(--glow-strong);
+    transform: scale(1);
   }
 }
 

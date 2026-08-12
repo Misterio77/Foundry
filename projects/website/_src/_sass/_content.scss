@@ -12,71 +12,71 @@ p {
 main > article {
   max-width: var(--content-width);
   margin: 0 auto;
+}
 
-  > header {
-    margin: 0;
-    padding: 2.25rem 0 var(--space-6);
+main > article > header {
+  margin: 0;
+  padding: 2.25rem 0 var(--space-6);
+}
 
-    p {
-      margin: 0.2rem 0 0;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-    }
-  }
+main > article > header p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
 
-  > section {
-    > p {
-      margin-bottom: 1.15rem;
-    }
+main > article > section > p {
+  margin-bottom: 1.15rem;
+}
 
-    > h2 {
-      margin: 2.6rem 0 var(--space-4);
-      padding-top: var(--space-4);
-      border-top: var(--rule-width) solid var(--border);
-      border-image: var(--starlight-rule);
-      color: var(--primary);
-      font-family: var(--font-body);
-      font-size: 2rem;
-      font-weight: 700;
-      line-height: 1.2;
+main > article > section > :is(h2, h3) {
+  color: var(--primary);
+}
 
-      &:first-of-type {
-        margin-top: 0;
-        padding-top: 0;
-        border-top: 0;
-        border-image: none;
-      }
-    }
+main > article > section > :is(h2, h3, h4) {
+  font-weight: 700;
+}
 
-    > h3 {
-      margin: 2rem 0 0.7rem;
-      color: var(--primary);
-      font-size: 1.4rem;
-      font-weight: 700;
-      line-height: 1.35;
-    }
+main > article > section > h2 {
+  margin: 2.6rem 0 var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--rule-width) solid var(--border);
+  border-image: var(--starlight-rule);
+  font-family: var(--font-body);
+  font-size: 2rem;
+  line-height: 1.2;
 
-    > h4 {
-      margin: 1.6rem 0 0.55rem;
-      color: var(--text-main);
-      font-size: 1.05rem;
-      font-weight: 700;
-      line-height: 1.4;
-    }
-
-    > ul {
-      margin: var(--space-4) 0 var(--space-6);
-      padding-left: 1.35rem;
-
-      li + li {
-        margin-top: 0.7rem;
-      }
-    }
-
+  &:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    border-image: none;
   }
 }
 
-main > article:not(:has(> section > article)) > section {
+main > article > section > h3 {
+  margin: 2rem 0 0.7rem;
+  font-size: 1.4rem;
+  line-height: 1.35;
+}
+
+main > article > section > h4 {
+  margin: 1.6rem 0 0.55rem;
+  color: var(--text-main);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+main > article > section > ul {
+  margin: var(--space-4) 0 var(--space-6);
+  padding-left: 1.35rem;
+
+  li + li {
+    margin-top: 0.7rem;
+  }
+}
+
+.document > section {
   max-width: var(--document-width);
   margin-inline: auto;
 }
