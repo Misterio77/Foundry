@@ -310,6 +310,7 @@ main > article {
 
 main > article:not(:has(> section > article)) > section {
   max-width: var(--document-width);
+  margin-inline: auto;
 }
 
 // Site header
