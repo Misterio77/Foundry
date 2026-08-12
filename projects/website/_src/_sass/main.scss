@@ -657,6 +657,19 @@ body > footer {
         }
       }
 
+      .placeholder-star {
+        position: absolute;
+        top: var(--y);
+        left: var(--x);
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: var(--text-muted);
+        box-shadow: 0 0 0.5rem color-mix(in srgb, var(--text-muted) 35%, transparent);
+        opacity: 0.6;
+        translate: -50% -50%;
+      }
+
       button {
         --star-color: var(--star-dark);
         position: absolute;
