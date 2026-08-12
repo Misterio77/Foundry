@@ -253,12 +253,12 @@ body {
     inset: 0;
     z-index: 0;
     background-image:
-      radial-gradient(circle, color-mix(in srgb, var(--primary) 32%, transparent) 0 0.045rem, transparent 0.09rem),
-      radial-gradient(circle, color-mix(in srgb, var(--primary) 24%, transparent) 0 0.035rem, transparent 0.08rem);
+      radial-gradient(circle, color-mix(in srgb, var(--primary) 72%, transparent) 0 0.065rem, color-mix(in srgb, var(--primary) 18%, transparent) 0.1rem, transparent 0.2rem),
+      radial-gradient(circle, color-mix(in srgb, var(--primary) 58%, transparent) 0 0.055rem, color-mix(in srgb, var(--primary) 14%, transparent) 0.09rem, transparent 0.18rem);
     background-position: 2rem 3rem, 11rem 8rem;
     background-size: 23rem 19rem, 31rem 29rem;
     content: "";
-    opacity: 0.18;
+    opacity: 0.46;
     pointer-events: none;
     animation: ambient-sparks 9s ease-in-out infinite alternate;
   }
@@ -266,7 +266,7 @@ body {
   &::after {
     background-position: 7rem 13rem, 19rem 4rem;
     background-size: 37rem 31rem, 29rem 41rem;
-    opacity: 0.1;
+    opacity: 0.3;
     animation-delay: -4.5s;
     animation-duration: 13s;
   }
@@ -871,17 +871,17 @@ body > footer {
 @keyframes ambient-sparks {
   0%,
   18% {
-    opacity: 0.08;
+    opacity: 0.24;
     transform: translate(0);
   }
 
   48% {
-    opacity: 0.2;
+    opacity: 0.5;
   }
 
   72%,
   100% {
-    opacity: 0.11;
+    opacity: 0.32;
     transform: translate(0.18rem, -0.12rem);
   }
 }
