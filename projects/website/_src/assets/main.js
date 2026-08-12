@@ -53,8 +53,7 @@ function setTheme(scheme, persist) {
     css += "}";
     chosenSchemeStyle.textContent = css;
 
-    var picker = document.getElementById("scheme-select");
-    if (picker) picker.value = scheme;
+    updateThemeControls(scheme);
     if (persist !== false) setCookie("fontes_theme", scheme, 365);
 }
 
@@ -70,20 +69,34 @@ function resetTheme() {
     }
     eraseCookie("fontes_theme");
 
-    var picker = document.getElementById("scheme-select");
-    if (picker) picker.value = "{{ site.default_scheme }}";
+    updateThemeControls("{{ site.default_scheme }}");
+}
+
+function updateThemeControls(scheme) {
+    var buttons = document.querySelectorAll("[data-scheme]");
+    for (var i = 0; i < buttons.length; i++) {
+        var active = buttons[i].getAttribute("data-scheme") === scheme;
+        buttons[i].setAttribute("aria-pressed", active ? "true" : "false");
+    }
+
+    var output = document.getElementById("current-scheme");
+    if (output) output.textContent = scheme.charAt(0).toUpperCase() + scheme.slice(1);
 }
 
 var storedTheme = getTheme();
 if (storedTheme) setTheme(storedTheme, false);
 
 document.addEventListener("DOMContentLoaded", function () {
-    var picker = document.getElementById("scheme-select");
-    if (!picker) return;
+    var constellation = document.querySelector(".theme-constellation");
+    if (!constellation) return;
 
-    picker.parentElement.hidden = false;
-    picker.value = storedTheme || "{{ site.default_scheme }}";
-    picker.addEventListener("change", function () {
-        setTheme(picker.value);
-    });
+    constellation.hidden = false;
+    updateThemeControls(storedTheme || "{{ site.default_scheme }}");
+
+    var buttons = constellation.querySelectorAll("[data-scheme]");
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].addEventListener("click", function () {
+            setTheme(this.getAttribute("data-scheme"));
+        });
+    }
 });

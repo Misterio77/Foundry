@@ -561,8 +561,7 @@ body > footer {
 
   > address,
   > nav,
-  > .copyleft,
-  > label {
+  > .copyleft {
     @media (max-width: 700px) {
       grid-column: 1;
       grid-row: auto;
@@ -578,39 +577,149 @@ body > footer {
     }
   }
 
-  > label {
-    display: flex;
-    grid-column: 2;
-    grid-row: 1;
-    align-items: center;
-    gap: 0.55rem;
-    white-space: nowrap;
+  > .theme-constellation {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-top: 0.4rem;
 
     @media (max-width: 700px) {
-      grid-column: 1;
       grid-row: auto;
-      justify-self: start;
-      text-align: left;
+    }
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+
+    &[hidden] {
+      display: none;
+    }
+
+    > header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+
+      @media (max-width: 700px) {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+    }
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--primary);
+      font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+    }
+
+    output {
+      color: var(--text-main);
+    }
+
+    .stars {
+      position: relative;
+      width: 100%;
+      height: clamp(10rem, 22vw, 13rem);
+      margin-top: 0.5rem;
+
+      svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+
+        path {
+          fill: none;
+          stroke: var(--border);
+          stroke-width: 0.45;
+          vector-effect: non-scaling-stroke;
+        }
+      }
+
+      button {
+        position: absolute;
+        top: var(--y);
+        left: var(--x);
+        width: 3rem;
+        height: 3rem;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        touch-action: manipulation;
+        translate: -50% -50%;
+
+        &::before {
+          position: absolute;
+          bottom: calc(100% - 0.15rem);
+          left: 50%;
+          z-index: 1;
+          padding: 0.15rem 0.35rem;
+          border: 1px solid var(--border);
+          color: var(--text-main);
+          background: var(--surface_container_high);
+          content: attr(data-label);
+          opacity: 0;
+          pointer-events: none;
+          transform: translate(-50%, 0.2rem);
+          transition: opacity 120ms linear, transform 120ms ease-out;
+          white-space: nowrap;
+        }
+
+        &:hover::before,
+        &:focus-visible::before {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+
+        &:focus-visible {
+          outline: 1px solid var(--star-color);
+          outline-offset: 0;
+        }
+
+        span {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 0.65rem;
+          height: 0.65rem;
+          border-radius: 50%;
+          background: var(--star-color);
+          box-shadow: 0 0 0.75rem color-mix(in srgb, var(--star-color) 45%, transparent);
+          transform: translate(-50%, -50%);
+          transition: box-shadow 130ms linear, transform 130ms ease-out;
+        }
+
+        &:hover span,
+        &:focus-visible span {
+          box-shadow: 0 0 1rem var(--star-color);
+          transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        &:active span {
+          transform: translate(-50%, -50%) scale(0.9);
+        }
+
+        &:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        &[aria-pressed="true"] span {
+          box-shadow: 0 0 0 0.22rem var(--background-body), 0 0 0 0.35rem var(--star-color), 0 0 1rem var(--star-color);
+          animation: star-glint 360ms ease-out;
+        }
+      }
     }
 
     @media print {
       display: none;
-    }
-  }
-
-  select {
-    min-width: 7.5rem;
-    margin: 0;
-    padding: 0.35rem 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: 0;
-    color: var(--text-main);
-    background: var(--surface_container);
-    font: inherit;
-
-    &:focus-visible {
-      outline: 2px solid var(--primary);
-      outline-offset: 2px;
     }
   }
 
@@ -620,6 +729,21 @@ body > footer {
     @media print {
       display: block;
     }
+  }
+}
+
+@keyframes star-glint {
+  50% {
+    transform: translate(-50%, -50%) scale(1.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-constellation .stars button,
+  .theme-constellation .stars button::before,
+  .theme-constellation .stars button span {
+    animation: none;
+    transition: none;
   }
 }
 
