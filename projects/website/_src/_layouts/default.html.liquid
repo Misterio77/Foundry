@@ -6,7 +6,7 @@ layout: root.html
 </header>
 
 <main>
-  <article>
+  <article{% if page.doi %} class="publication"{% endif %}>
     <header>
       <h1>{{ page.title }}</h1>
       {% if page.description %}

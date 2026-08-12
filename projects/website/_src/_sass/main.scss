@@ -195,6 +195,14 @@ video {
   height: auto;
 }
 
+.publication section > p > img:only-child {
+  display: block;
+  padding: 0.75rem;
+  border: 1px solid #777;
+  background: #fff;
+  color-scheme: light;
+}
+
 table {
   display: block;
   width: 100%;
