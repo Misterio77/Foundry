@@ -530,18 +530,6 @@ main > article:has(> section > article) {
   position: relative;
 
   > section {
-    > p:first-child {
-      position: absolute;
-      top: 8.9rem;
-      right: 0;
-      margin: 0;
-
-      @media (max-width: 700px) {
-        position: static;
-        margin: -1.5rem 0 2rem;
-      }
-    }
-
     > article {
     position: relative;
     display: grid;
