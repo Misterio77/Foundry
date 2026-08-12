@@ -23,6 +23,7 @@
   --highlight: var(--magenta);
   --page-width: min(56.25rem, calc(100vw - 3rem));
   --content-width: 56.25rem;
+  --document-width: 72ch;
 
   @media (max-width: 700px) {
     --page-width: calc(100vw - 2rem);
@@ -177,7 +178,7 @@ body {
   width: var(--page-width);
   max-width: none;
   margin: 0 auto;
-  padding: 1.75rem 0 2.6rem;
+  padding: 1.4rem 0 2.6rem;
   background: var(--background-body);
   color: var(--text-main);
   font-size: 17px;
@@ -238,12 +239,12 @@ p {
 }
 
 main > article {
-  max-width: var(--content-width);
+  max-width: var(--document-width);
   margin: 0 auto;
 
   > header {
     margin: 0;
-    padding: 2.65rem 0 0.35rem;
+    padding: 2.25rem 0 0.3rem;
 
     p {
       margin: 0.2rem 0 0;
@@ -253,12 +254,18 @@ main > article {
   }
 
   > section {
+    > p {
+      margin-bottom: 1.15rem;
+    }
+
     > h2 {
-      margin: 3.4rem 0 1.3rem;
-      padding-top: 1.35rem;
+      margin: 2.6rem 0 1rem;
+      padding-top: 1rem;
       border-top: 1px solid var(--border);
       color: var(--primary);
-      font-size: 2.3rem;
+      font-family: "Fira Sans", system-ui, sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
       line-height: 1.2;
 
       &:first-of-type {
@@ -267,7 +274,7 @@ main > article {
     }
 
     > h3 {
-      margin: 2.5rem 0 0.75rem;
+      margin: 2rem 0 0.7rem;
       color: var(--primary);
       font-size: 1.4rem;
       font-weight: 700;
@@ -306,15 +313,15 @@ body > header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 1.5rem;
   margin: 0;
-  padding: 0 0 1rem;
+  padding: 0 0 0.75rem;
   border-bottom: 1px solid var(--border);
 
   > a[rel="home"] {
     color: var(--primary);
     font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
-    font-size: 1.8rem;
+    font-size: 1.7rem;
     font-weight: 600;
     letter-spacing: 0.015em;
     text-decoration: none;
@@ -341,7 +348,7 @@ body > header nav {
 
   ul {
     display: flex;
-    gap: clamp(1.5rem, 3.5vw, 3rem);
+    gap: clamp(1.25rem, 2.5vw, 2.2rem);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -379,6 +386,7 @@ body > header nav {
 // Article listings
 main > article:has(> section > article) {
   position: relative;
+  max-width: var(--content-width);
 
   > header {
     padding-bottom: 2rem;
