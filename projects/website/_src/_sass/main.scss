@@ -776,7 +776,8 @@ body > footer {
           transform: translate(-50%, 0);
         }
 
-        &:focus-visible {
+        &:focus-visible,
+        &[aria-pressed="true"] {
           outline: 1px solid var(--star-color);
           outline-offset: 0;
         }
