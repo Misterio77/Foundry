@@ -6,22 +6,13 @@
 :root {
   color-scheme: light dark;
   --background-body: color-mix(in srgb, var(--surface_container_lowest) 88%, var(--primary_container) 12%);
-  --background: color-mix(in srgb, var(--surface_container) 88%, var(--primary_container) 12%);
   --background-alt: color-mix(in srgb, var(--surface_container_high) 82%, var(--primary_container) 18%);
   --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
   --text-main: var(--on_background);
   --text-bright: var(--on_surface);
   --text-muted: var(--on_surface_variant);
   --links: var(--blue);
-  --focus: var(--primary);
   --border: color-mix(in srgb, var(--outline_variant) 80%, var(--primary) 20%);
-  --code: var(--on_background);
-  --scrollbar-thumb: color-mix(in srgb, var(--outline) 30%, var(--primary) 70%);
-  --scrollbar-thumb-hover: var(--primary);
-  --form-placeholder: var(--outline);
-  --form-text: var(--on_background);
-  --variable: var(--green);
-  --highlight: var(--magenta);
   --surface-container: var(--surface_container);
   --surface-container-low: var(--surface_container_low);
   --surface-container-high: var(--surface_container_high);
@@ -34,7 +25,6 @@
 
   @media (prefers-color-scheme: light) {
     --background-body: color-mix(in srgb, var(--surface_container_lowest) 89%, var(--primary) 11%);
-    --background: color-mix(in srgb, var(--surface_container) 85%, var(--primary) 15%);
     --background-alt: color-mix(in srgb, var(--surface_container_high) 79%, var(--primary) 21%);
   }
 
