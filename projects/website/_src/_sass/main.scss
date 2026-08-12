@@ -408,6 +408,20 @@ body > header {
     &:active {
       transform: translateY(0) scale(0.98);
     }
+
+    > span {
+      display: inline-block;
+      font-size: 0.65em;
+      text-shadow: var(--glow-soft);
+      transition: text-shadow 130ms linear, transform 130ms ease-out;
+      vertical-align: 0.12em;
+    }
+
+    &:hover > span,
+    &:focus-visible > span {
+      text-shadow: var(--glow-strong);
+      transform: scale(1.2);
+    }
   }
 
   @media (max-width: 700px) {
@@ -709,13 +723,16 @@ body > footer {
         position: absolute;
         top: var(--y);
         left: var(--x);
-        width: 0.45rem;
-        height: 0.45rem;
-        border-radius: 50%;
-        background: var(--text-muted);
-        box-shadow: 0 0 0.5rem color-mix(in srgb, var(--text-muted) 35%, transparent);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        line-height: 1;
         opacity: 0.6;
+        text-shadow: 0 0 0.5rem color-mix(in srgb, var(--text-muted) 35%, transparent);
         translate: -50% -50%;
+
+        &::before {
+          content: "✦";
+        }
       }
 
       button {
@@ -768,18 +785,21 @@ body > footer {
           position: absolute;
           top: 50%;
           left: 50%;
-          width: 0.65rem;
-          height: 0.65rem;
-          border-radius: 50%;
-          background: var(--star-color);
-          box-shadow: 0 0 0.75rem color-mix(in srgb, var(--star-color) 45%, transparent);
+          color: var(--star-color);
+          font-size: 1.05rem;
+          line-height: 1;
+          text-shadow: 0 0 0.75rem color-mix(in srgb, var(--star-color) 45%, transparent);
           transform: translate(-50%, -50%);
-          transition: box-shadow 130ms linear, transform 130ms ease-out;
+          transition: text-shadow 130ms linear, transform 130ms ease-out;
+
+          &::before {
+            content: "✦";
+          }
         }
 
         &:hover span,
         &:focus-visible span {
-          box-shadow: 0 0 1rem var(--star-color);
+          text-shadow: 0 0 1rem var(--star-color);
           transform: translate(-50%, -50%) scale(1.2);
         }
 
@@ -793,7 +813,7 @@ body > footer {
         }
 
         &[aria-pressed="true"] span {
-          box-shadow: 0 0 0 0.22rem var(--background-body), 0 0 0 0.35rem var(--star-color), 0 0 1rem var(--star-color);
+          text-shadow: 0 0 0.2rem var(--background-body), 0 0 0.45rem var(--star-color), 0 0 1rem var(--star-color);
           animation: star-glint 360ms ease-out;
         }
       }

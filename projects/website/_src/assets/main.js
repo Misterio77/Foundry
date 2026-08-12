@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", function () {
         permalink.className = "heading-permalink";
         permalink.href = "#" + encodeURIComponent(headings[i].id);
         permalink.setAttribute("aria-label", "Permalink to " + headings[i].textContent.trim());
-        permalink.textContent = "✦";
+        permalink.textContent = "#";
         headings[i].appendChild(permalink);
     }
 
