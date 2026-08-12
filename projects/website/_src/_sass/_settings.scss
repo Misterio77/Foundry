@@ -1,0 +1,7 @@
+$mobile-breakpoint: 43.75rem;
+
+@mixin mobile {
+  @media (max-width: $mobile-breakpoint) {
+    @content;
+  }
+}

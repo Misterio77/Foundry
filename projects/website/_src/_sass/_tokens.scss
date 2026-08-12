@@ -1,6 +1,9 @@
-// Color roles
+@use "settings";
+
 :root {
   color-scheme: light dark;
+
+  // Color roles
   --background-body: color-mix(in srgb, var(--surface_container_lowest) 88%, var(--primary_container) 12%);
   --background-alt: color-mix(in srgb, var(--surface_container_high) 82%, var(--primary_container) 18%);
   --selection: color-mix(in srgb, var(--primary) 30%, transparent 70%);
@@ -12,19 +15,48 @@
   --surface-container: var(--surface_container);
   --surface-container-low: var(--surface_container_low);
   --surface-container-high: var(--surface_container_high);
-  --glow-soft: 0 0 0.75rem color-mix(in srgb, var(--primary) 30%, transparent);
-  --glow-strong: 0 0 1rem color-mix(in srgb, var(--primary) 65%, transparent);
-  --starlight-rule: linear-gradient(90deg, var(--border), color-mix(in srgb, var(--primary) 75%, var(--border)), var(--border)) 1;
-  --page-width: min(56.25rem, calc(100vw - 3rem));
+  --publication-border: #777;
+  --publication-paper: #fff;
+
+  // Typography
+  --font-body: "Fira Sans", system-ui, sans-serif;
+  --font-display: "Fira Sans Condensed", "Arial Narrow", sans-serif;
+  --font-mono: "Fira Code", monospace;
+
+  // Layout and spacing
   --content-width: 56.25rem;
   --document-width: 72ch;
+  --page-inline-space: 3rem;
+  --page-width: min(var(--content-width), calc(100% - var(--page-inline-space)));
+  --listing-meta-width: 11.5625rem;
+  --listing-gap: 2.5rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  // Borders and effects
+  --rule-width: 1px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --glow-soft: 0 0 var(--space-3) color-mix(in srgb, var(--primary) 30%, transparent);
+  --glow-strong: 0 0 var(--space-4) color-mix(in srgb, var(--primary) 65%, transparent);
+  --starlight-rule: linear-gradient(90deg, var(--border), color-mix(in srgb, var(--primary) 75%, var(--border)), var(--border)) 1;
+
+  // Motion
+  --duration-fast: 100ms;
+  --duration-normal: 130ms;
+  --ease-linear: linear;
+  --ease-out: ease-out;
 
   @media (prefers-color-scheme: light) {
     --background-body: color-mix(in srgb, var(--surface_container_lowest) 89%, var(--primary) 11%);
     --background-alt: color-mix(in srgb, var(--surface_container_high) 79%, var(--primary) 21%);
   }
 
-  @media (max-width: 700px) {
-    --page-width: calc(100vw - 2rem);
+  @include settings.mobile {
+    --page-inline-space: 2rem;
   }
 }

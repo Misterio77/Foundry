@@ -15,19 +15,19 @@
 @include font-face("Fira Sans Condensed", "FiraSansCondensed/SemiBold", normal, 600);
 
 body {
-  font-family: "Fira Sans", system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 code,
 kbd,
 pre,
 samp {
-  font-family: "Fira Code", monospace;
+  font-family: var(--font-mono);
 }
 
 h1,
 h2 {
-  font-family: "Fira Sans Condensed", "Arial Narrow", sans-serif;
+  font-family: var(--font-display);
   font-weight: 600;
 }
 

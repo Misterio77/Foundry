@@ -1,25 +1,27 @@
+@use "settings";
+
 // Footer and theme picker
 body > footer {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   margin-top: 1.4rem;
   padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  border-top: var(--rule-width) solid var(--border);
   border-image: var(--starlight-rule);
   color: var(--text-muted);
   font-size: 0.875rem;
 
-  @media (max-width: 700px) {
+  @include settings.mobile {
     grid-template-columns: 1fr;
   }
 
   > address {
     grid-column: 1 / -1;
     grid-row: 2;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border);
+    padding-top: var(--space-3);
+    border-top: var(--rule-width) solid var(--border);
     border-image: var(--starlight-rule);
     font-style: normal;
   }
@@ -40,7 +42,7 @@ body > footer {
   > address,
   > nav,
   > .copyleft {
-    @media (max-width: 700px) {
+    @include settings.mobile {
       grid-column: 1;
       grid-row: auto;
       justify-self: start;
@@ -49,7 +51,7 @@ body > footer {
   }
 
   > address {
-    @media (max-width: 700px) {
+    @include settings.mobile {
       padding-top: 0;
       border-top: 0;
     }
@@ -60,11 +62,11 @@ body > footer {
     grid-row: 3;
     margin-top: 0.4rem;
 
-    @media (max-width: 700px) {
+    @include settings.mobile {
       grid-row: auto;
     }
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
+    padding-top: var(--space-4);
+    border-top: var(--rule-width) solid var(--border);
     border-image: var(--starlight-rule);
 
     &[hidden] {
@@ -136,14 +138,14 @@ body > footer {
           left: 50%;
           z-index: 1;
           padding: 0.15rem 0.35rem;
-          border: 1px solid var(--border);
+          border: var(--rule-width) solid var(--border);
           color: var(--text-main);
           background: var(--surface-container-high);
           content: attr(data-label);
           opacity: 0;
           pointer-events: none;
           transform: translate(-50%, 0.2rem);
-          transition: opacity 120ms linear, transform 120ms ease-out;
+          transition: opacity var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
           white-space: nowrap;
         }
 
@@ -156,7 +158,7 @@ body > footer {
         &:focus-visible,
         &[aria-pressed="true"] {
           outline: 0;
-          box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--star-color) 85%, transparent), 0 0 0.45rem color-mix(in srgb, var(--star-color) 25%, transparent);
+          box-shadow: inset 0 0 0 var(--rule-width) color-mix(in srgb, var(--star-color) 85%, transparent), 0 0 0.45rem color-mix(in srgb, var(--star-color) 25%, transparent);
         }
 
         span {
@@ -166,9 +168,9 @@ body > footer {
           color: var(--star-color);
           font-size: 1.05rem;
           line-height: 1;
-          text-shadow: 0 0 0.75rem color-mix(in srgb, var(--star-color) 45%, transparent);
+          text-shadow: 0 0 var(--space-3) color-mix(in srgb, var(--star-color) 45%, transparent);
           transform: translate(-50%, -50%);
-          transition: text-shadow 130ms linear, transform 130ms ease-out;
+          transition: text-shadow var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
 
           &::before {
             content: "✦";
@@ -192,7 +194,7 @@ body > footer {
 
         &[aria-pressed="true"] span {
           text-shadow: 0 0 0.2rem var(--background-body), 0 0 0.45rem var(--star-color), 0 0 1rem var(--star-color);
-          animation: star-glint 360ms ease-out;
+          animation: star-glint 360ms var(--ease-out);
         }
       }
     }

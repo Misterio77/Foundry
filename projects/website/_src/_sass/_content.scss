@@ -1,7 +1,7 @@
 // Content
 h1 {
-  max-width: 56.25rem;
-  margin: 0 0 1rem;
+  max-width: var(--content-width);
+  margin: 0 0 var(--space-4);
   color: var(--text-bright);
 }
 
@@ -15,7 +15,7 @@ main > article {
 
   > header {
     margin: 0;
-    padding: 2.25rem 0 1.5rem;
+    padding: 2.25rem 0 var(--space-6);
 
     p {
       margin: 0.2rem 0 0;
@@ -30,12 +30,12 @@ main > article {
     }
 
     > h2 {
-      margin: 2.6rem 0 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border);
+      margin: 2.6rem 0 var(--space-4);
+      padding-top: var(--space-4);
+      border-top: var(--rule-width) solid var(--border);
       border-image: var(--starlight-rule);
       color: var(--primary);
-      font-family: "Fira Sans", system-ui, sans-serif;
+      font-family: var(--font-body);
       font-size: 2rem;
       font-weight: 700;
       line-height: 1.2;
@@ -65,7 +65,7 @@ main > article {
     }
 
     > ul {
-      margin: 1rem 0 1.5rem;
+      margin: var(--space-4) 0 var(--space-6);
       padding-left: 1.35rem;
 
       li + li {
