@@ -32,17 +32,12 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(2.5rem, 3.8vw, 3.5rem);
+  font-size: clamp(2.0rem, 3.8vw, 2.5rem);
   letter-spacing: -0.015em;
   line-height: 1.08;
 
   &::before {
     color: var(--primary);
     content: "> ";
-  }
-
-  &::after {
-    color: var(--text-muted);
-    content: "_";
   }
 }
