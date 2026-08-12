@@ -239,7 +239,7 @@ p {
 }
 
 main > article {
-  max-width: var(--document-width);
+  max-width: var(--content-width);
   margin: 0 auto;
 
   > header {
@@ -306,6 +306,10 @@ main > article {
       }
     }
   }
+}
+
+main > article:not(:has(> section > article)) > section {
+  max-width: var(--document-width);
 }
 
 // Site header
@@ -386,7 +390,6 @@ body > header nav {
 // Article listings
 main > article:has(> section > article) {
   position: relative;
-  max-width: var(--content-width);
 
   > header {
     padding-bottom: 2rem;
