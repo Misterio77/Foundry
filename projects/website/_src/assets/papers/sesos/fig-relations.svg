@@ -1795,26 +1795,6 @@ C 603.283507 302.154177 604.705517 302.743193 606.188047 302.743193
 z
 " clip-path="url(#p81b4e141be)" style="fill: #fe9f9a; stroke: #ffffff; stroke-width: 0.8"/>
    </g>
-   <g id="patch_128">
-    <path d="M 3.00024 428.99976 
-L 3.00024 3.00024 
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="patch_129">
-    <path d="M 788.99976 428.99976 
-L 788.99976 3.00024 
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="patch_130">
-    <path d="M 3.00024 428.99976 
-L 788.99976 428.99976 
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
-   <g id="patch_131">
-    <path d="M 3.00024 3.00024 
-L 788.99976 3.00024 
-" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
-   </g>
    <g id="text_1">
     <g id="patch_132">
      <path d="M 424.047198 75.187752 
