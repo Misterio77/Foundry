@@ -56,12 +56,7 @@ in {
     hosts = mkOption {
       readOnly = true;
       type = types.attrs;
-      default = let
-        homeConfigs = lib.mapAttrs' (n: v: lib.nameValuePair (lib.last (lib.splitString "@" n)) v.config) outputs.homeConfigurations;
-        systemConfigs = lib.mapAttrs (_: v: v.config.home-manager.users.gabriel) outputs.systemConfigs;
-        nixosConfigs = lib.mapAttrs (_: v: v.config.home-manager.users.gabriel) outputs.nixosConfigurations;
-      in
-        lib.mapAttrs (_: v: v.colorscheme.rawColorscheme.colors.${cfg.mode}) (homeConfigs // systemConfigs // nixosConfigs);
+      default = lib.mapAttrs (_: v: v.colors.${cfg.mode}) outputs.colorschemes;
     };
   };
 }
