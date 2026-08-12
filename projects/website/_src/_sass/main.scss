@@ -658,8 +658,13 @@ body > footer {
       }
 
       button {
+        --star-color: var(--star-dark);
         position: absolute;
         top: var(--y);
+
+        @media (prefers-color-scheme: light) {
+          --star-color: var(--star-light);
+        }
         left: var(--x);
         width: 3rem;
         height: 3rem;
