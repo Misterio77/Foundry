@@ -5,9 +5,9 @@
 // Color roles
 :root {
   color-scheme: light dark;
-  --background-body: var(--palette-surface_container_lowest);
-  --background: var(--palette-surface_container);
-  --background-alt: var(--palette-surface_container_high);
+  --background-body: color-mix(in srgb, var(--palette-surface_container_lowest) 88%, var(--palette-primary_container) 12%);
+  --background: color-mix(in srgb, var(--palette-surface_container) 88%, var(--palette-primary_container) 12%);
+  --background-alt: color-mix(in srgb, var(--palette-surface_container_high) 82%, var(--palette-primary_container) 18%);
   --selection: color-mix(in srgb, var(--palette-primary) 30%, transparent 70%);
   --text-main: var(--palette-on_background);
   --text-bright: var(--palette-on_surface);
@@ -46,9 +46,9 @@
   --document-width: 72ch;
 
   @media (prefers-color-scheme: light) {
-    --background-body: var(--palette-inverse_surface);
-    --background: color-mix(in srgb, var(--palette-inverse_surface) 94%, var(--palette-inverse_primary) 6%);
-    --background-alt: color-mix(in srgb, var(--palette-inverse_surface) 88%, var(--palette-inverse_primary) 12%);
+    --background-body: color-mix(in srgb, var(--palette-inverse_surface) 88%, var(--palette-primary_fixed) 12%);
+    --background: color-mix(in srgb, var(--palette-inverse_surface) 82%, var(--palette-primary_fixed_dim) 18%);
+    --background-alt: color-mix(in srgb, var(--palette-inverse_surface) 72%, var(--palette-primary_fixed_dim) 28%);
     --text-main: var(--palette-inverse_on_surface);
     --text-bright: var(--palette-on_primary_fixed);
     --text-muted: var(--palette-on_primary_fixed_variant);
@@ -62,7 +62,7 @@
     --variable: var(--palette-green_container);
     --highlight: var(--palette-magenta_container);
     --surface-container: var(--background);
-    --surface-container-low: var(--palette-inverse_surface);
+    --surface-container-low: var(--background-body);
     --surface-container-high: var(--background-alt);
     --error: var(--palette-error_container);
     --red: var(--palette-red_container);
