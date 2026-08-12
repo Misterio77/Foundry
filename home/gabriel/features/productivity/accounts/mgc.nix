@@ -78,6 +78,19 @@ in {
           set copy = no
         '';
       };
+      aerc = {
+        enable = true;
+        # Pinned at the top of the sidebar, in this order; the rest stays
+        # alphabetical
+        extraAccounts.folders-sort = [
+          "Inbox"
+          "Archive"
+          "Drafts"
+          "Sent"
+          "Junk"
+          "Trash"
+        ];
+      };
     };
 
     calendar.accounts.mgc = {
