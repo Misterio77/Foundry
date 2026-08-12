@@ -309,6 +309,9 @@ This study was supported by CNPq (313245/2021-5), FAPESP (2023/00488-5, 2025/069
 
 ## Appendix: Sustainability fragments and keywords {#sustainability-fragments}
 
+<details markdown="1">
+<summary>Relevant fragments and extracted keywords</summary>
+
 | ID | Relevant fragment(s); extracted keywords in bold |
 |:---|:---|
 | [S001](https://doi.org/10.1002/smr.2270) | [...]its sustainability could be threatened by that **complexity** or **non-uniform** evolution of some packages. |
@@ -422,6 +425,8 @@ This study was supported by CNPq (313245/2021-5), FAPESP (2023/00488-5, 2025/069
 | [S109](https://doi.org/10.1145/3691620.3695286) | [...] the open-source software community has faced various **onboarding** challenges over the past decades which has posed a threat to its sustainability |
 | [S110](https://doi.org/10.1109/SERA61261.2024.10685609) | In a survey of 49 developers from the NPM ecosystem, we find that developers are more likely to maintain **their own packages** rather than contribute to **the ecosystem**.<br><br>For researchers, this study calls for more research into how the different **relationships between developers** of a package may assist it with its sustainability.<br><br>First, we observe that **personal drivers** are the key factors behind developers making contributions to their own packages (40 responses). They also reserve more **challenging** tasks for own packages, as oppose to trying to make to other packages. Second, we find that developers contribute to other packages more due to **professional** (39 responses) rather than personal **drivers**. |
 | [S111](https://doi.org/10.1007/978-3-642-55128-4_21) | [...] **motivate**, **engage**, and **retain** new developers is the way to promote a sustainable amount of developers in a project.<br><br>[...] presents five categories: **Social Interactions**, **Finding a Way to Start**, **Documentation Problems**, **Code Issues**, and **Newcomers’ Knowledge**. |
+
+</details>
 
 ## References
 
