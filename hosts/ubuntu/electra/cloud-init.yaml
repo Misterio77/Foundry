@@ -40,7 +40,7 @@ autoinstall:
       # The installer's netplan wifi config is load-bearing for exactly one
       # boot: the bootstrap below needs the network before system-manager
       # exists to configure it. Once activated, system-manager owns
-      # /etc/systemd/network and wpa_supplicant (see hosts/system-manager/
+      # /etc/systemd/network and wpa_supplicant (see hosts/ubuntu/
       # common/optional/network.nix), and netplan's generator is masked.
       # Stop cloud-init from re-rendering network config on later boots.
       - |
