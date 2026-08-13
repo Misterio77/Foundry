@@ -15,6 +15,7 @@ in {
       inputs.home-manager.nixosModules.home-manager
       inputs.nix-system-graphics.systemModules.default
       ./greetd.nix
+      ./network.nix
       ./nix.nix
       ./pam.nix
       ./sops.nix

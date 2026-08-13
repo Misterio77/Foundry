@@ -34,6 +34,7 @@ in {
         "render"
         "sudo"
         "video"
+        "wpa_supplicant"
       ];
     };
   };
