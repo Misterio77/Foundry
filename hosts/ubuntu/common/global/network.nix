@@ -34,6 +34,17 @@
       RouteMetric=1025
     '';
 
+    # Consider the network up as soon as *any* link is, rather than waiting for
+    # every managed one. Without this the ethernet rule above makes an unplugged
+    # enp44s0 hold network-online.target for the full 120s timeout, delaying
+    # everything ordered after it (wg-quick@wg0). This mirrors NixOS, where
+    # systemd.network.wait-online.anyInterface defaults on with useDHCP.
+    "systemd/system/systemd-networkd-wait-online.service.d/any-interface.conf".text = ''
+      [Service]
+      ExecStart=
+      ExecStart=/usr/lib/systemd/systemd-networkd-wait-online --any
+    '';
+
     # Neuter netplan without uninstalling it: purging netplan.io would take
     # cloud-init, ubuntu-minimal and ubuntu-server-minimal with it. Masking the
     # generator is reverted by `system-manager deactivate`, unlike apt state.
