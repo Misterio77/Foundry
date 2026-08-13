@@ -12,6 +12,12 @@
     # can't be decrypted kills the daemon (and the control socket needed to
     # connect by hand and fix it). Also breaks wpa_gui.
     enableHardening = false;
+    # The P2P device's control socket never gets ctrl_interface_group applied
+    # (upstream doesn't copy the field when creating that interface), so with
+    # the daemon running as root it ends up root-only. wpa_gui scans the socket
+    # directory, hits p2p-dev-* first and gives up before reaching the real
+    # interface. We don't use Wi-Fi Direct anyway.
+    extraConfig = "p2p_disabled=1";
     # Declarative
     secretsFile = config.sops.secrets.wireless.path;
     networks = {
