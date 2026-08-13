@@ -8,6 +8,10 @@
   networking.wireless = {
     enable = true;
     fallbackToWPA2 = false;
+    # The sandbox binds secretsFile into the unit's namespace, so a secret that
+    # can't be decrypted kills the daemon (and the control socket needed to
+    # connect by hand and fix it). Also breaks wpa_gui.
+    enableHardening = false;
     # Declarative
     secretsFile = config.sops.secrets.wireless.path;
     networks = {
