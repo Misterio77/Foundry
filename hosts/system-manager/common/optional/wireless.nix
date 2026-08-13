@@ -1,5 +1,5 @@
 {...}: {
-  imports = [../../../wireless.nix];
+  imports = [../../../common/wireless.nix];
 
   # The upstream module emits no country line; Ubuntu's netplan-generated
   # config used to set this, and dropping it would silently relax the

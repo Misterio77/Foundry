@@ -13,7 +13,7 @@ keys:
     - &pleione age1mhlh8lj8jv58xy9mdhsarfyanckyx8c2xdu09xrn23nrc56e94xserztxx
     - &mgc age1znn83s2w8s6manxmfj488kmrrmp49s2497qvz5kk25xajfyn7cfqk8meu5
 creation_rules:
-  - path_regex: hosts/secrets.ya?ml$
+  - path_regex: hosts/common/secrets.ya?ml$
     key_groups:
     - age:
       - *atlas

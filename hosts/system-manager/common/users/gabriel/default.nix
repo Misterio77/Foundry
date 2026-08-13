@@ -41,11 +41,11 @@ in {
 
   sops.secrets = {
     brave_api_key = {
-      sopsFile = ../../../../secrets.yaml;
+      sopsFile = ../../../../common/secrets.yaml;
       owner = "gabriel";
     };
     kagi_session_token = {
-      sopsFile = ../../../../secrets.yaml;
+      sopsFile = ../../../../common/secrets.yaml;
       owner = "gabriel";
     };
   };
