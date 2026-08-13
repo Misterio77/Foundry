@@ -34,7 +34,12 @@
   # Green (160°)
   wallpaper = pkgs.wallpapers.aenami-northern-lights;
 
-  home.packages = [pkgs.wireguard-tools pkgs.sshuttle];
+  home.packages = [
+    pkgs.wireguard-tools
+    pkgs.sshuttle
+    pkgs.glab
+    pkgs.juju
+  ];
 
   # System Manager and the upstream Nix installer only ship POSIX
   # /etc/profile.d fragments to set up PATH / XDG_DATA_DIRS; fish never sources
