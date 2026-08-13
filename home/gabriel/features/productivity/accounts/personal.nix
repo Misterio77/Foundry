@@ -40,17 +40,6 @@ in {
       msmtp = {
         enable = true;
       };
-      neomutt = {
-        enable = true;
-        mailboxName = "=== Personal ===";
-        extraMailboxes = [
-          "Archive"
-          "Drafts"
-          "Junk"
-          "Sent"
-          "Trash"
-        ];
-      };
       aerc = {
         enable = true;
         # Pinned at the top of the sidebar, in this order; the rest stays

@@ -74,17 +74,6 @@ in {
         extraConfig.auth = "oauthbearer";
         enable = true;
       };
-      neomutt = {
-        enable = true;
-        mailboxName = "=== USP ===";
-        extraMailboxes = [
-          "Archive"
-          "Drafts"
-          "Junk"
-          "Sent"
-          "Trash"
-        ];
-      };
       folders.sent = null;
       aerc = {
         enable = true;

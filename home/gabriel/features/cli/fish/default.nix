@@ -10,7 +10,6 @@
   hasEza = hasPackage "eza";
   hasSpecialisationCli = hasPackage "specialisation";
   hasAwsCli = hasPackage "awscli2";
-  hasNeomutt = config.programs.neomutt.enable;
 in {
   imports = [
     ./tide.nix
@@ -30,8 +29,6 @@ in {
       ls = mkIf hasEza "eza";
       exa = ls;
 
-      mutt = mkIf hasNeomutt "neomutt";
-      m = mutt;
 
       aws-switch = mkIf hasAwsCli "export AWS_PROFILE=(aws configure list-profiles | fzf)";
       awssw = aws-switch;

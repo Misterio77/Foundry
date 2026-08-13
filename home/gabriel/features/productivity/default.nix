@@ -8,7 +8,6 @@
 
     ./mail.nix
     ./calendar.nix
-    ./neomutt.nix
 
     # Pass feature is required
     ../pass
