@@ -30,6 +30,7 @@ autoinstall:
       - policykit-1-gnome
       - power-profiles-daemon
       - rtkit
+      - uidmap # For podman
       - upower
       - wireguard-tools
       - wireplumber
