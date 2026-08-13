@@ -84,11 +84,8 @@ in {
           "Sent"
           "Trash"
         ];
-        # Gmail already stores a copy
-        extraConfig = ''
-          set copy = no
-        '';
       };
+      folders.sent = null;
       aerc = {
         enable = true;
         # Pinned at the top of the sidebar, in this order; the rest stays
