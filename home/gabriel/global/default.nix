@@ -22,6 +22,7 @@
     sessionVariables = {
       NH_FLAKE = "$HOME/Foundry";
     };
+    sessionPath = ["$HOME/Atelier/bin"];
     persistence = {
       "/persist".directories = [
         # Private authored work: notes, papers, drafts, research, and experiments.
