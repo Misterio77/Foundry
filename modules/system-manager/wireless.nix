@@ -3,9 +3,9 @@
 #
 # system-manager reuses nixpkgs' systemdUtils, environment.etc and userborn, so
 # the unit, the generated wpa_supplicant.conf and the wpa_supplicant user all
-# come out unchanged. Only a handful of NixOS-only options are missing: three
-# are read but never acted on, and the two that do matter are re-expressed on
-# top of environment.etc, which the host distro reads from the same paths.
+# come out unchanged. Only a handful of NixOS-only options are missing: four
+# are read but never acted on, and the udev rules are re-expressed on top of
+# environment.etc, which the host distro reads from the same path.
 {
   config,
   lib,
@@ -51,19 +51,7 @@ in {
     };
   };
 
-  config = {
-    environment.etc = lib.mkMerge [
-      (lib.mkIf (cfg.udev.extraRules != "") {
-        "udev/rules.d/99-system-manager.rules".text = cfg.udev.extraRules;
-      })
-      # The attribute name may not carry string context, hence the discard; the
-      # value keeps its reference to the store path.
-      (lib.listToAttrs (map (file: {
-          name = "dbus-1/system.d/" + builtins.unsafeDiscardStringContext (baseNameOf file);
-          value = {source = file;};
-        })
-        (lib.concatMap (pkg: lib.filesystem.listFilesRecursive "${pkg}/share/dbus-1/system.d")
-          (lib.filter (pkg: builtins.pathExists "${pkg}/share/dbus-1/system.d") cfg.dbus.packages))))
-    ];
+  config = lib.mkIf (cfg.udev.extraRules != "") {
+    environment.etc."udev/rules.d/99-system-manager.rules".text = cfg.udev.extraRules;
   };
 }

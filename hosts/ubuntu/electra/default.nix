@@ -11,5 +11,9 @@
   # Pinned rather than auto-detected: with an empty list the upstream module
   # installs a udev rule that calls /run/current-system/systemd/bin/systemctl,
   # a path that does not exist outside NixOS.
-  networking.wireless.interfaces = ["wlp0s20f3"];
+  networking.wireless = {
+    # system-manager lacks the NixOS D-Bus module that installs its policy.
+    dbusControlled = false;
+    interfaces = ["wlp0s20f3"];
+  };
 }
