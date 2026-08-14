@@ -15,6 +15,7 @@ in {
     enable = true;
     extraBinds = {
       global = {
+        "$include" = "${config.programs.aerc.package}/share/aerc/binds.conf";
         "<C-c>" = ":quit<Enter>";
         "<C-q>" = ":quit<Enter>";
       };

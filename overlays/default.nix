@@ -34,6 +34,8 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    aerc = addPatches prev.aerc [./aerc-config-includes.patch];
+
     runelite = addPatches prev.runelite [./runelite-developer-mode.patch];
 
     qutebrowser = prev.qutebrowser.overrideAttrs (oldAttrs: {
