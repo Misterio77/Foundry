@@ -4,7 +4,12 @@
   pkgs,
   ...
 }: let
+  aerc = lib.getExe config.programs.aerc.package;
   c = config.colorscheme.colors;
+  reload = command: ''
+    socket="''${XDG_RUNTIME_DIR:-/run/user/$UID}/aerc.sock"
+    [[ -S "$socket" ]] && ${aerc} '${command}' || true
+  '';
 in {
   programs.aerc = {
     enable = true;
@@ -154,4 +159,8 @@ in {
       };
     };
   };
+
+  home.file."${config.xdg.configHome}/aerc/aerc.conf".onChange = reload ":reload -C";
+  home.file."${config.xdg.configHome}/aerc/stylesets/colorscheme".onChange =
+    reload ":reload -s colorscheme";
 }
