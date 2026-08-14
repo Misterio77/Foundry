@@ -13,6 +13,13 @@
 in {
   programs.aerc = {
     enable = true;
+    extraBinds = {
+      global = {
+        "<C-c>" = ":quit<Enter>";
+        "<C-q>" = ":quit<Enter>";
+      };
+      messages.q = ":quit<Enter>";
+    };
     extraConfig = {
       general.unsafe-accounts-conf = true;
       ui = {
