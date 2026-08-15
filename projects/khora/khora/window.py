@@ -141,7 +141,12 @@ class KhoraWindow(Adw.ApplicationWindow):
             calendars_by_account.setdefault(calendar.account, []).append(calendar)
 
         for account, calendars in calendars_by_account.items():
-            group = Adw.PreferencesGroup(title=self._account_label(account))
+            account_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            account_list.add_css_class("boxed-list")
+            account_row = Adw.ExpanderRow(
+                title=self._account_label(account),
+                expanded=True,
+            )
             for calendar in calendars:
                 toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
                 toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
@@ -149,8 +154,9 @@ class KhoraWindow(Adw.ApplicationWindow):
                 row.add_prefix(self._color_dot(calendar.color))
                 row.add_suffix(toggle)
                 row.set_activatable_widget(toggle)
-                group.add(row)
-            groups.append(group)
+                account_row.add_row(row)
+            account_list.append(account_row)
+            groups.append(account_list)
 
         box.append(
             Gtk.ScrolledWindow(
