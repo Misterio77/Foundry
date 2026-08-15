@@ -80,9 +80,11 @@ class KhoraWindow(Adw.ApplicationWindow):
         calendars.add_css_class("boxed-list")
         assert self._repository is not None
         for calendar in self._repository.calendars:
-            toggle = Gtk.CheckButton(label=calendar.name, active=True)
-            toggle.connect("toggled", self._on_calendar_toggled, calendar.name)
-            row = Gtk.ListBoxRow(child=toggle, activatable=False)
+            toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
+            toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
+            row = Adw.ActionRow(title=calendar.name, activatable=True)
+            row.add_suffix(toggle)
+            row.set_activatable_widget(toggle)
             calendars.append(row)
         box.append(calendars)
         return box
@@ -136,7 +138,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             details += f" · {event.location}"
         return Adw.ActionRow(title=event.summary, subtitle=details)
 
-    def _on_calendar_toggled(self, button: Gtk.CheckButton, name: str) -> None:
+    def _on_calendar_toggled(self, button: Gtk.Switch, _property, name: str) -> None:
         if button.get_active():
             self._visible_calendars.add(name)
         else:
