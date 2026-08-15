@@ -62,6 +62,11 @@ class KhalRepository:
             all_day=event.allday,
             location=event.location or "",
             color=event.color,
+            uid=str(event.uid or ""),
+            description=event.description or "",
+            url=event.url or "",
+            organizer=event.organizer or "",
+            attendees=event.attendees or "",
         )
 
     @staticmethod

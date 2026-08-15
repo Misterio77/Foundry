@@ -307,10 +307,18 @@ class KhoraWindow(Adw.ApplicationWindow):
                     label=event.summary,
                     xalign=0,
                     ellipsize=Pango.EllipsizeMode.END,
-                    tooltip_text=event.summary,
-                    css_classes=["all-day-event", self._event_color_class(event.color)],
                 )
-                box.append(event_label)
+                event_button = Gtk.Button(
+                    child=event_label,
+                    tooltip_text=event.summary,
+                    css_classes=[
+                        "flat",
+                        "all-day-event",
+                        self._event_color_class(event.color),
+                    ],
+                )
+                event_button.connect("clicked", lambda _button, item=event: self._show_event(item))
+                box.append(event_button)
             headers.append(box)
         row.append(headers)
         return row
@@ -343,24 +351,32 @@ class KhoraWindow(Adw.ApplicationWindow):
             label = Gtk.Label(
                 xalign=0,
                 yalign=0,
-                valign=Gtk.Align.START,
-                halign=Gtk.Align.FILL,
                 wrap=event_height >= 40,
                 lines=2 if event_height >= 40 else 1,
                 ellipsize=Pango.EllipsizeMode.END,
-                margin_top=start * self._slot_height,
-                height_request=event_height,
-                tooltip_text=f"{event.time_label} · {event.summary}",
-                css_classes=["timed-event", self._event_color_class(event.color)],
             )
             summary = GLib.markup_escape_text(event.summary)
             if event_height >= 40:
                 label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
             elif event_height >= 22:
                 label.set_markup(f"<b>{summary}</b>")
-            overlay.add_overlay(label)
-            overlay.set_measure_overlay(label, False)
-            overlay.set_clip_overlay(label, True)
+            event_button = Gtk.Button(
+                child=label,
+                valign=Gtk.Align.START,
+                halign=Gtk.Align.FILL,
+                margin_top=start * self._slot_height,
+                height_request=event_height,
+                tooltip_text=f"{event.time_label} · {event.summary}",
+                css_classes=[
+                    "flat",
+                    "timed-event",
+                    self._event_color_class(event.color),
+                ],
+            )
+            event_button.connect("clicked", lambda _button, item=event: self._show_event(item))
+            overlay.add_overlay(event_button)
+            overlay.set_measure_overlay(event_button, False)
+            overlay.set_clip_overlay(event_button, True)
 
         if day == dt.date.today():
             indicator = self._current_time_indicator()
@@ -426,14 +442,50 @@ class KhoraWindow(Adw.ApplicationWindow):
             self._event_color_providers[class_name] = provider
         return class_name
 
-    @staticmethod
-    def _event_row(event: Event) -> Adw.ActionRow:
+    def _event_row(self, event: Event) -> Adw.ActionRow:
         details = f"{event.time_label} · {event.calendar}"
         if event.location:
             details += f" · {event.location}"
-        row = Adw.ActionRow(title=event.summary, subtitle=details)
-        row.add_prefix(KhoraWindow._color_dot(event.color))
+        row = Adw.ActionRow(title=event.summary, subtitle=details, activatable=True)
+        row.add_prefix(self._color_dot(event.color))
+        row.connect("activated", lambda _row: self._show_event(event))
         return row
+
+    def _show_event(self, event: Event) -> None:
+        details = Adw.PreferencesGroup()
+        calendar = Adw.ActionRow(title="Calendar", subtitle=event.calendar)
+        calendar.add_prefix(self._color_dot(event.color))
+        details.add(calendar)
+
+        for title, value in (
+            ("Location", event.location),
+            ("Organizer", event.organizer),
+            ("Attendees", event.attendees),
+            ("Description", event.description),
+        ):
+            if value:
+                details.add(
+                    Adw.ActionRow(
+                        title=title,
+                        subtitle=value,
+                        subtitle_lines=0,
+                        subtitle_selectable=True,
+                    )
+                )
+
+        if event.url:
+            website = Adw.ActionRow(title="Website")
+            website.add_suffix(Gtk.LinkButton(uri=event.url, label="Open link"))
+            details.add(website)
+
+        dialog = Adw.AlertDialog(
+            heading=event.summary,
+            body=event.when_label,
+            extra_child=details,
+            content_width=520,
+        )
+        dialog.add_response("close", "Close")
+        dialog.present(self)
 
     @staticmethod
     def _color_dot(color: str | None) -> Gtk.Label:

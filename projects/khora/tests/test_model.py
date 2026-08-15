@@ -69,6 +69,29 @@ def test_event_slot_range_clamps_events_to_the_day() -> None:
     assert event_slot_range(event, dt.date(2026, 8, 15)) == (0, 48)
 
 
+def test_event_when_label_includes_its_date() -> None:
+    event = Event(
+        summary="Write a calendar",
+        calendar="Personal",
+        start=dt.datetime(2026, 8, 15, 13, 30),
+        end=dt.datetime(2026, 8, 15, 15, 0),
+    )
+
+    assert event.when_label == "Saturday, August 15, 2026 · 13:30–15:00"
+
+
+def test_multiday_all_day_event_when_label_uses_inclusive_last_day() -> None:
+    event = Event(
+        summary="Conference",
+        calendar="Work",
+        start=dt.date(2026, 8, 15),
+        end=dt.date(2026, 8, 18),
+        all_day=True,
+    )
+
+    assert event.when_label == "August 15 – August 17, 2026 · All day"
+
+
 def test_all_day_event_label() -> None:
     event = Event(
         summary="Escape the calendar mines",

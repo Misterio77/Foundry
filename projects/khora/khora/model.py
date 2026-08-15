@@ -71,6 +71,11 @@ class Event:
     all_day: bool = False
     location: str = ""
     color: str | None = None
+    uid: str = ""
+    description: str = ""
+    url: str = ""
+    organizer: str = ""
+    attendees: str = ""
 
     @property
     def time_label(self) -> str:
@@ -80,3 +85,28 @@ class Event:
         assert isinstance(self.start, dt.datetime)
         assert isinstance(self.end, dt.datetime)
         return f"{self.start:%H:%M}–{self.end:%H:%M}"
+
+    @property
+    def when_label(self) -> str:
+        if self.all_day:
+            assert isinstance(self.start, dt.date)
+            assert isinstance(self.end, dt.date)
+            if self.end <= self.start + dt.timedelta(days=1):
+                return f"{self.start:%A, %B} {self.start.day}, {self.start.year} · All day"
+            last_day = self.end - dt.timedelta(days=1)
+            return (
+                f"{self.start:%B} {self.start.day} – "
+                f"{last_day:%B} {last_day.day}, {last_day.year} · All day"
+            )
+
+        assert isinstance(self.start, dt.datetime)
+        assert isinstance(self.end, dt.datetime)
+        if self.start.date() == self.end.date():
+            return (
+                f"{self.start:%A, %B} {self.start.day}, {self.start.year} · "
+                f"{self.time_label}"
+            )
+        return (
+            f"{self.start:%B} {self.start.day}, {self.start:%H:%M} – "
+            f"{self.end:%B} {self.end.day}, {self.end:%H:%M}, {self.end.year}"
+        )
