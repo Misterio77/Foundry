@@ -3,6 +3,7 @@
   python3Packages,
   khal,
   gobject-introspection,
+  gsettings-desktop-schemas,
   gtk4,
   libadwaita,
   wrapGAppsHook4,
@@ -16,8 +17,9 @@ python3Packages.buildPythonApplication {
     root = ./.;
     fileset = lib.fileset.unions [
       ./data
+      ./README.md
       ./pyproject.toml
-      ./src
+      ./khora
       ./tests
     ];
   };
@@ -37,6 +39,10 @@ python3Packages.buildPythonApplication {
     libadwaita
   ];
   nativeCheckInputs = [python3Packages.pytestCheckHook];
+
+  shellHook = ''
+    export XDG_DATA_DIRS="${gsettings-desktop-schemas}/share/gsettings-schemas/${gsettings-desktop-schemas.name}:${gtk4}/share/gsettings-schemas/${gtk4.name}:$XDG_DATA_DIRS"
+  '';
 
   postInstall = ''
     install -Dm644 data/rs.m7.Khora.desktop \

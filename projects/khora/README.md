@@ -28,6 +28,13 @@ nix build .#khora
 nix run .#khora
 ```
 
+For a faster development loop, enter `projects/khora` and let direnv load its
+Khora development shell, then run the source tree directly:
+
+```sh
+python -m khora
+```
+
 Khora reads the same XDG configuration and vdirs as khal. It does not configure
 accounts or perform network synchronization.
 
