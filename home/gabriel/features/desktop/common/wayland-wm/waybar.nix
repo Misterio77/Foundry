@@ -174,10 +174,11 @@ in {
           exec = mkScriptJson {
             deps = [pkgs.findutils pkgs.gawk];
             script = ''
-              inbox_count="$(find ~/Mail/*/Inbox/new -type f | cut -d / -f5 | uniq -c | awk '{$1=$1};1')"
+              inbox_count="$(find ~/Mail/*/Inbox/{new,cur} -type f ! -name '*:2,*S*' \
+                | awk -F / '{count[$5]++} END {for (account in count) print count[account], account}')"
               if [ -z "$inbox_count" ]; then
                 status="read"
-                inbox_count="No new mail!"
+                inbox_count="No unread mail!"
               else
                 status="unread"
               fi
