@@ -689,7 +689,7 @@ class KhoraWindow(Adw.ApplicationWindow):
                 .timed-event.{class_name},
                 .all-day-event.{class_name},
                 .month-event.{class_name} {{
-                  background-color: {color};
+                  background: {color};
                   color: {foreground};
                 }}
                 """
