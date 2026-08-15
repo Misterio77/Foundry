@@ -18,8 +18,22 @@ in {
         "$include" = "${config.programs.aerc.package}/share/aerc/binds.conf";
         "<C-c>" = ":quit<Enter>";
         "<C-q>" = ":quit<Enter>";
+        "\\[t" = "";
+        "\\]t" = "";
+        gn = ":next-tab<Enter>";
+        gp = ":prev-tab<Enter>";
       };
-      messages.q = ":quit<Enter>";
+      messages = {
+        G = "";
+        V = "";
+        X = ":mark -v<Enter>";
+        g = "";
+        ge = ":select -1<Enter>";
+        gg = ":select 0<Enter>";
+        q = ":quit<Enter>";
+        v = "";
+        x = ":mark -t<Enter>";
+      };
     };
     extraConfig = {
       general.unsafe-accounts-conf = true;
