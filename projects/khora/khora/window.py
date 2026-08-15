@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import math
 
 import gi
 
@@ -15,6 +14,7 @@ from .mini_calendar import MiniCalendar
 from .model import (
     Calendar,
     Event,
+    EventPlacement,
     layout_event_lanes,
     month_grid_dates,
     period_label,
@@ -31,6 +31,38 @@ MAX_SLOT_HEIGHT = 64
 ZOOM_STEP = 4
 AGENDA_CHUNK_DAYS = 14
 MAX_EMPTY_AGENDA_CHUNKS = 6
+
+
+class EventLayer(Gtk.Fixed):
+    def __init__(self, slot_height: int) -> None:
+        super().__init__(hexpand=True, vexpand=True)
+        self._slot_height = slot_height
+        self._events: list[tuple[Gtk.Widget, EventPlacement]] = []
+        self._last_width = -1
+        self.add_tick_callback(self._layout_events)
+
+    def add_event(self, widget: Gtk.Widget, placement: EventPlacement) -> None:
+        self._events.append((widget, placement))
+        widget.set_size_request(
+            -1,
+            (placement.end_slot - placement.start_slot) * self._slot_height,
+        )
+        self.put(widget, 0, placement.start_slot * self._slot_height)
+
+    def _layout_events(self, _widget: Gtk.Widget, _frame_clock: Gdk.FrameClock) -> bool:
+        width = self.get_width()
+        if width <= 0 or width == self._last_width:
+            return GLib.SOURCE_CONTINUE
+        self._last_width = width
+        for widget, placement in self._events:
+            left = round(width * placement.lane / placement.lane_count)
+            right = round(width * (placement.lane + 1) / placement.lane_count)
+            widget.set_size_request(
+                max(1, right - left),
+                (placement.end_slot - placement.start_slot) * self._slot_height,
+            )
+            self.move(widget, left, placement.start_slot * self._slot_height)
+        return GLib.SOURCE_CONTINUE
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -588,25 +620,14 @@ class KhoraWindow(Adw.ApplicationWindow):
         overlay = Gtk.Overlay(child=column)
         placements = layout_event_lanes(events, day)
         if placements:
-            lane_grid = math.lcm(*(placement.lane_count for placement in placements))
-            event_layer = Gtk.Grid(
-                row_homogeneous=True,
-                column_homogeneous=True,
-                hexpand=True,
-                vexpand=True,
-            )
-            event_layer.attach(Gtk.Box(), lane_grid - 1, 47, 1, 1)
+            event_layer = EventLayer(self._slot_height)
             for placement in placements:
-                lane_width = lane_grid // placement.lane_count
-                event_layer.attach(
+                event_layer.add_event(
                     self._timed_event_button(
                         placement.event,
                         (placement.end_slot - placement.start_slot) * self._slot_height,
                     ),
-                    placement.lane * lane_width,
-                    placement.start_slot,
-                    lane_width,
-                    placement.end_slot - placement.start_slot,
+                    placement,
                 )
             overlay.add_overlay(event_layer)
             overlay.set_measure_overlay(event_layer, False)
