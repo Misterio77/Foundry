@@ -59,6 +59,7 @@ class Calendar:
     name: str
     color: str | None = None
     readonly: bool = False
+    account: str = "Calendars"
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .colors import display_color
 from .khal_adapter import KhalRepository
-from .model import Event, event_slot_range, period_label, shifted_date, week_dates
+from .model import Calendar, Event, event_slot_range, period_label, shifted_date, week_dates
 
 
 SIDEBAR_WIDTH = 280
@@ -130,19 +130,40 @@ class KhoraWindow(Adw.ApplicationWindow):
         box.append(self._calendar)
         box.append(Gtk.Label(label="Calendars", xalign=0, css_classes=["heading"]))
 
-        calendars = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        calendars.add_css_class("boxed-list")
+        groups = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=18,
+            margin_bottom=6,
+        )
         assert self._repository is not None
+        calendars_by_account: dict[str, list[Calendar]] = {}
         for calendar in self._repository.calendars:
-            toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
-            toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
-            row = Adw.ActionRow(title=calendar.name, activatable=True)
-            row.add_prefix(self._color_dot(calendar.color))
-            row.add_suffix(toggle)
-            row.set_activatable_widget(toggle)
-            calendars.append(row)
-        box.append(calendars)
+            calendars_by_account.setdefault(calendar.account, []).append(calendar)
+
+        for account, calendars in calendars_by_account.items():
+            group = Adw.PreferencesGroup(title=self._account_label(account))
+            for calendar in calendars:
+                toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
+                toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
+                row = Adw.ActionRow(title=calendar.name, activatable=True)
+                row.add_prefix(self._color_dot(calendar.color))
+                row.add_suffix(toggle)
+                row.set_activatable_widget(toggle)
+                group.add(row)
+            groups.append(group)
+
+        box.append(
+            Gtk.ScrolledWindow(
+                child=groups,
+                hscrollbar_policy=Gtk.PolicyType.NEVER,
+                vexpand=True,
+            )
+        )
         return box
+
+    @staticmethod
+    def _account_label(account: str) -> str:
+        return account.replace("-", " ").replace("_", " ").title()
 
     def _build_calendar_view(self) -> Gtk.Widget:
         overlay = Gtk.Overlay()

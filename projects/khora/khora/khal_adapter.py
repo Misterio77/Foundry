@@ -23,6 +23,7 @@ class KhalRepository:
                 name=name,
                 color=settings.get("color") or None,
                 readonly=settings.get("readonly", False),
+                account=Path(settings["path"]).expanduser().parent.name or "Calendars",
             )
             for name, settings in self._config["calendars"].items()
             if settings.get("type", "calendar") == "calendar"
