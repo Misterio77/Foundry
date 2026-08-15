@@ -1,6 +1,6 @@
 import datetime as dt
 
-from khora.model import Event, event_slot_range, week_dates
+from khora.model import Event, event_slot_range, period_label, shifted_date, week_dates
 
 
 def test_timed_event_label_uses_24_hour_time() -> None:
@@ -24,6 +24,27 @@ def test_week_dates_runs_from_monday_through_sunday() -> None:
         dt.date(2026, 8, 15),
         dt.date(2026, 8, 16),
     )
+
+
+def test_period_labels_follow_the_active_view() -> None:
+    day = dt.date(2026, 8, 15)
+
+    assert period_label(day, "day") == "Saturday, August 15, 2026"
+    assert period_label(day, "week") == "August 10–16, 2026"
+    assert period_label(day, "month") == "August 2026"
+    assert period_label(day, "agenda") == "Saturday, August 15, 2026"
+
+
+def test_week_label_handles_month_boundaries() -> None:
+    assert period_label(dt.date(2026, 9, 1), "week") == "August 31 – September 6, 2026"
+
+
+def test_shifted_date_uses_the_active_view_interval() -> None:
+    day = dt.date(2026, 8, 15)
+
+    assert shifted_date(day, "day", 1) == dt.date(2026, 8, 16)
+    assert shifted_date(day, "week", -1) == dt.date(2026, 8, 8)
+    assert shifted_date(dt.date(2026, 1, 31), "month", 1) == dt.date(2026, 2, 28)
 
 
 def test_event_slot_range_rounds_to_half_hours() -> None:

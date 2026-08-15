@@ -10,7 +10,7 @@ from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from .colors import display_color
 from .khal_adapter import KhalRepository
-from .model import Event, event_slot_range, week_dates
+from .model import Event, event_slot_range, period_label, shifted_date, week_dates
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -53,16 +53,53 @@ class KhoraWindow(Adw.ApplicationWindow):
 
     def _build_header(self) -> Adw.HeaderBar:
         header = Adw.HeaderBar()
+        header.set_title_widget(Gtk.Box())
+
+        brand = Gtk.Box(spacing=8, margin_end=12)
+        brand.append(Gtk.Image(icon_name="x-office-calendar-symbolic", pixel_size=24))
+        brand.append(Gtk.Label(label="Khora", css_classes=["title"]))
+        header.pack_start(brand)
         header.pack_start(Gtk.Button(label="Today", action_name="win.today"))
+
+        navigation = Gtk.Box()
+        previous = Gtk.Button(
+            icon_name="go-previous-symbolic",
+            action_name="win.previous",
+            css_classes=["flat"],
+            tooltip_text="Previous period",
+        )
+        following = Gtk.Button(
+            icon_name="go-next-symbolic",
+            action_name="win.next",
+            css_classes=["flat"],
+            tooltip_text="Next period",
+        )
+        navigation.append(previous)
+        navigation.append(following)
+        header.pack_start(navigation)
+
+        self._period_label = Gtk.Label(css_classes=["title"], margin_start=6)
+        header.pack_start(self._period_label)
 
         menu = Gio.Menu()
         for mode in ("day", "week", "month", "agenda"):
             menu.append(mode.title(), f"win.view::{mode}")
         self._view_button = Gtk.MenuButton(label="Week", menu_model=menu)
-        header.set_title_widget(self._view_button)
-        header.pack_end(Gtk.Button(icon_name="view-refresh-symbolic", action_name="win.refresh"))
+
+        controls = Gtk.Box(spacing=6)
+        controls.append(
+            Gtk.Button(
+                icon_name="view-refresh-symbolic",
+                action_name="win.refresh",
+                tooltip_text="Refresh calendars",
+            )
+        )
+        controls.append(self._view_button)
+        header.pack_end(controls)
 
         self._install_action("today", self._on_today)
+        self._install_action("previous", lambda *_: self._navigate(-1))
+        self._install_action("next", lambda *_: self._navigate(1))
         self._install_action("refresh", lambda *_: self._refresh())
         view_action = Gio.SimpleAction.new("view", GLib.VariantType.new("s"))
         view_action.connect("activate", self._on_view_selected)
@@ -122,6 +159,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         if self._repository is None or not hasattr(self, "_view_content"):
             return
 
+        self._period_label.set_label(period_label(self._selected_day(), self._view_mode))
         self._clear_view()
         self._empty.set_visible(False)
         if self._view_mode == "month":
@@ -290,6 +328,12 @@ class KhoraWindow(Adw.ApplicationWindow):
 
     def _on_today(self, *_args) -> None:
         self._calendar.select_day(GLib.DateTime.new_now_local())
+        self._refresh()
+
+    def _navigate(self, direction: int) -> None:
+        target = shifted_date(self._selected_day(), self._view_mode, direction)
+        selected = GLib.DateTime.new_local(target.year, target.month, target.day, 0, 0, 0)
+        self._calendar.select_day(selected)
         self._refresh()
 
     def _on_view_selected(self, _action: Gio.SimpleAction, parameter: GLib.Variant) -> None:
