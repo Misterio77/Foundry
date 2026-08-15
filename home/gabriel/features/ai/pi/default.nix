@@ -49,13 +49,9 @@ in {
         prompts = [./prompts];
         extensions = [customExtensions];
         enableInstallTelemetry = false;
-      }
-      // lib.optionalAttrs
-      (osConfig ? sops && osConfig.sops ? secrets && osConfig.sops.secrets ? brave_api_key && osConfig.sops.secrets ? kagi_session_token)
-      {
         webSearch = {
-          braveApiKeyFile = osConfig.sops.secrets.brave_api_key.path;
-          kagiSessionTokenFile = osConfig.sops.secrets.kagi_session_token.path;
+          braveApiKeyFile = osConfig.sops.secrets.brave_api_key.path or null;
+          kagiSessionTokenFile = osConfig.sops.secrets.kagi_session_token.path or null;
         };
       };
     keybindings = {
