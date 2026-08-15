@@ -36,6 +36,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._toolbar = Adw.ToolbarView()
         self.set_content(self._toolbar)
         self._toolbar.add_top_bar(self._build_header())
+        self._install_accelerators(application)
 
         if error is not None:
             self._toolbar.set_content(self._error_page(error))
@@ -114,6 +115,9 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._install_action("previous", lambda *_: self._navigate(-1))
         self._install_action("next", lambda *_: self._navigate(1))
         self._install_action("refresh", lambda *_: self._refresh())
+        self._install_action("zoom-in", lambda *_: self._zoom_time_grid(1))
+        self._install_action("zoom-out", lambda *_: self._zoom_time_grid(-1))
+        self._install_action("zoom-reset", lambda *_: self._set_time_grid_zoom(DEFAULT_SLOT_HEIGHT))
         view_action = Gio.SimpleAction.new("view", GLib.VariantType.new("s"))
         view_action.connect("activate", self._on_view_selected)
         self.add_action(view_action)
@@ -537,11 +541,15 @@ class KhoraWindow(Adw.ApplicationWindow):
         return True
 
     def _zoom_time_grid(self, direction: int) -> None:
-        slot_height = max(
-            MIN_SLOT_HEIGHT,
-            min(MAX_SLOT_HEIGHT, self._slot_height + direction * ZOOM_STEP),
-        )
-        if slot_height == self._slot_height or not self._displayed_days:
+        self._set_time_grid_zoom(self._slot_height + direction * ZOOM_STEP)
+
+    def _set_time_grid_zoom(self, slot_height: int) -> None:
+        slot_height = max(MIN_SLOT_HEIGHT, min(MAX_SLOT_HEIGHT, slot_height))
+        if (
+            self._view_mode not in {"day", "week"}
+            or slot_height == self._slot_height
+            or not self._displayed_days
+        ):
             return
 
         adjustment = self._calendar_scroller.get_vadjustment()
@@ -575,6 +583,24 @@ class KhoraWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._clock_source)
             self._clock_source = 0
         return False
+
+    @staticmethod
+    def _install_accelerators(application: Adw.Application) -> None:
+        shortcuts = {
+            "win.today": ("t",),
+            "win.previous": ("k", "p", "Page_Up", "<Alt>Left"),
+            "win.next": ("j", "n", "Page_Down", "<Alt>Right"),
+            "win.refresh": ("r", "<Primary>r"),
+            "win.view::day": ("d",),
+            "win.view::week": ("w",),
+            "win.view::month": ("m",),
+            "win.view::agenda": ("a",),
+            "win.zoom-in": ("<Primary>plus", "<Primary>equal"),
+            "win.zoom-out": ("<Primary>minus",),
+            "win.zoom-reset": ("<Primary>0",),
+        }
+        for action, accelerators in shortcuts.items():
+            application.set_accels_for_action(action, accelerators)
 
     def _install_action(self, name: str, callback) -> None:
         action = Gio.SimpleAction.new(name, None)

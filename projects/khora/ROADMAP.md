@@ -5,8 +5,8 @@ The order reflects engineering dependencies rather than product priority.
 
 1. **Event details — done.** Open an event from any view and show its complete
    time, calendar, location, description, URL, organizer, and attendees.
-2. **Keyboard navigation** — previous/next period, Today, view switching, refresh,
-   and zoom shortcuts.
+2. **Keyboard navigation — done.** Previous/next period, Today, view switching,
+   refresh, and zoom shortcuts.
 3. **Session persistence** — remember the selected view, zoom, sidebar width,
    collapsed accounts, and visible calendars across restarts.
 4. **Filesystem monitoring** — refresh when local vdir files change, without

@@ -39,6 +39,14 @@ python -m khora
 Khora reads the same XDG configuration and vdirs as khal. It does not configure
 accounts or perform network synchronization.
 
+## Keyboard shortcuts
+
+- `t`: today;
+- `j` / `n` and `k` / `p`: next and previous period;
+- `d`, `w`, `m`, `a`: day, week, month, and agenda views;
+- `r`: refresh; and
+- `Ctrl`+`+`, `Ctrl`+`-`, `Ctrl`+`0`: zoom in, out, and reset.
+
 ## License
 
 [BSD 2-Clause](LICENSE)
