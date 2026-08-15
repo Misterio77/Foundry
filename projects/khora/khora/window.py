@@ -35,6 +35,8 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._state_store = state_store or StateStore()
         self._state = self._state_store.load()
         self._save_source = 0
+        self._refresh_source = 0
+        self._file_monitors: list[Gio.FileMonitor] = []
         self._visible_calendars: set[str] = set()
         self._collapsed_accounts = set(self._state.collapsed_accounts)
         self._view_mode = (
@@ -87,6 +89,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._split.connect("notify::position", lambda *_: self._schedule_state_save())
         self._toolbar.set_content(self._split)
         self._refresh()
+        self._install_file_monitors()
         self._clock_source = GLib.timeout_add_seconds(30, self._on_clock_tick)
         self.connect("close-request", self._on_close_request)
 
@@ -223,6 +226,29 @@ class KhoraWindow(Adw.ApplicationWindow):
         overlay.set_child(self._calendar_scroller)
         overlay.add_overlay(self._empty)
         return overlay
+
+    def _install_file_monitors(self) -> None:
+        assert self._repository is not None
+        for path in getattr(self._repository, "watch_paths", ()):
+            try:
+                monitor = Gio.File.new_for_path(str(path)).monitor_directory(
+                    Gio.FileMonitorFlags.WATCH_MOVES,
+                    None,
+                )
+            except GLib.Error:
+                continue
+            monitor.connect("changed", self._on_vdir_changed)
+            self._file_monitors.append(monitor)
+
+    def _on_vdir_changed(self, *_args) -> None:
+        if self._refresh_source:
+            GLib.source_remove(self._refresh_source)
+        self._refresh_source = GLib.timeout_add(500, self._refresh_after_vdir_change)
+
+    def _refresh_after_vdir_change(self) -> bool:
+        self._refresh_source = 0
+        self._refresh()
+        return GLib.SOURCE_REMOVE
 
     def _error_page(self, error: str) -> Adw.StatusPage:
         return Adw.StatusPage(
@@ -626,6 +652,12 @@ class KhoraWindow(Adw.ApplicationWindow):
         if self._save_source:
             GLib.source_remove(self._save_source)
             self._save_source = 0
+        if self._refresh_source:
+            GLib.source_remove(self._refresh_source)
+            self._refresh_source = 0
+        for monitor in self._file_monitors:
+            monitor.cancel()
+        self._file_monitors.clear()
         self._save_state()
         return False
 

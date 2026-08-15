@@ -29,6 +29,15 @@ class KhalRepository:
             if settings.get("type", "calendar") == "calendar"
         )
 
+    @property
+    def watch_paths(self) -> tuple[Path, ...]:
+        paths = {
+            Path(settings["path"]).expanduser()
+            for settings in self._config["calendars"].values()
+            if settings.get("type", "calendar") == "calendar"
+        }
+        return tuple(sorted(paths))
+
     def events_on(self, day: dt.date, visible: set[str] | None = None) -> tuple[Event, ...]:
         return self.events_for_days((day,), visible)[day]
 

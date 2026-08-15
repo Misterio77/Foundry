@@ -1,4 +1,5 @@
 import datetime as dt
+from pathlib import Path
 from types import SimpleNamespace
 
 from khora.khal_adapter import KhalRepository
@@ -25,6 +26,10 @@ def test_calendar_accounts_come_from_their_parent_directory() -> None:
     calendars = repository.calendars
 
     assert tuple(calendar.account for calendar in calendars) == ("personal", "university")
+    assert repository.watch_paths == (
+        Path("/home/example/Calendars/personal/default"),
+        Path("/home/example/Calendars/university/classes"),
+    )
 
 
 def test_event_details_cross_the_khal_boundary() -> None:

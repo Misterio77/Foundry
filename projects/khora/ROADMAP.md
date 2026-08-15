@@ -9,8 +9,8 @@ The order reflects engineering dependencies rather than product priority.
    refresh, and zoom shortcuts.
 3. **Session persistence — done.** Remember the selected view, zoom, sidebar
    width, collapsed accounts, and visible calendars across restarts.
-4. **Filesystem monitoring** — refresh when local vdir files change, without
-   requiring the toolbar refresh button.
+4. **Filesystem monitoring — done.** Refresh when local vdir files change,
+   without requiring the toolbar refresh button.
 5. **Forward agenda** — replace the selected-day list with a lazily loaded,
    continuously scrolling agenda starting at the selected date.
 6. **Overlapping event layout** — place simultaneous timed events in adjacent
