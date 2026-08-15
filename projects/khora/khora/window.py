@@ -718,7 +718,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             Gtk.StyleContext.add_provider_for_display(
                 self.get_display(),
                 provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+                Gtk.STYLE_PROVIDER_PRIORITY_USER + 1,
             )
             self._event_color_providers[class_name] = provider
         return class_name
