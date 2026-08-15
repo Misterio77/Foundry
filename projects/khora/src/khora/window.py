@@ -8,6 +8,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, Gtk
 
+from .colors import display_color
 from .khal_adapter import KhalRepository
 from .model import Event
 
@@ -83,6 +84,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
             toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
             row = Adw.ActionRow(title=calendar.name, activatable=True)
+            row.add_prefix(self._color_dot(calendar.color))
             row.add_suffix(toggle)
             row.set_activatable_widget(toggle)
             calendars.append(row)
@@ -136,7 +138,15 @@ class KhoraWindow(Adw.ApplicationWindow):
         details = f"{event.time_label} · {event.calendar}"
         if event.location:
             details += f" · {event.location}"
-        return Adw.ActionRow(title=event.summary, subtitle=details)
+        row = Adw.ActionRow(title=event.summary, subtitle=details)
+        row.add_prefix(KhoraWindow._color_dot(event.color))
+        return row
+
+    @staticmethod
+    def _color_dot(color: str | None) -> Gtk.Label:
+        dot = Gtk.Label(valign=Gtk.Align.CENTER)
+        dot.set_markup(f'<span foreground="{display_color(color)}" size="18000">●</span>')
+        return dot
 
     def _on_calendar_toggled(self, button: Gtk.Switch, _property, name: str) -> None:
         if button.get_active():
