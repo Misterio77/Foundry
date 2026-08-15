@@ -5,7 +5,8 @@ import sys
 import gi
 
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio
+gi.require_version("Gtk", "4.0")
+from gi.repository import Adw, Gdk, Gio, Gtk
 
 from .khal_adapter import KhalRepository
 from .window import KhoraWindow
@@ -18,9 +19,35 @@ class KhoraApplication(Adw.Application):
 
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
+        self._install_styles()
         self._interface_settings = Gio.Settings.new("org.gnome.desktop.interface")
         self._interface_settings.connect("changed::color-scheme", self._on_color_scheme_changed)
         self._apply_color_scheme()
+
+    def _install_styles(self) -> None:
+        provider = Gtk.CssProvider()
+        provider.load_from_string(
+            """
+            .view-tab {
+              border-radius: 0;
+              border-bottom: 2px solid transparent;
+              padding: 8px 14px 6px;
+            }
+
+            .view-tab:checked {
+              background: transparent;
+              border-bottom-color: @accent_color;
+              box-shadow: none;
+            }
+            """
+        )
+        display = Gdk.Display.get_default()
+        if display is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
 
     def _on_color_scheme_changed(self, *_args) -> None:
         self._apply_color_scheme()

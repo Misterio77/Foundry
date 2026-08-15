@@ -57,9 +57,9 @@ class KhoraWindow(Adw.ApplicationWindow):
         today = Gtk.Button(label="Today", action_name="win.today")
         header.pack_start(today)
 
-        view_switcher = Gtk.Box(css_classes=["linked"])
-        day = Gtk.ToggleButton(label="Day", active=True)
-        week = Gtk.ToggleButton(label="Week", group=day)
+        view_switcher = Gtk.Box()
+        day = Gtk.ToggleButton(label="Day", active=True, css_classes=["flat", "view-tab"])
+        week = Gtk.ToggleButton(label="Week", group=day, css_classes=["flat", "view-tab"])
         day.connect("toggled", self._on_view_toggled, "day")
         week.connect("toggled", self._on_view_toggled, "week")
         view_switcher.append(day)
