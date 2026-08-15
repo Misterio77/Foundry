@@ -21,8 +21,9 @@ class KhoraApplication(Adw.Application):
         Adw.Application.do_startup(self)
         self._install_styles()
         self._interface_settings = Gio.Settings.new("org.gnome.desktop.interface")
-        self._interface_settings.connect("changed::color-scheme", self._on_color_scheme_changed)
-        self._apply_color_scheme()
+        for key in ("color-scheme", "gtk-theme", "icon-theme"):
+            self._interface_settings.connect(f"changed::{key}", self._on_appearance_changed)
+        self._apply_appearance()
 
     def _install_styles(self) -> None:
         provider = Gtk.CssProvider()
@@ -93,11 +94,22 @@ class KhoraApplication(Adw.Application):
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
             )
 
-    def _on_color_scheme_changed(self, *_args) -> None:
-        self._apply_color_scheme()
+    def _on_appearance_changed(self, *_args) -> None:
+        self._apply_appearance()
 
-    def _apply_color_scheme(self) -> None:
+    def _apply_appearance(self) -> None:
         assert self._interface_settings is not None
+        gtk_settings = Gtk.Settings.get_default()
+        if gtk_settings is not None:
+            gtk_settings.set_property(
+                "gtk-theme-name",
+                self._interface_settings.get_string("gtk-theme"),
+            )
+            gtk_settings.set_property(
+                "gtk-icon-theme-name",
+                self._interface_settings.get_string("icon-theme"),
+            )
+
         scheme = self._interface_settings.get_string("color-scheme")
         color_scheme = {
             "prefer-dark": Adw.ColorScheme.FORCE_DARK,
