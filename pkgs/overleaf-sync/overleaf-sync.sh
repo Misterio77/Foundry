@@ -17,9 +17,9 @@
 #   old remote tree is removed first, newly ignored tracked files are deleted.
 #   Local symlinks are dereferenced because their targets may live outside the
 #   Overleaf project. Its commit message is written in Git's editor, with the
-#   staged diff included for review. The temporary commit is then shown and
-#   pushed only after confirmation; if there is no diff, nothing is committed
-#   or pushed.
+#   staged diff included for review. Closing the editor with an empty message
+#   aborts the operation; a successful commit is pushed immediately. If there
+#   is no diff, nothing is committed or pushed.
 # - `pull` requires Jujutsu. It applies non-ignored remote additions, changes,
 #   and deletions in an isolated jj workspace while leaving ignored local files
 #   untouched. If a remote regular file matches the resolved contents of an
@@ -177,7 +177,7 @@ clone_overleaf() {
 }
 
 push_project() {
-  local temp_root overleaf_dir matcher_dir manifest confirm
+  local temp_root overleaf_dir matcher_dir manifest
   temp_root="$(mktemp -d -t overleaf-sync.XXXXXXXX)"
   overleaf_dir="$temp_root/overleaf"
   matcher_dir="$temp_root/matcher"
@@ -200,12 +200,7 @@ push_project() {
   fi
 
   git -C "$overleaf_dir" -c commit.gpgsign=false commit --verbose
-  git -C "$overleaf_dir" show
-
-  read -r -p "Push to Overleaf? [y/N] " confirm || true
-  if [[ "${confirm:-}" =~ ^[Yy]$ ]]; then
-    overleaf_git -C "$overleaf_dir" push
-  fi
+  overleaf_git -C "$overleaf_dir" push
 }
 
 pull_project() {
