@@ -19,6 +19,8 @@ DEFAULT_SLOT_HEIGHT = 24
 MIN_SLOT_HEIGHT = 12
 MAX_SLOT_HEIGHT = 64
 ZOOM_STEP = 4
+AGENDA_CHUNK_DAYS = 14
+MAX_EMPTY_AGENDA_CHUNKS = 6
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -70,6 +72,10 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._zoom_scroll_accumulator = 0.0
         self._displayed_days: tuple[dt.date, ...] = ()
         self._displayed_events: dict[dt.date, tuple[Event, ...]] = {}
+        self._agenda_next_day = dt.date.today()
+        self._agenda_loading = False
+        self._agenda_empty_chunks = 0
+        self._agenda_load_more: Gtk.Button | None = None
         self._time_indicator: Gtk.Widget | None = None
         self._rendered_today = dt.date.today()
         self._empty = Adw.StatusPage(
@@ -223,6 +229,10 @@ class KhoraWindow(Adw.ApplicationWindow):
         )
         zoom_controller.connect("scroll", self._on_time_grid_scroll)
         self._calendar_scroller.add_controller(zoom_controller)
+        self._calendar_scroller.get_vadjustment().connect(
+            "value-changed",
+            self._on_calendar_scroll,
+        )
         overlay.set_child(self._calendar_scroller)
         overlay.add_overlay(self._empty)
         return overlay
@@ -279,6 +289,9 @@ class KhoraWindow(Adw.ApplicationWindow):
                 )
             )
             return
+        if self._view_mode == "agenda":
+            self._start_agenda()
+            return
 
         days = self._visible_days()
         try:
@@ -289,10 +302,7 @@ class KhoraWindow(Adw.ApplicationWindow):
 
         self._displayed_days = days
         self._displayed_events = events_by_day
-        if self._view_mode == "agenda":
-            self._render_agenda(days[0], events_by_day[days[0]])
-        else:
-            self._view_content.append(self._time_grid(days, events_by_day))
+        self._view_content.append(self._time_grid(days, events_by_day))
 
     def _visible_days(self) -> tuple[dt.date, ...]:
         if self._view_mode == "week":
@@ -304,21 +314,79 @@ class KhoraWindow(Adw.ApplicationWindow):
         while child := self._view_content.get_first_child():
             self._view_content.remove(child)
 
-    def _render_agenda(self, day: dt.date, events: tuple[Event, ...]) -> None:
-        if not events:
-            self._empty.set_visible(True)
+    def _start_agenda(self) -> None:
+        self._agenda_next_day = self._selected_day()
+        self._agenda_empty_chunks = 0
+        self._agenda_load_more = None
+        self._load_more_agenda()
+
+    def _load_more_agenda(self, *_args) -> None:
+        if self._agenda_loading or self._repository is None or self._view_mode != "agenda":
+            return
+        self._agenda_loading = True
+        if (
+            self._agenda_load_more is not None
+            and self._agenda_load_more.get_parent() is self._view_content
+        ):
+            self._view_content.remove(self._agenda_load_more)
+
+        days = tuple(
+            self._agenda_next_day + dt.timedelta(days=offset)
+            for offset in range(AGENDA_CHUNK_DAYS)
+        )
+        try:
+            events_by_day = self._repository.events_for_days(days, self._visible_calendars)
+        except Exception as error:  # khal exposes several backend-specific errors
+            self._show_toast(str(error))
+            self._agenda_loading = False
             return
 
-        group = Adw.PreferencesGroup(
-            title=f"{day:%A, %B} {day.day}",
-            margin_top=24,
+        found_events = False
+        for day in days:
+            events = events_by_day[day]
+            if not events:
+                continue
+            found_events = True
+            group = Adw.PreferencesGroup(
+                title=f"{day:%A, %B} {day.day}",
+                margin_top=24,
+                margin_start=24,
+                margin_end=24,
+            )
+            for event in events:
+                group.add(self._event_row(event))
+            self._view_content.append(group)
+
+        self._agenda_next_day = days[-1] + dt.timedelta(days=1)
+        self._agenda_load_more = Gtk.Button(
+            label="Load more",
+            halign=Gtk.Align.CENTER,
+            margin_top=12,
             margin_bottom=24,
-            margin_start=24,
-            margin_end=24,
         )
-        for event in events:
-            group.add(self._event_row(event))
-        self._view_content.append(group)
+        self._agenda_load_more.connect("clicked", self._load_more_agenda)
+        self._view_content.append(self._agenda_load_more)
+        self._agenda_loading = False
+
+        if found_events:
+            self._agenda_empty_chunks = 0
+        else:
+            self._agenda_empty_chunks += 1
+            if self._agenda_empty_chunks < MAX_EMPTY_AGENDA_CHUNKS:
+                GLib.idle_add(self._load_next_empty_agenda_chunk)
+
+    def _load_next_empty_agenda_chunk(self) -> bool:
+        self._load_more_agenda()
+        return GLib.SOURCE_REMOVE
+
+    def _on_calendar_scroll(self, adjustment: Gtk.Adjustment) -> None:
+        if self._view_mode != "agenda" or self._agenda_loading:
+            return
+        if (
+            adjustment.get_value() + adjustment.get_page_size()
+            >= adjustment.get_upper() - 240
+        ):
+            self._load_more_agenda()
 
     def _time_grid(
         self,

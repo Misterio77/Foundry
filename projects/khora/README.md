@@ -13,12 +13,12 @@ Khora is an early, read-only prototype. It currently provides:
 - calendar discovery from the existing khal configuration;
 - per-calendar visibility controls;
 - day and week time grids with recurring and all-day events;
-- a read-only agenda for the selected day; and
+- a forward-scrolling, read-only agenda; and
 - explicit refreshes of khal's local index.
 
-A month grid, a forward-scrolling agenda, editing, event details, and filesystem
-monitoring come next. The khal dependency is isolated in `khora.khal_adapter`
-so its internal API can change without leaking through the application.
+A month grid and event editing come next. The khal dependency is isolated in
+`khora.khal_adapter` so its internal API can change without leaking through the
+application.
 
 ## Development
 
