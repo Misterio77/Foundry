@@ -29,6 +29,10 @@ class KhoraApplication(Adw.Application):
         provider = Gtk.CssProvider()
         provider.load_from_string(
             """
+            @define-color accent_color @theme_selected_bg_color;
+            @define-color accent_bg_color @theme_selected_bg_color;
+            @define-color accent_fg_color @theme_selected_fg_color;
+
             .mini-calendar {
               font-size: 0.82em;
             }
