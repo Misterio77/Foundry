@@ -28,9 +28,9 @@ type SearchResult = {
 };
 
 type WebSearchConfig = {
-  kagiApiKeyFile?: string;
-  kagiSessionTokenFile?: string;
-  braveApiKeyFile?: string;
+  kagiApiKeyFile?: string | null;
+  kagiSessionTokenFile?: string | null;
+  braveApiKeyFile?: string | null;
 };
 
 type PiSettings = { webSearch?: WebSearchConfig };
@@ -216,14 +216,14 @@ function loadConfig(): WebSearchConfig {
   ) as PiSettings;
   const config = settings.webSearch ?? {};
   for (const [key, value] of Object.entries(config)) {
-    if (value !== undefined && typeof value !== "string") {
+    if (value != null && typeof value !== "string") {
       throw new Error(`web_search: ${key} must be a string`);
     }
   }
   return config;
 }
 
-function readSecretFile(file: string | undefined): string | undefined {
+function readSecretFile(file: string | null | undefined): string | undefined {
   if (!file) return undefined;
   if (!path.isAbsolute(file)) {
     throw new Error("web_search: secret file paths must be absolute");
