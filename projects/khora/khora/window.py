@@ -14,6 +14,7 @@ from .model import Event, event_slot_range, period_label, shifted_date, week_dat
 
 
 SIDEBAR_WIDTH = 280
+GRID_HEIGHT = 48 * 24
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -40,6 +41,8 @@ class KhoraWindow(Adw.ApplicationWindow):
         assert repository is not None
         self._visible_calendars = {calendar.name for calendar in repository.calendars}
         self._view_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._time_indicator: Gtk.Widget | None = None
+        self._rendered_today = dt.date.today()
         self._empty = Adw.StatusPage(
             icon_name="x-office-calendar-symbolic",
             title="No events",
@@ -53,6 +56,8 @@ class KhoraWindow(Adw.ApplicationWindow):
         split.set_shrink_start_child(False)
         self._toolbar.set_content(split)
         self._refresh()
+        self._clock_source = GLib.timeout_add_seconds(30, self._on_clock_tick)
+        self.connect("close-request", self._on_close_request)
 
     def _build_header(self) -> Adw.HeaderBar:
         header = Adw.HeaderBar()
@@ -164,6 +169,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         if self._repository is None or not hasattr(self, "_view_content"):
             return
 
+        self._rendered_today = dt.date.today()
         self._period_label.set_label(period_label(self._selected_day(), self._view_mode))
         self._clear_view()
         self._empty.set_visible(False)
@@ -196,6 +202,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         return (self._selected_day(),)
 
     def _clear_view(self) -> None:
+        self._time_indicator = None
         while child := self._view_content.get_first_child():
             self._view_content.remove(child)
 
@@ -281,8 +288,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             gutter.attach(label, 0, slot, 1, 1)
         return gutter
 
-    @staticmethod
-    def _day_column(day: dt.date, events: tuple[Event, ...]) -> Gtk.Widget:
+    def _day_column(self, day: dt.date, events: tuple[Event, ...]) -> Gtk.Widget:
         column = Gtk.Grid(row_homogeneous=True, hexpand=True, css_classes=["day-column"])
         for slot in range(48):
             line = Gtk.Box(css_classes=["hour-line" if slot % 2 == 0 else "half-hour-line"])
@@ -307,7 +313,48 @@ class KhoraWindow(Adw.ApplicationWindow):
                 f"<b>{summary}</b>\n<small>{event.time_label}</small>"
             )
             column.attach(label, 0, start, 1, end - start)
-        return column
+
+        overlay = Gtk.Overlay(child=column)
+        if day == dt.date.today():
+            indicator = self._current_time_indicator()
+            overlay.add_overlay(indicator)
+            overlay.set_measure_overlay(indicator, False)
+            overlay.set_clip_overlay(indicator, False)
+        return overlay
+
+    def _current_time_indicator(self) -> Gtk.Widget:
+        indicator = Gtk.Box(
+            valign=Gtk.Align.START,
+            can_target=False,
+            css_classes=["current-time-indicator"],
+        )
+        indicator.append(
+            Gtk.Box(
+                width_request=8,
+                height_request=8,
+                valign=Gtk.Align.CENTER,
+                css_classes=["current-time-dot"],
+            )
+        )
+        indicator.append(
+            Gtk.Box(
+                height_request=2,
+                hexpand=True,
+                valign=Gtk.Align.CENTER,
+                css_classes=["current-time-line"],
+            )
+        )
+        self._time_indicator = indicator
+        self._position_time_indicator()
+        return indicator
+
+    def _position_time_indicator(self) -> None:
+        if self._time_indicator is None:
+            return
+        now = dt.datetime.now()
+        elapsed_minutes = now.hour * 60 + now.minute + now.second / 60
+        offset = round(elapsed_minutes / (24 * 60) * GRID_HEIGHT)
+        self._time_indicator.set_margin_top(max(0, offset - 4))
 
     @staticmethod
     def _event_row(event: Event) -> Adw.ActionRow:
@@ -345,6 +392,21 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._view_mode = parameter.get_string()
         self._view_button.set_label(self._view_mode.title())
         self._refresh()
+
+    def _on_clock_tick(self) -> bool:
+        today = dt.date.today()
+        if self._view_mode in {"day", "week"} and today != self._rendered_today:
+            self._rendered_today = today
+            self._refresh()
+        else:
+            self._position_time_indicator()
+        return GLib.SOURCE_CONTINUE
+
+    def _on_close_request(self, *_args) -> bool:
+        if self._clock_source:
+            GLib.source_remove(self._clock_source)
+            self._clock_source = 0
+        return False
 
     def _install_action(self, name: str, callback) -> None:
         action = Gio.SimpleAction.new(name, None)

@@ -74,6 +74,15 @@ class KhoraApplication(Adw.Application):
             .half-hour-line {
               border-top: 1px solid alpha(@window_fg_color, 0.05);
             }
+
+            .current-time-dot,
+            .current-time-line {
+              background-color: @error_color;
+            }
+
+            .current-time-dot {
+              border-radius: 999px;
+            }
             """
         )
         display = Gdk.Display.get_default()
