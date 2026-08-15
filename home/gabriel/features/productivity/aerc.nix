@@ -29,6 +29,7 @@ in {
         # Nest subfolders (Archive/2025) under their parent, folded by default
         dirlist-tree = true;
         dirlist-collapse = 1;
+        tab-title-account = ''{{.Account}}{{with .Unread "Inbox"}} ({{.}}){{end}}'';
       };
       # Home Manager writes the whole aerc.conf, so aerc's shipped filters
       # don't apply and every viewable type has to be listed here. These are
