@@ -11,6 +11,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
 from .model import Calendar, Event, event_slot_range, period_label, shifted_date, week_dates
+from .state import StateStore, UiState
 
 
 SIDEBAR_WIDTH = 280
@@ -26,12 +27,21 @@ class KhoraWindow(Adw.ApplicationWindow):
         application: Adw.Application,
         repository: KhalRepository | None,
         error: str | None = None,
+        state_store: StateStore | None = None,
     ) -> None:
         super().__init__(application=application, title="Khora")
         self.set_default_size(1280, 800)
         self._repository = repository
+        self._state_store = state_store or StateStore()
+        self._state = self._state_store.load()
+        self._save_source = 0
         self._visible_calendars: set[str] = set()
-        self._view_mode = "week"
+        self._collapsed_accounts = set(self._state.collapsed_accounts)
+        self._view_mode = (
+            self._state.view
+            if self._state.view in {"day", "week", "month", "agenda"}
+            else "week"
+        )
 
         self._toolbar = Adw.ToolbarView()
         self.set_content(self._toolbar)
@@ -43,10 +53,18 @@ class KhoraWindow(Adw.ApplicationWindow):
             return
 
         assert repository is not None
-        self._visible_calendars = {calendar.name for calendar in repository.calendars}
+        calendar_names = {calendar.name for calendar in repository.calendars}
+        self._visible_calendars = (
+            calendar_names
+            if self._state.visible_calendars is None
+            else calendar_names & set(self._state.visible_calendars)
+        )
         self._event_color_providers: dict[str, Gtk.CssProvider] = {}
         self._view_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self._slot_height = DEFAULT_SLOT_HEIGHT
+        self._slot_height = max(
+            MIN_SLOT_HEIGHT,
+            min(MAX_SLOT_HEIGHT, self._state.slot_height),
+        )
         self._zoom_scroll_accumulator = 0.0
         self._displayed_days: tuple[dt.date, ...] = ()
         self._displayed_events: dict[dt.date, tuple[Event, ...]] = {}
@@ -58,12 +76,16 @@ class KhoraWindow(Adw.ApplicationWindow):
             description="A suspiciously peaceful day.",
         )
 
-        split = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, position=SIDEBAR_WIDTH)
-        split.set_start_child(self._build_sidebar())
-        split.set_end_child(self._build_calendar_view())
-        split.set_resize_start_child(False)
-        split.set_shrink_start_child(False)
-        self._toolbar.set_content(split)
+        self._split = Gtk.Paned(
+            orientation=Gtk.Orientation.HORIZONTAL,
+            position=max(280, min(600, self._state.sidebar_width)),
+        )
+        self._split.set_start_child(self._build_sidebar())
+        self._split.set_end_child(self._build_calendar_view())
+        self._split.set_resize_start_child(False)
+        self._split.set_shrink_start_child(False)
+        self._split.connect("notify::position", lambda *_: self._schedule_state_save())
+        self._toolbar.set_content(self._split)
         self._refresh()
         self._clock_source = GLib.timeout_add_seconds(30, self._on_clock_tick)
         self.connect("close-request", self._on_close_request)
@@ -98,7 +120,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         menu = Gio.Menu()
         for mode in ("day", "week", "month", "agenda"):
             menu.append(mode.title(), f"win.view::{mode}")
-        self._view_button = Gtk.MenuButton(label="Week", menu_model=menu)
+        self._view_button = Gtk.MenuButton(label=self._view_mode.title(), menu_model=menu)
 
         controls = Gtk.Box(spacing=6)
         controls.append(
@@ -157,10 +179,14 @@ class KhoraWindow(Adw.ApplicationWindow):
             account_list.add_css_class("boxed-list")
             account_row = Adw.ExpanderRow(
                 title=self._account_label(account),
-                expanded=True,
+                expanded=account not in self._collapsed_accounts,
             )
+            account_row.connect("notify::expanded", self._on_account_expanded, account)
             for calendar in calendars:
-                toggle = Gtk.Switch(active=True, valign=Gtk.Align.CENTER)
+                toggle = Gtk.Switch(
+                    active=calendar.name in self._visible_calendars,
+                    valign=Gtk.Align.CENTER,
+                )
                 toggle.connect("notify::active", self._on_calendar_toggled, calendar.name)
                 row = Adw.ActionRow(title=calendar.name, activatable=True)
                 row.add_prefix(self._color_dot(calendar.color))
@@ -497,11 +523,24 @@ class KhoraWindow(Adw.ApplicationWindow):
         dot.set_markup(f'<span foreground="{display_color(color)}" size="18000">●</span>')
         return dot
 
+    def _on_account_expanded(
+        self,
+        row: Adw.ExpanderRow,
+        _property,
+        account: str,
+    ) -> None:
+        if row.get_expanded():
+            self._collapsed_accounts.discard(account)
+        else:
+            self._collapsed_accounts.add(account)
+        self._schedule_state_save()
+
     def _on_calendar_toggled(self, button: Gtk.Switch, _property, name: str) -> None:
         if button.get_active():
             self._visible_calendars.add(name)
         else:
             self._visible_calendars.discard(name)
+        self._schedule_state_save()
         self._refresh()
 
     def _on_today(self, *_args) -> None:
@@ -517,6 +556,7 @@ class KhoraWindow(Adw.ApplicationWindow):
     def _on_view_selected(self, _action: Gio.SimpleAction, parameter: GLib.Variant) -> None:
         self._view_mode = parameter.get_string()
         self._view_button.set_label(self._view_mode.title())
+        self._schedule_state_save()
         self._refresh()
 
     def _on_time_grid_scroll(
@@ -558,6 +598,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             1,
         )
         self._slot_height = slot_height
+        self._schedule_state_save()
         self._clear_view()
         self._view_content.append(self._time_grid(self._displayed_days, self._displayed_events))
         GLib.idle_add(self._restore_zoom_position, focus)
@@ -582,7 +623,29 @@ class KhoraWindow(Adw.ApplicationWindow):
         if self._clock_source:
             GLib.source_remove(self._clock_source)
             self._clock_source = 0
+        if self._save_source:
+            GLib.source_remove(self._save_source)
+            self._save_source = 0
+        self._save_state()
         return False
+
+    def _schedule_state_save(self) -> None:
+        if self._save_source:
+            GLib.source_remove(self._save_source)
+        self._save_source = GLib.timeout_add(500, self._save_state)
+
+    def _save_state(self) -> bool:
+        self._save_source = 0
+        self._state_store.save(
+            UiState(
+                view=self._view_mode,
+                slot_height=self._slot_height,
+                sidebar_width=self._split.get_position(),
+                visible_calendars=tuple(sorted(self._visible_calendars)),
+                collapsed_accounts=tuple(sorted(self._collapsed_accounts)),
+            )
+        )
+        return GLib.SOURCE_REMOVE
 
     @staticmethod
     def _install_accelerators(application: Adw.Application) -> None:

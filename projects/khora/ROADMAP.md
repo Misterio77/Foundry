@@ -7,8 +7,8 @@ The order reflects engineering dependencies rather than product priority.
    time, calendar, location, description, URL, organizer, and attendees.
 2. **Keyboard navigation — done.** Previous/next period, Today, view switching,
    refresh, and zoom shortcuts.
-3. **Session persistence** — remember the selected view, zoom, sidebar width,
-   collapsed accounts, and visible calendars across restarts.
+3. **Session persistence — done.** Remember the selected view, zoom, sidebar
+   width, collapsed accounts, and visible calendars across restarts.
 4. **Filesystem monitoring** — refresh when local vdir files change, without
    requiring the toolbar refresh button.
 5. **Forward agenda** — replace the selected-day list with a lazily loaded,
