@@ -16,8 +16,10 @@
 #   Git excludes, but not `.gitignore` files above the project root. Because the
 #   old remote tree is removed first, newly ignored tracked files are deleted.
 #   Local symlinks are dereferenced because their targets may live outside the
-#   Overleaf project. The temporary commit is shown and pushed only after
-#   confirmation; if there is no diff, nothing is committed or pushed.
+#   Overleaf project. Its commit message is written in Git's editor, with the
+#   staged diff included for review. The temporary commit is then shown and
+#   pushed only after confirmation; if there is no diff, nothing is committed
+#   or pushed.
 # - `pull` requires Jujutsu. It applies non-ignored remote additions, changes,
 #   and deletions in an isolated jj workspace while leaving ignored local files
 #   untouched. If a remote regular file matches the resolved contents of an
@@ -197,7 +199,7 @@ push_project() {
     return
   fi
 
-  git -C "$overleaf_dir" -c commit.gpgsign=false commit -m "sync from $(basename -- "$project_root")"
+  git -C "$overleaf_dir" -c commit.gpgsign=false commit --verbose
   git -C "$overleaf_dir" show
 
   read -r -p "Push to Overleaf? [y/N] " confirm || true
