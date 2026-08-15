@@ -10,6 +10,12 @@ def week_dates(day: dt.date) -> tuple[dt.date, ...]:
     return tuple(monday + dt.timedelta(days=offset) for offset in range(7))
 
 
+def month_grid_dates(day: dt.date) -> tuple[dt.date, ...]:
+    first = day.replace(day=1)
+    start = first - dt.timedelta(days=first.weekday())
+    return tuple(start + dt.timedelta(days=offset) for offset in range(42))
+
+
 def period_label(day: dt.date, mode: str) -> str:
     if mode == "month":
         return f"{day:%B} {day.year}"

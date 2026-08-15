@@ -4,6 +4,7 @@ from khora.model import (
     Event,
     event_slot_range,
     layout_event_lanes,
+    month_grid_dates,
     period_label,
     shifted_date,
     week_dates,
@@ -31,6 +32,14 @@ def test_week_dates_runs_from_monday_through_sunday() -> None:
         dt.date(2026, 8, 15),
         dt.date(2026, 8, 16),
     )
+
+
+def test_month_grid_contains_six_complete_weeks() -> None:
+    days = month_grid_dates(dt.date(2026, 8, 15))
+
+    assert len(days) == 42
+    assert days[0] == dt.date(2026, 7, 27)
+    assert days[-1] == dt.date(2026, 9, 6)
 
 
 def test_period_labels_follow_the_active_view() -> None:

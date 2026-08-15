@@ -33,11 +33,40 @@ class KhoraApplication(Adw.Application):
               font-size: 0.82em;
             }
 
-            .mini-calendar label {
-              min-width: 20px;
-              min-height: 20px;
+            .mini-calendar .day-button {
+              min-width: 26px;
+              min-height: 30px;
               margin: 0;
               padding: 1px;
+              border-radius: 999px;
+            }
+
+            .mini-calendar .selected {
+              background-color: @accent_bg_color;
+              color: @accent_fg_color;
+            }
+
+            .mini-calendar .other-month {
+              opacity: 0.45;
+            }
+
+            .mini-calendar .today .day-number {
+              color: @accent_color;
+              font-weight: bold;
+            }
+
+            .mini-calendar .selected .day-number {
+              color: @accent_fg_color;
+            }
+
+            .mini-calendar .weekday {
+              opacity: 0.65;
+              font-size: 0.8em;
+            }
+
+            .mini-calendar .event-dots {
+              min-height: 8px;
+              font-size: 0.55em;
             }
 
             .calendar-grid-header {

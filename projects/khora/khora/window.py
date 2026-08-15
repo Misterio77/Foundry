@@ -11,6 +11,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
+from .mini_calendar import MiniCalendar
 from .model import Calendar, Event, layout_event_lanes, period_label, shifted_date, week_dates
 from .state import StateStore, UiState
 
@@ -96,6 +97,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._split.connect("notify::position", lambda *_: self._schedule_state_save())
         self._toolbar.set_content(self._split)
         self._refresh()
+        self._refresh_mini_calendar()
         self._install_file_monitors()
         self._clock_source = GLib.timeout_add_seconds(30, self._on_clock_tick)
         self.connect("close-request", self._on_close_request)
@@ -146,7 +148,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._install_action("today", self._on_today)
         self._install_action("previous", lambda *_: self._navigate(-1))
         self._install_action("next", lambda *_: self._navigate(1))
-        self._install_action("refresh", lambda *_: self._refresh())
+        self._install_action("refresh", lambda *_: self._refresh_all())
         self._install_action("zoom-in", lambda *_: self._zoom_time_grid(1))
         self._install_action("zoom-out", lambda *_: self._zoom_time_grid(-1))
         self._install_action("zoom-reset", lambda *_: self._set_time_grid_zoom(DEFAULT_SLOT_HEIGHT))
@@ -165,12 +167,9 @@ class KhoraWindow(Adw.ApplicationWindow):
             margin_end=10,
             css_classes=["sidebar"],
         )
-        self._calendar = Gtk.Calendar(
-            show_day_names=True,
-            show_heading=True,
-            css_classes=["mini-calendar"],
-        )
+        self._calendar = MiniCalendar()
         self._calendar.connect("day-selected", lambda *_: self._refresh())
+        self._calendar.connect("month-changed", lambda *_: self._refresh_mini_calendar())
         box.append(self._calendar)
         box.append(Gtk.Label(label="Calendars", xalign=0, css_classes=["heading"]))
 
@@ -258,7 +257,7 @@ class KhoraWindow(Adw.ApplicationWindow):
 
     def _refresh_after_vdir_change(self) -> bool:
         self._refresh_source = 0
-        self._refresh()
+        self._refresh_all()
         return GLib.SOURCE_REMOVE
 
     def _error_page(self, error: str) -> Adw.StatusPage:
@@ -269,8 +268,28 @@ class KhoraWindow(Adw.ApplicationWindow):
         )
 
     def _selected_day(self) -> dt.date:
-        selected: GLib.DateTime = self._calendar.get_date()
-        return dt.date(selected.get_year(), selected.get_month(), selected.get_day_of_month())
+        return self._calendar.selected_day
+
+    def _refresh_all(self) -> None:
+        self._refresh()
+        self._refresh_mini_calendar()
+
+    def _refresh_mini_calendar(self) -> None:
+        if self._repository is None or not hasattr(self, "_calendar"):
+            return
+        days = self._calendar.visible_days
+        try:
+            events_by_day = self._repository.events_for_days(days, self._visible_calendars)
+        except Exception as error:  # khal exposes several backend-specific errors
+            self._show_toast(str(error))
+            return
+        self._calendar.set_event_colors(
+            {
+                day: tuple(event.color for event in events_by_day[day])
+                for day in days
+                if events_by_day[day]
+            }
+        )
 
     def _refresh(self) -> None:
         if self._repository is None or not hasattr(self, "_view_content"):
@@ -654,17 +673,14 @@ class KhoraWindow(Adw.ApplicationWindow):
         else:
             self._visible_calendars.discard(name)
         self._schedule_state_save()
-        self._refresh()
+        self._refresh_all()
 
     def _on_today(self, *_args) -> None:
-        self._calendar.select_day(GLib.DateTime.new_now_local())
-        self._refresh()
+        self._calendar.select_day(dt.date.today())
 
     def _navigate(self, direction: int) -> None:
         target = shifted_date(self._selected_day(), self._view_mode, direction)
-        selected = GLib.DateTime.new_local(target.year, target.month, target.day, 0, 0, 0)
-        self._calendar.select_day(selected)
-        self._refresh()
+        self._calendar.select_day(target)
 
     def _on_view_selected(self, _action: Gio.SimpleAction, parameter: GLib.Variant) -> None:
         self._view_mode = parameter.get_string()
@@ -727,7 +743,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         today = dt.date.today()
         if self._view_mode in {"day", "week"} and today != self._rendered_today:
             self._rendered_today = today
-            self._refresh()
+            self._refresh_all()
         else:
             self._position_time_indicator()
         return GLib.SOURCE_CONTINUE
