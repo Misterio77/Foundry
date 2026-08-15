@@ -28,16 +28,40 @@ class KhoraApplication(Adw.Application):
         provider = Gtk.CssProvider()
         provider.load_from_string(
             """
-            .view-tab {
-              border-radius: 0;
-              border-bottom: 2px solid transparent;
-              padding: 8px 14px 6px;
+            .calendar-grid-header {
+              background-color: @headerbar_bg_color;
+              border-bottom: 1px solid alpha(@window_fg_color, 0.15);
             }
 
-            .view-tab:checked {
-              background: transparent;
-              border-bottom-color: @accent_color;
-              box-shadow: none;
+            .day-header {
+              min-height: 42px;
+              padding: 8px 4px;
+              border-left: 1px solid alpha(@window_fg_color, 0.1);
+            }
+
+            .all-day-event,
+            .timed-event {
+              margin: 1px 2px;
+              padding: 3px 5px;
+              border-radius: 4px;
+              background-color: alpha(@accent_bg_color, 0.14);
+            }
+
+            .time-label {
+              color: alpha(@window_fg_color, 0.6);
+              font-size: 0.75em;
+            }
+
+            .day-column {
+              border-left: 1px solid alpha(@window_fg_color, 0.1);
+            }
+
+            .hour-line {
+              border-top: 1px solid alpha(@window_fg_color, 0.13);
+            }
+
+            .half-hour-line {
+              border-top: 1px solid alpha(@window_fg_color, 0.05);
             }
             """
         )

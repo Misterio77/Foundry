@@ -12,12 +12,13 @@ Khora is an early, read-only prototype. It currently provides:
 - a native GTK 4/libadwaita interface;
 - calendar discovery from the existing khal configuration;
 - per-calendar visibility controls;
-- day and week agendas with recurring and all-day events; and
+- day and week time grids with recurring and all-day events;
+- a read-only agenda for the selected day; and
 - explicit refreshes of khal's local index.
 
-Editing, a month view, event details, and filesystem monitoring come next. The
-khal dependency is isolated in `khora.khal_adapter` so its internal API can
-change without leaking through the application.
+A month grid, a forward-scrolling agenda, editing, event details, and filesystem
+monitoring come next. The khal dependency is isolated in `khora.khal_adapter`
+so its internal API can change without leaking through the application.
 
 ## Development
 
