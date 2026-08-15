@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
 
 import gi
 
@@ -10,7 +11,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
-from .model import Calendar, Event, event_slot_range, period_label, shifted_date, week_dates
+from .model import Calendar, Event, layout_event_lanes, period_label, shifted_date, week_dates
 from .state import StateStore, UiState
 
 
@@ -469,38 +470,31 @@ class KhoraWindow(Adw.ApplicationWindow):
             column.attach(line, 0, slot, 1, 1)
 
         overlay = Gtk.Overlay(child=column)
-        for event in events:
-            start, end = event_slot_range(event, day)
-            event_height = (end - start) * self._slot_height
-            label = Gtk.Label(
-                xalign=0,
-                yalign=0,
-                wrap=event_height >= 40,
-                lines=2 if event_height >= 40 else 1,
-                ellipsize=Pango.EllipsizeMode.END,
+        placements = layout_event_lanes(events, day)
+        if placements:
+            lane_grid = math.lcm(*(placement.lane_count for placement in placements))
+            event_layer = Gtk.Grid(
+                row_homogeneous=True,
+                column_homogeneous=True,
+                hexpand=True,
+                vexpand=True,
             )
-            summary = GLib.markup_escape_text(event.summary)
-            if event_height >= 40:
-                label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
-            elif event_height >= 22:
-                label.set_markup(f"<b>{summary}</b>")
-            event_button = Gtk.Button(
-                child=label,
-                valign=Gtk.Align.START,
-                halign=Gtk.Align.FILL,
-                margin_top=start * self._slot_height,
-                height_request=event_height,
-                tooltip_text=f"{event.time_label} · {event.summary}",
-                css_classes=[
-                    "flat",
-                    "timed-event",
-                    self._event_color_class(event.color),
-                ],
-            )
-            event_button.connect("clicked", lambda _button, item=event: self._show_event(item))
-            overlay.add_overlay(event_button)
-            overlay.set_measure_overlay(event_button, False)
-            overlay.set_clip_overlay(event_button, True)
+            event_layer.attach(Gtk.Box(), lane_grid - 1, 47, 1, 1)
+            for placement in placements:
+                lane_width = lane_grid // placement.lane_count
+                event_layer.attach(
+                    self._timed_event_button(
+                        placement.event,
+                        (placement.end_slot - placement.start_slot) * self._slot_height,
+                    ),
+                    placement.lane * lane_width,
+                    placement.start_slot,
+                    lane_width,
+                    placement.end_slot - placement.start_slot,
+                )
+            overlay.add_overlay(event_layer)
+            overlay.set_measure_overlay(event_layer, False)
+            overlay.set_clip_overlay(event_layer, True)
 
         if day == dt.date.today():
             indicator = self._current_time_indicator()
@@ -508,6 +502,31 @@ class KhoraWindow(Adw.ApplicationWindow):
             overlay.set_measure_overlay(indicator, False)
             overlay.set_clip_overlay(indicator, False)
         return overlay
+
+    def _timed_event_button(self, event: Event, event_height: int) -> Gtk.Button:
+        label = Gtk.Label(
+            xalign=0,
+            yalign=0,
+            wrap=event_height >= 40,
+            lines=2 if event_height >= 40 else 1,
+            ellipsize=Pango.EllipsizeMode.END,
+        )
+        summary = GLib.markup_escape_text(event.summary)
+        if event_height >= 40:
+            label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
+        elif event_height >= 22:
+            label.set_markup(f"<b>{summary}</b>")
+        button = Gtk.Button(
+            child=label,
+            tooltip_text=f"{event.time_label} · {event.summary}",
+            css_classes=[
+                "flat",
+                "timed-event",
+                self._event_color_class(event.color),
+            ],
+        )
+        button.connect("clicked", lambda _button: self._show_event(event))
+        return button
 
     def _current_time_indicator(self) -> Gtk.Widget:
         indicator = Gtk.Box(

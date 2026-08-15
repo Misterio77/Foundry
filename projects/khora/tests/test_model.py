@@ -1,6 +1,13 @@
 import datetime as dt
 
-from khora.model import Event, event_slot_range, period_label, shifted_date, week_dates
+from khora.model import (
+    Event,
+    event_slot_range,
+    layout_event_lanes,
+    period_label,
+    shifted_date,
+    week_dates,
+)
 
 
 def test_timed_event_label_uses_24_hour_time() -> None:
@@ -45,6 +52,36 @@ def test_shifted_date_uses_the_active_view_interval() -> None:
     assert shifted_date(day, "day", 1) == dt.date(2026, 8, 16)
     assert shifted_date(day, "week", -1) == dt.date(2026, 8, 8)
     assert shifted_date(dt.date(2026, 1, 31), "month", 1) == dt.date(2026, 2, 28)
+
+
+def test_overlapping_events_are_assigned_adjacent_lanes() -> None:
+    day = dt.date(2026, 8, 15)
+    first = Event(
+        "First",
+        "Work",
+        dt.datetime(2026, 8, 15, 9, 0),
+        dt.datetime(2026, 8, 15, 10, 0),
+    )
+    second = Event(
+        "Second",
+        "Work",
+        dt.datetime(2026, 8, 15, 9, 30),
+        dt.datetime(2026, 8, 15, 10, 30),
+    )
+    later = Event(
+        "Later",
+        "Work",
+        dt.datetime(2026, 8, 15, 11, 0),
+        dt.datetime(2026, 8, 15, 12, 0),
+    )
+
+    placements = layout_event_lanes((first, second, later), day)
+
+    assert [(item.event, item.lane, item.lane_count) for item in placements] == [
+        (first, 0, 2),
+        (second, 1, 2),
+        (later, 0, 1),
+    ]
 
 
 def test_event_slot_range_rounds_to_half_hours() -> None:

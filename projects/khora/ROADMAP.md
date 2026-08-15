@@ -13,8 +13,8 @@ The order reflects engineering dependencies rather than product priority.
    without requiring the toolbar refresh button.
 5. **Forward agenda — done.** A lazily loaded, continuously scrolling agenda
    starts at the selected date.
-6. **Overlapping event layout** — place simultaneous timed events in adjacent
-   lanes instead of drawing them on top of each other.
+6. **Overlapping event layout — done.** Simultaneous timed events occupy
+   adjacent lanes instead of drawing on top of each other.
 7. **Mini-calendar indicators** — show calendar-colored event dots on dates in
    the sidebar. GTK's stock calendar cannot render these, so this needs a small
    custom month widget.

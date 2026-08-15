@@ -110,3 +110,43 @@ class Event:
             f"{self.start:%B} {self.start.day}, {self.start:%H:%M} – "
             f"{self.end:%B} {self.end.day}, {self.end:%H:%M}, {self.end.year}"
         )
+
+
+@dataclass(frozen=True)
+class EventPlacement:
+    event: Event
+    start_slot: int
+    end_slot: int
+    lane: int
+    lane_count: int
+
+
+def layout_event_lanes(events: tuple[Event, ...], day: dt.date) -> tuple[EventPlacement, ...]:
+    intervals = sorted(
+        ((event, *event_slot_range(event, day)) for event in events),
+        key=lambda item: (item[1], item[2], item[0].summary.casefold()),
+    )
+    groups: list[list[tuple[Event, int, int]]] = []
+    for interval in intervals:
+        if not groups or interval[1] >= max(item[2] for item in groups[-1]):
+            groups.append([interval])
+        else:
+            groups[-1].append(interval)
+
+    placements: list[EventPlacement] = []
+    for group in groups:
+        active: list[tuple[int, int]] = []
+        assigned: list[tuple[Event, int, int, int]] = []
+        lane_count = 0
+        for event, start, end in group:
+            active = [(active_end, lane) for active_end, lane in active if active_end > start]
+            occupied = {lane for _active_end, lane in active}
+            lane = next(candidate for candidate in range(len(occupied) + 1) if candidate not in occupied)
+            active.append((end, lane))
+            lane_count = max(lane_count, lane + 1)
+            assigned.append((event, start, end, lane))
+        placements.extend(
+            EventPlacement(event, start, end, lane, lane_count)
+            for event, start, end, lane in assigned
+        )
+    return tuple(placements)
