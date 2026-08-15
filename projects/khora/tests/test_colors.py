@@ -1,4 +1,4 @@
-from khora.colors import display_color
+from khora.colors import contrasting_foreground, display_color
 
 
 def test_preserves_html_colors() -> None:
@@ -16,3 +16,8 @@ def test_converts_xterm_color_cube() -> None:
 def test_unknown_colors_use_accent_fallback() -> None:
     assert display_color("auto") == "#3584e4"
     assert display_color("chartreuse, probably") == "#3584e4"
+
+
+def test_chooses_contrasting_event_text() -> None:
+    assert contrasting_foreground("dark blue") == "#ffffff"
+    assert contrasting_foreground("yellow") == "#000000"

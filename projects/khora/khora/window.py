@@ -8,7 +8,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
-from .colors import display_color
+from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
 from .model import Calendar, Event, event_slot_range, period_label, shifted_date, week_dates
 
@@ -40,6 +40,7 @@ class KhoraWindow(Adw.ApplicationWindow):
 
         assert repository is not None
         self._visible_calendars = {calendar.name for calendar in repository.calendars}
+        self._event_color_providers: dict[str, Gtk.CssProvider] = {}
         self._view_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._time_indicator: Gtk.Widget | None = None
         self._rendered_today = dt.date.today()
@@ -293,7 +294,7 @@ class KhoraWindow(Adw.ApplicationWindow):
                     xalign=0,
                     ellipsize=Pango.EllipsizeMode.END,
                     tooltip_text=event.summary,
-                    css_classes=["all-day-event"],
+                    css_classes=["all-day-event", self._event_color_class(event.color)],
                 )
                 box.append(event_label)
             headers.append(box)
@@ -331,14 +332,10 @@ class KhoraWindow(Adw.ApplicationWindow):
                 lines=2,
                 ellipsize=Pango.EllipsizeMode.END,
                 tooltip_text=f"{event.time_label} · {event.summary}",
-                css_classes=["timed-event"],
+                css_classes=["timed-event", self._event_color_class(event.color)],
             )
             summary = GLib.markup_escape_text(event.summary)
-            color = display_color(event.color)
-            label.set_markup(
-                f'<span foreground="{color}">▌</span> '
-                f"<b>{summary}</b>\n<small>{event.time_label}</small>"
-            )
+            label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
             column.attach(label, 0, start, 1, end - start)
 
         overlay = Gtk.Overlay(child=column)
@@ -382,6 +379,29 @@ class KhoraWindow(Adw.ApplicationWindow):
         elapsed_minutes = now.hour * 60 + now.minute + now.second / 60
         offset = round(elapsed_minutes / (24 * 60) * GRID_HEIGHT)
         self._time_indicator.set_margin_top(max(0, offset - 4))
+
+    def _event_color_class(self, value: str | None) -> str:
+        color = display_color(value)
+        class_name = f"event-color-{color.lstrip('#').lower()}"
+        if class_name not in self._event_color_providers:
+            provider = Gtk.CssProvider()
+            foreground = contrasting_foreground(value)
+            provider.load_from_string(
+                f"""
+                .timed-event.{class_name},
+                .all-day-event.{class_name} {{
+                  background-color: {color};
+                  color: {foreground};
+                }}
+                """
+            )
+            Gtk.StyleContext.add_provider_for_display(
+                self.get_display(),
+                provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
+            self._event_color_providers[class_name] = provider
+        return class_name
 
     @staticmethod
     def _event_row(event: Event) -> Adw.ActionRow:

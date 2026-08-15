@@ -61,6 +61,20 @@ def display_color(value: str | None) -> str:
     return _DEFAULT
 
 
+def contrasting_foreground(value: str | None) -> str:
+    """Choose black or white for readable text over a calendar color."""
+    color = display_color(value).lstrip("#")
+    if len(color) == 3:
+        color = "".join(channel * 2 for channel in color)
+    red, green, blue = (int(color[index : index + 2], 16) / 255 for index in (0, 2, 4))
+
+    def linear(channel: float) -> float:
+        return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    return "#000000" if luminance > 0.179 else "#ffffff"
+
+
 def _xterm_color(index: int) -> str:
     if index < 16:
         return _ANSI[index]
