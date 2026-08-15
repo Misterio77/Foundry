@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "khora-calendar"
+version = "0.1.0"
+description = "A graphical calendar for local vdirs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-2-Clause"
+dependencies = [
+  "khal>=0.14,<0.15",
+  "PyGObject>=3.50",
+]
+
+[project.scripts]
+khora = "khora.application:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -7,6 +7,7 @@
   jellysearch = pkgs.callPackage ./jellysearch {};
   website = pkgs.callPackage ../projects/website {};
   runelite-mcp = pkgs.callPackage ../projects/runelite-mcp {};
+  khora = pkgs.callPackage ../projects/khora {};
   runescape = pkgs.callPackage ./runescape {};
 
   # Personal scripts
