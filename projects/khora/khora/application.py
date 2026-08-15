@@ -28,6 +28,17 @@ class KhoraApplication(Adw.Application):
         provider = Gtk.CssProvider()
         provider.load_from_string(
             """
+            .mini-calendar {
+              font-size: 0.82em;
+            }
+
+            .mini-calendar label {
+              min-width: 20px;
+              min-height: 20px;
+              margin: 0;
+              padding: 1px;
+            }
+
             .calendar-grid-header {
               background-color: @headerbar_bg_color;
               border-bottom: 1px solid alpha(@window_fg_color, 0.15);

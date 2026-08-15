@@ -13,6 +13,9 @@ from .khal_adapter import KhalRepository
 from .model import Event, event_slot_range, period_label, shifted_date, week_dates
 
 
+SIDEBAR_WIDTH = 280
+
+
 class KhoraWindow(Adw.ApplicationWindow):
     def __init__(
         self,
@@ -43,7 +46,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             description="A suspiciously peaceful day.",
         )
 
-        split = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, position=260)
+        split = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, position=SIDEBAR_WIDTH)
         split.set_start_child(self._build_sidebar())
         split.set_end_child(self._build_calendar_view())
         split.set_resize_start_child(False)
@@ -55,10 +58,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Box())
 
-        brand = Gtk.Box(spacing=8, margin_end=12)
-        brand.append(Gtk.Image(icon_name="x-office-calendar-symbolic", pixel_size=24))
-        brand.append(Gtk.Label(label="Khora", css_classes=["title"]))
-        header.pack_start(brand)
+        header.pack_start(Gtk.Box(width_request=SIDEBAR_WIDTH - 12))
         header.pack_start(Gtk.Button(label="Today", action_name="win.today"))
 
         navigation = Gtk.Box()
@@ -109,13 +109,18 @@ class KhoraWindow(Adw.ApplicationWindow):
     def _build_sidebar(self) -> Gtk.Widget:
         box = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=18,
-            margin_top=18,
-            margin_bottom=18,
-            margin_start=18,
-            margin_end=18,
+            spacing=14,
+            margin_top=12,
+            margin_bottom=12,
+            margin_start=10,
+            margin_end=10,
+            css_classes=["sidebar"],
         )
-        self._calendar = Gtk.Calendar(show_day_names=True, show_heading=True)
+        self._calendar = Gtk.Calendar(
+            show_day_names=True,
+            show_heading=True,
+            css_classes=["mini-calendar"],
+        )
         self._calendar.connect("day-selected", lambda *_: self._refresh())
         box.append(self._calendar)
         box.append(Gtk.Label(label="Calendars", xalign=0, css_classes=["heading"]))
