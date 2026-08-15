@@ -12,7 +12,15 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
 from .mini_calendar import MiniCalendar
-from .model import Calendar, Event, layout_event_lanes, period_label, shifted_date, week_dates
+from .model import (
+    Calendar,
+    Event,
+    layout_event_lanes,
+    month_grid_dates,
+    period_label,
+    shifted_date,
+    week_dates,
+)
 from .state import StateStore, UiState
 
 
@@ -299,16 +307,6 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._period_label.set_label(period_label(self._selected_day(), self._view_mode))
         self._clear_view()
         self._empty.set_visible(False)
-        if self._view_mode == "month":
-            self._view_content.append(
-                Adw.StatusPage(
-                    icon_name="x-office-calendar-symbolic",
-                    title="Month view",
-                    description="Coming next.",
-                    vexpand=True,
-                )
-            )
-            return
         if self._view_mode == "agenda":
             self._start_agenda()
             return
@@ -322,11 +320,16 @@ class KhoraWindow(Adw.ApplicationWindow):
 
         self._displayed_days = days
         self._displayed_events = events_by_day
-        self._view_content.append(self._time_grid(days, events_by_day))
+        if self._view_mode == "month":
+            self._view_content.append(self._month_grid(days, events_by_day))
+        else:
+            self._view_content.append(self._time_grid(days, events_by_day))
 
     def _visible_days(self) -> tuple[dt.date, ...]:
         if self._view_mode == "week":
             return week_dates(self._selected_day())
+        if self._view_mode == "month":
+            return month_grid_dates(self._selected_day())
         return (self._selected_day(),)
 
     def _clear_view(self) -> None:
@@ -407,6 +410,100 @@ class KhoraWindow(Adw.ApplicationWindow):
             >= adjustment.get_upper() - 240
         ):
             self._load_more_agenda()
+
+    def _month_grid(
+        self,
+        days: tuple[dt.date, ...],
+        events_by_day: dict[dt.date, tuple[Event, ...]],
+    ) -> Gtk.Widget:
+        view = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        weekdays = Gtk.Box(homogeneous=True, css_classes=["month-weekdays"])
+        monday = dt.date(2024, 1, 1)
+        for offset in range(7):
+            weekdays.append(
+                Gtk.Label(
+                    label=f"{monday + dt.timedelta(days=offset):%A}",
+                    css_classes=["heading"],
+                )
+            )
+        view.append(weekdays)
+
+        grid = Gtk.Grid(
+            column_homogeneous=True,
+            row_homogeneous=True,
+            hexpand=True,
+            vexpand=True,
+        )
+        selected_month = self._selected_day().month
+        today = dt.date.today()
+        for index, day in enumerate(days):
+            classes = ["month-cell"]
+            if day.month != selected_month:
+                classes.append("other-month")
+            if day == today:
+                classes.append("today")
+            cell = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                spacing=2,
+                height_request=108,
+                css_classes=classes,
+            )
+            day_button = Gtk.Button(
+                label=str(day.day),
+                halign=Gtk.Align.END,
+                css_classes=["flat", "month-day"],
+                tooltip_text=f"Open {day:%A, %B} {day.day}",
+            )
+            day_button.connect(
+                "clicked",
+                lambda _button, selected=day: self._open_date(selected, "day"),
+            )
+            cell.append(day_button)
+
+            events = events_by_day[day]
+            for event in events[:3]:
+                prefix = "" if event.all_day else f"{event.start:%H:%M} "
+                label = Gtk.Label(
+                    label=f"{prefix}{event.summary}",
+                    xalign=0,
+                    ellipsize=Pango.EllipsizeMode.END,
+                )
+                event_button = Gtk.Button(
+                    child=label,
+                    tooltip_text=f"{event.time_label} · {event.summary}",
+                    css_classes=[
+                        "flat",
+                        "month-event",
+                        self._event_color_class(event.color),
+                    ],
+                )
+                event_button.connect(
+                    "clicked",
+                    lambda _button, item=event: self._show_event(item),
+                )
+                cell.append(event_button)
+            if len(events) > 3:
+                overflow = Gtk.Button(
+                    label=f"+{len(events) - 3} more",
+                    halign=Gtk.Align.START,
+                    css_classes=["flat", "caption"],
+                )
+                overflow.connect(
+                    "clicked",
+                    lambda _button, selected=day: self._open_date(selected, "agenda"),
+                )
+                cell.append(overflow)
+
+            row, column = divmod(index, 7)
+            grid.attach(cell, column, row, 1, 1)
+        view.append(grid)
+        return view
+
+    def _open_date(self, day: dt.date, view: str) -> None:
+        self._view_mode = view
+        self._view_button.set_label(view.title())
+        self._schedule_state_save()
+        self._calendar.select_day(day)
 
     def _time_grid(
         self,
@@ -590,7 +687,8 @@ class KhoraWindow(Adw.ApplicationWindow):
             provider.load_from_string(
                 f"""
                 .timed-event.{class_name},
-                .all-day-event.{class_name} {{
+                .all-day-event.{class_name},
+                .month-event.{class_name} {{
                   background-color: {color};
                   color: {foreground};
                 }}

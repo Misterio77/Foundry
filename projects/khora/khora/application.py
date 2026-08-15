@@ -81,11 +81,38 @@ class KhoraApplication(Adw.Application):
             }
 
             .all-day-event,
-            .timed-event {
+            .timed-event,
+            .month-event {
               margin: 1px 2px;
               padding: 3px 5px;
               border-radius: 4px;
               background-color: alpha(@accent_bg_color, 0.14);
+            }
+
+            .month-weekdays {
+              padding: 8px 0;
+              border-bottom: 1px solid alpha(@window_fg_color, 0.15);
+            }
+
+            .month-cell {
+              padding: 3px;
+              border-left: 1px solid alpha(@window_fg_color, 0.1);
+              border-bottom: 1px solid alpha(@window_fg_color, 0.1);
+            }
+
+            .month-cell.other-month {
+              opacity: 0.5;
+            }
+
+            .month-cell.today .month-day {
+              background-color: @accent_bg_color;
+              color: @accent_fg_color;
+              border-radius: 999px;
+            }
+
+            .month-event {
+              min-height: 20px;
+              padding: 1px 4px;
             }
 
             .time-label {

@@ -17,8 +17,8 @@ The order reflects engineering dependencies rather than product priority.
    adjacent lanes instead of drawing on top of each other.
 7. **Mini-calendar indicators — done.** A custom sidebar month widget shows up
    to three calendar-colored event dots on each visible date.
-8. **Month view** — build a full month grid with compact event chips, overflow
-   counts, and navigation consistent with the day and week grids.
+8. **Month view — done.** A six-week month grid provides compact event chips,
+   overflow counts, and navigation into day and agenda views.
 9. **Search** — search expanded local occurrences and jump from results to the
    relevant date or event.
 10. **Event creation** — create timed and all-day events in writable calendars,
