@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import gi
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gdk, Gio, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .khal_adapter import KhalRepository
 from .window import KhoraWindow
@@ -16,6 +17,9 @@ class KhoraApplication(Adw.Application):
     def __init__(self) -> None:
         super().__init__(application_id="rs.m7.Khora", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self._interface_settings: Gio.Settings | None = None
+        self._appearance_source = 0
+        self._gtk_css_monitor: Gio.FileMonitor | None = None
+        self._gtk_theme_provider: Gtk.CssProvider | None = None
 
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
@@ -23,6 +27,7 @@ class KhoraApplication(Adw.Application):
         self._interface_settings = Gio.Settings.new("org.gnome.desktop.interface")
         for key in ("color-scheme", "gtk-theme", "icon-theme"):
             self._interface_settings.connect(f"changed::{key}", self._on_appearance_changed)
+        self._watch_user_styles()
         self._apply_appearance()
 
     def _install_styles(self) -> None:
@@ -151,13 +156,61 @@ class KhoraApplication(Adw.Application):
             Gtk.StyleContext.add_provider_for_display(
                 display,
                 provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_USER + 1,
+                Gtk.STYLE_PROVIDER_PRIORITY_USER + 2,
             )
 
-    def _on_appearance_changed(self, *_args) -> None:
-        self._apply_appearance()
+    def _watch_user_styles(self) -> None:
+        gtk_config = Path(GLib.get_user_config_dir()) / "gtk-4.0"
+        try:
+            self._gtk_css_monitor = Gio.File.new_for_path(str(gtk_config)).monitor_directory(
+                Gio.FileMonitorFlags.WATCH_MOVES,
+                None,
+            )
+        except GLib.Error:
+            return
+        self._gtk_css_monitor.connect("changed", self._on_gtk_css_changed)
 
-    def _apply_appearance(self) -> None:
+    def _on_gtk_css_changed(
+        self,
+        _monitor: Gio.FileMonitor,
+        file: Gio.File,
+        other_file: Gio.File | None,
+        _event: Gio.FileMonitorEvent,
+    ) -> None:
+        names = {item.get_basename() for item in (file, other_file) if item is not None}
+        if "gtk.css" in names:
+            self._schedule_appearance_reload()
+
+    def _on_appearance_changed(self, *_args) -> None:
+        self._schedule_appearance_reload()
+
+    def _schedule_appearance_reload(self) -> None:
+        if self._appearance_source:
+            GLib.source_remove(self._appearance_source)
+        self._appearance_source = GLib.timeout_add(100, self._apply_appearance)
+
+    def _reload_user_styles(self) -> None:
+        display = Gdk.Display.get_default()
+        path = Path(GLib.get_user_config_dir()) / "gtk-4.0" / "gtk.css"
+        if display is None or not path.exists():
+            return
+
+        provider = Gtk.CssProvider()
+        try:
+            provider.load_from_path(str(path))
+        except GLib.Error:
+            return
+        if self._gtk_theme_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, self._gtk_theme_provider)
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER + 1,
+        )
+        self._gtk_theme_provider = provider
+
+    def _apply_appearance(self) -> bool:
+        self._appearance_source = 0
         assert self._interface_settings is not None
         gtk_settings = Gtk.Settings.get_default()
         if gtk_settings is not None:
@@ -170,12 +223,23 @@ class KhoraApplication(Adw.Application):
                 self._interface_settings.get_string("icon-theme"),
             )
 
+        self._reload_user_styles()
         scheme = self._interface_settings.get_string("color-scheme")
         color_scheme = {
             "prefer-dark": Adw.ColorScheme.FORCE_DARK,
             "prefer-light": Adw.ColorScheme.FORCE_LIGHT,
         }.get(scheme, Adw.ColorScheme.DEFAULT)
         Adw.StyleManager.get_default().set_color_scheme(color_scheme)
+        return GLib.SOURCE_REMOVE
+
+    def do_shutdown(self) -> None:
+        if self._appearance_source:
+            GLib.source_remove(self._appearance_source)
+            self._appearance_source = 0
+        if self._gtk_css_monitor is not None:
+            self._gtk_css_monitor.cancel()
+            self._gtk_css_monitor = None
+        Adw.Application.do_shutdown(self)
 
     def do_activate(self) -> None:
         window = self.get_active_window()
