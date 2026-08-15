@@ -10,7 +10,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from .colors import display_color
 from .khal_adapter import KhalRepository
-from .model import Event
+from .model import Event, week_dates
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -24,6 +24,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         self.set_default_size(960, 680)
         self._repository = repository
         self._visible_calendars: set[str] = set()
+        self._view_mode = "day"
 
         self._toolbar = Adw.ToolbarView()
         self.set_content(self._toolbar)
@@ -35,8 +36,7 @@ class KhoraWindow(Adw.ApplicationWindow):
 
         assert repository is not None
         self._visible_calendars = {calendar.name for calendar in repository.calendars}
-        self._event_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self._event_list.add_css_class("boxed-list")
+        self._agenda_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
         self._empty = Adw.StatusPage(
             icon_name="x-office-calendar-symbolic",
             title="No events",
@@ -57,6 +57,15 @@ class KhoraWindow(Adw.ApplicationWindow):
 
         today = Gtk.Button(label="Today", action_name="win.today")
         header.pack_start(today)
+
+        view_switcher = Gtk.Box(css_classes=["linked"])
+        day = Gtk.ToggleButton(label="Day", active=True)
+        week = Gtk.ToggleButton(label="Week", group=day)
+        day.connect("toggled", self._on_view_toggled, "day")
+        week.connect("toggled", self._on_view_toggled, "week")
+        view_switcher.append(day)
+        view_switcher.append(week)
+        header.pack_start(view_switcher)
         header.pack_end(Gtk.Button(icon_name="view-refresh-symbolic", action_name="win.refresh"))
 
         self._install_action("today", self._on_today)
@@ -94,7 +103,7 @@ class KhoraWindow(Adw.ApplicationWindow):
     def _build_agenda(self) -> Gtk.Widget:
         overlay = Gtk.Overlay()
         scroller = Gtk.ScrolledWindow(
-            child=self._event_list,
+            child=self._agenda_content,
             hscrollbar_policy=Gtk.PolicyType.NEVER,
             margin_top=24,
             margin_bottom=24,
@@ -117,21 +126,46 @@ class KhoraWindow(Adw.ApplicationWindow):
         return dt.date(selected.get_year(), selected.get_month(), selected.get_day_of_month())
 
     def _refresh(self) -> None:
-        if self._repository is None or not hasattr(self, "_event_list"):
+        if self._repository is None or not hasattr(self, "_agenda_content"):
             return
 
+        days = (
+            week_dates(self._selected_day())
+            if self._view_mode == "week"
+            else (self._selected_day(),)
+        )
         try:
-            events = self._repository.events_on(self._selected_day(), self._visible_calendars)
+            events_by_day = self._repository.events_for_days(days, self._visible_calendars)
         except Exception as error:  # khal exposes several backend-specific errors
             self._show_toast(str(error))
             return
 
-        while row := self._event_list.get_row_at_index(0):
-            self._event_list.remove(row)
-        for event in events:
-            self._event_list.append(self._event_row(event))
-        self._empty.set_visible(not events)
-        self._event_list.set_visible(bool(events))
+        while child := self._agenda_content.get_first_child():
+            self._agenda_content.remove(child)
+
+        has_events = any(events_by_day.values())
+        if self._view_mode == "week":
+            for day in days:
+                self._agenda_content.append(self._day_group(day, events_by_day[day]))
+        elif has_events:
+            event_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            event_list.add_css_class("boxed-list")
+            for event in events_by_day[days[0]]:
+                event_list.append(self._event_row(event))
+            self._agenda_content.append(event_list)
+
+        self._empty.set_visible(not has_events and self._view_mode == "day")
+        self._agenda_content.set_visible(has_events or self._view_mode == "week")
+
+    @staticmethod
+    def _day_group(day: dt.date, events: tuple[Event, ...]) -> Adw.PreferencesGroup:
+        group = Adw.PreferencesGroup(title=f"{day:%A, %B} {day.day}")
+        if events:
+            for event in events:
+                group.add(KhoraWindow._event_row(event))
+        else:
+            group.set_description("No events")
+        return group
 
     @staticmethod
     def _event_row(event: Event) -> Adw.ActionRow:
@@ -158,6 +192,11 @@ class KhoraWindow(Adw.ApplicationWindow):
     def _on_today(self, *_args) -> None:
         self._calendar.select_day(GLib.DateTime.new_now_local())
         self._refresh()
+
+    def _on_view_toggled(self, button: Gtk.ToggleButton, mode: str) -> None:
+        if button.get_active():
+            self._view_mode = mode
+            self._refresh()
 
     def _install_action(self, name: str, callback) -> None:
         action = Gio.SimpleAction.new(name, None)

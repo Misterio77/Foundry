@@ -4,6 +4,11 @@ import datetime as dt
 from dataclasses import dataclass
 
 
+def week_dates(day: dt.date) -> tuple[dt.date, ...]:
+    monday = day - dt.timedelta(days=day.weekday())
+    return tuple(monday + dt.timedelta(days=offset) for offset in range(7))
+
+
 @dataclass(frozen=True)
 class Calendar:
     name: str

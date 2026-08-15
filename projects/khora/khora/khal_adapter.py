@@ -29,13 +29,27 @@ class KhalRepository:
         )
 
     def events_on(self, day: dt.date, visible: set[str] | None = None) -> tuple[Event, ...]:
+        return self.events_for_days((day,), visible)[day]
+
+    def events_for_days(
+        self,
+        days: tuple[dt.date, ...],
+        visible: set[str] | None = None,
+    ) -> dict[dt.date, tuple[Event, ...]]:
         self._collection.update_db()
-        events = (
-            self._to_event(event)
-            for event in self._collection.get_events_on(day)
-            if visible is None or event.calendar in visible
-        )
-        return tuple(sorted(events, key=self._sort_key))
+        return {
+            day: tuple(
+                sorted(
+                    (
+                        self._to_event(event)
+                        for event in self._collection.get_events_on(day)
+                        if visible is None or event.calendar in visible
+                    ),
+                    key=self._sort_key,
+                )
+            )
+            for day in days
+        }
 
     @staticmethod
     def _to_event(event) -> Event:
