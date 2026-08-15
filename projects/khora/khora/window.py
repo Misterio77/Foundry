@@ -6,7 +6,7 @@ import gi
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from .colors import contrasting_foreground, display_color
 from .khal_adapter import KhalRepository
@@ -14,7 +14,10 @@ from .model import Calendar, Event, event_slot_range, period_label, shifted_date
 
 
 SIDEBAR_WIDTH = 280
-GRID_HEIGHT = 48 * 24
+DEFAULT_SLOT_HEIGHT = 24
+MIN_SLOT_HEIGHT = 12
+MAX_SLOT_HEIGHT = 64
+ZOOM_STEP = 4
 
 
 class KhoraWindow(Adw.ApplicationWindow):
@@ -42,6 +45,10 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._visible_calendars = {calendar.name for calendar in repository.calendars}
         self._event_color_providers: dict[str, Gtk.CssProvider] = {}
         self._view_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._slot_height = DEFAULT_SLOT_HEIGHT
+        self._zoom_scroll_accumulator = 0.0
+        self._displayed_days: tuple[dt.date, ...] = ()
+        self._displayed_events: dict[dt.date, tuple[Event, ...]] = {}
         self._time_indicator: Gtk.Widget | None = None
         self._rendered_today = dt.date.today()
         self._empty = Adw.StatusPage(
@@ -174,11 +181,16 @@ class KhoraWindow(Adw.ApplicationWindow):
 
     def _build_calendar_view(self) -> Gtk.Widget:
         overlay = Gtk.Overlay()
-        scroller = Gtk.ScrolledWindow(
+        self._calendar_scroller = Gtk.ScrolledWindow(
             child=self._view_content,
             hscrollbar_policy=Gtk.PolicyType.NEVER,
         )
-        overlay.set_child(scroller)
+        zoom_controller = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL,
+        )
+        zoom_controller.connect("scroll", self._on_time_grid_scroll)
+        self._calendar_scroller.add_controller(zoom_controller)
+        overlay.set_child(self._calendar_scroller)
         overlay.add_overlay(self._empty)
         return overlay
 
@@ -219,6 +231,8 @@ class KhoraWindow(Adw.ApplicationWindow):
             self._show_toast(str(error))
             return
 
+        self._displayed_days = days
+        self._displayed_events = events_by_day
         if self._view_mode == "agenda":
             self._render_agenda(days[0], events_by_day[days[0]])
         else:
@@ -301,8 +315,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         row.append(headers)
         return row
 
-    @staticmethod
-    def _time_gutter() -> Gtk.Widget:
+    def _time_gutter(self) -> Gtk.Widget:
         gutter = Gtk.Grid(row_homogeneous=True, width_request=64)
         for slot in range(48):
             label = Gtk.Label(
@@ -312,7 +325,7 @@ class KhoraWindow(Adw.ApplicationWindow):
                 margin_end=8,
                 css_classes=["time-label"],
             )
-            label.set_size_request(-1, 24)
+            label.set_size_request(-1, self._slot_height)
             gutter.attach(label, 0, slot, 1, 1)
         return gutter
 
@@ -320,25 +333,35 @@ class KhoraWindow(Adw.ApplicationWindow):
         column = Gtk.Grid(row_homogeneous=True, hexpand=True, css_classes=["day-column"])
         for slot in range(48):
             line = Gtk.Box(css_classes=["hour-line" if slot % 2 == 0 else "half-hour-line"])
-            line.set_size_request(-1, 24)
+            line.set_size_request(-1, self._slot_height)
             column.attach(line, 0, slot, 1, 1)
 
+        overlay = Gtk.Overlay(child=column)
         for event in events:
             start, end = event_slot_range(event, day)
+            event_height = (end - start) * self._slot_height
             label = Gtk.Label(
                 xalign=0,
                 yalign=0,
-                wrap=True,
-                lines=2,
+                valign=Gtk.Align.START,
+                halign=Gtk.Align.FILL,
+                wrap=event_height >= 40,
+                lines=2 if event_height >= 40 else 1,
                 ellipsize=Pango.EllipsizeMode.END,
+                margin_top=start * self._slot_height,
+                height_request=event_height,
                 tooltip_text=f"{event.time_label} · {event.summary}",
                 css_classes=["timed-event", self._event_color_class(event.color)],
             )
             summary = GLib.markup_escape_text(event.summary)
-            label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
-            column.attach(label, 0, start, 1, end - start)
+            if event_height >= 40:
+                label.set_markup(f"<b>{summary}</b>\n<small>{event.time_label}</small>")
+            elif event_height >= 22:
+                label.set_markup(f"<b>{summary}</b>")
+            overlay.add_overlay(label)
+            overlay.set_measure_overlay(label, False)
+            overlay.set_clip_overlay(label, True)
 
-        overlay = Gtk.Overlay(child=column)
         if day == dt.date.today():
             indicator = self._current_time_indicator()
             overlay.add_overlay(indicator)
@@ -377,7 +400,7 @@ class KhoraWindow(Adw.ApplicationWindow):
             return
         now = dt.datetime.now()
         elapsed_minutes = now.hour * 60 + now.minute + now.second / 60
-        offset = round(elapsed_minutes / (24 * 60) * GRID_HEIGHT)
+        offset = round(elapsed_minutes / (24 * 60) * (48 * self._slot_height))
         self._time_indicator.set_margin_top(max(0, offset - 4))
 
     def _event_color_class(self, value: str | None) -> str:
@@ -439,6 +462,52 @@ class KhoraWindow(Adw.ApplicationWindow):
         self._view_mode = parameter.get_string()
         self._view_button.set_label(self._view_mode.title())
         self._refresh()
+
+    def _on_time_grid_scroll(
+        self,
+        controller: Gtk.EventControllerScroll,
+        _dx: float,
+        dy: float,
+    ) -> bool:
+        modifiers = controller.get_current_event_state()
+        if self._view_mode not in {"day", "week"} or not (
+            modifiers & Gdk.ModifierType.CONTROL_MASK
+        ):
+            return False
+
+        self._zoom_scroll_accumulator += dy
+        if abs(self._zoom_scroll_accumulator) < 0.5:
+            return True
+
+        direction = -1 if self._zoom_scroll_accumulator > 0 else 1
+        self._zoom_scroll_accumulator = 0.0
+        self._zoom_time_grid(direction)
+        return True
+
+    def _zoom_time_grid(self, direction: int) -> None:
+        slot_height = max(
+            MIN_SLOT_HEIGHT,
+            min(MAX_SLOT_HEIGHT, self._slot_height + direction * ZOOM_STEP),
+        )
+        if slot_height == self._slot_height or not self._displayed_days:
+            return
+
+        adjustment = self._calendar_scroller.get_vadjustment()
+        focus = (adjustment.get_value() + adjustment.get_page_size() / 2) / max(
+            adjustment.get_upper(),
+            1,
+        )
+        self._slot_height = slot_height
+        self._clear_view()
+        self._view_content.append(self._time_grid(self._displayed_days, self._displayed_events))
+        GLib.idle_add(self._restore_zoom_position, focus)
+
+    def _restore_zoom_position(self, focus: float) -> bool:
+        adjustment = self._calendar_scroller.get_vadjustment()
+        value = focus * adjustment.get_upper() - adjustment.get_page_size() / 2
+        upper = max(adjustment.get_lower(), adjustment.get_upper() - adjustment.get_page_size())
+        adjustment.set_value(max(adjustment.get_lower(), min(value, upper)))
+        return GLib.SOURCE_REMOVE
 
     def _on_clock_tick(self) -> bool:
         today = dt.date.today()
