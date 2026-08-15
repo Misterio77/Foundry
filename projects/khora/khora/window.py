@@ -53,7 +53,6 @@ class KhoraWindow(Adw.ApplicationWindow):
 
     def _build_header(self) -> Adw.HeaderBar:
         header = Adw.HeaderBar()
-        header.set_title_widget(Gtk.Label(label="Khora", css_classes=["title"]))
 
         today = Gtk.Button(label="Today", action_name="win.today")
         header.pack_start(today)
@@ -65,7 +64,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         week.connect("toggled", self._on_view_toggled, "week")
         view_switcher.append(day)
         view_switcher.append(week)
-        header.pack_start(view_switcher)
+        header.set_title_widget(view_switcher)
         header.pack_end(Gtk.Button(icon_name="view-refresh-symbolic", action_name="win.refresh"))
 
         self._install_action("today", self._on_today)
