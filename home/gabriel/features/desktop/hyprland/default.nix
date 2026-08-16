@@ -213,8 +213,6 @@ in {
         disable_hyprland_logo = true;
         disable_splash_rendering = true;
         disable_hyprland_guiutils_check = true;
-        enable_swallow = true;
-        swallow_regex = "(?i)(${lib.concatMapStringsSep "|" (lib.removeSuffix ".desktop") config.xdg.mimeApps.defaultApplications."x-scheme-handler/terminal"})";
       };
       windowrule = let
         sweethome3d-tooltips = "match:title win[0-9], match:class com-eteks-sweethome3d-SweetHome3DBootstrap";
