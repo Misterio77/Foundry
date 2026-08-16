@@ -1,13 +1,13 @@
-# Khora
+# gtkhal
 
-Khora is a graphical calendar for local
+gtkhal is a graphical calendar for local
 [vdirs](https://vdirsyncer.pimutils.org/). It uses khal for configuration,
 indexing, recurrence expansion, and iCalendar semantics; vdirsyncer remains in
 charge of talking to CalDAV servers.
 
 ## Status
 
-Khora is an early, read-only prototype. It currently provides:
+gtkhal is an early, read-only prototype. It currently provides:
 
 - a native GTK 4/libadwaita interface;
 - calendar discovery from the existing khal configuration;
@@ -18,7 +18,7 @@ Khora is an early, read-only prototype. It currently provides:
 - explicit refreshes of khal's local index.
 
 Event creation and editing come next. The khal dependency is isolated in
-`khora.khal_adapter` so its internal API can change without leaking through the
+`gtkhal.khal_adapter` so its internal API can change without leaking through the
 application.
 
 ## Development
@@ -26,18 +26,18 @@ application.
 Build and run it from the Foundry root:
 
 ```sh
-nix build .#khora
-nix run .#khora
+nix build .#gtkhal
+nix run .#gtkhal
 ```
 
-For a faster development loop, enter `projects/khora` and let direnv load its
-Khora development shell, then run the source tree directly:
+For a faster development loop, enter `projects/gtkhal` and let direnv load its
+gtkhal development shell, then run the source tree directly:
 
 ```sh
-python -m khora
+python -m gtkhal
 ```
 
-Khora reads the same XDG configuration and vdirs as khal. It does not configure
+gtkhal reads the same XDG configuration and vdirs as khal. It does not configure
 accounts or perform network synchronization.
 
 ## Keyboard shortcuts

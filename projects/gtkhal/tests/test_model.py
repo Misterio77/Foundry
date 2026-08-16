@@ -1,6 +1,6 @@
 import datetime as dt
 
-from khora.model import (
+from gtkhal.model import (
     Event,
     event_slot_range,
     layout_event_lanes,

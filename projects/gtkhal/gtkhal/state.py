@@ -18,7 +18,7 @@ class UiState:
 class StateStore:
     def __init__(self, path: Path | None = None) -> None:
         state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
-        self.path = path or state_home / "khora" / "state.json"
+        self.path = path or state_home / "gtkhal" / "state.json"
 
     def load(self) -> UiState:
         try:

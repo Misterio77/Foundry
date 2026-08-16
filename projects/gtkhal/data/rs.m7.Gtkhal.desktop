@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=Khora
+Name=gtkhal
 Comment=View calendars stored in local vdirs
-Exec=khora
-Icon=rs.m7.Khora
+Exec=gtkhal
+Icon=rs.m7.Gtkhal
 Terminal=false
 Type=Application
 Categories=Office;Calendar;

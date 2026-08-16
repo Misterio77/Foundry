@@ -9,7 +9,7 @@
   wrapGAppsHook4,
 }:
 python3Packages.buildPythonApplication {
-  pname = "khora";
+  pname = "gtkhal";
   version = "0.1.0";
   pyproject = true;
 
@@ -19,7 +19,7 @@ python3Packages.buildPythonApplication {
       ./data
       ./README.md
       ./pyproject.toml
-      ./khora
+      ./gtkhal
       ./tests
     ];
   };
@@ -45,17 +45,17 @@ python3Packages.buildPythonApplication {
   '';
 
   postInstall = ''
-    install -Dm644 data/rs.m7.Khora.desktop \
-      $out/share/applications/rs.m7.Khora.desktop
-    install -Dm644 data/rs.m7.Khora.svg \
-      $out/share/icons/hicolor/scalable/apps/rs.m7.Khora.svg
+    install -Dm644 data/rs.m7.Gtkhal.desktop \
+      $out/share/applications/rs.m7.Gtkhal.desktop
+    install -Dm644 data/rs.m7.Gtkhal.svg \
+      $out/share/icons/hicolor/scalable/apps/rs.m7.Gtkhal.svg
   '';
 
   meta = {
     description = "Graphical calendar for local vdirs";
-    homepage = "https://github.com/misterio77/Foundry/tree/main/projects/khora";
+    homepage = "https://github.com/misterio77/Foundry/tree/main/projects/gtkhal";
     license = lib.licenses.bsd2;
-    mainProgram = "khora";
+    mainProgram = "gtkhal";
     platforms = lib.platforms.linux;
   };
 }

@@ -65,7 +65,7 @@ class EventLayer(Gtk.Fixed):
         return GLib.SOURCE_CONTINUE
 
 
-class KhoraWindow(Adw.ApplicationWindow):
+class GtkhalWindow(Adw.ApplicationWindow):
     def __init__(
         self,
         application: Adw.Application,
@@ -73,7 +73,7 @@ class KhoraWindow(Adw.ApplicationWindow):
         error: str | None = None,
         state_store: StateStore | None = None,
     ) -> None:
-        super().__init__(application=application, title="Khora")
+        super().__init__(application=application, title="gtkhal")
         self.set_default_size(1280, 800)
         self._repository = repository
         self._state_store = state_store or StateStore()

@@ -1,4 +1,4 @@
-from khora.state import StateStore, UiState
+from gtkhal.state import StateStore, UiState
 
 
 def test_round_trips_ui_state(tmp_path) -> None:

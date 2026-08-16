@@ -10,12 +10,12 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .khal_adapter import KhalRepository
-from .window import KhoraWindow
+from .window import GtkhalWindow
 
 
-class KhoraApplication(Adw.Application):
+class GtkhalApplication(Adw.Application):
     def __init__(self) -> None:
-        super().__init__(application_id="rs.m7.Khora", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        super().__init__(application_id="rs.m7.Gtkhal", flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self._interface_settings: Gio.Settings | None = None
         self._appearance_source = 0
         self._gtk_css_monitor: Gio.FileMonitor | None = None
@@ -250,9 +250,9 @@ class KhoraApplication(Adw.Application):
             except Exception as caught:
                 repository = None
                 error = str(caught)
-            window = KhoraWindow(self, repository, error)
+            window = GtkhalWindow(self, repository, error)
         window.present()
 
 
 def main() -> int:
-    return KhoraApplication().run(sys.argv)
+    return GtkhalApplication().run(sys.argv)

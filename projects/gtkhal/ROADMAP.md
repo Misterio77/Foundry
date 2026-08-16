@@ -1,4 +1,4 @@
-# Khora roadmap
+# gtkhal roadmap
 
 Planned improvements, ordered roughly from least to most implementation complexity.
 The order reflects engineering dependencies rather than product priority.
@@ -30,4 +30,4 @@ The order reflects engineering dependencies rather than product priority.
 13. **Advanced recurrence editor** — expose richer RFC 5545 recurrence rules,
     exceptions, and occurrence-level changes.
 14. **Optional synchronization actions** — run vdirsyncer explicitly and show
-    progress/errors without making network synchronization Khora's default job.
+    progress/errors without making network synchronization gtkhal's default job.

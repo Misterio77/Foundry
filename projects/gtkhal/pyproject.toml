@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "khora-calendar"
+name = "gtkhal"
 version = "0.1.0"
 description = "A graphical calendar for local vdirs"
 readme = "README.md"
@@ -15,10 +15,10 @@ dependencies = [
 ]
 
 [project.scripts]
-khora = "khora.application:main"
+gtkhal = "gtkhal.application:main"
 
 [tool.setuptools.packages.find]
-include = ["khora*"]
+include = ["gtkhal*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

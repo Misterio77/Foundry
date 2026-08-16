@@ -1,4 +1,4 @@
-from khora.colors import contrasting_foreground, display_color
+from gtkhal.colors import contrasting_foreground, display_color
 
 
 def test_preserves_html_colors() -> None:

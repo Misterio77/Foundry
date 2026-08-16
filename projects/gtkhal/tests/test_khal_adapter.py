@@ -2,7 +2,7 @@ import datetime as dt
 from pathlib import Path
 from types import SimpleNamespace
 
-from khora.khal_adapter import KhalRepository
+from gtkhal.khal_adapter import KhalRepository
 
 
 def test_calendar_accounts_come_from_their_parent_directory() -> None:
