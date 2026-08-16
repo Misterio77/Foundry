@@ -1,11 +1,23 @@
 {
-  # Set as default calendar handler
+  config,
+  lib,
+  ...
+}: {
+  # Import calendar files interactively in a terminal
+  xdg.desktopEntries.khal-import = {
+    name = "Import calendar event";
+    exec = "${lib.getExe' config.programs.khal.package "khal"} import %f";
+    terminal = true;
+    noDisplay = true;
+    mimeType = ["text/calendar"];
+  };
+
   xdg.mimeApps = {
-    associations.added = {
-      "text/calendar" = "khal.desktop";
-    };
+    # pkgs.khal's desktop entry launches ikhal but declares no MIME types
+    associations.added."x-scheme-handler/calendar" = "khal.desktop";
     defaultApplications = {
-      "text/calendar" = "khal.desktop";
+      "text/calendar" = "khal-import.desktop";
+      "x-scheme-handler/calendar" = "khal.desktop";
     };
   };
 

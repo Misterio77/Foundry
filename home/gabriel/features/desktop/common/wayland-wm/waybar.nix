@@ -226,7 +226,7 @@ in {
           };
           on-click = mkScript {
             deps = [pkgs.handlr-regex];
-            script = "handlr launch text/calendar";
+            script = "handlr launch x-scheme-handler/calendar";
           };
         };
         "custom/gpg-status" = {
