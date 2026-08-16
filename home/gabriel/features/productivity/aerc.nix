@@ -24,15 +24,21 @@ in {
         gp = ":prev-tab<Enter>";
       };
       messages = {
+        D = ":move Trash<Enter>";
         G = "";
         V = "";
         X = ":mark -v<Enter>";
+        d = ":move Trash<Enter>";
         g = "";
         ge = ":select -1<Enter>";
         gg = ":select 0<Enter>";
         q = ":quit<Enter>";
         v = "";
         x = ":mark -t<Enter>";
+      };
+      view = {
+        D = ":move Trash<Enter>";
+        d = ":move Trash<Enter>";
       };
     };
     extraConfig = {
