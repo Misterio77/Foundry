@@ -12,14 +12,8 @@
     mimeType = ["text/calendar"];
   };
 
-  xdg.mimeApps = {
-    # pkgs.khal's desktop entry launches ikhal but declares no MIME types
-    associations.added."x-scheme-handler/calendar" = "khal.desktop";
-    defaultApplications = {
-      "text/calendar" = "khal-import.desktop";
-      "x-scheme-handler/calendar" = "khal.desktop";
-    };
-  };
+  # pkgs.khal's desktop entry launches ikhal but declares no MIME types
+  xdg.mimeApps.associations.added."x-scheme-handler/calendar" = "khal.desktop";
 
   programs.khal = {
     enable = true;
