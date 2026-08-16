@@ -1,6 +1,7 @@
 {
   imports = [
     ./khal.nix
+    ./gtkhal.nix
     ./khard.nix
     ./todoman.nix
     ./oama.nix
