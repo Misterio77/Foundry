@@ -66,6 +66,7 @@ in {
       folders.sent = null;
       aerc = {
         enable = true;
+        extraAccounts.restrict-delete = true;
         # Pinned at the top of the sidebar, in this order; the rest stays
         # alphabetical
         extraAccounts.folders-sort = [
