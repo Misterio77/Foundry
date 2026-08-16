@@ -56,7 +56,7 @@ in {
         "message/rfc822" = "colorize";
         # '!' hands the terminal to the filter; the html one is already
         # wrapped with w3m by nixpkgs
-        "text/html" = "! html -o extbrowser=${lib.getExe' pkgs.xdg-utils "xdg-open"}";
+        "text/html" = "! html -o display_link_number=true -o extbrowser=${lib.getExe' pkgs.xdg-utils "xdg-open"}";
         # Only used when viewer.show-headers is on
         ".headers" = "colorize";
       };
