@@ -43,6 +43,7 @@
     calibre-web.serviceConfig = {
       CPUWeight = 50;
       IOWeight = 50;
+      UMask = "0002";
     };
   };
 
