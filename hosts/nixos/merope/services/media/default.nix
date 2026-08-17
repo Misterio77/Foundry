@@ -3,7 +3,7 @@
     ./jellyfin.nix
     ./lidarr.nix
     ./readarr.nix
-    ./calibre-web.nix
+    ./kavita.nix
     ./sonarr.nix
     ./radarr.nix
     ./bazarr.nix

@@ -39,8 +39,7 @@
     }
   ];
 
-  # Readarr owns the library; Calibre Content Server writes through Readarr's
-  # group, while read-only consumers use the world-readable bits.
+  # Readarr owns the library; read-only consumers use the world-readable bits.
   systemd.tmpfiles.settings.srv-media-books."/srv/media/books".d = {
     user = config.services.readarr.user;
     group = config.services.readarr.group;
