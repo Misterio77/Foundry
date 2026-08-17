@@ -10,6 +10,8 @@ in {
     kavita = {
       enable = true;
       inherit tokenKeyFile;
+      # JellySearch already occupies Kavita's default port 5000.
+      settings.Port = 5001;
     };
 
     nginx.virtualHosts."books.m7.rs" = {
