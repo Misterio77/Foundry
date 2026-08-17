@@ -1,4 +1,8 @@
-{config, pkgs, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   seerrng = pkgs.seerr.overrideAttrs (finalAttrs: previousAttrs: {
     pname = "seerrng";
     version = "3.12.3";
@@ -22,16 +26,19 @@
       };
   });
 in {
-  services.jellyseerr = {
+  services.seerr = {
     enable = true;
     package = seerrng;
+    # DynamicUser exposes StateDirectory through /var/lib/jellyseerr as a
+    # symlink; SeerrNG deliberately rejects symlinks in its log path.
+    configDir = "/var/lib/private/jellyseerr/config";
   };
 
   services.nginx.virtualHosts."requests.m7.rs" = {
     forceSSL = true;
     enableACME = true;
     locations."/" = {
-      proxyPass = "http://localhost:${toString config.services.jellyseerr.port}";
+      proxyPass = "http://localhost:${toString config.services.seerr.port}";
       proxyWebsockets = true;
     };
   };
