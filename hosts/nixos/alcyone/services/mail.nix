@@ -92,6 +92,8 @@
   # Prefer ipv4 and use main ipv6 to avoid reverse DNS issues
   # CHANGEME when switching hosts
   services.postfix.settings.main = {
+    # Authentication is only available through the Tailscale-restricted submissions service.
+    smtpd_sasl_auth_enable = lib.mkForce false;
     smtp_bind_address6 = "2001:19f0:b800:1bf8::1";
     smtp_address_preference = "ipv4";
   };
@@ -149,12 +151,13 @@
         ${psql} -f ${config.services.roundcube.package}/plugins/${file}
       fi
     '';
-  in lib.mkAfter ''
-    ${mkDbInit "libkolab" "libkolab/SQL/postgres.initial.sql"}
-    ${mkDbInit "calendar-caldav" "calendar/drivers/caldav/SQL/postgres.initial.sql"}
-    ${mkDbInit "calendar-database" "calendar/drivers/database/SQL/postgres.initial.sql"}
-    ${mkDbInit "tasklist-database" "tasklist/drivers/database/SQL/postgres.initial.sql"}
-  '';
+  in
+    lib.mkAfter ''
+      ${mkDbInit "libkolab" "libkolab/SQL/postgres.initial.sql"}
+      ${mkDbInit "calendar-caldav" "calendar/drivers/caldav/SQL/postgres.initial.sql"}
+      ${mkDbInit "calendar-database" "calendar/drivers/database/SQL/postgres.initial.sql"}
+      ${mkDbInit "tasklist-database" "tasklist/drivers/database/SQL/postgres.initial.sql"}
+    '';
 
   # Autoconfig
   services.automx2 = {
@@ -164,8 +167,14 @@
       provider = "Gabriel Fontes";
       domains = ["m7.rs" "misterio.me" "gsfontes.com"];
       servers = [
-        { type = "imap"; name = "mail.m7.rs"; }
-        { type = "smtp"; name = "mail.m7.rs"; }
+        {
+          type = "imap";
+          name = "mail.m7.rs";
+        }
+        {
+          type = "smtp";
+          name = "mail.m7.rs";
+        }
       ];
     };
   };
