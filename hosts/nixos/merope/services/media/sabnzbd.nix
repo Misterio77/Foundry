@@ -15,7 +15,7 @@ in {
         log_dir = "${sabnzbdDir}/logs";
         admin_dir = "${sabnzbdDir}/admin";
         backup_dir = "${sabnzbdDir}/backup";
-        permissions = 770;
+        permissions = 755; # Directories 0755, regular files 0644
         cache_limit = "1G";
         # Six servers x three rounds is a lot of round trips to spend before
         # concluding an article is gone; two rounds is enough
