@@ -2,6 +2,8 @@
   imports = [
     ./jellyfin.nix
     ./lidarr.nix
+    ./readarr.nix
+    ./calibre-web.nix
     ./sonarr.nix
     ./radarr.nix
     ./bazarr.nix

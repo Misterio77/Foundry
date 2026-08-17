@@ -23,6 +23,7 @@ in {
       };
       categories = {
         music.name = "music";
+        ebooks.name = "ebooks";
       };
       servers = {
         frugal = {
@@ -104,23 +105,27 @@ in {
     secretFiles = [config.sops.templates.sabnzbd-secrets.path];
   };
   sops.templates.sabnzbd-secrets = {
-    content = /*ini*/ ''
-      [misc]
-      api_key = ${config.sops.placeholder.sabnzbd-key}
-      [servers]
-      [[frugal]]
-      password = ${config.sops.placeholder.frugalusenet-key}
-      [[frugal-secondary]]
-      password = ${config.sops.placeholder.frugalusenet-key}
-      [[frugal-bonus]]
-      password = ${config.sops.placeholder.frugalusenet-key}
-      [[eweka]]
-      password = ${config.sops.placeholder.eweka-key}
-      [[blocknews]]
-      password = ${config.sops.placeholder.blocknews-key}
-      [[blocknews-secondary]]
-      password = ${config.sops.placeholder.blocknews-key}
-    '';
+    content =
+      /*
+      ini
+      */
+      ''
+        [misc]
+        api_key = ${config.sops.placeholder.sabnzbd-key}
+        [servers]
+        [[frugal]]
+        password = ${config.sops.placeholder.frugalusenet-key}
+        [[frugal-secondary]]
+        password = ${config.sops.placeholder.frugalusenet-key}
+        [[frugal-bonus]]
+        password = ${config.sops.placeholder.frugalusenet-key}
+        [[eweka]]
+        password = ${config.sops.placeholder.eweka-key}
+        [[blocknews]]
+        password = ${config.sops.placeholder.blocknews-key}
+        [[blocknews-secondary]]
+        password = ${config.sops.placeholder.blocknews-key}
+      '';
     owner = config.services.sabnzbd.user;
     group = config.services.sabnzbd.group;
     mode = "0600";
@@ -149,9 +154,9 @@ in {
 
   sops.secrets = {
     sabnzbd-key.sopsFile = ../../secrets.yaml;
-    frugalusenet-key.sopsFile  = ../../secrets.yaml;
-    blocknews-key.sopsFile  = ../../secrets.yaml;
-    eweka-key.sopsFile  = ../../secrets.yaml;
+    frugalusenet-key.sopsFile = ../../secrets.yaml;
+    blocknews-key.sopsFile = ../../secrets.yaml;
+    eweka-key.sopsFile = ../../secrets.yaml;
   };
 
   environment.persistence = {
