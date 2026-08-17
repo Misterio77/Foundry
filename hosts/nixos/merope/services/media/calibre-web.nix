@@ -3,9 +3,11 @@
   lib,
   ...
 }: {
-  # Calibre Content Server maintains Readarr's library. Calibre-Web consumes
-  # the resulting database and files read-only, like Jellyfin.
-  users.users.calibre-server.extraGroups = [config.services.readarr.group];
+  users.users = {
+    # Allow calibre to write to readarr-managed library
+    calibre-server.extraGroups = [config.services.readarr.group];
+    calibre-web.extraGroups = [config.services.calibre-server.group config.services.readarr.group];
+  };
 
   services = {
     calibre-server = {
@@ -35,14 +37,12 @@
     calibre-server.serviceConfig = {
       CPUWeight = 50;
       IOWeight = 50;
-      # Calibre-Web reads the library through the world-readable bits.
       UMask = "0002";
     };
 
     calibre-web.serviceConfig = {
       CPUWeight = 50;
       IOWeight = 50;
-      ReadWritePaths = lib.mkForce [];
     };
   };
 
