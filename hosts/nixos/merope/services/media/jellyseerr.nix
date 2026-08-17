@@ -18,6 +18,14 @@
       fetcherVersion = 3;
       hash = "sha256-xd+FrZDzUA/jLkWRrlL6K9r85/nNkYDR4jF/pObXomo=";
     };
+    postPatch =
+      (previousAttrs.postPatch or "")
+      + ''
+        substituteInPlace server/api/servarr/lidarr.ts \
+          --replace-fail \
+            "this.apiKey = apiKey;" \
+            "this.apiKey = apiKey; this.axios.defaults.maxContentLength = 64 * 1024 * 1024;"
+      '';
     meta =
       previousAttrs.meta
       // {
