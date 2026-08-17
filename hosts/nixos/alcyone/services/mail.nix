@@ -52,6 +52,10 @@
         sendOnly = true;
         hashedPasswordFile = config.sops.secrets.firefly-mail-password-hashed.path;
       };
+      "calibre@m7.rs" = {
+        sendOnly = true;
+        hashedPasswordFile = config.sops.secrets.calibre-mail-password-hashed.path;
+      };
       "contato@lumis.cards" = {
         hashedPasswordFile = config.sops.secrets.lumis-mail-password-hashed.path;
       };
@@ -97,6 +101,7 @@
     grafana-mail-password-hashed.sopsFile = ../secrets.yaml;
     media-mail-password-hashed.sopsFile = ../secrets.yaml;
     firefly-mail-password-hashed.sopsFile = ../secrets.yaml;
+    calibre-mail-password-hashed.sopsFile = ../secrets.yaml;
     lumis-mail-password-hashed.sopsFile = ../secrets.yaml;
   };
 
