@@ -87,6 +87,24 @@ in {
     # -rocm variants (llama-cpp.override) inherit it.
     llama-cpp = addPatches prev.llama-cpp [./llama-cpp-optional-cache-scan.patch];
 
+    # https://gitlab.freedesktop.org/mstoeckl/waypipe/-/releases#v0.11.1
+    # Raise when it's time to remove
+    waypipe = assert final.lib.versionOlder prev.waypipe.version "0.11.1";
+      prev.waypipe.overrideAttrs (finalAttrs: _: {
+        version = "0.11.1";
+        src = final.fetchFromGitLab {
+          domain = "gitlab.freedesktop.org";
+          owner = "mstoeckl";
+          repo = "waypipe";
+          tag = "v${finalAttrs.version}";
+          hash = "sha256-CQgDQJudxtUc7unORE/yAa+poopiceS/a4AMOfcsKP8=";
+        };
+        cargoDeps = final.rustPlatform.fetchCargoVendor {
+          inherit (finalAttrs) pname version src;
+          hash = "sha256-qYid2YZweunwD3ETV19mAo2CrdYItD6BSZwFNolBLv4=";
+        };
+      });
+
     wl-clipboard = addPatches prev.wl-clipboard [./wl-clipboard-secrets.diff];
 
     pass = addPatches prev.pass [./pass-wlclipboard-secret.diff];
