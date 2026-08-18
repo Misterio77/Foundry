@@ -6,8 +6,9 @@
   ...
 }: let
   nixosConfigs = builtins.attrNames outputs.nixosConfigurations;
+  systemConfigs = builtins.attrNames outputs.systemConfigs;
   homeConfigs = map (n: lib.last (lib.splitString "@" n)) (builtins.attrNames outputs.homeConfigurations);
-  hostnames = lib.unique (homeConfigs ++ nixosConfigs);
+  hostnames = lib.unique (homeConfigs ++ nixosConfigs ++ systemConfigs);
 in {
   programs.ssh = {
     enable = true;

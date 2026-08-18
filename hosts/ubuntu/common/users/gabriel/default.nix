@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   systemManagerHostName,
   ...
@@ -28,6 +29,7 @@ in {
       createHome = false;
       shell = pkgs.fish;
       ignoreShellProgramCheck = true;
+      openssh.authorizedKeys.keys = lib.splitString "\n" (builtins.readFile ../../../../../home/gabriel/ssh.pub);
       extraGroups = [
         "audio"
         "netdev"

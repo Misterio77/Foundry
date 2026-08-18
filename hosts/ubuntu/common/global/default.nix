@@ -18,6 +18,7 @@ in {
       ./greetd.nix
       ./network.nix
       ./nix.nix
+      ./openssh.nix
       ./pam.nix
       ./sops.nix
     ]

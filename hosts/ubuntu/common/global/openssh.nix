@@ -1,19 +1,15 @@
 {
   outputs,
   lib,
-  config,
+  systemManagerHostName,
   ...
 }: let
   # Every host we know a key for, mapped to the file holding it.
   hostKeyFiles =
     lib.genAttrs (lib.attrNames outputs.nixosConfigurations)
-    (hostname: ../../${hostname}/ssh_host_ed25519_key.pub)
+    (hostname: ../../../nixos/${hostname}/ssh_host_ed25519_key.pub)
     // lib.genAttrs (lib.attrNames outputs.systemConfigs)
-    (hostname: ../../../ubuntu/${hostname}/ssh_host_ed25519_key.pub);
-
-  # Sops needs acess to the keys before the persist dirs are even mounted; so
-  # just persisting the keys won't work, we must point at /persist
-  hasOptinPersistence = config.environment.persistence ? "/persist";
+    (hostname: ../../${hostname}/ssh_host_ed25519_key.pub);
 in {
   services.openssh = {
     enable = true;
@@ -31,15 +27,25 @@ in {
       X11Forwarding = true;
     };
 
+    # Unlike NixOS, nothing generates these: System Manager's openssh module
+    # runs Ubuntu's /usr/sbin/sshd (so it keeps working with Ubuntu's PAM), and
+    # openssh-server already created the key at install time. sops reads the
+    # same file, see ./sops.nix.
     hostKeys = [
       {
-        path = "${lib.optionalString hasOptinPersistence "/persist"}/etc/ssh/ssh_host_ed25519_key";
+        path = "/etc/ssh/ssh_host_ed25519_key";
         type = "ed25519";
       }
     ];
   };
 
   programs.ssh = {
+    # Takes over /etc/ssh/ssh_config (Ubuntu's is backed up), which is what
+    # makes the known hosts below system-wide.
+    enable = true;
+    # No default on non-NixOS, and X11Forwarding above asserts on it.
+    setXAuthLocation = true;
+
     # Each hosts public key
     knownHosts =
       lib.mapAttrs (hostname: publicKeyFile: {
@@ -50,7 +56,7 @@ in {
           ]
           ++
           # Alias for localhost if it's the same host
-          (lib.optional (hostname == config.networking.hostName) "localhost")
+          (lib.optional (hostname == systemManagerHostName) "localhost")
           # Alias to m7.rs and git.m7.rs if it's alcyone
           ++ (lib.optionals (hostname == "alcyone") [
             "m7.rs"
@@ -59,10 +65,4 @@ in {
       })
       hostKeyFiles;
   };
-
-  # Passwordless sudo when SSH'ing with keys
-  # security.pam.sshAgentAuth = {
-  #   enable = true;
-  #   authorizedKeysFiles = ["/etc/ssh/authorized_keys.d/%u"];
-  # };
 }
