@@ -37,10 +37,14 @@ in {
     aerc = addPatches prev.aerc [./aerc-config-includes.patch];
 
     # Automatic sync passes no reference, so ffsubsync picks whichever embedded
-    # subtitle track ends last. Signs & Songs and full subtitles both end on the
-    # same shared title card, and the tie resolves to the signs track, which has
-    # no dialogue to align against.
-    bazarr = addPatches prev.bazarr [./bazarr-subsync-skip-non-dialogue-streams.patch];
+    # subtitle track ends last -- won by the Signs & Songs track, whose trailing
+    # title card outlasts the final line of dialogue. Skip the non-dialogue
+    # tracks outright, and select among the rest by speech rather than by final
+    # timestamp so a mistagged track can't win either.
+    bazarr = addPatches prev.bazarr [
+      ./bazarr-subsync-skip-non-dialogue-streams.patch
+      ./bazarr-ffsubsync-reference-by-speech.patch
+    ];
 
     runelite = addPatches prev.runelite [./runelite-developer-mode.patch];
 

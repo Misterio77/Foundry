@@ -1,0 +1,33 @@
+--- a/libs/ffsubsync/speech_transformers.py	2026-08-20 08:55:15.737139594 -0300
++++ b/libs/ffsubsync/speech_transformers.py	2026-08-20 08:55:15.737139594 -0300
+@@ -252,7 +252,7 @@
+ 
+     def try_fit_using_embedded_subs(self, fname: str) -> None:
+         embedded_subs = []
+-        embedded_subs_times = []
++        embedded_subs_speech = []
+         if self.ref_stream is None:
+             # check first 5; should cover 99% of movies
+             streams_to_try: List[str] = list(map("0:s:{}".format, range(5)))
+@@ -290,15 +290,18 @@
+             ).fit(output)
+             speech_step = pipe.steps[-1][1]
+             embedded_subs.append(speech_step)
+-            embedded_subs_times.append(speech_step.max_time_)
++            embedded_subs_speech.append(speech_step.subtitle_speech_results_.sum())
+         if len(embedded_subs) == 0:
+             if self.ref_stream is None:
+                 error_msg = "Video file appears to lack subtitle stream"
+             else:
+                 error_msg = "Stream {} not found".format(self.ref_stream)
+             raise ValueError(error_msg)
+-        # use longest set of embedded subs
+-        subs_to_use = embedded_subs[int(np.argmax(embedded_subs_times))]
++        # Use the set of embedded subs holding the most speech. Selecting on the last
++        # timestamp instead favors tracks that merely end late: a "Signs & Songs" track
++        # carries no dialogue to align against, yet its trailing title card outlasts the
++        # final line of the full subtitles.
++        subs_to_use = embedded_subs[int(np.argmax(embedded_subs_speech))]
+         self.video_speech_results_ = subs_to_use.subtitle_speech_results_
+ 
+     def fit(self, fname: str, *_) -> "VideoSpeechTransformer":
