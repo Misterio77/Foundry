@@ -1,0 +1,79 @@
+--- a/bazarr/subtitles/tools/subsyncer.py	2026-08-20 08:50:07.522343161 -0300
++++ b/bazarr/subtitles/tools/subsyncer.py	2026-08-20 08:50:07.526343199 -0300
+@@ -1,7 +1,10 @@
+ # coding=utf-8
+ 
++import json
+ import logging
+ import os
++import re
++import subprocess
+ 
+ from ffsubsync.ffsubsync import run, make_parser
+ 
+@@ -33,6 +36,43 @@
+         self.sync_result = None
+         self.job_id = None
+ 
++    # Signs & Songs tracks are usually tagged zxx ("no linguistic content"), but plenty of
++    # release groups tag them with a real language and only say so in the title.
++    NON_DIALOGUE_TITLE = re.compile(r'\b(signs?|songs?)\b', re.IGNORECASE)
++
++    @classmethod
++    def _first_dialogue_stream(cls, video_path, ffprobe_exe):
++        """Return the relative index of the first embedded subtitles stream carrying dialogue.
++
++        ffsubsync, given no --reference-stream, keeps whichever embedded subtitles track ends
++        last. On releases carrying both a "Signs & Songs" track and a full subtitles track,
++        both end on the same shared title card, and the tie resolves to the first stream --
++        the signs one, which holds no dialogue to align against. Forced tracks are too sparse
++        to align against either, so skip both kinds.
++        """
++        try:
++            output = subprocess.check_output(
++                [ffprobe_exe, '-v', 'error', '-select_streams', 's', '-show_entries',
++                 'stream_tags=language,title:stream_disposition=forced', '-of', 'json',
++                 video_path], stderr=subprocess.DEVNULL)
++            streams = json.loads(output).get('streams', [])
++        except Exception:
++            logging.exception('BAZARR unable to probe subtitles streams of %s', video_path)
++            return None
++
++        for relative_index, stream in enumerate(streams):
++            tags = stream.get('tags') or {}
++            if tags.get('language') == 'zxx':
++                continue
++            if (stream.get('disposition') or {}).get('forced'):
++                continue
++            if cls.NON_DIALOGUE_TITLE.search(tags.get('title') or ''):
++                continue
++            return relative_index
++
++        logging.debug('BAZARR no embedded subtitles stream of %s carries dialogue', video_path)
++        return None
++
+     def sync(self, video_path, srt_path, srt_lang, hi, forced,
+              max_offset_seconds, no_fix_framerate, gss, reference=None, sonarr_series_id=None, sonarr_episode_id=None,
+              radarr_id=None, progress_callback=None, job_id=None, force_sync=False):
+@@ -70,6 +110,12 @@
+             if reference and reference != video_path and os.path.isfile(reference):
+                 # subtitles path provided
+                 self.reference = reference
++            elif not reference and not settings.subsync.force_audio:
++                # automatic sync passes no reference: pick one instead of letting ffsubsync guess
++                dialogue_stream = self._first_dialogue_stream(self.reference, ffprobe_exe)
++                if dialogue_stream is not None:
++                    reference = f's:{dialogue_stream}'
++                    logging.debug('BAZARR using subtitles stream %s as syncing reference', reference)
+ 
+             unparsed_args = [self.reference, '-i', self.srtin, '-o', self.srtout, '--ffmpegpath', self.ffmpeg_path,
+                              '--vad', self.vad, '--log-dir-path', self.log_dir_path, '--max-offset-seconds',
+@@ -81,7 +127,7 @@
+             if gss:
+                 unparsed_args.append('--gss')
+ 
+-            if reference and isinstance(reference, str) and len(reference) == 3 and reference[:2] in ['a:', 's:']:
++            if reference and isinstance(reference, str) and re.fullmatch(r'[as]:\d+', reference):
+                 # audio or subtitles track id provided
+                 unparsed_args.append('--reference-stream')
+                 unparsed_args.append(reference)

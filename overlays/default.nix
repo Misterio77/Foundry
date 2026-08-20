@@ -36,6 +36,12 @@ in {
   modifications = final: prev: {
     aerc = addPatches prev.aerc [./aerc-config-includes.patch];
 
+    # Automatic sync passes no reference, so ffsubsync picks whichever embedded
+    # subtitle track ends last. Signs & Songs and full subtitles both end on the
+    # same shared title card, and the tie resolves to the signs track, which has
+    # no dialogue to align against.
+    bazarr = addPatches prev.bazarr [./bazarr-subsync-skip-non-dialogue-streams.patch];
+
     runelite = addPatches prev.runelite [./runelite-developer-mode.patch];
 
     qutebrowser = prev.qutebrowser.overrideAttrs (oldAttrs: {
