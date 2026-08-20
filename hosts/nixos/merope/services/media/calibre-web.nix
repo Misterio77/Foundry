@@ -1,5 +1,6 @@
 {
   config,
+  outputs,
   lib,
   ...
 }: {
@@ -12,8 +13,8 @@
     calibre-server = {
       enable = true;
       libraries = ["/srv/media/books"];
-      # Readarr connects locally and uses the Content Server to update the
-      # Calibre database without racing direct metadata.db writes.
+      auth.enable = true;
+      # Readarr connects locally
       extraFlags = ["--enable-local-write"];
     };
 
@@ -22,12 +23,29 @@
       options.calibreLibrary = lib.head config.services.calibre-server.libraries;
     };
 
-    nginx.virtualHosts."books.m7.rs" = {
-      forceSSL = true;
-      enableACME = true;
-      locations."/" = {
-        proxyPass = "http://localhost:${toString config.services.calibre-web.listen.port}";
-        proxyWebsockets = true;
+    nginx.virtualHosts = {
+      "books.m7.rs" = {
+        forceSSL = true;
+        enableACME = true;
+        locations."/" = {
+          proxyPass = "http://localhost:${toString config.services.calibre-web.listen.port}";
+          proxyWebsockets = true;
+        };
+      };
+      "calibre.m7.rs" = {
+        forceSSL = true;
+        enableACME = true;
+        locations."/" = {
+          proxyPass = "http://localhost:${toString config.services.calibre-server.port}";
+          proxyWebsockets = true;
+          extraConfig = ''
+            allow 127.0.0.1;
+            allow ::1;
+            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+            deny all;
+          '';
+        };
       };
     };
   };
