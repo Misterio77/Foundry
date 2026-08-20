@@ -37,6 +37,8 @@ in {
         "openai-codex/gpt-5.6-sol"
         "openai-codex/gpt-5.6-terra"
         "openai-codex/gpt-5.6-luna"
+        "deepseek/deepseek-v4-flash"
+        "deepseek/deepseek-v4-pro"
         "claude-bridge/claude-opus-5"
         "claude-bridge/claude-sonnet-5"
         "claude-bridge/claude-haiku-4-5"
