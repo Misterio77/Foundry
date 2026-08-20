@@ -4,9 +4,8 @@
   ...
 }: {
   users.users = {
-    # Allow calibre to write to readarr-managed library
+    # Allow calibre-server to write to readarr-managed library
     calibre-server.extraGroups = [config.services.readarr.group];
-    calibre-web.extraGroups = [config.services.calibre-server.group config.services.readarr.group];
   };
 
   services = {
@@ -43,7 +42,8 @@
     calibre-web.serviceConfig = {
       CPUWeight = 50;
       IOWeight = 50;
-      UMask = "0002";
+      ReadWritePaths = lib.mkForce ["/var/lib/calibre-web"];
+      ReadOnlyPaths = config.services.calibre-server.libraries;
     };
   };
 
