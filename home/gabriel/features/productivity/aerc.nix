@@ -25,6 +25,7 @@ in {
       };
       messages = {
         D = ":move Trash<Enter>";
+        F = ":flag -t -x flagged<Enter>";
         G = "";
         V = "";
         X = ":mark -v<Enter>";
@@ -38,6 +39,7 @@ in {
       };
       view = {
         D = ":move Trash<Enter>";
+        F = ":flag -t -x flagged<Enter>";
         d = ":move Trash<Enter>";
       };
     };
