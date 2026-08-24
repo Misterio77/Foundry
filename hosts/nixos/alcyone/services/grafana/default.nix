@@ -86,7 +86,7 @@
             policies = [
               {
                 receiver = "default";
-                group_wait = "10s"; # Time to wait for others in group before sending (for batching)
+                group_wait = "30s"; # Time to wait for others in group before sending (for batching)
                 group_interval = "1m"; # Time to wait before sending update about changes in the same group
                 repeat_interval = "4h"; # Time to wait before re-emiting notifications already sent
               }
@@ -229,7 +229,7 @@
                     condition = "B";
                     execErrState = "KeepLast";
                     noDataState = "KeepLast";
-                    for = "1m"; # Higher than 'interval' (30s), to avoid blips generating notifications
+                    for = "3m"; # Higher than 'interval' (30s), to avoid blips generating notifications
                     data = [
                       {
                         refId = "A";
