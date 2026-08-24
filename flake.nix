@@ -85,6 +85,11 @@
       // {
         colors = import ./lib/colors.nix {lib = base;};
         material-you = import ./lib/material-you.nix {lib = base;};
+        toSystemdDevice = device:
+          base.concatStringsSep "-" (
+            base.tail (map (base.replaceString "-" "\\x2d") (base.splitString "/" device))
+          )
+          + ".device";
       };
     forEachSystem = f: lib.genAttrs (import systems) (system: f pkgsFor.${system});
     pkgsFor = lib.genAttrs (import systems) (

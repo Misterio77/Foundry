@@ -2,6 +2,7 @@
 {
   lib,
   config,
+  outputs,
   ...
 }: let
   root = config.fileSystems."/";
@@ -26,9 +27,7 @@
     )
   '';
 
-  # Convert a device path to a systemd .device
-  toSystemdDevice = device: lib.concatStringsSep "-" (lib.tail (map (lib.replaceString "-" "\\x2d" ) (lib.splitString "/" device))) + ".device";
-
+  rootDeviceUnit = outputs.lib.toSystemdDevice root.device;
   phase1Systemd = config.boot.initrd.systemd.enable;
 in {
   boot.initrd = {
@@ -37,8 +36,8 @@ in {
     systemd.services.restore-root = lib.mkIf phase1Systemd {
       description = "Rollback btrfs rootfs";
       wantedBy = ["initrd.target"];
-      requires = [(toSystemdDevice root.device)];
-      after = [(toSystemdDevice root.device)];
+      requires = [rootDeviceUnit];
+      after = [rootDeviceUnit];
       before = ["sysroot.mount"];
       unitConfig.DefaultDependencies = "no";
       serviceConfig.Type = "oneshot";

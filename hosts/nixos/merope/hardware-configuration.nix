@@ -1,5 +1,6 @@
 {
   inputs,
+  outputs,
   config,
   pkgs,
   lib,
@@ -131,7 +132,7 @@
     overrideStrategy = "asDropin";
     text = ''
       [Unit]
-      BindsTo=dev-disk-by\x2dpartlabel-disk\x2dhdd\x2dmedia.device
+      BindsTo=${outputs.lib.toSystemdDevice config.fileSystems."/srv/media".device}
     '';
   };
 
