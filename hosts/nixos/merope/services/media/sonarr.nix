@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   services.sonarr = {
     enable = true;
     settings = {
@@ -21,7 +25,6 @@
       '';
     };
   };
-
 
   # Add sonarr to deluge's and nzbget's groups
   # Make sure sonarr can hard-link their files
@@ -47,8 +50,13 @@
     mode = "0755";
   };
 
-  systemd.services.sonarr.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.sonarr = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 }

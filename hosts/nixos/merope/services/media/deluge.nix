@@ -60,9 +60,14 @@
     ];
   };
 
-  systemd.services.deluged.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.deluged = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 
   systemd.tmpfiles.settings.srv-media-incoming-torrent."/srv/media/incoming/torrent".d = {

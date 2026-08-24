@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   services.lidarr = {
     enable = true;
     settings = {
@@ -46,8 +50,13 @@
     mode = "0755";
   };
 
-  systemd.services.lidarr.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.lidarr = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 }

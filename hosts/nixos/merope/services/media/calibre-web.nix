@@ -51,17 +51,27 @@
   };
 
   systemd.services = {
-    calibre-server.serviceConfig = {
-      CPUWeight = 50;
-      IOWeight = 50;
-      UMask = "0002";
+    calibre-server = {
+      bindsTo = ["srv-media.mount"];
+      after = ["srv-media.mount"];
+      unitConfig.ConditionPathIsMountPoint = "/srv/media";
+      serviceConfig = {
+        CPUWeight = 50;
+        IOWeight = 50;
+        UMask = "0002";
+      };
     };
 
-    calibre-web.serviceConfig = {
-      CPUWeight = 50;
-      IOWeight = 50;
-      ReadWritePaths = lib.mkForce ["/var/lib/calibre-web"];
-      ReadOnlyPaths = config.services.calibre-server.libraries;
+    calibre-web = {
+      bindsTo = ["srv-media.mount"];
+      after = ["srv-media.mount"];
+      unitConfig.ConditionPathIsMountPoint = "/srv/media";
+      serviceConfig = {
+        CPUWeight = 50;
+        IOWeight = 50;
+        ReadWritePaths = lib.mkForce ["/var/lib/calibre-web"];
+        ReadOnlyPaths = config.services.calibre-server.libraries;
+      };
     };
   };
 

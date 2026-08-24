@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   services.radarr = {
     enable = true;
     settings = {
@@ -21,7 +25,6 @@
       '';
     };
   };
-
 
   # Add radarr to deluge's and nzbget's groups
   # Make sure radarr can hard-link their files
@@ -47,8 +50,13 @@
     mode = "0755";
   };
 
-  systemd.services.radarr.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.radarr = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 }

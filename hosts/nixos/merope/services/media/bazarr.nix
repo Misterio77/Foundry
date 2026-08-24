@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   services.bazarr = {
     enable = true;
     listenPort = 8689;
@@ -38,8 +42,13 @@
     ];
   };
 
-  systemd.services.bazarr.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.bazarr = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 }

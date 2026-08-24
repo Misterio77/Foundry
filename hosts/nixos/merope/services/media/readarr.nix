@@ -47,8 +47,13 @@
     mode = "2775";
   };
 
-  systemd.services.readarr.serviceConfig = {
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.readarr = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
 }

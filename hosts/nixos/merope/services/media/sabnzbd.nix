@@ -138,18 +138,23 @@ in {
     mode = "0770"; # So that others in the group (e.g. *arr) can move/hardlink completed files
   };
 
-  systemd.services.sabnzbd.serviceConfig = {
-    # A SIGTERM'd sabnzbd saves its queue and exits 0, so `on-failure` would
-    # leave it dead after an out-of-memory kill
-    Restart = "always";
-    # Yield to playback and library scans; par2/unrar inherit this as children
-    CPUWeight = 20;
-    IOWeight = 20;
-    # Registering only this unit for swap monitoring makes it the sole candidate
-    # once swap passes oomd's 90% limit, so ranking by swap usage cannot pick a
-    # service that is merely holding cold pages. Catches a runaway early; the
-    # pressure rule on system.slice is the later, broader net.
-    ManagedOOMSwap = "kill";
+  systemd.services.sabnzbd = {
+    bindsTo = ["srv-media.mount"];
+    after = ["srv-media.mount"];
+    unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    serviceConfig = {
+      # A SIGTERM'd sabnzbd saves its queue and exits 0, so `on-failure` would
+      # leave it dead after an out-of-memory kill
+      Restart = "always";
+      # Yield to playback and library scans; par2/unrar inherit this as children
+      CPUWeight = 20;
+      IOWeight = 20;
+      # Registering only this unit for swap monitoring makes it the sole candidate
+      # once swap passes oomd's 90% limit, so ranking by swap usage cannot pick a
+      # service that is merely holding cold pages. Catches a runaway early; the
+      # pressure rule on system.slice is the later, broader net.
+      ManagedOOMSwap = "kill";
+    };
   };
 
   sops.secrets = {

@@ -1,4 +1,8 @@
-{config, outputs, ...}: {
+{
+  config,
+  outputs,
+  ...
+}: {
   services.immich = {
     enable = true;
     accelerationDevices = ["/dev/dri/renderD128"];
@@ -55,9 +59,17 @@
   };
   */
 
-  systemd.tmpfiles.settings.srv-media-photos."/srv/media/photos".d = {
-    user = config.services.immich.user;
-    group = config.services.immich.group;
-    mode = "0750";
+  systemd = {
+    services.immich-server = {
+      bindsTo = ["srv-media.mount"];
+      after = ["srv-media.mount"];
+      unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    };
+
+    tmpfiles.settings.srv-media-photos."/srv/media/photos".d = {
+      user = config.services.immich.user;
+      group = config.services.immich.group;
+      mode = "0750";
+    };
   };
 }

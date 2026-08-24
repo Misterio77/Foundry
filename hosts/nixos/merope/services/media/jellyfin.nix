@@ -1,7 +1,14 @@
-{config, lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: {
   # https://jellyfin.org/docs/general/post-install/networking/
   # TODO: https://github.com/Sveske-Juice/declarative-jellyfin
-  options.services.jellyfin.port = lib.mkOption { default = 8096; type = lib.types.port; };
+  options.services.jellyfin.port = lib.mkOption {
+    default = 8096;
+    type = lib.types.port;
+  };
 
   config = {
     services = {
@@ -35,7 +42,12 @@
       tmpfiles.settings.jellyfinDirs = {
         "${config.services.jellyfin.dataDir}".d.mode = lib.mkForce "750";
       };
-      services.jellyfin.serviceConfig.UMask = lib.mkForce "0027";
+      services.jellyfin = {
+        bindsTo = ["srv-media.mount"];
+        after = ["srv-media.mount"];
+        unitConfig.ConditionPathIsMountPoint = "/srv/media";
+        serviceConfig.UMask = lib.mkForce "0027";
+      };
     };
 
     environment.persistence = {
