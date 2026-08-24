@@ -160,6 +160,65 @@
                     ];
                   }
                   {
+                    title = "Read-only Btrfs filesystem";
+                    uid = "btrfs-read-only";
+                    notification_settings.receiver = "default";
+                    annotations = {
+                      summary = "{{ $labels.instance }} has a read-only Btrfs filesystem";
+                      description = "{{ $labels.device }} at {{ $labels.instance }} has been read-only for at least one minute.";
+                    };
+                    condition = "B";
+                    execErrState = "KeepLast";
+                    noDataState = "KeepLast";
+                    for = "1m";
+                    data = [
+                      {
+                        refId = "A";
+                        datasourceUid = "prometheus-default";
+                        model = {
+                          refId = "A";
+                          intervalMs = 1000;
+                          expr = ''max by (job, instance, device) (node_filesystem_readonly{job="hosts",fstype="btrfs"})'';
+                          instant = true;
+                          range = false;
+                          legendFormat = "__auto";
+                          maxDataPoints = 43200;
+                        };
+                        relativeTimeRange = {
+                          from = 600;
+                          to = 0;
+                        };
+                      }
+                      {
+                        refId = "B";
+                        datasourceUid = "__expr__";
+                        model = {
+                          refId = "B";
+                          intervalMs = 1000;
+                          maxDataPoints = 43200;
+                          type = "threshold";
+                          expression = "A";
+                          datasource = {
+                            type = "__expr__";
+                            uid = "__expr__";
+                          };
+                          conditions = [
+                            {
+                              type = "query";
+                              query.params = ["B"];
+                              evaluator = {
+                                type = "gt";
+                                params = [0];
+                              };
+                              operator.type = "and";
+                              reducer.type = "last";
+                            }
+                          ];
+                        };
+                      }
+                    ];
+                  }
+                  {
                     title = "Service down";
                     uid = "service-down";
                     notification_settings.receiver = "default";
