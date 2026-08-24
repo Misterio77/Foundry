@@ -95,7 +95,7 @@
             type = "btrfs";
             subvolumes = {
               "/media" = {
-                mountOptions = ["noatime" "x-systemd.device-bound"];
+                mountOptions = ["noatime"];
                 mountpoint = "/srv/media";
               };
             };
@@ -122,6 +122,17 @@
         };
       };
     };
+  };
+
+  # Keep the generated mount bound to the stable device alias. The
+  # x-systemd.device-bound mount option is lost once systemd refreshes the
+  # unit from /proc/self/mountinfo.
+  systemd.units."srv-media.mount" = {
+    overrideStrategy = "asDropin";
+    text = ''
+      [Unit]
+      BindsTo=dev-disk-by\x2dpartlabel-disk\x2dhdd\x2dmedia.device
+    '';
   };
 
   fileSystems."/firmware".neededForBoot = lib.mkDefault true;
