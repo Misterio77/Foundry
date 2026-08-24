@@ -36,6 +36,27 @@ in {
   modifications = final: prev: {
     aerc = addPatches prev.aerc [./aerc-config-includes.patch];
 
+    agent-browser = let
+      chromiumHeadlessShell = final.playwright-driver.components.chromium-headless-shell;
+      chromiumHeadlessShellExecutable = builtins.getAttr final.stdenv.hostPlatform.system {
+        x86_64-linux = "chrome-headless-shell-linux64/chrome-headless-shell";
+        aarch64-linux = "chrome-linux/headless_shell";
+        x86_64-darwin = "chrome-headless-shell-mac-x64/chrome-headless-shell";
+        aarch64-darwin = "chrome-headless-shell-mac-arm64/chrome-headless-shell";
+      };
+    in
+      final.symlinkJoin {
+        inherit (prev.agent-browser) meta passthru;
+        name = prev.agent-browser.name;
+        paths = [prev.agent-browser];
+        nativeBuildInputs = [final.makeWrapper];
+        postBuild = ''
+          wrapProgram $out/bin/agent-browser \
+            --set AGENT_BROWSER_EXECUTABLE_PATH \
+              ${chromiumHeadlessShell}/${chromiumHeadlessShellExecutable}
+        '';
+      };
+
     # Automatic sync passes no reference, so ffsubsync picks whichever embedded
     # subtitle track ends last -- won by the Signs & Songs track, whose trailing
     # title card outlasts the final line of dialogue. Skip the non-dialogue
