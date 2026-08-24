@@ -1,4 +1,8 @@
-{modulesPath, inputs, ...}: {
+{
+  modulesPath,
+  inputs,
+  ...
+}: {
   imports = [
     (modulesPath + "/profiles/qemu-guest.nix")
     inputs.disko.nixosModules.disko
@@ -17,7 +21,7 @@
   };
 
   disko.devices.disk.main = {
-    device = "/dev/vda";
+    device = "/dev/disk/by-path/virtio-pci-0000:00:04.0";
     type = "disk";
     content = {
       type = "gpt";

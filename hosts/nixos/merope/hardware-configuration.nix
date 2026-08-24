@@ -1,4 +1,10 @@
-{inputs, config, pkgs, lib, ...}: {
+{
+  inputs,
+  config,
+  pkgs,
+  lib,
+  ...
+}: {
   imports = [
     ../common/optional/ephemeral-btrfs.nix
     inputs.disko.nixosModules.disko
@@ -13,7 +19,7 @@
 
   disko.devices.disk = {
     main = {
-      device = "/dev/sdb";
+      device = "/dev/disk/by-id/usb-Argon_Forty_000000000F38-0:0";
       type = "disk";
       content = {
         type = "gpt";
@@ -64,7 +70,7 @@
       };
     };
     sd-card = {
-      device = "/dev/mmcblk0";
+      device = "/dev/disk/by-id/mmc-SS32G_0x95aa1789";
       type = "disk";
       content = {
         type = "gpt";
@@ -79,7 +85,7 @@
       };
     };
     hdd = {
-      device = "/dev/sda";
+      device = "/dev/disk/by-id/wwn-0x50014ee2c1c1deaa";
       type = "disk";
       content = {
         type = "gpt";
@@ -98,7 +104,7 @@
       };
     };
     hdd2 = {
-      device = "/dev/sdc";
+      device = "/dev/disk/by-id/wwn-0x5000c50090d3963f";
       type = "disk";
       content = {
         type = "gpt";

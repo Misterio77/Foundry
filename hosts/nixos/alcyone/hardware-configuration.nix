@@ -17,54 +17,56 @@
     loader.grub = {
       enable = true;
       version = 2;
-      device = "/dev/vda";
+      device = "/dev/disk/by-path/virtio-pci-0000:00:05.0";
     };
   };
 
   disko.devices.disk.main = {
-    device = "/dev/vda";
+    device = "/dev/disk/by-path/virtio-pci-0000:00:05.0";
     type = "disk";
     # TODO: switch to gpt when reinstalling alcyone, eventually.
     content = {
       type = "table";
       format = "msdos";
-      partitions = [{
-        content = {
-          type = "btrfs";
-          postCreateHook = ''
-            MNTPOINT=$(mktemp -d)
-            mount -t btrfs "$device" "$MNTPOINT"
-            trap 'umount $MNTPOINT; rm -d $MNTPOINT' EXIT
-            btrfs subvolume snapshot -r $MNTPOINT/root $MNTPOINT/root-blank
-          '';
-          subvolumes = {
-            "/boot" = {
-              mountOptions = [];
-              mountpoint = "/boot";
-            };
-            "/root" = {
-              mountOptions = ["compress=zstd"];
-              mountpoint = "/";
-            };
-            "/nix" = {
-              mountOptions = ["noatime" "compress=zstd"];
-              mountpoint = "/nix";
-            };
-            "/persist" = {
-              mountOptions = ["compress=zstd"];
-              mountpoint = "/persist";
-            };
-            "/swap" = {
-              mountOptions = ["compress=zstd" "noatime"];
-              mountpoint = "/swap";
-              swap.swapfile = {
-                size = "3072M";
-                path = "swapfile";
+      partitions = [
+        {
+          content = {
+            type = "btrfs";
+            postCreateHook = ''
+              MNTPOINT=$(mktemp -d)
+              mount -t btrfs "$device" "$MNTPOINT"
+              trap 'umount $MNTPOINT; rm -d $MNTPOINT' EXIT
+              btrfs subvolume snapshot -r $MNTPOINT/root $MNTPOINT/root-blank
+            '';
+            subvolumes = {
+              "/boot" = {
+                mountOptions = [];
+                mountpoint = "/boot";
+              };
+              "/root" = {
+                mountOptions = ["compress=zstd"];
+                mountpoint = "/";
+              };
+              "/nix" = {
+                mountOptions = ["noatime" "compress=zstd"];
+                mountpoint = "/nix";
+              };
+              "/persist" = {
+                mountOptions = ["compress=zstd"];
+                mountpoint = "/persist";
+              };
+              "/swap" = {
+                mountOptions = ["compress=zstd" "noatime"];
+                mountpoint = "/swap";
+                swap.swapfile = {
+                  size = "3072M";
+                  path = "swapfile";
+                };
               };
             };
           };
-        };
-      }];
+        }
+      ];
     };
   };
 

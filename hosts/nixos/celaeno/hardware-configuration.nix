@@ -1,4 +1,8 @@
-{inputs, modulesPath, ...}: {
+{
+  inputs,
+  modulesPath,
+  ...
+}: {
   imports = [
     ../common/optional/ephemeral-btrfs.nix
     (modulesPath + "/profiles/qemu-guest.nix")
@@ -30,7 +34,7 @@
   };
 
   disko.devices.disk.main = {
-    device = "/dev/vda";
+    device = "/dev/disk/by-id/wwn-0x60352ec0420046b8b663e821c315f803";
     type = "disk";
     content = {
       type = "gpt";

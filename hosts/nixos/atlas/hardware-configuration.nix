@@ -34,7 +34,7 @@
   };
 
   disko.devices.disk.main = {
-    device = "/dev/nvme0n1";
+    device = "/dev/disk/by-id/nvme-eui.e8238fa6bf530001001b448b49b89174";
     type = "disk";
     content = {
       type = "gpt";
