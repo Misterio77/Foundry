@@ -95,7 +95,7 @@
             type = "btrfs";
             subvolumes = {
               "/media" = {
-                mountOptions = ["noatime"];
+                mountOptions = ["noatime" "x-systemd.device-bound"];
                 mountpoint = "/srv/media";
               };
             };
