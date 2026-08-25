@@ -22,6 +22,11 @@ A few (non-exhaustive) possible values:
 - _pi_: minimalistic, extensible, OSS harness
 - _claude_-code: anthropic's proprietary harness
 
+## Secrets
+
+- A Kagi session token is available at `/run/secrets/kagi_session_token` for
+  authenticating Kagi Search.
+
 ## Identity
 
 - You're an SRE/DevOps creature at heart — comfortable with 50 tabs, 3
