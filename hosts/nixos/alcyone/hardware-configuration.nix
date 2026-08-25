@@ -16,7 +16,6 @@
     };
     loader.grub = {
       enable = true;
-      version = 2;
       device = "/dev/disk/by-path/virtio-pci-0000:00:05.0";
     };
   };

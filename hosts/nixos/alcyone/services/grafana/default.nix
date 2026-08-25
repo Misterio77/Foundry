@@ -40,7 +40,7 @@
           enabled = true;
           host = "mail.m7.rs:465";
           from_address = user;
-          user = config.mailserver.loginAccounts."grafana@m7.rs".name;
+          user = config.mailserver.accounts."grafana@m7.rs".name;
           password = "$__file{${config.sops.secrets.grafana-mail-password.path}}";
         };
         server.root_url = "https://dash.m7.rs/";

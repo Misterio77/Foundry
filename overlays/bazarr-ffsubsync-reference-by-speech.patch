@@ -1,16 +1,16 @@
---- a/libs/ffsubsync/speech_transformers.py	2026-08-20 08:55:15.737139594 -0300
-+++ b/libs/ffsubsync/speech_transformers.py	2026-08-20 08:55:15.737139594 -0300
-@@ -252,7 +252,7 @@
- 
-     def try_fit_using_embedded_subs(self, fname: str) -> None:
+--- a/libs/ffsubsync/speech_transformers.py
++++ b/libs/ffsubsync/speech_transformers.py
+@@ -503,7 +503,7 @@
+                     fname, list(map("0:s:{}".format, range(5)))
+                 )
          embedded_subs = []
 -        embedded_subs_times = []
 +        embedded_subs_speech = []
-         if self.ref_stream is None:
-             # check first 5; should cover 99% of movies
-             streams_to_try: List[str] = list(map("0:s:{}".format, range(5)))
-@@ -290,15 +290,18 @@
-             ).fit(output)
+         for buffer in subtitle_buffers:
+             pipe = cast(
+                 Pipeline,
+@@ -511,15 +511,18 @@
+             ).fit(buffer)
              speech_step = pipe.steps[-1][1]
              embedded_subs.append(speech_step)
 -            embedded_subs_times.append(speech_step.max_time_)
@@ -30,4 +30,4 @@
 +        subs_to_use = embedded_subs[int(np.argmax(embedded_subs_speech))]
          self.video_speech_results_ = subs_to_use.subtitle_speech_results_
  
-     def fit(self, fname: str, *_) -> "VideoSpeechTransformer":
+     def _build_ffmpeg_args(self, fname: str) -> List[str]:

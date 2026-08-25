@@ -17,7 +17,6 @@
   gtk2,
   gtk3,
   lib,
-  libappindicator-gtk2,
   libappindicator-gtk3,
   libdrm,
   libgbm,
@@ -132,7 +131,6 @@ in
       glib
       gtk2
       gtk3
-      libappindicator-gtk2
       libappindicator-gtk3
       libdrm
       libgbm

@@ -1,7 +1,7 @@
 From 73315cfff45b1e4f3c611fa4fc1e59c3a11ece98 Mon Sep 17 00:00:00 2001
 From: Gabriel Fontes <hi@m7.rs>
 Date: Tue, 7 Apr 2026 15:21:18 -0300
-Subject: [PATCH] fix support for fish 4.3
+Subject: [PATCH] fix support for modern Fish versions
 
 ---
  functions/fish_helix_key_bindings.fish | 123 +++++++++++--------------
@@ -11,10 +11,15 @@ diff --git a/functions/fish_helix_key_bindings.fish b/functions/fish_helix_key_b
 index c6aa397..ec98d9b 100644
 --- a/functions/fish_helix_key_bindings.fish
 +++ b/functions/fish_helix_key_bindings.fish
-@@ -58,8 +58,7 @@ function fish_helix_key_bindings --description 'helix-like key bindings for fish
-         __fish_shared_key_bindings -s -M $mode
+@@ -58,8 +58,11 @@ function fish_helix_key_bindings --description 'helix-like key bindings for fish
+-        __fish_shared_key_bindings -s -M $mode
++        function __fish_helix_shared_key_bindings
++            eval "$(__fish_shared_key_bindings)"
++        end
++        __fish_helix_shared_key_bindings -s -M $mode
++        functions --erase __fish_helix_shared_key_bindings
      end
-
+ 
 -    bind -s --preset -M insert \r execute
 -    bind -s --preset -M insert \n execute
 +    bind -s --preset -M insert enter execute

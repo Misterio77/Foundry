@@ -1,13 +1,20 @@
-{lib, pkg-config, hyprland, cmake, fetchFromGitHub, gnused}:
+{
+  lib,
+  pkg-config,
+  hyprland,
+  cmake,
+  fetchFromGitHub,
+  gnused,
+}:
 hyprland.stdenv.mkDerivation (final: {
   pname = "hyprbars";
-  version = "0.53.3";
+  version = "0.56.0";
 
   src = "${fetchFromGitHub {
     owner = "hyprwm";
     repo = "hyprland-plugins";
-    rev = "3aa21f2e0ca72412f1b434c3126f8f1fec3c716c";
-    hash = "sha256-VTRC7MN4HReathEqTEAGtTb6X6fjFXLhK4/+jZHTl1Q=";
+    rev = "7644cecdb947060682891a0db2a0cdc5c0b9e704";
+    hash = "sha256-piRpwar7VZI3YviYo0a/UMFz9+rLesfv3nRLGKxjVGg=";
   }}/hyprbars";
   buildInputs = [hyprland] ++ hyprland.buildInputs;
   nativeBuildInputs = [pkg-config cmake];

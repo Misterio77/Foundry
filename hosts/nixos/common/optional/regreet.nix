@@ -1,6 +1,6 @@
 # Graphical greeter, hooks into greetd
 {pkgs, ...}: {
-  programs.regreet = {
+  services.displayManager.regreet = {
     enable = true;
     cageArgs = ["-d" "-s" "-m" "last"];
     iconTheme = {
@@ -24,10 +24,12 @@
 
   environment.persistence = {
     # Persist last user and last selected session
-    "/persist".directories = [{
-      directory = "/var/lib/regreet";
-      user = "greeter";
-      group = "greeter";
-    }];
+    "/persist".directories = [
+      {
+        directory = "/var/lib/regreet";
+        user = "greeter";
+        group = "greeter";
+      }
+    ];
   };
 }

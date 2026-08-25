@@ -33,9 +33,9 @@
 
   programs.dconf.enable = true;
 
-  services.logind = {
-    powerKey = "suspend";
-    powerKeyLongPress = "poweroff";
+  services.logind.settings.Login = {
+    HandlePowerKey = "suspend";
+    HandlePowerKeyLongPress = "poweroff";
   };
 
   system.stateVersion = "22.05";

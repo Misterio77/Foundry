@@ -26,7 +26,10 @@ in {
 
   # Adds my custom packages
   additions = final: prev:
-    import ../pkgs {pkgs = final;}
+    import ../pkgs {
+      inherit inputs;
+      pkgs = final;
+    }
     // {
       formats = (prev.formats or {}) // import ../pkgs/formats {pkgs = final;};
       roundcubePlugins = (prev.roundcubePlugins or {}) // import ../pkgs/roundcube-plugins {pkgs = final;};

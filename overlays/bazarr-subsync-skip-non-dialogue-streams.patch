@@ -1,5 +1,5 @@
---- a/bazarr/subtitles/tools/subsyncer.py	2026-08-20 08:50:07.522343161 -0300
-+++ b/bazarr/subtitles/tools/subsyncer.py	2026-08-20 08:50:07.526343199 -0300
+--- a/bazarr/subtitles/tools/subsyncer.py
++++ b/bazarr/subtitles/tools/subsyncer.py
 @@ -1,7 +1,10 @@
  # coding=utf-8
  
@@ -10,8 +10,8 @@
 +import subprocess
  
  from ffsubsync.ffsubsync import run, make_parser
- 
-@@ -33,6 +36,43 @@
+ from ffsubsync import ProgressInfo
+@@ -36,6 +39,43 @@
          self.sync_result = None
          self.job_id = None
  
@@ -52,10 +52,10 @@
 +        logging.debug('BAZARR no embedded subtitles stream of %s carries dialogue', video_path)
 +        return None
 +
-     def sync(self, video_path, srt_path, srt_lang, hi, forced,
-              max_offset_seconds, no_fix_framerate, gss, reference=None, sonarr_series_id=None, sonarr_episode_id=None,
-              radarr_id=None, progress_callback=None, job_id=None, force_sync=False):
-@@ -70,6 +110,12 @@
+     @staticmethod
+     def _original_language_name(sonarr_series_id, radarr_id):
+         """Read originalLanguage from the local DB. The column is populated by the regular
+@@ -142,6 +182,12 @@
              if reference and reference != video_path and os.path.isfile(reference):
                  # subtitles path provided
                  self.reference = reference
@@ -68,10 +68,10 @@
  
              unparsed_args = [self.reference, '-i', self.srtin, '-o', self.srtout, '--ffmpegpath', self.ffmpeg_path,
                               '--vad', self.vad, '--log-dir-path', self.log_dir_path, '--max-offset-seconds',
-@@ -81,7 +127,7 @@
-             if gss:
-                 unparsed_args.append('--gss')
- 
+@@ -157,7 +203,7 @@
+                          f"use_original_language={settings.subsync.use_original_language} "
+                          f"auto_use_original_language={settings.subsync.auto_use_original_language} "
+                          f"force_sync={force_sync}")
 -            if reference and isinstance(reference, str) and len(reference) == 3 and reference[:2] in ['a:', 's:']:
 +            if reference and isinstance(reference, str) and re.fullmatch(r'[as]:\d+', reference):
                  # audio or subtitles track id provided

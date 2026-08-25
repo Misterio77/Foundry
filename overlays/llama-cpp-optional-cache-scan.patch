@@ -11,10 +11,10 @@ truth by default; set the env var to restore upstream behaviour.
 
 --- a/tools/server/server-models.cpp
 +++ b/tools/server/server-models.cpp
-@@ -280,8 +280,13 @@
+@@ -504,8 +504,13 @@
  
  void server_models::load_models() {
-     // Phase 1: load presets from all sources — pure I/O, no lock needed
+     // Phase 1: load presets from all sources - pure I/O, no lock needed
 -    // 1. cached models
 -    common_presets cached_models = ctx_preset.load_from_cache();
 +    // 1. cached models (opt-in). Scanning the HF cache auto-registers untuned

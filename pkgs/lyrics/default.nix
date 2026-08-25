@@ -5,7 +5,7 @@
   setuptools,
 }:
 buildPythonPackage rec {
-  pname = "lyrics";
+  pname = "lyrics-in-terminal";
   version = "1.5.0";
 
   src = fetchFromGitHub {

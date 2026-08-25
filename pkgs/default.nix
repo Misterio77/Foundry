@@ -1,15 +1,26 @@
-{pkgs ? import <nixpkgs> {}, ...}: rec {
+{
+  inputs,
+  pkgs,
+}: let
+  runescapePkgs = import inputs.nixpkgs-runescape {
+    inherit (pkgs.stdenv.hostPlatform) system;
+    config.permittedInsecurePackages = ["openssl-1.1.1w"];
+  };
+in rec {
   # Packages with an actual source
   lyrics = pkgs.python3Packages.callPackage ./lyrics {};
   prefetcharr = pkgs.callPackage ./prefetcharr {};
   alt1 = pkgs.callPackage ./alt1 {};
+  materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
   golive = pkgs.callPackage ./golive {};
   website = pkgs.callPackage ../projects/website {};
   runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
-  runescape = pkgs.callPackage ./runescape {};
+  runescape = pkgs.callPackage ./runescape {
+    inherit (runescapePkgs) openssl_1_1;
+  };
 
   # Personal scripts
   pass-wofi = pkgs.callPackage ./pass-wofi {};

@@ -233,6 +233,10 @@ in {
       };
     };
     extraConfig = ''
+      # QtWebEngine 6.11.1's GBM path flickers during hardware video playback
+      # on AMD Wayland systems: https://github.com/qutebrowser/qutebrowser/issues/8908
+      c.qt.environ = {"QTWEBENGINE_FORCE_USE_GBM": "0"}
+
       c.tabs.padding = {"bottom": 10, "left": 10, "right": 10, "top": 10}
       # Let Jagex hand authentication back to the rshub URL handler.
       config.set("content.unknown_url_scheme_policy", "allow-all", "https://account.jagex.com/*/launcher/successful-login*")
