@@ -12,17 +12,17 @@
 in {
   programs.ssh = {
     enable = true;
-    # See above
-    matchBlocks = {
+    enableDefaultConfig = false;
+    settings = {
       net = {
-        host = lib.concatStringsSep " " (lib.flatten (map (host: [
+        header = "Host ${lib.concatStringsSep " " (lib.flatten (map (host: [
             host
             "${host}.m7.rs"
             "${host}.ts.m7.rs"
           ])
-          hostnames));
-        forwardAgent = true;
-        remoteForwards = [
+          hostnames))}";
+        ForwardAgent = true;
+        RemoteForward = [
           {
             bind.address = ''/%d/.gnupg-sockets/S.gpg-agent'';
             host.address = ''/%d/.gnupg-sockets/S.gpg-agent.extra'';
@@ -32,17 +32,27 @@ in {
             host.address = ''/%d/.waypipe/client.sock'';
           }
         ];
-        forwardX11 = true;
-        forwardX11Trusted = true;
-        setEnv.WAYLAND_DISPLAY = "wayland-waypipe";
-        extraOptions = {
-          StreamLocalBindUnlink = "yes";
-          # Keep connections to the fleet warm after first use: speeds up
-          # subsequent ssh, and lets the tmux picker enumerate a box's sessions
-          # over the existing master (ssh -O check) without dialing out.
-          ControlMaster = "auto";
-          ControlPersist = "1m";
-        };
+        ForwardX11 = true;
+        ForwardX11Trusted = true;
+        SetEnv.WAYLAND_DISPLAY = "wayland-waypipe";
+        StreamLocalBindUnlink = "yes";
+        # Keep connections to the fleet warm after first use: speeds up
+        # subsequent ssh, and lets the tmux picker enumerate a box's sessions
+        # over the existing master (ssh -O check) without dialing out.
+        ControlMaster = "auto";
+        ControlPersist = "1m";
+      };
+      "*" = {
+        ForwardAgent = false;
+        AddKeysToAgent = "no";
+        Compression = false;
+        ServerAliveInterval = 0;
+        ServerAliveCountMax = 3;
+        HashKnownHosts = false;
+        UserKnownHostsFile = "~/.ssh/known_hosts";
+        ControlMaster = "no";
+        ControlPath = "~/.ssh/master-%r@%n:%p";
+        ControlPersist = "no";
       };
     };
   };
