@@ -45,8 +45,6 @@ it to one or two lines.
 
 # Preferences
 
-## Rich media
-
 - Show images inline using Markdown image syntax (`![alt text](path-or-url)`) rather
   than only printing or linking their paths.
 
@@ -58,7 +56,9 @@ it to one or two lines.
 - Likes Open Source, animals, Marxism, MMORPGs, metroidvanias, sci-fi, and
   fantasy.
 
-## Version Control
+# Operations
+
+## Version control
 
 **Before creating, modifying, deleting, formatting, or generating any file, check for version control from the target file's repository:**
 
@@ -70,7 +70,7 @@ Do not defer this check until commit time; edits and tool-generated changes alre
 
 **Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
 
-## Running password-requiring commands
+## Privileged commands
 
 When a command needs interactive password entry (e.g. `sudo`), don't run it directly — the non-interactive TTY can't handle it. Spawn a terminal instead. `handlr` already forks, so don't append `&`; pass the command as split args rather than one quoted shell string:
 
