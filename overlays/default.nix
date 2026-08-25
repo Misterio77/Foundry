@@ -198,6 +198,29 @@ in {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
         hash = "sha256-nECvL0OVD46U57vNDBs1SPAAly2gDE+5wNBSnU19VDE=";
       };
+      preBuild = ''
+        mkdir -p packages/ai/src/providers/data
+        tar -xzf "$modelData" \
+          --strip-components=4 \
+          -C packages/ai/src/providers/data \
+          package/dist/providers/data
+
+        npx tsgo -p packages/telemetry/tsconfig.build.json
+        npx tsgo -p packages/protocol/tsconfig.build.json
+        npx tsgo -p packages/client/tsconfig.build.json
+      '';
+      postInstall =
+        oldAttrs.postInstall
+        + ''
+          local nm="$out/lib/node_modules/pi-monorepo/node_modules"
+
+          for ws in @earendil-works/pi-telemetry:packages/telemetry \
+                    @earendil-works/pi-protocol:packages/protocol \
+                    @earendil-works/pi-client:packages/client; do
+            IFS=: read -r pkg src <<< "$ws"
+            cp -r "$src" "$nm/$pkg"
+          done
+        '';
     });
 
     buildPiPackage = let
