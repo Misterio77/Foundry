@@ -6,7 +6,7 @@
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
   website = pkgs.callPackage ../projects/website {};
-  runelite-mcp = pkgs.callPackage ../projects/runelite-mcp {};
+  runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
   runescape = pkgs.callPackage ./runescape {};
 

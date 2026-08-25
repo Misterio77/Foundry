@@ -11,7 +11,7 @@ in {
     pkgs.jagex-auth
   ];
 
-  home.file.".runelite/sideloaded-plugins/runelite-mcp.jar".source = "${pkgs.runelite-mcp}/share/runelite/sideloaded-plugins/runelite-mcp.jar";
+  home.file.".runelite/sideloaded-plugins/runelite-query.jar".source = "${pkgs.runelite-query}/share/runelite/sideloaded-plugins/runelite-query.jar";
 
   home.persistence = {
     "/persist".directories = [

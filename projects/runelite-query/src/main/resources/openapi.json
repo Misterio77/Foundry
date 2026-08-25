@@ -1,0 +1,38 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RuneLite Query",
+    "version": "1",
+    "description": "Read-only local HTTP API for current RuneLite state. It never performs gameplay actions."
+  },
+  "paths": {
+    "/v1/health": {"get": {"summary": "Check plugin availability", "responses": {"200": {"description": "Plugin is running"}}}},
+    "/v1/openapi.json": {"get": {"summary": "Read this API description", "responses": {"200": {"description": "OpenAPI document"}}}},
+    "/v1/context": {"get": {"summary": "Read session, player, location, movement, interaction, and core vitals", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/skills": {"get": {"summary": "Read base and current skill levels and XP", "parameters": [{"$ref": "#/components/parameters/SkillName"}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/status-effects": {"get": {"summary": "Read boosts, prayers, poison, venom, and supported timers", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/carried-items": {"get": {"summary": "Read inventory and equipment", "parameters": [{"name": "container", "in": "query", "description": "Repeat to select containers; omit for both", "schema": {"type": "string", "enum": ["inventory", "equipment"]}}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/events": {"get": {"summary": "Read bounded recent state changes", "parameters": [{"name": "generation", "in": "query", "schema": {"type": "string"}}, {"name": "after-sequence", "in": "query", "schema": {"type": "integer", "minimum": 0}}, {"name": "before-sequence", "in": "query", "schema": {"type": "integer", "minimum": 1}}, {"name": "type", "in": "query", "description": "Repeat to select event types", "schema": {"type": "string", "enum": ["game_state_changed", "skill_changed", "inventory_changed", "equipment_changed", "movement_changed", "interaction_changed"]}}, {"$ref": "#/components/parameters/Limit"}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/quests": {"get": {"summary": "Search quest progression", "parameters": [{"name": "state", "in": "query", "description": "Repeat to select states", "schema": {"type": "string", "enum": ["not_started", "in_progress", "finished", "unknown"]}}, {"$ref": "#/components/parameters/Query"}, {"$ref": "#/components/parameters/Offset"}, {"$ref": "#/components/parameters/Limit"}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/achievement-diaries": {"get": {"summary": "Read achievement-diary reward tiers", "parameters": [{"name": "region", "in": "query", "description": "Repeat to select regions", "schema": {"type": "string", "enum": ["ardougne", "desert", "falador", "fremennik", "kandarin", "karamja", "kourend_kebos", "lumbridge_draynor", "morytania", "varrock", "western_provinces", "wilderness"]}}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/combat-achievements": {"get": {"summary": "Search combat-achievement tasks and totals", "parameters": [{"name": "tier", "in": "query", "description": "Repeat to select tiers", "schema": {"type": "string", "enum": ["easy", "medium", "hard", "elite", "master", "grandmaster"]}}, {"name": "completed", "in": "query", "schema": {"type": "boolean"}}, {"$ref": "#/components/parameters/Query"}, {"$ref": "#/components/parameters/Offset"}, {"$ref": "#/components/parameters/Limit"}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/slayer": {"get": {"summary": "Read Slayer task and progression", "parameters": [{"name": "section", "in": "query", "description": "Repeat to select sections", "schema": {"type": "string", "enum": ["task", "rewards", "blocks"]}}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/grand-exchange": {"get": {"summary": "Read current Grand Exchange slots", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/stored-items": {"get": {"summary": "Search observed bank and auxiliary containers", "parameters": [{"name": "container", "in": "query", "description": "Repeat up to four times", "schema": {"type": "string", "enum": ["bank", "seed_vault", "looting_bag", "rune_pouch", "seed_box", "tackle_box", "forestry_kit", "huntsmans_kit"]}}, {"$ref": "#/components/parameters/Query"}, {"name": "item-id", "in": "query", "schema": {"type": "integer", "minimum": 1}}, {"$ref": "#/components/parameters/Offset"}, {"$ref": "#/components/parameters/Limit"}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/account-wealth": {"get": {"summary": "Estimate wealth from observed account state", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/collection-log": {"get": {"summary": "Read collection-log summary and recent entries", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/poh": {"get": {"summary": "Read recognized features from the observed player-owned house", "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}},
+    "/v1/item-prices": {"get": {"summary": "Read RuneLite cached prices for one to eight item IDs", "parameters": [{"name": "id", "in": "query", "required": true, "description": "Repeat for each item ID", "schema": {"type": "integer", "minimum": 1}}], "responses": {"200": {"$ref": "#/components/responses/QueryResult"}}}}
+  },
+  "components": {
+    "parameters": {
+      "SkillName": {"name": "name", "in": "query", "description": "Repeat to select skills; omit for all", "schema": {"type": "string"}},
+      "Query": {"name": "query", "in": "query", "schema": {"type": "string", "minLength": 1, "maxLength": 128}},
+      "Offset": {"name": "offset", "in": "query", "schema": {"type": "integer", "minimum": 0}},
+      "Limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}
+    },
+    "responses": {
+      "QueryResult": {"description": "Current or explicitly unavailable RuneLite data", "content": {"application/json": {"schema": {"type": "object"}}}}
+    }
+  }
+}
