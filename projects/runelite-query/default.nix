@@ -39,8 +39,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   installPhase = ''
     runHook preInstall
-    install -Dm644 build/libs/runelite-query-${finalAttrs.version}.jar \
-      $out/share/runelite/sideloaded-plugins/runelite-query.jar
+    install -Dm644 build/libs/runelite-query-$version.jar \
+      $out/share/runelite/plugins/$pname.jar
     runHook postInstall
   '';
 

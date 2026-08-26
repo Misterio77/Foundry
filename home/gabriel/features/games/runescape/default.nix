@@ -1,17 +1,18 @@
-{pkgs, ...}: let
-  runelite = pkgs.jagex-auth.wrapLaunch pkgs.runelite;
-  hdos = pkgs.jagex-auth.wrapLaunch pkgs.hdos;
-  runescape = pkgs.jagex-auth.wrapLaunch pkgs.runescape;
-in {
+{
+  pkgs,
+  config,
+  ...
+}: {
   home.packages = [
-    runelite
-    hdos
-    runescape
+    (pkgs.jagex-auth.wrapLaunch pkgs.runelite)
+    (pkgs.jagex-auth.wrapLaunch pkgs.hdos)
+    (pkgs.jagex-auth.wrapLaunch pkgs.runescape)
     pkgs.alt1
     pkgs.jagex-auth
+    pkgs.runelite-query
   ];
 
-  home.file.".runelite/sideloaded-plugins/runelite-query.jar".source = "${pkgs.runelite-query}/share/runelite/sideloaded-plugins/runelite-query.jar";
+  home.file.".runelite/sideloaded-plugins".source = "${config.home.path}/share/runelite/plugins";
 
   home.persistence = {
     "/persist".directories = [
