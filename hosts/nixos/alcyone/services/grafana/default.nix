@@ -165,7 +165,7 @@
                     notification_settings.receiver = "default";
                     annotations = {
                       summary = "{{ $labels.instance }} has a read-only Btrfs filesystem";
-                      description = "{{ $labels.device }} at {{ $labels.instance }} has been read-only for at least one minute.";
+                      description = "{{ $labels.device }} mounted at {{ $labels.mountpoint }} on {{ $labels.instance }} has been read-only for at least one minute.";
                     };
                     condition = "B";
                     execErrState = "KeepLast";
@@ -178,7 +178,7 @@
                         model = {
                           refId = "A";
                           intervalMs = 1000;
-                          expr = ''max by (job, instance, device) (node_filesystem_readonly{job="hosts",fstype="btrfs"})'';
+                          expr = ''max by (job, instance, device, mountpoint) (node_filesystem_readonly{job="hosts",fstype="btrfs",mountpoint!="/nix/store"})'';
                           instant = true;
                           range = false;
                           legendFormat = "__auto";
