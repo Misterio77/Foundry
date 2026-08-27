@@ -13,9 +13,8 @@
 in {
   programs.aerc = {
     enable = true;
-    extraBinds = {
+    extraBinds = lib.recursiveUpdate (import ./aerc-default-bindings.nix) {
       global = {
-        "$include" = "${config.programs.aerc.package}/share/aerc/binds.conf";
         "<C-c>" = ":quit<Enter>";
         "<C-q>" = ":quit<Enter>";
         "\\[t" = "";

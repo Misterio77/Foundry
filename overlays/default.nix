@@ -34,8 +34,6 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
-    aerc = addPatches prev.aerc [./aerc-config-includes.patch];
-
     agent-browser = let
       chromiumHeadlessShell = final.playwright-driver.components.chromium-headless-shell;
       chromiumHeadlessShellExecutable = builtins.getAttr final.stdenv.hostPlatform.system {
