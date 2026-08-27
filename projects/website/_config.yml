@@ -26,8 +26,13 @@ source: _src
 collections:
   posts:
     output: true
-    permalink: /blog/:path/index:output_ext
+    permalink: /blog/:name/
     name: Posts
+  publications:
+    output: true
+    permalink: /publications/:name/
+    name: Publications
+    sort_by: date
 
 defaults:
   -
@@ -39,13 +44,19 @@ defaults:
       nav_current: "/blog/"
   -
     scope:
+      path: "assets/**/*.pdf"
+    values:
+      sitemap: false
+  -
+    scope:
+      path: ""
+      type: "publications"
+    values:
+      nav_current: "/publications/"
+  -
+    scope:
       path: ""
     values:
       layout: "default.html"
       language: "en"
       author: "Gabriel Fontes"
-  -
-    scope:
-      path: "publications"
-    values:
-      nav_current: "/publications/"

@@ -5,7 +5,8 @@ permalink: /publications/
 listing: true
 ---
 
-{% for pub in site.data.publications %}
+{% assign publications = site.publications | reverse %}
+{% for pub in publications %}
   <article id="{{ pub.slug }}">
     <header>
       <p>
@@ -13,16 +14,16 @@ listing: true
           {{ pub.date | date_to_long_string: "ordinal" }}
         </time>
       </p>
-      <h2><a href="{% if pub.web %}{{ pub.web }}{% else %}{{ pub.file }}{% endif %}">{{ pub.title }}</a></h2>
+      <h2><a href="{{ pub.url }}">{{ pub.title }}</a></h2>
     </header>
     <section>
-      {% if pub.venue %}<p>{{ pub.venue }}</p>{% endif %}
+      {% if pub.citation.conference_title %}<p>{{ pub.citation.conference_title }}</p>{% endif %}
     </section>
     <footer>
       <p>
-        {% if pub.web %}<a href="{{ pub.web }}">Web edition</a> · {% endif %}
-        <a class="file" href="{{ pub.file }}">PDF</a> ·
-        <a class="doi" href="https://doi.org/{{ pub.doi }}">{{ pub.doi }}</a>
+        <a href="{{ pub.url }}">Web edition</a> ·
+        <a class="file" href="{{ pub.citation.pdf_url }}">PDF</a> ·
+        <a class="doi" href="https://doi.org/{{ pub.citation.doi }}">{{ pub.citation.doi }}</a>
       </p>
     </footer>
   </article>

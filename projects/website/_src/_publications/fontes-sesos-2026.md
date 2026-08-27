@@ -1,23 +1,24 @@
 ---
-layout: default.html
 title: "Open Source Software Ecosystem for Cloud Observability: An Overview and Trends"
 description: The main goal of this paper is to present the OSS Ecosystem formed by cloud computing observability tooling, by providing an overview of the main tools and identifying trends on their integration.
-permalink: /publications/fontes-sesos-2026/
-pdf: /assets/docs/fontes-sesos-2026.pdf
-doi: 10.1145/3786163.3788453
-citation_title: "Open Source Software Ecosystem for Cloud Observability: An Overview and Trends"
-citation_authors:
-  - Gabriel Silva Fontes
-  - Vasilios Andrikopoulos
-  - Elisa Yumi Nakagawa
-published_date: 2026-04-12
-venue: 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS '26)
+date: 2026-04-12
+last_modified_at: 2026-08-27
+citation:
+  doi: 10.1145/3786163.3788453
+  isbn: "9798400723957"
+  pdf_url: "https://gsfontes.com/assets/docs/fontes-sesos-2026.pdf"
+  title: "Open Source Software Ecosystem for Cloud Observability: An Overview and Trends"
+  author:
+    - Gabriel Silva Fontes
+    - Vasilios Andrikopoulos
+    - Elisa Yumi Nakagawa
+  publication_date: "2026/4/12"
+  conference_title: 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS '26)
+  inbook_title: "SESoS '26: Proceedings of the 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems"
+  firstpage: "9"
+  lastpage: "15"
+  publisher: Association for Computing Machinery
 ---
-
-[PDF](/assets/docs/fontes-sesos-2026.pdf) · [10.1145/3786163.3788453](https://doi.org/10.1145/3786163.3788453)
-
-Gabriel Silva Fontes · Vasilios Andrikopoulos · Elisa Yumi Nakagawa  
-14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS ’26) · April 12–18, 2026 · Rio de Janeiro, Brazil
 
 ## Abstract
 

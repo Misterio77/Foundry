@@ -1,23 +1,24 @@
 ---
-layout: default.html
 title: "Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability"
-description: Synthesize how the wider concept of OSS sustainability is currently understood "in the wild", explore how it can be characterized, and discuss the impact a better understanding can have on more responsible OSS adoption.
-permalink: /publications/fontes-design-2026/
-pdf: /assets/docs/fontes-design-2026.pdf
-doi: 10.1145/3786152.3788587
-citation_title: "Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability"
-citation_authors:
-  - Gabriel Silva Fontes
-  - Vinicius dos Santos
-  - Elisa Yumi Nakagawa
-published_date: 2026-04-13
-venue: 3rd International Workshop on Designing Software (Designing '26)
+description: Synthesize how the wider concept of OSS sustainability is currently understood “in the wild”, explore how it can be characterized, and discuss the impact a better understanding can have on more responsible OSS adoption.
+date: 2026-04-13
+last_modified_at: 2026-08-27
+citation:
+  doi: 10.1145/3786152.3788587
+  isbn: "9798400723858"
+  pdf_url: "https://gsfontes.com/assets/docs/fontes-design-2026.pdf"
+  title: "Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability"
+  author:
+    - Gabriel Silva Fontes
+    - Vinicius dos Santos
+    - Elisa Yumi Nakagawa
+  publication_date: "2026/4/13"
+  conference_title: 3rd International Workshop on Designing Software (Designing '26)
+  inbook_title: "Designing '26: Proceedings of the 3rd International Workshop on Designing Software"
+  firstpage: "50"
+  lastpage: "57"
+  publisher: Association for Computing Machinery
 ---
-
-[PDF](/assets/docs/fontes-design-2026.pdf) · [10.1145/3786152.3788587](https://doi.org/10.1145/3786152.3788587)
-
-Gabriel Silva Fontes · Vinicius dos Santos · Elisa Yumi Nakagawa  
-3rd International Workshop on Designing Software (Designing ’26) · April 12–18, 2026 · Rio de Janeiro, Brazil
 
 ## Abstract
 

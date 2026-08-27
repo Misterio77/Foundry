@@ -16,15 +16,14 @@
     {% if page.noindex == true -%}
       <meta name="robots" content="noindex">
     {%- endif %}
-    {% if page.doi -%}
-      <meta name="citation_title" content="{{ page.citation_title | default: page.title }}">
-      {% for author in page.citation_authors -%}
-        <meta name="citation_author" content="{{ author }}">
-      {% endfor -%}
-      <meta name="citation_publication_date" content="{{ page.published_date }}">
-      <meta name="citation_conference_title" content="{{ page.venue }}">
-      <meta name="citation_doi" content="{{ page.doi }}">
-      <meta name="citation_pdf_url" content="{{ site.url }}{{ page.pdf }}">
+    {% if page.citation -%}
+      {% for metadata in page.citation -%}
+        {%- assign key = metadata[0] -%}
+        {%- assign values = metadata[1] | array -%}
+        {% for value in values -%}
+        <meta name="citation_{{key}}" content="{{value}}">
+        {% endfor %}
+      {%- endfor %}
     {%- endif %}
 
     <link rel="icon" href="data:,">
