@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <meta charset="utf-8" />
     <title>Gabriel Fontes | {{ page.title }}</title>
+    <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <meta name="description" content="
       {%- if page.description -%}
         {{ page.description }}
@@ -23,8 +27,30 @@
       <meta name="citation_pdf_url" content="{{ site.url }}{{ page.pdf }}">
     {%- endif %}
 
-    <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
-    {% include head.html.liquid %}
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/assets/style.css" />
+    <style id="default-css">
+      :root {
+      {%- for color in site.data.colorscheme[site.default_scheme].colors.dark %}
+        --{{ color[0] }}: {{ color[1] }};
+      {%- endfor %}
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+        {%- for color in site.data.colorscheme[site.default_scheme].colors.light %}
+          --{{ color[0] }}: {{ color[1] }};
+        {%- endfor %}
+        }
+      }
+      @media print {
+        :root {
+        {%- for color in site.data.colorscheme[site.default_scheme].colors.light %}
+          --{{ color[0] }}: {{ color[1] }};
+        {%- endfor %}
+        }
+      }
+    </style>
+    <script src="/assets/main.js"></script>
   </head>
   <body>
     {{ content | extlinks }}
