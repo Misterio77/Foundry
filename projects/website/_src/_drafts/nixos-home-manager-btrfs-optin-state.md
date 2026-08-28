@@ -1,7 +1,6 @@
 ---
 title: NixOS + home-manager on BTRFS with opt-in state
 description: About my opt-in state NixOS and home-manager setups
-tags: nix
 ---
 
 There's a few blog posts about how opt-in persistence makes NixOS/home-manager

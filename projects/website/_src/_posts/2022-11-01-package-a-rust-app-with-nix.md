@@ -1,7 +1,6 @@
 ---
 title: How to package a Rust app using Nix
 description: Here's a quick tutorial on how to nixify your cargo-based rust project
-tags: [ nix, rust ]
 ---
 
 Sometimes I see people looking around for a cookbook to package a rust project.

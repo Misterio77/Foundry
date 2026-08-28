@@ -1,6 +1,5 @@
 ---
 description: About my new website, featuring 170+ color schemes
-tags: web
 ---
 
 Here's a writeup on how i made this website
