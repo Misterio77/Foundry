@@ -14,7 +14,7 @@ layout: root.html
       {% endif %}
       {% if page.date %}
         <p>
-          Date: <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>
+          <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>
         </p>
       {% endif %}
     </header>
