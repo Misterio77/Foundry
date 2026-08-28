@@ -19,10 +19,23 @@ main > article > header {
   padding: 2.25rem 0 var(--space-6);
 }
 
-main > article > header p {
+main > article > header :is(p, .inline-list) {
   margin: 0.2rem 0 0;
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+.inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  list-style: none;
+
+  > li:not(:last-child)::after {
+    margin-right: 0.35em;
+    content: " ·";
+  }
 }
 
 main > article > section > p {

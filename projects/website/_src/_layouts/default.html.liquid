@@ -18,16 +18,18 @@ layout: root.html
         </p>
       {% endif %}
       {% if page.citation %}
-        <p>
+        <ul class="inline-list">
           {% if page.citation.pdf_url %}
-            <a href="{{ page.citation.pdf_url }}">PDF</a>;
+            <li><a href="{{ page.citation.pdf_url }}">PDF</a></li>
           {% endif %}
           {% if page.citation.doi %}
-            <a href="https://doi.org/{{ page.citation.doi }}">{{ page.citation.doi }}</a>
+            <li><a href="https://doi.org/{{ page.citation.doi }}">{{ page.citation.doi }}</a></li>
           {% endif %}
-        </p>
+        </ul>
         {% if page.citation.author %}
-          <p>{% for author in page.citation.author %}{{ author }}; {% endfor %}</p>
+          <ul class="inline-list">
+            {% for author in page.citation.author %}<li>{{ author }}</li>{% endfor %}
+          </ul>
         {% endif %}
         {% if page.citation.conference_title %}
           <p>{{ page.citation.conference_title }}</p>
