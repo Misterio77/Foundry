@@ -19,7 +19,6 @@ body > footer {
 
   > address {
     grid-column: 1 / -1;
-    grid-row: 2;
     padding-top: var(--space-3);
     border-top: var(--rule-width) solid var(--border);
     border-image: var(--starlight-rule);
@@ -28,14 +27,12 @@ body > footer {
 
   > nav {
     grid-column: 3;
-    grid-row: 1;
     justify-self: end;
     text-align: right;
   }
 
   > .copyleft {
     grid-column: 1;
-    grid-row: 1;
     margin: 0;
   }
 
@@ -44,27 +41,14 @@ body > footer {
   > .copyleft {
     @include settings.mobile {
       grid-column: 1;
-      grid-row: auto;
       justify-self: start;
       text-align: left;
     }
   }
 
-  > address {
-    @include settings.mobile {
-      padding-top: 0;
-      border-top: 0;
-    }
-  }
-
   > .theme-constellation {
     grid-column: 1 / -1;
-    grid-row: 3;
     margin-top: 0.4rem;
-
-    @include settings.mobile {
-      grid-row: auto;
-    }
     padding-top: var(--space-4);
     border-top: var(--rule-width) solid var(--border);
     border-image: var(--starlight-rule);
