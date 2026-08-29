@@ -5,6 +5,7 @@
   alt1 = pkgs.callPackage ./alt1 {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
+  golive = pkgs.callPackage ./golive {};
   website = pkgs.callPackage ../projects/website {};
   runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
