@@ -12,6 +12,8 @@
   ];
 
   boot = {
+    # The server does not use the Pi vendor media interfaces.
+    kernelPackages = pkgs.linuxPackages;
     initrd = {
       availableKernelModules = ["xhci_pci"];
     };
@@ -149,13 +151,7 @@
     };
   };
 
-  hardware.raspberry-pi."4" = {
-    i2c1.enable = true;
-    fkms-3d = {
-      enable = true;
-      cma = 1024;
-    };
-  };
+  hardware.raspberry-pi."4".i2c1.enable = true;
   hardware.graphics.enable = true;
 
   # Avoiding some heavy IO
