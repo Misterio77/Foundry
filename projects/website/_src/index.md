@@ -18,7 +18,7 @@ I like working on the parts of software development that help make people happie
 
 I currently work full-time at [Magalu Cloud](https://magalu.cloud), an innovative 100% Brazilian public cloud, as part of the team that handles underlying virtualization, packaging, and deployment orchestration.
 
-I'm also working towards a Computer Science M.Sc. degree at the [University of São Paulo](https://usp.br)'s [Institute of Mathematics and Computer Sciences](https://icmc.usp.br/en/), under the [Software Engineering Lab](http://www.labes.icmc.usp.br). My [current research](/publications) is around software sustainability in open-source ecosystems.
+I'm also working towards a Computer Science M.Sc. degree at the [University of São Paulo](https://usp.br)'s [Institute of Mathematics and Computer Sciences](https://icmc.usp.br/en/), under the [Software Engineering Lab](http://www.labes.icmc.usp.br). My [current research](/publications/) is around software sustainability in open-source ecosystems.
 
 ## Communities
 
