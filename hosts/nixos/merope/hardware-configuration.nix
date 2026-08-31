@@ -140,7 +140,13 @@
 
   fileSystems."/firmware".neededForBoot = lib.mkDefault true;
   hardware.raspberry-pi = {
-    configtxt.settings.all.avoid_warnings = true;
+    configtxt = {
+      settings.all.avoid_warnings = true;
+      deviceTreeOverlays.all = [
+        # Decrease CMA reservation
+        { vc4-kms-v3d."cma-256" = true; }
+      ];
+    };
     firmware = {
       enable = true;
       path = "/firmware";
