@@ -1,6 +1,6 @@
 ---
 title: "Open Source Software Ecosystem for Cloud Observability: An Overview and Trends"
-description: The main goal of this paper is to present the OSS Ecosystem formed by cloud computing observability tooling, by providing an overview of the main tools and identifying trends on their integration.
+description: An analysis of the open-source cloud observability ecosystem maps major tools and identifies recurring integrations, ecosystem roles, and emerging trends.
 date: 2026-04-12
 last_modified_at: 2026-08-27
 citation:

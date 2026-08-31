@@ -1,6 +1,6 @@
 ---
 title: "Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability"
-description: Synthesize how the wider concept of OSS sustainability is currently understood “in the wild”, explore how it can be characterized, and discuss the impact a better understanding can have on more responsible OSS adoption.
+description: A systematic mapping of 111 studies identifies 19 social, technical, individual, economic, and environmental aspects of open-source sustainability.
 date: 2026-04-13
 last_modified_at: 2026-08-27
 citation:

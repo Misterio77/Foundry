@@ -9,8 +9,8 @@ layout: root.html
   <article class="{% if page.citation %}publication {% endif %}{% if page.listing %}listing{% else %}document{% endif %}">
     <header>
       <h1>{{ page.title }}</h1>
-      {% if page.description %}
-          <p><em>{{ page.description }}</em></p>
+      {% if page.subtitle %}
+          <p><em>{{ page.subtitle }}</em></p>
       {% endif %}
       {% if page.date %}
         <p>

@@ -1,5 +1,6 @@
 ---
 title: Curriculum Vitae
+description: Curriculum vitae of Gabriel Fontes, a software engineer and researcher specializing in reproducible infrastructure, cloud platforms, and developer tooling.
 permalink: /cv/
 ---
 

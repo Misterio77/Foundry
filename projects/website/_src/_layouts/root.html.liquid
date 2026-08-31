@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Gabriel Fontes | {{ page.title }}</title>
+    <title>{{ page.title }}{% unless page.citation %} | Gabriel Fontes{% endunless %}</title>
     <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
