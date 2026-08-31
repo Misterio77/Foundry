@@ -14,6 +14,7 @@ citation:
     - Elisa Yumi Nakagawa
   publication_date: "2026/4/12"
   conference_title: 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems (SESoS '26)
+  conference_title_short: SESoS '26
   inbook_title: "SESoS '26: Proceedings of the 14th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosystems"
   firstpage: "9"
   lastpage: "15"

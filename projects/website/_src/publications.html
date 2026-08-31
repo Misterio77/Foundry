@@ -10,22 +10,24 @@ listing: true
 {% for pub in publications %}
   <article id="{{ pub.slug }}">
     <header>
-      <p>
-        <time datetime="{{ pub.date | date_to_xmlschema }}">
-          {{ pub.date | date_to_long_string: "ordinal" }}
-        </time>
-      </p>
+      <div>
+        <p>
+          <time datetime="{{ pub.date | date_to_xmlschema }}">{{ pub.date | date_to_long_string: "ordinal" }}</time>
+        </p>
+        <p><strong>{{ pub.citation.conference_title_short }}</strong></p>
+      </div>
+      <ul class="inline-list">{% for author in pub.citation.author %}<li><small>{{ author }}</small></li>{% endfor %}</ul>
       <h2><a href="{{ pub.url }}">{{ pub.title }}</a></h2>
     </header>
     <section>
-      {% if pub.citation.conference_title %}<p>{{ pub.citation.conference_title }}</p>{% endif %}
+      {% if pub.description %}<p>{{ pub.description }}</p>{% endif %}
     </section>
     <footer>
-      <p>
-        <a href="{{ pub.url }}">Web edition</a> ·
-        <a class="file" href="{{ pub.citation.pdf_url }}">PDF</a> ·
-        <a class="doi" href="https://doi.org/{{ pub.citation.doi }}">{{ pub.citation.doi }}</a>
-      </p>
+      <ul class="inline-list">
+        <li><a href="{{ pub.url }}">Web edition</a></li>
+        <li><a class="file" href="{{ pub.citation.pdf_url }}">PDF</a></li>
+        <li><a class="doi" href="https://doi.org/{{ pub.citation.doi }}">{{ pub.citation.doi }}</a></li>
+      </ul>
     </footer>
   </article>
 {% endfor %}

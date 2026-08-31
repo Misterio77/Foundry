@@ -14,6 +14,7 @@ citation:
     - Elisa Yumi Nakagawa
   publication_date: "2026/4/13"
   conference_title: 3rd International Workshop on Designing Software (Designing '26)
+  conference_title_short: Designing '26
   inbook_title: "Designing '26: Proceedings of the 3rd International Workshop on Designing Software"
   firstpage: "50"
   lastpage: "57"

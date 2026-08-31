@@ -9,12 +9,12 @@ listing: true
 {% for post in site.posts %}
   <article>
     <header>
-      <p>
-        <time datetime="{{ post.date | date_to_xmlschema }}">
+      <div>
+        <p><time datetime="{{ post.date | date_to_xmlschema }}">
           {{ post.date | date_to_long_string: "ordinal" }}
-        </time>
-        <small>({{ post.language }})</small>
-      </p>
+        </time></p>
+        <p><strong>({{ post.language }})</strong></p>
+      </div>
       <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
     </header>
     <section>
