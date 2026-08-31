@@ -12,8 +12,6 @@
   ];
 
   boot = {
-    # The server does not use the Pi vendor media interfaces.
-    kernelPackages = pkgs.linuxPackages;
     initrd = {
       availableKernelModules = ["xhci_pci"];
     };
@@ -140,13 +138,7 @@
 
   fileSystems."/firmware".neededForBoot = lib.mkDefault true;
   hardware.raspberry-pi = {
-    configtxt = {
-      settings.all.avoid_warnings = true;
-      deviceTreeOverlays.all = [
-        # Decrease CMA reservation
-        { vc4-kms-v3d."cma-256" = true; }
-      ];
-    };
+    configtxt.settings.all.avoid_warnings = true;
     firmware = {
       enable = true;
       path = "/firmware";
@@ -157,7 +149,13 @@
     };
   };
 
-  hardware.raspberry-pi."4".i2c1.enable = true;
+  hardware.raspberry-pi."4" = {
+    i2c1.enable = true;
+    fkms-3d = {
+      enable = true;
+      cma = 1024;
+    };
+  };
   hardware.graphics.enable = true;
 
   # Avoiding some heavy IO
