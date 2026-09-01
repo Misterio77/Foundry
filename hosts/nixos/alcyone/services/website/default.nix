@@ -51,12 +51,18 @@ in {
         "=/ssh".alias = sshKey;
 
         # Canonical web versions for the PDFs
-        "=/assets/docs/fontes-design-2026.pdf".extraConfig = ''
-          add_header Link '<https://gsfontes.com/publications/fontes-design-2026/>; rel=canonical';
-        '';
-        "=/assets/docs/fontes-sesos-2026.pdf".extraConfig = ''
-          add_header Link '<https://gsfontes.com/publications/fontes-sesos-2026/>; rel=canonical';
-        '';
+        "=/assets/docs/fontes-design-2026.pdf" = {
+          root = "${website}/public";
+          extraConfig = ''
+            add_header Link '<https://gsfontes.com/publications/fontes-design-2026/>; rel=canonical';
+          '';
+        };
+        "=/assets/docs/fontes-sesos-2026.pdf" = {
+          root = "${website}/public";
+          extraConfig = ''
+            add_header Link '<https://gsfontes.com/publications/fontes-sesos-2026/>; rel=canonical';
+          '';
+        };
       };
     };
     "m7.rs" = redir;
