@@ -4,7 +4,7 @@ description: About my new website, featuring 170+ color schemes
 
 Here's a writeup on how i made this website
 
-**Notice: this website has evolved quite a lot since this post, this might not be up to date**
+**Notice: this website has (and I have) evolved quite a lot since this post. This is completely out of date and only kept for historical purposes.**
 
 I've been wanting to get into blogging random tech rants, maybe something useful too. Guides, maybe?
 
@@ -16,7 +16,7 @@ How did i build it?
 
 
 ## Semantic HTML and 170+ CSS schemes
-I decided to start building the [about page](../index.md) as a purely static page. I was looking for a good and pure CSS library i could use, as to keep the site as simple and lightweight as possible, considering i don't need any dynamic content.
+I decided to start building the [about page](/) as a purely static page. I was looking for a good and pure CSS library i could use, as to keep the site as simple and lightweight as possible, considering i don't need any dynamic content.
 
 First, i'm not a huge fan of utility CSS or heavily class based HTML. In my opinion, HTML should have as much semantic meaning as possible, and not be concerned with how a CSS sheet does the styling. I also love markdown, and i like having a 1:1 conversion from it to HTML, without having to add stuff. Blogging in markdown was big on the site wishlist.
 
