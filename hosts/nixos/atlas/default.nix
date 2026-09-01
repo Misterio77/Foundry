@@ -9,7 +9,6 @@
     inputs.hardware.nixosModules.common-pc-ssd
 
     ./hardware-configuration.nix
-    ./llm-server.nix
 
     ../common/global
     ../common/users/gabriel
