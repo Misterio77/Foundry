@@ -1,18 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ page.language | default: site.language }}">
   <head>
     <meta charset="utf-8" />
     <title>{{ page.title }}{% unless page.citation %} | Gabriel Fontes{% endunless %}</title>
     <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <meta name="description" content="
-      {%- if page.description -%}
-        {{ page.description }}
-      {%- else -%}
-        {{ site.description }}
-      {%- endif -%}"
-    />
+    <meta name="description" content="{{ page.description | default: site.description }}"/>
     {% if page.noindex == true -%}
       <meta name="robots" content="noindex">
     {%- endif %}

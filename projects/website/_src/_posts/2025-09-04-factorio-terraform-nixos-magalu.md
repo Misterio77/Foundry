@@ -1,7 +1,7 @@
 ---
 title: Servidor de Factorio declarativo com NixOS+Terraform no Magalu Cloud
 description: Aprenda como usar Terraform e NixOS para facilmente subir VMs com suas aplicações no Magalu Cloud.
-language: pt
+language: pt-BR
 ---
 
 > **This blog post was originally published on [dev.to](https://dev.to/magalucloud/servidor-de-factorio-100-declarativo-com-nixos-e-terraform-no-magalu-cloud-3f37) as a guide for Magalu Cloud (my employer) hackathon's participants.**
