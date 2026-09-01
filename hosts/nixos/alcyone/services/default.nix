@@ -12,6 +12,7 @@
     ./prometheus.nix
     ./radicale.nix
     ./firefly.nix
+    ./freshrss.nix
     ./lumis.nix
 
     # Disabled for now
