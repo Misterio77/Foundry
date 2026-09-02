@@ -43,6 +43,13 @@
   --focus-offset: 2px;
   --glow-soft: 0 0 var(--space-3) color-mix(in srgb, var(--primary) 30%, transparent);
   --glow-strong: 0 0 var(--space-4) color-mix(in srgb, var(--primary) 65%, transparent);
+  --ambient-star-core: 72%;
+  --ambient-star-inner: 18%;
+  --ambient-star-faint-core: 58%;
+  --ambient-star-faint-inner: 14%;
+  --ambient-star-dust-core: 42%;
+  --ambient-star-dust-inner: 10%;
+  --ambient-star-glow: 6%;
   --starlight-rule: linear-gradient(90deg, var(--border), color-mix(in srgb, var(--primary) 75%, var(--border)), var(--border)) 1;
 
   // Motion
@@ -54,6 +61,13 @@
   @media (prefers-color-scheme: light) {
     --background-body: color-mix(in srgb, var(--surface_container_lowest) 89%, var(--primary) 11%);
     --background-alt: color-mix(in srgb, var(--surface_container_high) 79%, var(--primary) 21%);
+    --ambient-star-core: 90%;
+    --ambient-star-inner: 28%;
+    --ambient-star-faint-core: 74%;
+    --ambient-star-faint-inner: 22%;
+    --ambient-star-dust-core: 56%;
+    --ambient-star-dust-inner: 16%;
+    --ambient-star-glow: 10%;
   }
 
   @include settings.mobile {

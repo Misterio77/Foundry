@@ -211,10 +211,11 @@ body {
     inset: 0;
     z-index: 0;
     background-image:
-      radial-gradient(circle, color-mix(in srgb, var(--primary) 72%, transparent) 0 0.065rem, color-mix(in srgb, var(--primary) 18%, transparent) 0.1rem, transparent 0.2rem),
-      radial-gradient(circle, color-mix(in srgb, var(--primary) 58%, transparent) 0 0.055rem, color-mix(in srgb, var(--primary) 14%, transparent) 0.09rem, transparent 0.18rem);
-    background-position: 2rem 3rem, 11rem 8rem;
-    background-size: 23rem 19rem, 31rem 29rem;
+      radial-gradient(circle, color-mix(in srgb, var(--primary) var(--ambient-star-core), transparent) 0 0.065rem, color-mix(in srgb, var(--primary) var(--ambient-star-inner), transparent) 0.1rem, color-mix(in srgb, var(--primary) var(--ambient-star-glow), transparent) 0.2rem, transparent 0.32rem),
+      radial-gradient(circle, color-mix(in srgb, var(--primary) var(--ambient-star-faint-core), transparent) 0 0.055rem, color-mix(in srgb, var(--primary) var(--ambient-star-faint-inner), transparent) 0.09rem, color-mix(in srgb, var(--primary) var(--ambient-star-glow), transparent) 0.18rem, transparent 0.28rem),
+      radial-gradient(circle, color-mix(in srgb, var(--primary) var(--ambient-star-dust-core), transparent) 0 0.045rem, color-mix(in srgb, var(--primary) var(--ambient-star-dust-inner), transparent) 0.075rem, color-mix(in srgb, var(--primary) var(--ambient-star-glow), transparent) 0.15rem, transparent 0.24rem);
+    background-position: 2rem 3rem, 11rem 8rem, 17rem 15rem;
+    background-size: 23rem 19rem, 31rem 29rem, 43rem 37rem;
     content: "";
     opacity: 0.46;
     pointer-events: none;
@@ -222,8 +223,8 @@ body {
   }
 
   &::after {
-    background-position: 7rem 13rem, 19rem 4rem;
-    background-size: 37rem 31rem, 29rem 41rem;
+    background-position: 7rem 13rem, 19rem 4rem, 29rem 23rem;
+    background-size: 37rem 31rem, 29rem 41rem, 47rem 43rem;
     opacity: 0.3;
     animation-delay: -4.5s;
     animation-duration: 13s;

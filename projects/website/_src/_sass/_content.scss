@@ -90,6 +90,12 @@ main > article > section > ul {
   }
 }
 
+// Keep ambient stars clear of article content while softly feathering the edges.
+article > section {
+  background: var(--background-body);
+  box-shadow: 0 0 1.5rem 0.5rem var(--background-body);
+}
+
 .document > section {
   max-width: var(--document-width);
   margin-inline: auto;
