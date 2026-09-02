@@ -256,6 +256,10 @@ a {
   text-underline-offset: 0.14em;
   transition: color var(--duration-normal) var(--ease-linear), text-decoration-color var(--duration-normal) var(--ease-linear), text-decoration-thickness var(--duration-normal) var(--ease-linear), text-underline-offset var(--duration-normal) var(--ease-out);
 
+  &.external {
+    overflow-wrap: anywhere;
+  }
+
   &:hover,
   &:focus-visible {
     color: var(--primary);
