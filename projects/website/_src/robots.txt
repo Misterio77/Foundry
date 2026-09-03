@@ -1,2 +1,8 @@
 User-agent: *
 Disallow: /git/*
+Disallow: /*.pub
+Disallow: /*.asc
+Disallow: /ssh
+Disallow: /pgp
+Disallow: /nix
+Disallow: /setup-gpg
