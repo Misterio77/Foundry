@@ -120,7 +120,7 @@ actual websites in a very short timespan.
 
 ## Education and Research
 
-For my publications, see: [Publications](https://gsfontes.com/publications).
+For my publications, see: [Publications]({% link publications.html %}).
 
 ### University of Groningen (2025)
 
@@ -131,7 +131,7 @@ in the Netherlands.
 
 I was at RUG for a 3 month internship, focusing on the intersection between
 Cloud Computing Sustainability and open-source software tooling. Some of this
-research was [published at SESoS '26](/publications#fontes-sesos-2026).
+research was [published at SESoS '26]({% link _publications/fontes-sesos-2026.md %}).
 
 ### University of São Paulo (2020-present)
 
@@ -146,7 +146,7 @@ Software extracurricular group](https://gelos.club).
 I'm currently researching Software Sustainability in open-source software
 projects, hoping to contribute to our understanding of best practices
 for successful, long-lived, self-sustaining OSS. Some of this research was
-[published at Designing '26](/publications#fontes-design-2026).
+[published at Designing '26]({% link _publications/fontes-design-2026.md %}).
 
 #### Bachelor's: Computer Information Systems (2020-2022)
 
