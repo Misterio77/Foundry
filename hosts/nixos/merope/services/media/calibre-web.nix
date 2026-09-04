@@ -82,5 +82,11 @@
       group = config.services.calibre-web.group;
       mode = "0700";
     }
+    {
+      directory = "/var/lib/calibre-server";
+      user = config.services.calibre-server.user;
+      group = config.services.calibre-server.group;
+      mode = "0700";
+    }
   ];
 }
