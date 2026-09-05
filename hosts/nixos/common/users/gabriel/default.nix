@@ -35,6 +35,7 @@ in {
     shell = pkgs.fish;
     extraGroups = ifTheyExist [
       "audio"
+      "btrbk"
       "deluge"
       "docker"
       "git"
