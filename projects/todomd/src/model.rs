@@ -30,3 +30,21 @@ pub struct TaskList {
 pub struct TaskState {
     pub lists: Vec<TaskList>,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditedTask {
+    pub id: Option<TaskId>,
+    pub summary: String,
+    pub completed: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditedTaskList {
+    pub name: String,
+    pub tasks: Vec<EditedTask>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditedTaskState {
+    pub lists: Vec<EditedTaskList>,
+}

@@ -19,8 +19,10 @@ Early implementation. The current read-only vertical slice discovers configured
 lists, parses their active VTODO files, creates a private session, and opens its
 deterministic Markdown document in `$VISUAL` or `$EDITOR`.
 
-Source files are not modified yet. The session directory is retained after the
-editor exits so its artifacts and edited Markdown can be inspected.
+After the editor exits, `todomd` strictly parses the document, rereads the source
+vdirs, performs three-way reconciliation, and previews any semantic changes.
+Source files are not modified yet. Changed, conflicted, and invalid sessions are
+retained for inspection; unchanged sessions are removed.
 
 See [DESIGN.md](DESIGN.md) for the complete design.
 

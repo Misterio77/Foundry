@@ -28,6 +28,11 @@ impl Session {
         &self.tasks_path
     }
 
+    pub fn read_tasks(&self) -> Result<String> {
+        fs::read_to_string(&self.tasks_path)
+            .with_context(|| format!("failed to read {}", self.tasks_path.display()))
+    }
+
     pub fn retain(self) -> PathBuf {
         self.directory.keep()
     }

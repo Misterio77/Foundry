@@ -2,6 +2,7 @@ pub mod config;
 pub mod editor;
 pub mod markdown;
 pub mod model;
+pub mod planner;
 pub mod repository;
 pub mod session;
 
