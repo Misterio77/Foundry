@@ -5,6 +5,7 @@ pub mod model;
 pub mod planner;
 pub mod repository;
 pub mod session;
+pub mod transaction;
 
 use std::collections::BTreeSet;
 

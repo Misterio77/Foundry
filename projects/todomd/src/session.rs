@@ -24,6 +24,10 @@ impl Session {
         Self::create_in(&parent, rendered)
     }
 
+    pub fn path(&self) -> &Path {
+        self.directory.path()
+    }
+
     pub fn tasks_path(&self) -> &Path {
         &self.tasks_path
     }

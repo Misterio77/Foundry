@@ -1,6 +1,10 @@
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
+use chrono::Utc;
 use clap::Parser;
 use todomd::{
     config::Config,
@@ -8,6 +12,7 @@ use todomd::{
     planner::{self, Reconciliation},
     render_lists, repository,
     session::Session,
+    transaction,
 };
 
 #[derive(Debug, Parser)]
@@ -36,34 +41,79 @@ fn main() -> Result<()> {
     let reconciliation = (|| {
         let edited_document = session.read_tasks()?;
         let edited = markdown::parse(&edited_document, &rendered.baseline, &rendered.manifest)?;
-        let (current_ics, _) = repository::load_lists(&config, &cli.lists)?;
-        planner::reconcile(&rendered.baseline, &edited, &current_ics)
+        let (current_ics, sources) = repository::load_lists(&config, &cli.lists)?;
+        Ok((
+            planner::reconcile(&rendered.baseline, &edited, &current_ics)?,
+            sources,
+        ))
     })();
 
+    let (reconciliation, sources) = match reconciliation {
+        Ok(value) => value,
+        Err(error) => {
+            retain_and_report(session);
+            return Err(error);
+        }
+    };
+
     match reconciliation {
-        Ok(Reconciliation::NoChange) => {
+        Reconciliation::NoChange => {
             eprintln!("todomd: no changes");
             Ok(())
         }
-        Ok(Reconciliation::Outgoing(plan)) => {
-            print!("{plan}");
-            retain_and_report(session);
-            eprintln!("todomd: preview only; source files were not changed");
+        Reconciliation::Outgoing(plan) => {
+            let staged = match transaction::stage(&plan, &sources, session.path(), Utc::now()) {
+                Ok(staged) => staged,
+                Err(error) => {
+                    retain_and_report(session);
+                    return Err(error);
+                }
+            };
+            if let Err(error) = write_preview(&plan, &staged) {
+                retain_and_report(session);
+                return Err(error);
+            }
+
+            let confirmed = match transaction::confirm() {
+                Ok(confirmed) => confirmed,
+                Err(error) => {
+                    retain_and_report(session);
+                    return Err(error);
+                }
+            };
+
+            if !confirmed {
+                retain_and_report(session);
+                eprintln!("todomd: changes cancelled; source files were not changed");
+                return Ok(());
+            }
+
+            if let Err(error) = transaction::apply(&staged, &sources) {
+                retain_and_report(session);
+                return Err(error);
+            }
+
+            eprintln!("todomd: changes applied");
             Ok(())
         }
-        Ok(Reconciliation::Inbound) => {
+        Reconciliation::Inbound => {
             retain_and_report(session);
             bail!("source lists changed while the editor was open")
         }
-        Ok(Reconciliation::Conflict) => {
+        Reconciliation::Conflict => {
             retain_and_report(session);
             bail!("Markdown and source lists both changed while the editor was open")
         }
-        Err(error) => {
-            retain_and_report(session);
-            Err(error)
-        }
     }
+}
+
+fn write_preview(
+    plan: &planner::ChangePlan,
+    staged: &transaction::StagedTransaction,
+) -> Result<()> {
+    let mut stdout = io::stdout().lock();
+    write!(stdout, "{plan}\n{staged}").context("failed to write change preview")?;
+    stdout.flush().context("failed to flush change preview")
 }
 
 fn retain_and_report(session: Session) {

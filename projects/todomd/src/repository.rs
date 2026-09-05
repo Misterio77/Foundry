@@ -28,6 +28,53 @@ pub struct SourceSnapshot {
     pub task_files: BTreeMap<TaskId, PathBuf>,
 }
 
+impl SourceSnapshot {
+    pub fn file_for_task(&self, task_id: &TaskId) -> Option<&SourceFile> {
+        let path = self.task_files.get(task_id)?;
+        self.files.iter().find(|source| &source.path == path)
+    }
+}
+
+pub fn verify_snapshot(snapshot: &SourceSnapshot) -> Result<()> {
+    for (list_name, list_dir) in &snapshot.list_dirs {
+        let displayname_path = list_dir.join("displayname");
+        let metadata = fs::symlink_metadata(&displayname_path)
+            .with_context(|| format!("failed to inspect {}", displayname_path.display()))?;
+        if !metadata.file_type().is_file() {
+            bail!("{} is not a regular file", displayname_path.display());
+        }
+        let current_name = fs::read_to_string(&displayname_path)
+            .with_context(|| format!("failed to read {}", displayname_path.display()))?;
+        if current_name.trim_end_matches(['\r', '\n']) != list_name {
+            bail!("source list at {} changed identity", list_dir.display());
+        }
+
+        let expected = snapshot
+            .files
+            .iter()
+            .filter(|source| &source.list_name == list_name)
+            .map(|source| (source.path.clone(), source.sha256))
+            .collect::<BTreeMap<_, _>>();
+        let current_paths = ics_files(list_dir)?;
+        let current_set = current_paths.iter().cloned().collect::<BTreeSet<_>>();
+        let expected_set = expected.keys().cloned().collect::<BTreeSet<_>>();
+        if current_set != expected_set {
+            bail!("source list {list_name:?} changed after staging");
+        }
+
+        for path in current_paths {
+            let bytes =
+                fs::read(&path).with_context(|| format!("failed to verify {}", path.display()))?;
+            let hash: [u8; 32] = Sha256::digest(bytes).into();
+            if expected.get(&path) != Some(&hash) {
+                bail!("source file {} changed after staging", path.display());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn load_lists(
     config: &Config,
     requested_lists: &[String],
@@ -104,20 +151,37 @@ fn discover_lists(config: &Config) -> Result<BTreeMap<String, Vec<PathBuf>>> {
     let mut discovered: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
 
     for root in &config.calendar_roots {
-        let entries = fs::read_dir(root)
+        let root = fs::canonicalize(root)
+            .with_context(|| format!("failed to resolve calendar root {}", root.display()))?;
+        let entries = fs::read_dir(&root)
             .with_context(|| format!("failed to read calendar root {}", root.display()))?;
 
         for entry in entries {
             let entry = entry
                 .with_context(|| format!("failed to inspect calendar root {}", root.display()))?;
-            let path = entry.path();
-            if !path.is_dir() {
+            let file_type = entry.file_type().with_context(|| {
+                format!(
+                    "failed to inspect calendar entry {}",
+                    entry.path().display()
+                )
+            })?;
+            if !file_type.is_dir() {
                 continue;
             }
+            let path = entry.path();
 
             let displayname_path = path.join("displayname");
-            if !displayname_path.is_file() {
-                continue;
+            let displayname_type = match fs::symlink_metadata(&displayname_path) {
+                Ok(metadata) => metadata.file_type(),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to inspect {}", displayname_path.display())
+                    });
+                }
+            };
+            if !displayname_type.is_file() {
+                bail!("{} is not a regular file", displayname_path.display());
             }
             let displayname = fs::read_to_string(&displayname_path)
                 .with_context(|| format!("failed to read {}", displayname_path.display()))?;
@@ -136,23 +200,29 @@ fn discover_lists(config: &Config) -> Result<BTreeMap<String, Vec<PathBuf>>> {
 }
 
 fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut paths = fs::read_dir(list_dir)
-        .with_context(|| format!("failed to read VTODO list {}", list_dir.display()))?
-        .filter_map(|entry| match entry {
-            Ok(entry)
-                if entry.path().is_file()
-                    && entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension.eq_ignore_ascii_case("ics")) =>
-            {
-                Some(Ok(entry.path()))
-            }
-            Ok(_) => None,
-            Err(error) => Some(Err(error)),
-        })
-        .collect::<std::io::Result<Vec<_>>>()
-        .with_context(|| format!("failed to inspect VTODO list {}", list_dir.display()))?;
+    let entries = fs::read_dir(list_dir)
+        .with_context(|| format!("failed to read VTODO list {}", list_dir.display()))?;
+    let mut paths = Vec::new();
+
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("failed to inspect VTODO list {}", list_dir.display()))?;
+        let path = entry.path();
+        if !path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("ics"))
+        {
+            continue;
+        }
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to inspect {}", path.display()))?;
+        if !file_type.is_file() {
+            bail!("VTODO path {} is not a regular file", path.display());
+        }
+        paths.push(path);
+    }
+
     paths.sort();
     Ok(paths)
 }
@@ -221,6 +291,22 @@ fn optional_property(component: &Component<'_>, name: &str, path: &Path) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlinked_ics_files() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
+        let outside = directory.path().join("outside");
+        let list = directory.path().join("list");
+        fs::create_dir(&outside).unwrap();
+        fs::create_dir(&list).unwrap();
+        fs::write(outside.join("task.ics"), "not followed").unwrap();
+        symlink(outside.join("task.ics"), list.join("task.ics")).unwrap();
+
+        assert!(ics_files(&list).is_err());
+    }
 
     #[test]
     fn ignores_non_todo_components() {

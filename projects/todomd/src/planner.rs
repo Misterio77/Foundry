@@ -1,10 +1,11 @@
 use std::{collections::BTreeMap, fmt};
 
 use anyhow::{Result, bail};
+use serde::Serialize;
 
 use crate::model::{EditedTaskState, TaskId, TaskState};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Operation {
     Rename {
         id: TaskId,
@@ -35,7 +36,7 @@ pub enum Operation {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ChangePlan {
     pub operations: Vec<Operation>,
     list_order: Vec<String>,

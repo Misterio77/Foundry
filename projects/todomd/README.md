@@ -15,14 +15,19 @@ $ todomd Postgrad Personal
 
 ## Status
 
-Early implementation. The current read-only vertical slice discovers configured
-lists, parses their active VTODO files, creates a private session, and opens its
-deterministic Markdown document in `$VISUAL` or `$EDITOR`.
+Early implementation. `todomd` discovers configured lists, parses their active
+VTODO files, creates a private session, and opens its deterministic Markdown
+document in `$VISUAL` or `$EDITOR`.
 
 After the editor exits, `todomd` strictly parses the document, rereads the source
-vdirs, performs three-way reconciliation, and previews any semantic changes.
-Source files are not modified yet. Changed, conflicted, and invalid sessions are
-retained for inspection; unchanged sessions are removed.
+vdirs, performs three-way reconciliation, and stages the semantic and filesystem
+changes. An explicit `[y/N]` confirmation applies them with source-hash guards,
+backups, atomic file replacement, and best-effort rollback. Rejected, conflicted,
+and invalid sessions are retained for inspection; unchanged and successfully
+applied sessions are removed.
+
+Lifecycle hooks are not implemented yet. Until they are, pause external writers
+such as vdirsyncer before applying changes.
 
 See [DESIGN.md](DESIGN.md) for the complete design.
 
