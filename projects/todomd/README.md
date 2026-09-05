@@ -16,8 +16,11 @@ $ todomd Postgrad Personal
 ## Status
 
 Early implementation. The current read-only vertical slice discovers configured
-lists, parses their VTODO files, and renders deterministic Markdown to stdout.
-It does not open an editor or modify source files yet.
+lists, parses their active VTODO files, creates a private session, and opens its
+deterministic Markdown document in `$VISUAL` or `$EDITOR`.
+
+Source files are not modified yet. The session directory is retained after the
+editor exits so its artifacts and edited Markdown can be inspected.
 
 See [DESIGN.md](DESIGN.md) for the complete design.
 

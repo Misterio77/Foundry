@@ -1,8 +1,8 @@
-use std::{io::Write, path::PathBuf};
+use std::path::PathBuf;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use todomd::{config::Config, render_lists};
+use todomd::{config::Config, editor, render_lists, session::Session};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -20,8 +20,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = Config::load(cli.config.as_deref())?;
     let rendered = render_lists(&config, &cli.lists)?;
+    let session = Session::create(&rendered)?;
+    let editor_result = editor::open(session.tasks_path());
+    let retained = session.retain();
 
-    std::io::stdout()
-        .write_all(rendered.markdown.as_bytes())
-        .context("failed to write Markdown to stdout")
+    eprintln!(
+        "todomd: source files were not changed; session retained at {}",
+        retained.display()
+    );
+
+    editor_result
 }

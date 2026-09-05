@@ -1,19 +1,23 @@
 pub mod config;
+pub mod editor;
 pub mod markdown;
 pub mod model;
 pub mod repository;
+pub mod session;
 
 use std::collections::BTreeSet;
 
 use anyhow::{Result, bail};
 use config::Config;
 use markdown::{IdentityManifest, render};
+use model::TaskState;
 use repository::{SourceSnapshot, load_lists};
 
 #[derive(Debug)]
 pub struct RenderedSession {
     pub markdown: String,
     pub manifest: IdentityManifest,
+    pub baseline: TaskState,
     pub sources: SourceSnapshot,
 }
 
@@ -34,6 +38,7 @@ pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<Rende
     Ok(RenderedSession {
         markdown,
         manifest,
+        baseline: state,
         sources,
     })
 }
