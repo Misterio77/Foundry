@@ -18,6 +18,7 @@ in rec {
   website = pkgs.callPackage ../projects/website {};
   runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
+  todomd = pkgs.callPackage ../projects/todomd {};
   runescape = pkgs.callPackage ./runescape {
     inherit (runescapePkgs) openssl_1_1;
   };

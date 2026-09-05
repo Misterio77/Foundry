@@ -1,0 +1,8 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//todomd test//EN
+BEGIN:VTODO
+UID:groceries@example.test
+SUMMARY:Buy milk\, bread
+END:VTODO
+END:VCALENDAR

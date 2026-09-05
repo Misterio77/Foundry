@@ -15,7 +15,25 @@ $ todomd Postgrad Personal
 
 ## Status
 
-Design-stage. See [DESIGN.md](DESIGN.md) for the proposed MVP.
+Early implementation. The current read-only vertical slice discovers configured
+lists, parses their VTODO files, and renders deterministic Markdown to stdout.
+It does not open an editor or modify source files yet.
+
+See [DESIGN.md](DESIGN.md) for the complete design.
+
+## Try it
+
+Create `~/.config/todomd/config.toml`:
+
+```toml
+calendar_roots = ["~/Calendars/personal"]
+```
+
+Then run:
+
+```console
+$ nix run .#todomd -- Postgrad Personal
+```
 
 ## Why
 

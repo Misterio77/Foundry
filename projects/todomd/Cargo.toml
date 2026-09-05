@@ -1,0 +1,19 @@
+[package]
+name = "todomd"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Edit vdir-backed VTODO lists as Markdown"
+license = "BSD-2-Clause"
+repository = "https://github.com/misterio77/Foundry"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+icalendar = "0.17.13"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+toml = "0.9"
+
+[dev-dependencies]
+tempfile = "3.20"

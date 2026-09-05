@@ -25,10 +25,10 @@ synchronize Markdown and ICS in both directions without replacing the core.
 
 The MVP supports:
 
-- selecting multiple complete lists by display name;
+- selecting the complete active-task set of multiple lists by display name;
 - creating tasks;
 - editing summaries;
-- completing and reopening tasks;
+- completing tasks;
 - deleting tasks;
 - moving tasks between the selected lists;
 - previewing and confirming a semantic change plan;
@@ -65,6 +65,7 @@ The initial project will not:
 - require or directly control vdirsyncer;
 - edit priorities, categories, descriptions, recurrence, alarms, or task
   relationships;
+- browse or reopen tasks completed before the session;
 - assign a persistent ordering to tasks;
 - silently merge concurrent semantic edits; or
 - serve as a general-purpose iCalendar editor.
@@ -285,10 +286,12 @@ insignificant. Additional headings, missing or renamed selected headings,
 duplicate or unknown IDs, malformed checkboxes, and unsupported Markdown are
 parse errors. Task ordering has no semantic effect.
 
-Active tasks render unchecked. Completed tasks render checked so they can be
-reopened. Cancelled tasks are not editable in the MVP and remain untouched. An
-unchanged `IN-PROCESS` task remains `IN-PROCESS`; unchecked syntax alone does not
-normalize it to `NEEDS-ACTION`.
+Only active tasks render initially, and they render unchecked. Existing
+completed and cancelled tasks are outside the editable set and remain untouched;
+their absence cannot be interpreted as deletion. A task checked during the
+session is completed and disappears from the next rendered active-task state.
+An unchanged `IN-PROCESS` task remains `IN-PROCESS`; unchecked syntax alone does
+not normalize it to `NEEDS-ACTION`.
 
 ### Edit semantics
 
@@ -296,7 +299,6 @@ normalize it to `NEEDS-ACTION`.
 |---|---|
 | Change task text | Rename task |
 | Change `[ ]` to `[x]` | Complete task |
-| Change `[x]` to `[ ]` | Reopen task |
 | Add an item without an ID | Create task in the containing list |
 | Move an identified item beneath another heading | Move task to that list |
 | Remove an identified item | Delete task |
@@ -417,9 +419,9 @@ reserialized by the selected library, but unexposed data must remain
 semantically equivalent.
 
 An existing task change increments `SEQUENCE` and updates the appropriate
-modification timestamp. Completion and reopening update `STATUS`, `COMPLETED`,
-and relevant progress properties consistently. Exact normalization rules are
-chosen and tested alongside the iCalendar library.
+modification timestamp. Completion updates `STATUS`, `COMPLETED`, and relevant
+progress properties consistently. Exact normalization rules are chosen and
+tested alongside the iCalendar library.
 
 Source filenames and VTODO UIDs are independent identities. Moves preserve the
 source filename unless it collides in the destination, in which case staging
