@@ -15,6 +15,7 @@ in {
         log_dir = "${sabnzbdDir}/logs";
         admin_dir = "${sabnzbdDir}/admin";
         backup_dir = "${sabnzbdDir}/backup";
+        api_key = "@sabnzbd-key@";
         permissions = 775; # Directories 0775, regular files 0664
         cache_limit = "1G";
         # Six servers x three rounds is a lot of round trips to spend before
@@ -35,6 +36,7 @@ in {
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
           username = "misterio";
+          password = "@frugalusenet-key@";
           connections = 30;
           priority = 0;
         };
@@ -47,6 +49,7 @@ in {
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
           username = "misterio";
+          password = "@frugalusenet-key@";
           connections = 15;
           priority = 0;
         };
@@ -59,6 +62,7 @@ in {
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
           username = "misterio";
+          password = "@frugalusenet-key@";
           connections = 10;
           priority = 1;
         };
@@ -71,7 +75,7 @@ in {
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
           username = "043b11d25e1d9f6f";
-          password = "@eweka-key";
+          password = "@eweka-key@";
           connections = 10;
           priority = 2;
         };
@@ -80,6 +84,7 @@ in {
           name = "blocknews";
           displayname = "blocknews";
           host = "sanews.blocknews.net";
+          password = "@blocknews-key@";
           ssl = true;
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
@@ -92,6 +97,7 @@ in {
           name = "blocknews";
           displayname = "blocknews";
           host = "usnews.blocknews.net";
+          password = "@blocknews-key@";
           ssl = true;
           ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
           port = 563;
@@ -101,35 +107,12 @@ in {
         };
       };
     };
-    # TODO switch to secretValues after bumping nixpkgs
-    secretFiles = [config.sops.templates.sabnzbd-secrets.path];
-  };
-  sops.templates.sabnzbd-secrets = {
-    content =
-      /*
-      ini
-      */
-      ''
-        [misc]
-        api_key = ${config.sops.placeholder.sabnzbd-key}
-        [servers]
-        [[frugal]]
-        password = ${config.sops.placeholder.frugalusenet-key}
-        [[frugal-secondary]]
-        password = ${config.sops.placeholder.frugalusenet-key}
-        [[frugal-bonus]]
-        password = ${config.sops.placeholder.frugalusenet-key}
-        [[eweka]]
-        password = ${config.sops.placeholder.eweka-key}
-        [[blocknews]]
-        password = ${config.sops.placeholder.blocknews-key}
-        [[blocknews-secondary]]
-        password = ${config.sops.placeholder.blocknews-key}
-      '';
-    owner = config.services.sabnzbd.user;
-    group = config.services.sabnzbd.group;
-    mode = "0600";
-    restartUnits = ["sabnzbd.service"];
+    secretValues = {
+      "@sabnzbd-key@" = config.sops.secrets.sabnzbd-key.path;
+      "@frugalusenet-key@" = config.sops.secrets.frugalusenet-key.path;
+      "@blocknews-key@" = config.sops.secrets.blocknews-key.path;
+      "@eweka-key@" = config.sops.secrets.eweka-key.path;
+    };
   };
 
   systemd.tmpfiles.settings.srv-media-incoming-usenet."/srv/media/incoming/usenet".d = {
@@ -157,11 +140,18 @@ in {
     };
   };
 
-  sops.secrets = {
-    sabnzbd-key.sopsFile = ../../secrets.yaml;
-    frugalusenet-key.sopsFile = ../../secrets.yaml;
-    blocknews-key.sopsFile = ../../secrets.yaml;
-    eweka-key.sopsFile = ../../secrets.yaml;
+  sops.secrets = let
+    sabnzbd-secret = {
+      sopsFile = ../../secrets.yaml;
+      owner = config.services.sabnzbd.user;
+      group = config.services.sabnzbd.group;
+      restartUnits = ["sabnzbd.service"];
+    };
+  in {
+    sabnzbd-key = sabnzbd-secret;
+    frugalusenet-key = sabnzbd-secret;
+    blocknews-key = sabnzbd-secret;
+    eweka-key = sabnzbd-secret;
   };
 
   environment.persistence = {
