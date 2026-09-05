@@ -4,6 +4,7 @@
     ../../common/optional/mysql.nix
     ../../common/optional/postgres.nix
 
+    ./backups-jobs.nix
     ./grafana
     ./files-server.nix
     ./git-remote.nix
