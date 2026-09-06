@@ -5,25 +5,39 @@ use std::{
 
 use anyhow::{Context, Result, anyhow, bail};
 use chrono::Utc;
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use todomd::{
     config::Config,
     editor,
     hooks::{Lifecycle, Termination},
     markdown,
     planner::{self, Reconciliation},
-    render_lists, repository,
+    render_lists, repository, resolve_lists,
     session::Session,
-    transaction,
+    show, transaction,
 };
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Cli {
     /// Use a specific configuration file.
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<PathBuf>,
 
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Edit whole VTODO lists as Markdown.
+    Edit(EditArgs),
+    /// Print active tasks and their source files as JSON.
+    Show(ShowArgs),
+}
+
+#[derive(Args, Debug, Default)]
+struct EditArgs {
     /// Disable configured lifecycle hooks for this run.
     #[arg(long)]
     no_hooks: bool,
@@ -32,17 +46,42 @@ struct Cli {
     #[arg(long)]
     keep: bool,
 
-    /// Whole VTODO lists to render, in document order.
-    #[arg(required = true)]
+    /// Whole VTODO lists to edit, in document order [default: every list].
+    lists: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+struct ShowArgs {
+    /// Whole VTODO lists to print, in order [default: every list].
     lists: Vec<String>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = Config::load(cli.config.as_deref())?;
+
+    match cli.command {
+        Some(Command::Show(args)) => show(&config, &args),
+        Some(Command::Edit(args)) => edit(&config, &args),
+        None => edit(&config, &EditArgs::default()),
+    }
+}
+
+fn show(config: &Config, args: &ShowArgs) -> Result<()> {
+    let lists = resolve_lists(config, &args.lists)?;
+    let json = show::to_json(&show::collect(config, &lists)?)?;
+    let mut stdout = io::stdout().lock();
+    stdout
+        .write_all(json.as_bytes())
+        .context("failed to write tasks")?;
+    stdout.flush().context("failed to flush tasks")
+}
+
+fn edit(config: &Config, args: &EditArgs) -> Result<()> {
+    let lists = resolve_lists(config, &args.lists)?;
     let termination = Termination::install()?;
-    let lifecycle = Lifecycle::start(&config.hooks, !cli.no_hooks)?;
-    let result = run(&cli, &config, &lifecycle, &termination);
+    let lifecycle = Lifecycle::start(&config.hooks, !args.no_hooks)?;
+    let result = run(config, &lists, args.keep, &lifecycle, &termination);
     let result = lifecycle.finish(result);
     if result.is_ok() {
         termination.check()?;
@@ -50,9 +89,15 @@ fn main() -> Result<()> {
     result
 }
 
-fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Termination) -> Result<()> {
+fn run(
+    config: &Config,
+    lists: &[String],
+    keep: bool,
+    lifecycle: &Lifecycle,
+    termination: &Termination,
+) -> Result<()> {
     termination.check()?;
-    let rendered = render_lists(config, &cli.lists)?;
+    let rendered = render_lists(config, lists)?;
     let session = Session::create(&rendered)?;
 
     if let Err(error) = editor::open(session.tasks_path(), || termination.is_requested()) {
@@ -67,7 +112,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
     let reconciliation = (|| {
         let edited_document = session.read_tasks()?;
         let edited = markdown::parse(&edited_document, &rendered.baseline, &rendered.manifest)?;
-        let (current_ics, sources) = repository::load_lists(config, &cli.lists)?;
+        let (current_ics, sources) = repository::load_lists(config, lists)?;
         Ok((
             planner::reconcile(&rendered.baseline, &edited, &current_ics)?,
             sources,
@@ -90,7 +135,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
     match reconciliation {
         Reconciliation::NoChange => {
             eprintln!("todomd: no changes");
-            retain_if_requested(session, cli.keep);
+            retain_if_requested(session, keep);
             Ok(())
         }
         Reconciliation::Outgoing(plan) => {
@@ -134,8 +179,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
                 return Err(error);
             }
 
-            let refresh =
-                refresh_accepted_session(&session, &rendered.manifest, config, &cli.lists);
+            let refresh = refresh_accepted_session(&session, &rendered.manifest, config, lists);
             let hook = lifecycle.after_apply();
             if let Err(error) = combine_post_apply(refresh, hook) {
                 retain_and_report(session);
@@ -147,7 +191,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
             }
 
             eprintln!("todomd: changes applied");
-            retain_if_requested(session, cli.keep);
+            retain_if_requested(session, keep);
             Ok(())
         }
         Reconciliation::Inbound => {

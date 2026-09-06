@@ -6,6 +6,7 @@ pub mod model;
 pub mod planner;
 pub mod repository;
 pub mod session;
+pub mod show;
 pub mod transaction;
 
 use std::collections::BTreeSet;
@@ -14,7 +15,7 @@ use anyhow::{Result, bail};
 use config::Config;
 use markdown::{IdentityManifest, render};
 use model::TaskState;
-use repository::{SourceSnapshot, load_lists};
+use repository::{SourceSnapshot, list_names, load_lists};
 
 #[derive(Debug)]
 pub struct RenderedSession {
@@ -24,9 +25,11 @@ pub struct RenderedSession {
     pub sources: SourceSnapshot,
 }
 
-pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<RenderedSession> {
+/// Resolves the lists a command operates on, defaulting to every discovered
+/// list in display-name order.
+pub fn resolve_lists(config: &Config, requested_lists: &[String]) -> Result<Vec<String>> {
     if requested_lists.is_empty() {
-        bail!("at least one list is required");
+        return list_names(config);
     }
 
     let unique = requested_lists.iter().collect::<BTreeSet<_>>();
@@ -34,6 +37,10 @@ pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<Rende
         bail!("list names must not be repeated");
     }
 
+    Ok(requested_lists.to_vec())
+}
+
+pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<RenderedSession> {
     let (state, sources) = load_lists(config, requested_lists)?;
     let mut manifest = IdentityManifest::default();
     let markdown = render(&state, &mut manifest)?;

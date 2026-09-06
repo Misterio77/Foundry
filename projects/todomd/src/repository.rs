@@ -75,6 +75,14 @@ pub fn verify_snapshot(snapshot: &SourceSnapshot) -> Result<()> {
     Ok(())
 }
 
+pub fn list_names(config: &Config) -> Result<Vec<String>> {
+    let discovered = discover_lists(config)?;
+    if discovered.is_empty() {
+        bail!("no VTODO lists were found in the configured calendar roots");
+    }
+    Ok(discovered.into_keys().collect())
+}
+
 pub fn load_lists(
     config: &Config,
     requested_lists: &[String],

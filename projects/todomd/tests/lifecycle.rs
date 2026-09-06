@@ -77,18 +77,19 @@ impl Case {
         }
     }
 
-    fn command(&self, editor: &str) -> Command {
+    fn base(&self, editor: &str) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_todomd"));
         command
-            .args([
-                "--config",
-                self.config.to_str().unwrap(),
-                "Postgrad",
-                "Personal",
-            ])
+            .args(["--config", self.config.to_str().unwrap()])
             .env("VISUAL", editor)
             .env_remove("EDITOR")
             .env("XDG_RUNTIME_DIR", &self.runtime);
+        command
+    }
+
+    fn command(&self, editor: &str) -> Command {
+        let mut command = self.base(editor);
+        command.args(["edit", "Postgrad", "Personal"]);
         command
     }
 
@@ -105,6 +106,67 @@ fn no_change_runs_session_hooks_without_after_apply() {
     assert!(output.status.success(), "{}", output_text(&output));
     assert_eq!(case.hooks(), "before\nafter\n");
     assert!(String::from_utf8_lossy(&output.stderr).contains("todomd: no changes"));
+}
+
+#[test]
+fn a_bare_invocation_edits_every_discovered_list() {
+    let case = Case::new(0);
+    let mut command = case.base("true");
+    let output = command.output().unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    assert_eq!(case.hooks(), "before\nafter\n");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("todomd: no changes"));
+}
+
+#[test]
+fn show_prints_every_list_as_json_without_hooks_or_a_terminal() {
+    let case = Case::new(0);
+    let output = case.base("false").arg("show").output().unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    assert!(!case.hook_log.exists());
+
+    let tasks: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = tasks.as_array().unwrap();
+    assert_eq!(tasks.len(), 2);
+    assert_eq!(tasks[0]["list"], "Personal");
+    assert_eq!(tasks[0]["summary"], "Buy milk, bread");
+    assert_eq!(tasks[0]["completed"], false);
+    assert_eq!(
+        tasks[0]["file"],
+        case.calendars
+            .join("Personal/groceries.ics")
+            .to_str()
+            .unwrap()
+    );
+    assert_eq!(tasks[1]["list"], "Postgrad");
+    assert_eq!(tasks[1]["uid"], "write@example.test");
+}
+
+#[test]
+fn show_accepts_selected_lists() {
+    let case = Case::new(0);
+    let output = case
+        .base("false")
+        .args(["show", "Postgrad"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    let tasks: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(tasks.as_array().unwrap().len(), 1);
+    assert_eq!(tasks[0]["list"], "Postgrad");
+}
+
+#[test]
+fn a_list_name_is_not_mistaken_for_a_subcommand() {
+    let case = Case::new(0);
+    let output = case.base("true").arg("Postgrad").output().unwrap();
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"));
+    assert!(!case.hook_log.exists());
 }
 
 #[test]

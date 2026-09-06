@@ -10,7 +10,9 @@ on local vdirs and offers optional lifecycle hooks for pausing and resuming
 whatever synchronizes them.
 
 ```console
-$ todomd Postgrad Personal
+$ todomd                    # edit every list
+$ todomd edit Postgrad      # edit chosen lists
+$ todomd show               # print active tasks as JSON
 ```
 
 ## Status
@@ -30,13 +32,13 @@ bidirectional watch driver.
 With Nix:
 
 ```console
-$ nix run github:Misterio77/Foundry#todomd -- Postgrad Personal
+$ nix run github:Misterio77/Foundry#todomd -- edit Postgrad
 ```
 
 Or from a checkout of this repository:
 
 ```console
-$ nix run .#todomd -- Postgrad Personal
+$ nix run .#todomd -- edit Postgrad
 ```
 
 ## Configure
@@ -75,11 +77,15 @@ synchronization failure with a non-zero exit.
 
 ## Use
 
-Pass whole lists in the order you want them rendered:
-
 ```console
-$ todomd Postgrad Personal
+$ todomd                     # edit every discovered list
+$ todomd edit Postgrad Personal
 ```
+
+A bare `todomd` edits every discovered list. Naming lists selects them and fixes
+the order they are rendered in; otherwise lists are ordered by display name.
+List names are not accepted at the top level, so a list called `show` stays
+reachable as `todomd edit show`.
 
 `todomd` writes a private session document and opens it with `$VISUAL`, falling
 back to `$EDITOR`:
@@ -137,13 +143,47 @@ Apply these changes? [y/N]
 Only `y` or `Y` applies the plan. Anything else, including an empty answer,
 cancels it and leaves every source file untouched.
 
-### Options
+### Commands and options
+
+| Command | Effect |
+| --- | --- |
+| `todomd` | Edit every discovered list. |
+| `todomd edit [LISTS]...` | Edit the named lists, or every list. |
+| `todomd show [LISTS]...` | Print active tasks as JSON and exit. |
 
 | Option | Effect |
 | --- | --- |
-| `--config <PATH>` | Use a specific configuration file. |
-| `--no-hooks` | Skip every configured hook for this run. |
-| `--keep` | Retain the session even when it was unchanged or applied cleanly. |
+| `--config <PATH>` | Use a specific configuration file. Accepted anywhere. |
+| `--no-hooks` | `edit` only. Skip every configured hook for this run. |
+| `--keep` | `edit` only. Retain the session even when it was unchanged or applied cleanly. |
+
+## Scripting
+
+`todomd show` is the read surface for scripts and agents. It is read-only: no
+session, no editor, no hooks, and no terminal required.
+
+```console
+$ todomd show Personal
+[
+  {
+    "list": "Personal",
+    "uid": "f29e1dbd-b8b4-4327-89c2-608898269a01",
+    "summary": "Buy milk, bread",
+    "completed": false,
+    "file": "/home/gabriel/Calendars/personal/Personal/groceries.ics"
+  }
+]
+```
+
+Tasks are ordered by list, then by summary. `completed` is always `false` today,
+because only active tasks are shown.
+
+The `file` field matters: vdir filenames are whatever created them, so a UID
+cannot be turned into a path by hand. Use `file` to read or edit an item
+directly rather than searching for it.
+
+There is no non-interactive write command. To change fields `todomd` does not
+expose, edit the `.ics` at `file`, bump its `SEQUENCE`, and start your syncer.
 
 ## Safety
 
@@ -191,6 +231,7 @@ hook, editor, parsing, conflict, staging, application, and post-apply failures.
 ## Limitations
 
 - Active tasks only; completed and cancelled VTODOs are invisible.
+- `show` reports tasks, not lists, so a list with nothing active does not appear.
 - Summaries and list membership are the only editable fields.
 - One primary VTODO per `.ics` file.
 - No CalDAV, no watch mode, no automatic crash recovery.

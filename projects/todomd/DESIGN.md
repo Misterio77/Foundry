@@ -25,6 +25,40 @@ The one-shot MVP described below is implemented in Rust and covered by unit and
 CLI lifecycle tests. Watch mode, due and start dates, and automatic crash
 recovery remain unimplemented.
 
+## Command surface
+
+Modes are subcommands rather than mode flags, so each carries only the options
+that apply to it and a later `watch` flag on `edit` does not have to be made
+mutually exclusive with anything:
+
+- `todomd` edits every discovered list;
+- `todomd edit [LISTS]...` edits the named lists, with `--no-hooks` and
+  `--keep`; and
+- `todomd show [LISTS]...` prints active tasks as JSON.
+
+Lists are positional only inside a subcommand. The top level takes no list
+arguments, so a list sharing a subcommand's name stays addressable and an
+unknown verb is reported instead of being read as a list.
+
+Omitting list names selects every discovered list, ordered by display name. A
+command resolves that set once and reuses it, so a list appearing mid-session
+cannot turn into a spurious inbound change.
+
+### Read-only view
+
+`show` exists because agents and scripts mostly need to read, and because
+editing arbitrary VTODO fields is better done against the `.ics` file than
+through a Markdown dialect that deliberately exposes very little.
+
+It emits a JSON array of active tasks, each with its list, UID, summary,
+completion flag, and absolute source file. The file is required: vdir item
+filenames are chosen by whatever created them, so a UID cannot be mapped to a
+path without reading the collection.
+
+`show` performs no session, editor, hook, or terminal work, so it is safe to
+call from a non-interactive context. It intentionally offers no write path;
+unexposed fields are edited in the `.ics` directly.
+
 ## Product boundaries
 
 ### MVP
@@ -41,7 +75,8 @@ The MVP supports:
 - preserving iCalendar data not exposed in Markdown;
 - detecting source changes made during an editing session;
 - staging, backup, and best-effort rollback; and
-- optional hooks around the one-shot session and after a successful apply.
+- optional hooks around the one-shot session and after a successful apply; and
+- a read-only JSON view for scripts and agents.
 
 ### Next field extension
 
