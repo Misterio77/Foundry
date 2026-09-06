@@ -20,6 +20,8 @@ pub struct ShownTask {
     pub summary: String,
     pub completed: bool,
     pub priority: Priority,
+    pub start: Option<String>,
+    pub due: Option<String>,
     pub parent_uid: Option<String>,
     pub file: PathBuf,
 }
@@ -54,6 +56,8 @@ pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<Sh
                 summary: task.summary.clone(),
                 completed: task.completed,
                 priority: task.priority,
+                start: task.start.as_ref().map(|value| value.canonical()),
+                due: task.due.as_ref().map(|value| value.canonical()),
                 parent_uid: task
                     .parent
                     .as_ref()
@@ -101,6 +105,8 @@ mod tests {
         assert_eq!(shown[0].uid, "write@example.test");
         assert_eq!(shown[0].summary, "Write paper draft");
         assert!(!shown[0].completed);
+        assert_eq!(shown[0].start, None);
+        assert_eq!(shown[0].due.as_deref(), Some("2026-09-10"));
         assert!(shown[0].file.ends_with("Postgrad/write.ics"));
         assert_eq!(shown[1].list, "Personal");
         assert!(shown[1].file.ends_with("Personal/groceries.ics"));
@@ -141,6 +147,8 @@ mod tests {
         assert_eq!(task["uid"], "write@example.test");
         assert_eq!(task["summary"], "Write paper draft");
         assert_eq!(task["completed"], false);
+        assert_eq!(task["start"], serde_json::Value::Null);
+        assert_eq!(task["due"], "2026-09-10");
         assert!(
             task["file"]
                 .as_str()

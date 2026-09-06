@@ -3,8 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{
-    EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskReference, TaskState,
+use crate::{
+    dates::{self, DateContext, DateValue},
+    model::{
+        EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskReference, TaskState,
+    },
 };
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,6 +72,14 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
                 None => 0,
             };
             let checked = if task.completed { 'x' } else { ' ' };
+            let due = task
+                .due
+                .as_ref()
+                .map_or_else(String::new, |value| format!("-{} ", value.marker()));
+            let start = task
+                .start
+                .as_ref()
+                .map_or_else(String::new, |value| format!("+{} ", value.marker()));
             let priority = match task.priority.marker() {
                 "" => String::new(),
                 marker => format!("{marker} "),
@@ -77,7 +88,7 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
             let session_id = manifest.get_or_insert(&task.id);
             output.push_str(&"  ".repeat(depth));
             output.push_str(&format!(
-                "- [{checked}] {priority}{summary} <!-- todomd:id={session_id} -->\n"
+                "- [{checked}] {due}{start}{priority}{summary} <!-- todomd:id={session_id} -->\n"
             ));
             depths.insert(task.id.clone(), depth);
         }
@@ -101,6 +112,7 @@ pub fn parse(
     let mut seen_ids = BTreeSet::new();
     let mut ancestors: Vec<TaskReference> = Vec::new();
     let mut next_draft_id = 1;
+    let date_context = DateContext::local_now()?;
 
     for (index, line) in input.lines().enumerate() {
         let line_number = index + 1;
@@ -131,7 +143,7 @@ pub fn parse(
         if depth > ancestors.len() {
             bail!("line {line_number}: task nesting jumps more than one level");
         }
-        let mut task = parse_task_line(task_line, line_number, manifest)?;
+        let mut task = parse_task_line(task_line, line_number, manifest, &date_context)?;
         if let Some(task_id) = &task.id
             && !seen_ids.insert(task_id.clone())
         {
@@ -192,6 +204,7 @@ fn parse_task_line(
     line: &str,
     line_number: usize,
     manifest: &IdentityManifest,
+    date_context: &DateContext,
 ) -> Result<EditedTask> {
     let (completed, remainder) = if let Some(remainder) = line.strip_prefix("- [ ] ") {
         (false, remainder)
@@ -222,8 +235,8 @@ fn parse_task_line(
         }
     };
 
-    let (priority, field) =
-        split_priority(summary).with_context(|| format!("line {line_number}"))?;
+    let (priority, start, due, field) =
+        split_fields(summary, date_context).with_context(|| format!("line {line_number}"))?;
     let summary = parse_summary(field).with_context(|| format!("line {line_number}"))?;
     validate_summary(&summary).with_context(|| format!("line {line_number}"))?;
 
@@ -233,6 +246,8 @@ fn parse_task_line(
         completed,
         priority,
         parent: None,
+        start,
+        due,
     })
 }
 
@@ -253,31 +268,103 @@ fn render_summary(summary: &str) -> String {
 }
 
 fn needs_quoting(summary: &str) -> bool {
-    summary.starts_with(['!', '"']) || summary.trim() != summary
+    summary.starts_with(['!', '+', '-', '"']) || summary.trim() != summary
 }
 
-/// Splits an optional priority marker off the front of a task line.
-fn split_priority(remainder: &str) -> Result<(Priority, &str)> {
-    if !remainder.starts_with('!') {
-        return Ok((Priority::None, remainder));
+fn split_fields<'a>(
+    mut remainder: &'a str,
+    date_context: &DateContext,
+) -> Result<(Priority, Option<DateValue>, Option<DateValue>, &'a str)> {
+    let mut priority = None;
+    let mut start = None;
+    let mut due = None;
+
+    loop {
+        if remainder.starts_with('!') {
+            if priority.is_some() {
+                bail!("task contains more than one priority marker");
+            }
+            let marker_len = remainder
+                .chars()
+                .take_while(|character| *character == '!')
+                .count();
+            let (marker, rest) = remainder.split_at(marker_len);
+            priority = Some(
+                Priority::from_marker(marker)
+                    .with_context(|| format!("unknown priority marker {marker:?}"))?,
+            );
+            remainder = marker_remainder(rest, "priority marker")?;
+            continue;
+        }
+
+        let (slot, name) = if remainder.starts_with('-') {
+            (&mut due, "due")
+        } else if remainder.starts_with('+') {
+            (&mut start, "start")
+        } else {
+            break;
+        };
+        if slot.is_some() {
+            bail!("task contains more than one {name} marker");
+        }
+        let (value, rest) = take_marker_value(&remainder[1..])?;
+        *slot = Some(
+            dates::parse_markdown_at(&value, date_context)
+                .with_context(|| format!("invalid {name} marker"))?,
+        );
+        remainder = marker_remainder(rest, &format!("{name} marker"))?;
     }
 
-    let marker_len = remainder.chars().take_while(|c| *c == '!').count();
-    let (marker, rest) = remainder.split_at(marker_len);
-    let priority = Priority::from_marker(marker)
-        .with_context(|| format!("unknown priority marker {marker:?}"))?;
-    let summary = rest.strip_prefix(' ').context(
-        "a summary starting with '!' must be quoted so it is not read as a priority marker",
-    )?;
+    Ok((priority.unwrap_or_default(), start, due, remainder))
+}
 
-    Ok((priority, summary))
+fn marker_remainder<'a>(remainder: &'a str, marker: &str) -> Result<&'a str> {
+    remainder
+        .strip_prefix(' ')
+        .with_context(|| format!("{marker} must be followed by a space and the next field"))
+}
+
+fn take_marker_value(input: &str) -> Result<(String, &str)> {
+    let Some(mut remainder) = input.strip_prefix('"') else {
+        let (value, remainder) = input
+            .find(' ')
+            .map_or((input, ""), |index| (&input[..index], &input[index..]));
+        if value.is_empty() {
+            bail!("date marker cannot be empty");
+        }
+        return Ok((value.to_owned(), remainder));
+    };
+
+    let mut value = String::new();
+    loop {
+        let Some((character, rest)) = remainder.chars().next().map(|character| {
+            let length = character.len_utf8();
+            (character, &remainder[length..])
+        }) else {
+            bail!("quoted date marker must end with '\"'");
+        };
+        remainder = rest;
+        if character != '"' {
+            value.push(character);
+            continue;
+        }
+        if let Some(rest) = remainder.strip_prefix('"') {
+            value.push('"');
+            remainder = rest;
+            continue;
+        }
+        if value.is_empty() {
+            bail!("date marker cannot be empty");
+        }
+        return Ok((value, remainder));
+    }
 }
 
 /// Reads a summary field, honouring optional quoting.
 fn parse_summary(field: &str) -> Result<String> {
     let Some(inner) = field.strip_prefix('"') else {
-        if field.starts_with('!') {
-            bail!("a summary starting with '!' must be quoted");
+        if field.starts_with(['!', '+', '-']) {
+            bail!("a summary starting with '!', '+', or '-' must be quoted");
         }
         if field.trim() != field {
             bail!("a summary with leading or trailing whitespace must be quoted");
@@ -321,6 +408,8 @@ fn validate_summary(summary: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
+
     use crate::model::{Task, TaskList};
 
     use super::*;
@@ -336,6 +425,8 @@ mod tests {
                     completed: false,
                     priority: Priority::None,
                     parent: None,
+                    start: None,
+                    due: None,
                 }],
             }],
         };
@@ -373,6 +464,8 @@ mod tests {
                         completed: false,
                         priority: Priority::None,
                         parent: None,
+                        start: None,
+                        due: None,
                     }],
                 },
                 TaskList {
@@ -427,6 +520,8 @@ mod tests {
                         completed: false,
                         priority: Priority::High,
                         parent: None,
+                        start: None,
+                        due: None,
                     },
                     Task {
                         id: TaskId::new("medium"),
@@ -434,6 +529,8 @@ mod tests {
                         completed: false,
                         priority: Priority::Medium,
                         parent: None,
+                        start: None,
+                        due: None,
                     },
                     Task {
                         id: TaskId::new("low"),
@@ -441,6 +538,8 @@ mod tests {
                         completed: false,
                         priority: Priority::Low,
                         parent: None,
+                        start: None,
+                        due: None,
                     },
                     Task {
                         id: TaskId::new("none"),
@@ -448,6 +547,8 @@ mod tests {
                         completed: false,
                         priority: Priority::None,
                         parent: None,
+                        start: None,
+                        due: None,
                     },
                 ],
             }],
@@ -479,10 +580,75 @@ mod tests {
     }
 
     #[test]
+    fn renders_dates_canonically_and_accepts_fields_in_any_order() {
+        let context = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            Utc.with_ymd_and_hms(2026, 9, 6, 12, 0, 0).unwrap(),
+        )
+        .unwrap();
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("dated"),
+                    summary: "Write grant".into(),
+                    completed: false,
+                    priority: Priority::Low,
+                    parent: None,
+                    start: Some(
+                        dates::parse_markdown_at("2026-09-06T10:00:42-03:00", &context).unwrap(),
+                    ),
+                    due: Some(dates::parse_markdown_at("2026-09-07", &context).unwrap()),
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+        assert!(
+            document.contains(
+                "- [ ] -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!-- todomd:id=t1 -->"
+            ),
+            "{document}"
+        );
+
+        let reordered = "# Postgrad\n\n- [ ] ! +\"2026-09-06 10:00\" -2026-09-07 Write grant <!-- todomd:id=t1 -->\n";
+        let parsed = parse(reordered, &state, &manifest).unwrap();
+        assert_eq!(parsed.lists[0].tasks[0].priority, Priority::Low);
+        assert_eq!(
+            parsed.lists[0].tasks[0].start.as_ref().unwrap().canonical(),
+            "2026-09-06 10:00"
+        );
+        assert_eq!(
+            parsed.lists[0].tasks[0].due.as_ref().unwrap().canonical(),
+            "2026-09-07"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_date_markers() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        for line in [
+            "- [ ] -today -tomorrow Duplicate due",
+            "- [ ] +today +tomorrow Duplicate start",
+        ] {
+            let document = format!("# Personal\n\n{line}\n");
+            assert!(parse(&document, &baseline, &IdentityManifest::default()).is_err());
+        }
+    }
+
+    #[test]
     fn round_trips_summaries_that_need_quoting() {
         let awkward = [
             "!urgent looking",
             "!!! literal marker",
+            "+literal start",
+            "-literal start",
             "\"quoted\" start",
             "  padded  ",
             "trailing space ",
@@ -500,6 +666,8 @@ mod tests {
                         completed: false,
                         priority: Priority::Medium,
                         parent: None,
+                        start: None,
+                        due: None,
                     })
                     .collect(),
             }],
@@ -536,6 +704,8 @@ mod tests {
                     completed: false,
                     priority: Priority::None,
                     parent: None,
+                    start: None,
+                    due: None,
                 }],
             }],
         };
@@ -562,6 +732,8 @@ mod tests {
                     completed: false,
                     priority: Priority::None,
                     parent: None,
+                    start: None,
+                    due: None,
                 }],
             }],
         };
@@ -624,6 +796,8 @@ mod tests {
                     completed: false,
                     priority: Priority::None,
                     parent: None,
+                    start: None,
+                    due: None,
                 }],
             }],
         };
@@ -645,6 +819,8 @@ mod tests {
                         completed: false,
                         priority: Priority::None,
                         parent: None,
+                        start: None,
+                        due: None,
                     },
                     Task {
                         id: child.clone(),
@@ -652,6 +828,8 @@ mod tests {
                         completed: false,
                         priority: Priority::None,
                         parent: Some(root.clone()),
+                        start: None,
+                        due: None,
                     },
                     Task {
                         id: TaskId::new("grandchild"),
@@ -659,6 +837,8 @@ mod tests {
                         completed: false,
                         priority: Priority::None,
                         parent: Some(child.clone()),
+                        start: None,
+                        due: None,
                     },
                 ],
             }],

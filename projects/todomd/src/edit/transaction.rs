@@ -11,8 +11,11 @@ use std::{
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
 use icalendar::{
-    Calendar, Component as IcalComponent, Todo, TodoStatus,
-    parser::{Component as ParsedComponent, Property as ParsedProperty, read_calendar, unfold},
+    Calendar, Component as IcalComponent, Property as IcalProperty, Todo, TodoStatus,
+    parser::{
+        Component as ParsedComponent, Parameter as ParsedParameter, Property as ParsedProperty,
+        read_calendar, unfold,
+    },
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -21,6 +24,7 @@ use uuid::Uuid;
 
 use super::planner::{ChangePlan, Operation};
 use crate::{
+    dates::DateValue,
     model::{Priority, TaskId, TaskReference},
     repository::{SourceSnapshot, verify_snapshot},
 };
@@ -57,6 +61,8 @@ struct ExistingEdit {
     completion: CompletionChange,
     priority: Option<Priority>,
     parent: Option<Option<TaskReference>>,
+    start: Option<Option<DateValue>>,
+    due: Option<Option<DateValue>>,
     move_to: Option<String>,
     delete: bool,
 }
@@ -108,6 +114,22 @@ pub fn stage(
             Operation::Reprioritize { id, to, .. } => {
                 existing.entry(id.clone()).or_default().priority = Some(*to);
             }
+            Operation::Reschedule {
+                id,
+                from_start,
+                to_start,
+                from_due,
+                to_due,
+                ..
+            } => {
+                let edit = existing.entry(id.clone()).or_default();
+                if from_start != to_start {
+                    edit.start = Some(to_start.clone());
+                }
+                if from_due != to_due {
+                    edit.due = Some(to_due.clone());
+                }
+            }
             Operation::Reparent { id, to, .. } => {
                 existing.entry(id.clone()).or_default().parent = Some(to.clone());
             }
@@ -122,6 +144,8 @@ pub fn stage(
                 list,
                 summary,
                 priority,
+                start,
+                due,
                 parent,
                 ..
             } => creates.push((
@@ -129,6 +153,8 @@ pub fn stage(
                 list.clone(),
                 summary.clone(),
                 *priority,
+                start.clone(),
+                due.clone(),
                 parent.clone(),
             )),
         }
@@ -183,6 +209,8 @@ pub fn stage(
             || edit.completion != CompletionChange::Unchanged
             || edit.priority.is_some()
             || edit.parent.is_some()
+            || edit.start.is_some()
+            || edit.due.is_some()
         {
             let parent = edit
                 .parent
@@ -197,10 +225,14 @@ pub fn stage(
             patch_existing(
                 &source.contents,
                 &task_id,
-                edit.summary.as_deref(),
-                edit.completion,
-                edit.priority,
-                parent.as_ref().map(|parent| parent.as_ref()),
+                TodoPatch {
+                    summary: edit.summary.as_deref(),
+                    completion: edit.completion,
+                    priority: edit.priority,
+                    parent: parent.as_ref().map(|parent| parent.as_ref()),
+                    start: edit.start.as_ref().map(|value| value.as_ref()),
+                    due: edit.due.as_ref().map(|value| value.as_ref()),
+                },
                 now,
             )?
         } else {
@@ -226,7 +258,7 @@ pub fn stage(
         });
     }
 
-    for (draft_id, list, summary, priority, parent) in creates {
+    for (draft_id, list, summary, priority, start, due, parent) in creates {
         let task_id = &created_tasks[&draft_id];
         let parent = parent
             .as_ref()
@@ -246,7 +278,15 @@ pub fn stage(
 
         let index = changes.len() + 1;
         let staged = staged_dir.join(format!("{index:04}.ics"));
-        let contents = new_todo(task_id, &summary, priority, parent.as_ref(), now);
+        let contents = new_todo(
+            task_id,
+            &summary,
+            priority,
+            parent.as_ref(),
+            start.as_ref(),
+            due.as_ref(),
+            now,
+        );
         let staged_sha256 = hash_bytes(contents.as_bytes());
         fs::write(&staged, contents)
             .with_context(|| format!("failed to write staged file {}", staged.display()))?;
@@ -373,18 +413,25 @@ impl fmt::Display for StagedTransaction {
     }
 }
 
+#[derive(Default)]
+struct TodoPatch<'a> {
+    summary: Option<&'a str>,
+    completion: CompletionChange,
+    priority: Option<Priority>,
+    parent: Option<Option<&'a TaskId>>,
+    start: Option<Option<&'a DateValue>>,
+    due: Option<Option<&'a DateValue>>,
+}
+
 fn patch_existing(
     contents: &str,
     task_id: &TaskId,
-    summary: Option<&str>,
-    completion: CompletionChange,
-    priority: Option<Priority>,
-    parent: Option<Option<&TaskId>>,
+    patch: TodoPatch<'_>,
     now: DateTime<Utc>,
 ) -> Result<String> {
     let unfolded = unfold(contents);
     let original_relationships = related_to_lines(&unfolded, task_id);
-    let relationships = match parent {
+    let relationships = match patch.parent {
         None => original_relationships,
         Some(parent) => {
             let mut relationships = original_relationships
@@ -423,25 +470,31 @@ fn patch_existing(
     };
     let todo = &mut calendar.components[index];
 
-    if let Some(summary) = summary {
+    if let Some(summary) = patch.summary {
         set_property(todo, "SUMMARY", summary)?;
     }
     // Only written when the marker changed, so values like PRIORITY:4 survive
     // edits that leave the level alone.
-    if let Some(priority) = priority {
+    if let Some(priority) = patch.priority {
         match priority.to_ics() {
             Some(value) => set_property(todo, "PRIORITY", value)?,
             None => remove_property(todo, "PRIORITY"),
         }
     }
-    if let Some(parent) = parent {
+    if let Some(parent) = patch.parent {
         remove_parent_properties(todo);
         if let Some(parent) = parent {
             set_parent_property(todo, parent.as_str());
         }
     }
+    if let Some(start) = patch.start {
+        set_temporal_property(todo, "DTSTART", start);
+    }
+    if let Some(due) = patch.due {
+        set_temporal_property(todo, "DUE", due);
+    }
 
-    match completion {
+    match patch.completion {
         CompletionChange::Unchanged => {}
         CompletionChange::Complete => {
             set_property(todo, "STATUS", "COMPLETED")?;
@@ -673,6 +726,32 @@ fn set_parent_property(component: &mut ParsedComponent<'_>, value: &str) {
     }
 }
 
+fn set_temporal_property(
+    component: &mut ParsedComponent<'_>,
+    name: &str,
+    value: Option<&DateValue>,
+) {
+    remove_property(component, name);
+    let Some(value) = value else {
+        return;
+    };
+    let params = match value {
+        DateValue::Date(_) => vec![ParsedParameter {
+            key: "VALUE".to_owned().into(),
+            val: Some("DATE".to_owned().into()),
+        }],
+        DateValue::DateTime(value) => vec![ParsedParameter {
+            key: "TZID".to_owned().into(),
+            val: Some(value.timezone().name().to_owned().into()),
+        }],
+    };
+    component.properties.push(ParsedProperty {
+        name: name.to_owned().into(),
+        val: value.ics_value().into(),
+        params,
+    });
+}
+
 fn set_property(component: &mut ParsedComponent<'_>, name: &str, value: &str) -> Result<()> {
     let matching = component
         .properties
@@ -728,6 +807,8 @@ fn new_todo(
     summary: &str,
     priority: Priority,
     parent: Option<&TaskId>,
+    start: Option<&DateValue>,
+    due: Option<&DateValue>,
     now: DateTime<Utc>,
 ) -> String {
     let mut builder = Todo::new();
@@ -745,10 +826,28 @@ fn new_todo(
     if let Some(parent) = parent {
         builder.add_property("RELATED-TO", parent.as_str());
     }
+    add_temporal_property(builder, "DTSTART", start);
+    add_temporal_property(builder, "DUE", due);
     let todo = builder.done();
     let mut calendar = Calendar::new();
     calendar.push(todo);
     calendar.to_string()
+}
+
+fn add_temporal_property(todo: &mut Todo, name: &str, value: Option<&DateValue>) {
+    let Some(value) = value else {
+        return;
+    };
+    let mut property = IcalProperty::new(name, value.ics_value());
+    match value {
+        DateValue::Date(_) => {
+            property.add_parameter("VALUE", "DATE");
+        }
+        DateValue::DateTime(value) => {
+            property.add_parameter("TZID", value.timezone().name());
+        }
+    }
+    todo.append_property(property);
 }
 
 fn format_timestamp(timestamp: DateTime<Utc>) -> String {
@@ -997,6 +1096,7 @@ mod tests {
 
     use crate::{
         config::Config,
+        dates::{DateContext, parse_markdown_at},
         repository::{Scope, load_lists},
     };
 
@@ -1005,6 +1105,17 @@ mod tests {
         planner::{Reconciliation, reconcile},
     };
     use super::*;
+
+    fn date(value: &str) -> DateValue {
+        let context = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            DateTime::parse_from_rfc3339("2026-09-06T12:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+        )
+        .unwrap();
+        parse_markdown_at(value, &context).unwrap()
+    }
 
     fn fixture_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/calendars")
@@ -1050,7 +1161,7 @@ mod tests {
     fn applies_all_file_operations_and_preserves_hidden_properties() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] New task\n\n# Personal\n\n- [x] Submit paper <!-- todomd:id=t1 -->\n";
+        let markdown = "# Postgrad\n\n- [ ] New task\n\n# Personal\n\n- [x] -2026-09-10 Submit paper <!-- todomd:id=t1 -->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1092,10 +1203,10 @@ mod tests {
         let patched = patch_existing(
             source,
             &TaskId::new("read@example.test"),
-            None,
-            CompletionChange::Reopen,
-            None,
-            None,
+            TodoPatch {
+                completion: CompletionChange::Reopen,
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap();
@@ -1113,7 +1224,7 @@ mod tests {
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
         let markdown = "# Postgrad\n\n\
             - [ ] Read chapter four <!-- todomd:id=t1 -->\n\
-            - [ ] Write paper draft <!-- todomd:id=t2 -->\n\
+            - [ ] -2026-09-10 Write paper draft <!-- todomd:id=t2 -->\n\
             \n\
             # Personal\n\n\
             - [ ] Buy milk, bread <!-- todomd:id=t3 -->\n";
@@ -1142,10 +1253,11 @@ mod tests {
         patch_existing(
             PRIORITISED,
             &TaskId::new("prio@example.test"),
-            summary,
-            CompletionChange::Unchanged,
-            priority,
-            None,
+            TodoPatch {
+                summary,
+                priority,
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap()
@@ -1157,14 +1269,38 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc);
 
-        let high = new_todo(&TaskId::new("new"), "Foo", Priority::High, None, now);
+        let high = new_todo(
+            &TaskId::new("new"),
+            "Foo",
+            Priority::High,
+            None,
+            None,
+            None,
+            now,
+        );
         assert!(high.contains("PRIORITY:1"), "{high}");
         assert!(high.contains("SUMMARY:Foo"), "{high}");
 
-        let low = new_todo(&TaskId::new("new"), "Foo", Priority::Low, None, now);
+        let low = new_todo(
+            &TaskId::new("new"),
+            "Foo",
+            Priority::Low,
+            None,
+            None,
+            None,
+            now,
+        );
         assert!(low.contains("PRIORITY:9"), "{low}");
 
-        let none = new_todo(&TaskId::new("new"), "Foo", Priority::None, None, now);
+        let none = new_todo(
+            &TaskId::new("new"),
+            "Foo",
+            Priority::None,
+            None,
+            None,
+            None,
+            now,
+        );
         assert!(!none.contains("PRIORITY"), "{none}");
     }
 
@@ -1179,6 +1315,8 @@ mod tests {
             "Child",
             Priority::None,
             Some(&parent),
+            None,
+            None,
             now,
         );
         assert!(created.contains("RELATED-TO:parent"), "{created}");
@@ -1187,10 +1325,10 @@ mod tests {
         let changed = patch_existing(
             source,
             &TaskId::new("child"),
-            None,
-            CompletionChange::Unchanged,
-            None,
-            Some(Some(&parent)),
+            TodoPatch {
+                parent: Some(Some(&parent)),
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap();
@@ -1205,10 +1343,10 @@ mod tests {
         let detached = patch_existing(
             source,
             &TaskId::new("child"),
-            None,
-            CompletionChange::Unchanged,
-            None,
-            Some(None),
+            TodoPatch {
+                parent: Some(None),
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap();
@@ -1223,10 +1361,10 @@ mod tests {
         let renamed = patch_existing(
             source,
             &TaskId::new("child"),
-            Some("Renamed"),
-            CompletionChange::Unchanged,
-            None,
-            None,
+            TodoPatch {
+                summary: Some("Renamed"),
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap();
@@ -1235,6 +1373,87 @@ mod tests {
             "{renamed}"
         );
         assert!(renamed.contains("RELATED-TO:old"), "{renamed}");
+    }
+
+    #[test]
+    fn writes_and_clears_date_properties() {
+        let source = include_str!("../../tests/fixtures/calendars/Postgrad/write.ics");
+        let now = DateTime::parse_from_rfc3339("2026-09-06T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let start = date("2026-09-07 00:00");
+        let due = date("2026-09-08T20:00:42-03:00");
+
+        let patched = patch_existing(
+            source,
+            &TaskId::new("write@example.test"),
+            TodoPatch {
+                start: Some(Some(&start)),
+                due: Some(Some(&due)),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(
+            patched.contains("DTSTART;TZID=America/Sao_Paulo:20260907T000000"),
+            "{patched}"
+        );
+        assert!(
+            patched.contains("DUE;TZID=America/Sao_Paulo:20260908T200042"),
+            "{patched}"
+        );
+        assert!(!patched.contains("BEGIN:VTIMEZONE"), "{patched}");
+
+        let renamed = patch_existing(
+            &patched,
+            &TaskId::new("write@example.test"),
+            TodoPatch {
+                summary: Some("Renamed"),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(
+            renamed.contains("DUE;TZID=America/Sao_Paulo:20260908T200042"),
+            "{renamed}"
+        );
+
+        let cleared = patch_existing(
+            &patched,
+            &TaskId::new("write@example.test"),
+            TodoPatch {
+                due: Some(None),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(!cleared.contains("DUE"), "{cleared}");
+        assert!(cleared.contains("DTSTART;TZID=America/Sao_Paulo"));
+    }
+
+    #[test]
+    fn new_tasks_include_date_properties() {
+        let now = DateTime::parse_from_rfc3339("2026-09-06T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let start = date("2026-09-07");
+        let due = date("2026-09-08");
+
+        let created = new_todo(
+            &TaskId::new("dated"),
+            "Dated",
+            Priority::None,
+            None,
+            Some(&start),
+            Some(&due),
+            now,
+        );
+
+        assert!(created.contains("DTSTART;VALUE=DATE:20260907"), "{created}");
+        assert!(created.contains("DUE;VALUE=DATE:20260908"), "{created}");
     }
 
     #[test]
@@ -1276,10 +1495,10 @@ mod tests {
         let patched = patch_existing(
             source,
             &TaskId::new("write@example.test"),
-            Some(r"Comma, semicolon; slash\value"),
-            CompletionChange::Unchanged,
-            None,
-            None,
+            TodoPatch {
+                summary: Some(r"Comma, semicolon; slash\value"),
+                ..TodoPatch::default()
+            },
             now,
         )
         .unwrap();
@@ -1305,7 +1524,7 @@ mod tests {
     fn refuses_to_apply_when_any_selected_source_changed() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] Renamed <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\n";
+        let markdown = "# Postgrad\n\n- [ ] -2026-09-10 Renamed <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1325,7 +1544,7 @@ mod tests {
     fn refuses_to_apply_when_a_selected_list_changes_identity() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] Renamed <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\n";
+        let markdown = "# Postgrad\n\n- [ ] -2026-09-10 Renamed <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();

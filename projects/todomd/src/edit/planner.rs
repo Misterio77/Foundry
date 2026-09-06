@@ -1,9 +1,12 @@
 use std::{collections::BTreeMap, fmt};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
-use crate::model::{EditedTaskState, Priority, TaskId, TaskReference, TaskState};
+use crate::{
+    dates::{self, DateValue},
+    model::{EditedTaskState, Priority, TaskId, TaskReference, TaskState},
+};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -30,6 +33,15 @@ pub enum Operation {
         from: Priority,
         to: Priority,
     },
+    Reschedule {
+        id: TaskId,
+        list: String,
+        summary: String,
+        from_start: Option<DateValue>,
+        to_start: Option<DateValue>,
+        from_due: Option<DateValue>,
+        to_due: Option<DateValue>,
+    },
     Reparent {
         id: TaskId,
         list: String,
@@ -44,6 +56,8 @@ pub enum Operation {
         list: String,
         summary: String,
         priority: Priority,
+        start: Option<DateValue>,
+        due: Option<DateValue>,
         parent: Option<TaskReference>,
         parent_summary: Option<String>,
     },
@@ -81,6 +95,8 @@ struct ComparableTask {
     completed: bool,
     priority: Priority,
     parent: Option<TaskReference>,
+    start: Option<DateValue>,
+    due: Option<DateValue>,
 }
 
 type IdentifiedTasks = BTreeMap<TaskId, ComparableTask>;
@@ -93,7 +109,8 @@ pub fn reconcile(
 ) -> Result<Reconciliation> {
     let baseline_tasks = task_map(baseline);
     let current_tasks = task_map(current_ics);
-    let (markdown_tasks, new_tasks) = edited_task_map(markdown)?;
+    let (mut markdown_tasks, mut new_tasks) = edited_task_map(markdown)?;
+    prepare_dates(&baseline_tasks, &mut markdown_tasks, &mut new_tasks)?;
 
     for task_id in markdown_tasks.keys() {
         if !baseline_tasks.contains_key(task_id) {
@@ -167,6 +184,17 @@ fn build_plan(
                 to: edited.priority,
             });
         }
+        if original.start != edited.start || original.due != edited.due {
+            operations.push(Operation::Reschedule {
+                id: id.clone(),
+                list: edited.list.clone(),
+                summary: edited.summary.clone(),
+                from_start: original.start.clone(),
+                to_start: edited.start.clone(),
+                from_due: original.due.clone(),
+                to_due: edited.due.clone(),
+            });
+        }
         if original.parent != edited.parent {
             operations.push(Operation::Reparent {
                 id: id.clone(),
@@ -199,6 +227,8 @@ fn build_plan(
             list: task.list.clone(),
             summary: task.summary.clone(),
             priority: task.priority,
+            start: task.start.clone(),
+            due: task.due.clone(),
             parent: task.parent.clone(),
             parent_summary: parent_summary(task.parent.as_ref(), markdown_tasks, new_tasks),
         });
@@ -238,6 +268,8 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
                         completed: task.completed,
                         priority: task.priority,
                         parent: task.parent.clone().map(TaskReference::Existing),
+                        start: task.start.clone(),
+                        due: task.due.clone(),
                     },
                 )
             })
@@ -258,6 +290,8 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
                 completed: task.completed,
                 priority: task.priority,
                 parent: task.parent.clone(),
+                start: task.start.clone(),
+                due: task.due.clone(),
             };
             match &task.id {
                 Some(id) => {
@@ -278,6 +312,27 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
 
     validate_edited_hierarchy(&identified, &new)?;
     Ok((identified, new))
+}
+
+fn prepare_dates(
+    baseline: &IdentifiedTasks,
+    markdown: &mut IdentifiedTasks,
+    new_tasks: &mut DraftTasks,
+) -> Result<()> {
+    for (id, task) in markdown {
+        let Some(original) = baseline.get(id) else {
+            continue;
+        };
+        if task.start != original.start || task.due != original.due {
+            dates::normalize_and_validate(&mut task.start, &mut task.due)
+                .with_context(|| format!("invalid dates for task {:?}", task.summary))?;
+        }
+    }
+    for (_, task) in new_tasks {
+        dates::normalize_and_validate(&mut task.start, &mut task.due)
+            .with_context(|| format!("invalid dates for new task {:?}", task.summary))?;
+    }
+    Ok(())
 }
 
 fn parent_summary(
@@ -336,6 +391,12 @@ fn validate_edited_hierarchy(identified: &IdentifiedTasks, new_tasks: &DraftTask
     Ok(())
 }
 
+fn display_date(value: &Option<DateValue>) -> String {
+    value
+        .as_ref()
+        .map_or_else(|| "none".to_owned(), DateValue::canonical)
+}
+
 fn operation_sort_key<'a>(
     operation: &'a Operation,
     list_positions: &BTreeMap<&str, usize>,
@@ -345,10 +406,11 @@ fn operation_sort_key<'a>(
         Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
         Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
         Operation::Reprioritize { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
-        Operation::Reparent { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 6, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 7, summary.as_str()),
+        Operation::Reschedule { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
+        Operation::Reparent { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
+        Operation::Create { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
+        Operation::Move { to, summary, .. } => (to.as_str(), 7, summary.as_str()),
+        Operation::Delete { list, summary, .. } => (list.as_str(), 8, summary.as_str()),
     };
     (
         *list_positions.get(list).unwrap_or(&usize::MAX),
@@ -364,6 +426,7 @@ impl Operation {
             | Self::Complete { list, .. }
             | Self::Reopen { list, .. }
             | Self::Reprioritize { list, .. }
+            | Self::Reschedule { list, .. }
             | Self::Reparent { list, .. }
             | Self::Create { list, .. }
             | Self::Delete { list, .. } => list,
@@ -413,6 +476,23 @@ impl fmt::Display for ChangePlan {
                             to.label()
                         )?;
                     }
+                    Operation::Reschedule {
+                        summary,
+                        from_start,
+                        to_start,
+                        from_due,
+                        to_due,
+                        ..
+                    } => {
+                        writeln!(
+                            formatter,
+                            "  dates     {summary} (start: {} -> {}; due: {} -> {})",
+                            display_date(from_start),
+                            display_date(to_start),
+                            display_date(from_due),
+                            display_date(to_due)
+                        )?;
+                    }
                     Operation::Reparent {
                         summary,
                         from_summary,
@@ -433,17 +513,30 @@ impl fmt::Display for ChangePlan {
                     Operation::Create {
                         summary,
                         priority,
+                        start,
+                        due,
                         parent_summary,
                         ..
                     } => {
-                        let priority = match priority {
-                            Priority::None => String::new(),
-                            priority => format!(" ({})", priority.label()),
+                        let mut fields = Vec::new();
+                        if let Some(due) = due {
+                            fields.push(format!("-{}", due.canonical()));
+                        }
+                        if let Some(start) = start {
+                            fields.push(format!("+{}", start.canonical()));
+                        }
+                        if priority != &Priority::None {
+                            fields.push(priority.label().to_owned());
+                        }
+                        let fields = if fields.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({})", fields.join(" "))
                         };
                         let parent = parent_summary
                             .as_ref()
                             .map_or_else(String::new, |parent| format!(" under {parent}"));
-                        writeln!(formatter, "  created   {summary}{priority}{parent}")?;
+                        writeln!(formatter, "  created   {summary}{fields}{parent}")?;
                     }
                     Operation::Move { summary, from, .. } => {
                         writeln!(formatter, "  moved     {summary} <- {from}")?;
@@ -460,9 +553,23 @@ impl fmt::Display for ChangePlan {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::{EditedTask, EditedTaskList, Task, TaskList};
+    use chrono::{TimeZone, Utc};
+
+    use crate::{
+        dates::{DateContext, parse_markdown_at},
+        model::{EditedTask, EditedTaskList, Task, TaskList},
+    };
 
     use super::*;
+
+    fn date(value: &str) -> DateValue {
+        let context = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            Utc.with_ymd_and_hms(2026, 9, 6, 12, 0, 0).unwrap(),
+        )
+        .unwrap();
+        parse_markdown_at(value, &context).unwrap()
+    }
 
     fn task(id: &str, summary: &str) -> Task {
         Task {
@@ -471,6 +578,8 @@ mod tests {
             completed: false,
             priority: Priority::None,
             parent: None,
+            start: None,
+            due: None,
         }
     }
 
@@ -488,6 +597,8 @@ mod tests {
             completed,
             priority: Priority::None,
             parent: None,
+            start: None,
+            due: None,
         }
     }
 
@@ -521,6 +632,8 @@ mod tests {
                 list: "Postgrad".into(),
                 summary: "Foo".into(),
                 priority: Priority::High,
+                start: None,
+                due: None,
                 parent: None,
                 parent_summary: None,
             }]
@@ -594,6 +707,131 @@ mod tests {
             reconcile(&baseline, &markdown, &baseline).unwrap(),
             Reconciliation::NoChange
         );
+    }
+
+    #[test]
+    fn unchanged_rendered_minute_preserves_source_seconds() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    due: Some(date("2026-09-07T20:00:42-03:00")),
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    due: Some(date("2026-09-07 20:00")),
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        assert_eq!(
+            reconcile(&baseline, &markdown, &baseline).unwrap(),
+            Reconciliation::NoChange
+        );
+    }
+
+    #[test]
+    fn changing_a_mixed_date_pair_promotes_the_date_side() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    start: Some(date("2026-09-07")),
+                    due: Some(date("2026-09-08")),
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    start: Some(date("2026-09-07")),
+                    due: Some(date("2026-09-08 20:00:42")),
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+        let operation = plan
+            .operations
+            .iter()
+            .find(|operation| matches!(operation, Operation::Reschedule { .. }))
+            .unwrap();
+        assert!(matches!(
+            operation,
+            Operation::Reschedule {
+                to_start: Some(DateValue::DateTime(_)),
+                to_due: Some(DateValue::DateTime(_)),
+                ..
+            }
+        ));
+        assert!(format!("{plan}").contains("dates     Write paper"));
+    }
+
+    #[test]
+    fn preserves_an_untouched_inverted_source_pair() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    start: Some(date("2026-09-08")),
+                    due: Some(date("2026-09-07")),
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    start: Some(date("2026-09-08")),
+                    due: Some(date("2026-09-07")),
+                    ..edited(Some("paper"), "Rename only", false)
+                }],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+        assert_eq!(plan.operations.len(), 1);
+        assert!(matches!(plan.operations[0], Operation::Rename { .. }));
+    }
+
+    #[test]
+    fn rejects_due_before_start_after_a_date_edit() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![task("paper", "Write paper")],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    start: Some(date("2026-09-08")),
+                    due: Some(date("2026-09-07")),
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        let error = reconcile(&baseline, &markdown, &baseline).unwrap_err();
+        assert!(error.to_string().contains("invalid dates"));
+        assert!(format!("{error:#}").contains("must not be earlier"));
     }
 
     #[test]

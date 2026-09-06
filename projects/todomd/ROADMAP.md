@@ -3,27 +3,15 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
-## Editable fields
+## Categories
 
-Priority is editable through `!`, `!!`, and `!!!` markers. Due and start dates
-and categories still have to be changed in the `.ics` file.
+Categories still have to be changed in the `.ics` file. Adding them is a
+deliberate reversal of the original scope boundary, as priority and dates
+already were.
 
-Due and start dates are the extension the design already anticipates.
-Categories are listed as a non-goal; adding them is a deliberate reversal of
-that boundary, as priority already was.
-
-Constraints, all of which priority markers now demonstrate:
-
-- absence from Markdown must never delete or alter an existing property;
-- a value is written only when the rendered form changes, so representations the
-  dialect flattens are not rewritten;
-- ambiguous syntax must be a parse error rather than a guess; and
-- the dialect must stay diffable and easy to type.
-
-Quoting already exists for summaries whose start would otherwise read as syntax,
-so new leading markers can reuse it instead of inventing an escape. Categories
-remain the harder case: `@tag` is natural but unbounded, and tags can appear
-anywhere in a line rather than only at its start.
+`@tag` is natural but unbounded, and tags can appear anywhere in a line rather
+than only at its start. The syntax must remain unambiguous and preserve source
+representations unless the rendered category set changes.
 
 ## Configurable sorting
 
@@ -35,7 +23,7 @@ The fixed default does not suit everything:
 
 - 323 tasks already carry `X-APPLE-SORT-ORDER` from other clients, so a manual
   order exists in the data and is currently discarded;
-- due date is an obvious sort key once dates are editable; and
+- due date is now available as a sort key; and
 - grouping by priority rather than sorting by it suits some lists better.
 
 Likely shape: a configured list of sort keys, overridable per list. Whatever the

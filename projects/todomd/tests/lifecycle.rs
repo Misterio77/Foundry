@@ -48,7 +48,7 @@ impl Case {
         let editor = root.path().join("editor");
         write_executable(
             &editor,
-            "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] New task\n\n# Personal\n\n- [x] Submit paper <!-- todomd:id=t1 -->\nEOF\n",
+            "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] New task\n\n# Personal\n\n- [x] -2026-09-10 Submit paper <!-- todomd:id=t1 -->\nEOF\n",
         );
         let config = root.path().join("config.toml");
         fs::write(
@@ -278,7 +278,7 @@ fn a_created_task_keeps_the_priority_it_was_written_with() {
     let editor = case.root.path().join("prio-editor");
     write_executable(
         &editor,
-        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] !!! Foo\n- [ ] Plain\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] !!! Foo\n- [ ] Plain\n- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
     );
 
     let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
@@ -328,7 +328,7 @@ fn nested_created_tasks_keep_their_generated_relationships() {
     let editor = case.root.path().join("subtask-editor");
     write_executable(
         &editor,
-        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
     );
 
     let mut command = case.edit_command(editor.to_str().unwrap());
@@ -410,7 +410,7 @@ fn moving_a_task_under_a_parent_moves_and_reparents_it() {
     let editor = case.root.path().join("reparent-editor");
     write_executable(
         &editor,
-        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n  - [ ] Buy milk, bread <!-- todomd:id=t2 -->\n\n# Personal\n\nEOF\n",
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n  - [ ] Buy milk, bread <!-- todomd:id=t2 -->\n\n# Personal\n\nEOF\n",
     );
 
     let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
@@ -428,6 +428,51 @@ fn moving_a_task_under_a_parent_moves_and_reparents_it() {
     assert!(!case.calendars.join("Personal/groceries.ics").exists());
     let child = fs::read_to_string(case.calendars.join("Postgrad/groceries.ics")).unwrap();
     assert!(child.contains("RELATED-TO:write@example.test"), "{child}");
+}
+
+#[test]
+fn creates_and_round_trips_mixed_date_fields() {
+    let case = Case::new(0);
+    let editor = case.root.path().join("dates-editor");
+    write_executable(
+        &editor,
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] +2026-09-07 -\"2026-09-08 20:00:42\" Dated task\n- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+    );
+
+    let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
+    let text = output_text(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("created   Dated task"), "{text}");
+
+    let created = fs::read_dir(case.calendars.join("Postgrad"))
+        .unwrap()
+        .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+        .find(|contents| contents.contains("SUMMARY:Dated task"))
+        .unwrap();
+    let start = created
+        .lines()
+        .find(|line| line.starts_with("DTSTART;"))
+        .unwrap();
+    let due = created
+        .lines()
+        .find(|line| line.starts_with("DUE;"))
+        .unwrap();
+    assert!(start.contains("TZID="), "{created}");
+    assert!(start.ends_with(":20260907T000000"), "{created}");
+    assert!(due.contains("TZID="), "{created}");
+    assert!(due.ends_with(":20260908T200042"), "{created}");
+    assert!(!created.contains("BEGIN:VTIMEZONE"), "{created}");
+
+    let shown = case.base("false").arg("show").output().unwrap();
+    let tasks: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    let dated = tasks
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["summary"] == "Dated task")
+        .unwrap();
+    assert_eq!(dated["start"], "2026-09-07 00:00");
+    assert_eq!(dated["due"], "2026-09-08 20:00");
 }
 
 #[test]

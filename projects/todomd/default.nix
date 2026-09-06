@@ -21,6 +21,10 @@ rustPlatform.buildRustPackage {
 
   nativeBuildInputs = [installShellFiles];
 
+  preCheck = ''
+    export TZ=Etc/UTC
+  '';
+
   postInstall = ''
     installShellCompletion --cmd todomd \
       --bash <($out/bin/todomd --generate-completion bash) \

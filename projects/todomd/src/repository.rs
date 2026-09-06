@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     config::Config,
+    dates::{self, DateContext, DateValue},
     model::{Priority, Task, TaskId, TaskList, TaskState},
 };
 
@@ -135,6 +136,7 @@ pub fn load_lists(
     let discovered = discover_lists(config)?;
     let mut state = TaskState { lists: Vec::new() };
     let mut snapshot = SourceSnapshot::default();
+    let date_context = DateContext::local_now()?;
     let mut seen_task_ids = BTreeSet::new();
 
     for requested in requested_lists {
@@ -163,7 +165,7 @@ pub fn load_lists(
             let sha256 = Sha256::digest(&bytes).into();
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
-            let task = parse_task(&contents, &path)?;
+            let task = parse_task(&contents, &path, &date_context)?;
             snapshot.files.push(SourceFile {
                 list_name: requested.clone(),
                 path: path.clone(),
@@ -381,7 +383,7 @@ fn validate_acyclic(loaded: &LoadedTasks) -> Result<()> {
     Ok(())
 }
 
-fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
+fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result<Option<Task>> {
     let unfolded = unfold(contents);
     let calendar = read_calendar(&unfolded)
         .map_err(anyhow::Error::msg)
@@ -407,6 +409,8 @@ fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
         .map(|value| Priority::from_ics(&value))
         .unwrap_or_default();
     let parent = parent_property(todo, path)?.map(TaskId::new);
+    let start = temporal_property(todo, "DTSTART", path, date_context)?;
+    let due = temporal_property(todo, "DUE", path, date_context)?;
     // SUMMARY is optional in RFC 5545, so a task without one is valid but has
     // nothing to render. Every scope skips it and reports it instead.
     let Some(summary) =
@@ -418,6 +422,8 @@ fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
             completed,
             priority,
             parent,
+            start,
+            due,
         }));
     };
 
@@ -427,7 +433,54 @@ fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
         completed,
         priority,
         parent,
+        start,
+        due,
     }))
+}
+
+fn temporal_property(
+    component: &Component<'_>,
+    name: &str,
+    path: &Path,
+    date_context: &DateContext,
+) -> Result<Option<DateValue>> {
+    let properties = component
+        .properties
+        .iter()
+        .filter(|property| property.name.as_str().eq_ignore_ascii_case(name))
+        .collect::<Vec<_>>();
+    let property = match properties.as_slice() {
+        [] => return Ok(None),
+        [property] => *property,
+        _ => bail!(
+            "VTODO in {} contains more than one {name} property",
+            path.display()
+        ),
+    };
+    let parameter = |parameter_name: &str| -> Result<Option<&str>> {
+        let values = property
+            .params
+            .iter()
+            .filter(|parameter| parameter.key.as_str().eq_ignore_ascii_case(parameter_name))
+            .filter_map(|parameter| parameter.val.as_ref().map(|value| value.as_str()))
+            .collect::<Vec<_>>();
+        match values.as_slice() {
+            [] => Ok(None),
+            [value] => Ok(Some(*value)),
+            _ => bail!(
+                "VTODO in {} contains more than one {parameter_name} parameter on {name}",
+                path.display()
+            ),
+        }
+    };
+    dates::parse_ics(
+        property.val.as_str(),
+        parameter("VALUE")?,
+        parameter("TZID")?,
+        date_context,
+    )
+    .with_context(|| format!("invalid {name} in {}", path.display()))
+    .map(Some)
 }
 
 fn parent_property(component: &Component<'_>, path: &Path) -> Result<Option<String>> {
@@ -487,7 +540,17 @@ fn optional_property(component: &Component<'_>, name: &str, path: &Path) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
+
     use super::*;
+
+    fn date_context() -> DateContext {
+        DateContext::in_timezone(
+            "America/Sao_Paulo",
+            Utc.with_ymd_and_hms(2026, 9, 7, 12, 0, 0).unwrap(),
+        )
+        .unwrap()
+    }
 
     fn write_todo(
         list: &Path,
@@ -529,20 +592,24 @@ mod tests {
     fn ignores_non_todo_components() {
         let event =
             "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        assert!(parse_task(event, Path::new("event.ics")).unwrap().is_none());
+        assert!(
+            parse_task(event, Path::new("event.ics"), &date_context())
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
     fn rejects_multiple_todos() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:A\r\nEND:VTODO\r\nBEGIN:VTODO\r\nUID:b\r\nSUMMARY:B\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        assert!(parse_task(calendar, Path::new("multiple.ics")).is_err());
+        assert!(parse_task(calendar, Path::new("multiple.ics"), &date_context()).is_err());
     }
 
     #[test]
     fn parses_completed_todos_without_summaries_for_tree_projection() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:COMPLETED\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        let task = parse_task(calendar, Path::new("done.ics"))
+        let task = parse_task(calendar, Path::new("done.ics"), &date_context())
             .unwrap()
             .unwrap();
         assert!(task.completed);
@@ -557,7 +624,7 @@ mod tests {
         let blank = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nSUMMARY:   \r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
         for calendar in [missing, blank] {
-            let task = parse_task(calendar, Path::new("open.ics"))
+            let task = parse_task(calendar, Path::new("open.ics"), &date_context())
                 .unwrap()
                 .unwrap();
             assert!(task.summary.is_empty());
@@ -802,14 +869,14 @@ mod tests {
             let calendar = format!(
                 "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\n{property}\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
             );
-            let task = parse_task(&calendar, Path::new("child.ics"))
+            let task = parse_task(&calendar, Path::new("child.ics"), &date_context())
                 .unwrap()
                 .unwrap();
             assert_eq!(task.parent.as_ref().map(TaskId::as_str), Some("parent"));
         }
 
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        let task = parse_task(calendar, Path::new("child.ics"))
+        let task = parse_task(calendar, Path::new("child.ics"), &date_context())
             .unwrap()
             .unwrap();
         assert_eq!(task.parent, None);
@@ -819,9 +886,30 @@ mod tests {
     fn rejects_conflicting_parent_relationships() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO:a\r\nRELATED-TO;RELTYPE=PARENT:b\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        let error = parse_task(calendar, Path::new("child.ics")).unwrap_err();
+        let error = parse_task(calendar, Path::new("child.ics"), &date_context()).unwrap_err();
 
         assert!(error.to_string().contains("conflicting RELATED-TO parents"));
+    }
+
+    #[test]
+    fn reads_date_and_timezone_aware_datetime_properties() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:dated\r\nSUMMARY:Dated\r\nDTSTART;TZID=Europe/London:20260907T100042\r\nDUE;VALUE=DATE:20260908\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let task = parse_task(calendar, Path::new("dated.ics"), &date_context())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(task.start.unwrap().canonical(), "2026-09-07 06:00");
+        assert_eq!(task.due.unwrap().canonical(), "2026-09-08");
+    }
+
+    #[test]
+    fn rejects_duplicate_date_properties() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:dated\r\nSUMMARY:Dated\r\nDUE;VALUE=DATE:20260908\r\nDUE;VALUE=DATE:20260909\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let error = parse_task(calendar, Path::new("dated.ics"), &date_context()).unwrap_err();
+
+        assert!(error.to_string().contains("more than one DUE"));
     }
 
     #[test]
@@ -831,7 +919,7 @@ mod tests {
                 "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:{status}\r\nSUMMARY:Done\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
             );
 
-            let task = parse_task(&calendar, Path::new("done.ics"))
+            let task = parse_task(&calendar, Path::new("done.ics"), &date_context())
                 .unwrap()
                 .unwrap();
             assert!(task.completed);
@@ -843,7 +931,7 @@ mod tests {
     fn keeps_in_process_tasks_active() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:doing\r\nSTATUS:IN-PROCESS\r\nSUMMARY:Doing\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        let task = parse_task(calendar, Path::new("doing.ics"))
+        let task = parse_task(calendar, Path::new("doing.ics"), &date_context())
             .unwrap()
             .unwrap();
 

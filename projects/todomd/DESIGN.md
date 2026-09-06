@@ -18,8 +18,8 @@ later `edit --watch` can synchronize both directions without replacing it.
 Supported:
 
 - selecting whole lists by display name;
-- creating, renaming, nesting, prioritizing, completing, reopening, moving, and
-  deleting tasks;
+- creating, renaming, nesting, scheduling, prioritizing, completing, reopening,
+  moving, and deleting tasks;
 - previewing and confirming a semantic change plan;
 - preserving iCalendar data the Markdown does not expose;
 - detecting source changes made during a session;
@@ -35,8 +35,7 @@ Not supported:
 - silently merging concurrent semantic edits; or
 - general-purpose iCalendar editing.
 
-Deferred: due and start dates, watch mode, automatic crash recovery. Adding
-date fields must not disturb existing date properties.
+Deferred: watch mode and automatic crash recovery.
 
 ## Principles
 
@@ -83,7 +82,7 @@ watch driver ────┘
 
 | Component | Responsibility |
 |---|---|
-| Canonical model | Editable meaning only: list identity, task identity, parent identity, list membership, summary, completion state |
+| Canonical model | Editable meaning only: list identity, task identity, parent identity, list membership, summary, start and due values, completion state |
 | Source snapshot | Patch context: source paths, raw file hashes, parsed objects, unexposed properties |
 | ICS repository | Discovers lists, reads VTODOs, patches objects, stages and applies filesystem operations |
 | Markdown codec | Deterministic rendering and strict parsing |
@@ -123,11 +122,11 @@ command resolves that set once and reuses it, so a list appearing mid-session
 cannot become a spurious inbound change.
 
 `show` is the read surface for scripts and agents. It emits a JSON array of
-tasks, each with its list, UID, summary, completion flag, priority, rendered
-parent UID, and absolute source file, and performs no session, editor, hook, or
-terminal work. The file is
-required because vdir item filenames are chosen by whatever created them, so a
-UID cannot be mapped to a path without reading the collection.
+tasks, each with its list, UID, summary, completion flag, priority, canonical
+start and due values, rendered parent UID, and absolute source file. It performs
+no session, editor, hook, or terminal work. The file is required because vdir
+item filenames are chosen by whatever created them, so a UID cannot be mapped
+to a path without reading the collection.
 
 `show` has no write counterpart. Fields the Markdown does not expose are edited
 in the `.ics` directly, which suits both scripts and a deliberately narrow
@@ -173,17 +172,18 @@ its status unless it is explicitly reopened.
 ```markdown
 # Postgrad
 
-- [ ] !!! Write paper draft <!-- todomd:id=t1 -->
-  - [ ] Email advisor
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! Paper <!-- todomd:id=t1 -->
+  - [ ] -2026-09-11 Email advisor
 
 # Personal
 
 - [ ] ! Buy groceries <!-- todomd:id=t3 -->
 ```
 
-A task line is a checkbox, an optional priority marker, a summary, and an
-optional identity marker. `!!!`, `!!`, and `!` are high, medium, and low; an
-absent marker is no priority.
+A task line is a checkbox, optional due (`-`) and start (`+`) fields, an
+optional priority marker, a summary, and an optional identity marker. Input
+fields may appear in any order; rendering canonicalizes them to due, start,
+then priority.
 
 Within each sibling set, tasks render unfinished first, then by descending
 priority, then alphabetically by summary, with the task identity breaking ties.
@@ -210,6 +210,9 @@ alone does not normalize it to `NEEDS-ACTION`.
 | Markdown edit | Operation |
 |---|---|
 | Change task text | Rename |
+| Add or change `-DATE` | Set the due date or datetime |
+| Add or change `+DATE` | Set the start date or datetime |
+| Remove a date field | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
 | Remove the priority marker | Clear priority |
 | Change `[ ]` to `[x]` | Complete |
@@ -225,7 +228,7 @@ Task-list items use exactly two spaces per nesting level and may nest to
 arbitrary depth. A task cannot skip a level or have a parent in another list.
 Blank lines are insignificant. Additional headings, missing or renamed selected
 headings, duplicate or unknown IDs, malformed indentation or checkboxes, empty
-summaries, and unsupported Markdown are parse errors.
+summaries, duplicate fields, and unsupported Markdown are parse errors.
 
 Deleting a parent line deletes only that VTODO. Removing its nested block also
 deletes each child line; retaining and unindenting a child explicitly detaches
@@ -236,7 +239,8 @@ open.
 ### Quoting
 
 A summary is quoted only when reading it back would otherwise be ambiguous: when
-it starts with `!` or `"`, or when leading or trailing whitespace would be lost.
+it starts with `!`, `+`, `-`, or `"`, or when leading or trailing whitespace
+would be lost.
 Inside quotes a literal `"` is doubled, so the dialect needs no second escape
 character.
 
@@ -378,7 +382,7 @@ Signals that cannot be handled, notably `SIGKILL`, cannot promise cleanup.
 
 Existing files are patched, never rebuilt from Markdown fields, preserving:
 
-- due and start dates;
+- unchanged due and start representations;
 - categories;
 - descriptions;
 - alarms and recurrence;
@@ -394,6 +398,20 @@ Changing an existing task increments `SEQUENCE` and updates `DTSTAMP` and
 consistently; reopening sets `STATUS` to `NEEDS-ACTION` and removes `COMPLETED`
 and `PERCENT-COMPLETE`. Source filenames and VTODO UIDs are independent
 identities.
+
+Date-only fields render as `YYYY-MM-DD`; datetimes render as quoted local
+`"YYYY-MM-DD HH:MM"`. Parsing also accepts ISO/RFC 3339 timestamps and English
+relative expressions. Zoned and UTC source values are converted to the local
+IANA timezone, while floating values are interpreted there. Writes use
+`VALUE=DATE` or a local `TZID` datetime and do not generate `VTIMEZONE`.
+
+The canonical datetime hides seconds. A date property is written only when its
+rendered value changes, so untouched seconds, zones, floating values, and
+parameters survive unrelated edits. Changed input keeps whole seconds;
+fractional seconds are rejected because RFC 5545 cannot represent them. Mixed
+DATE and DATE-TIME pairs promote the date side to local midnight. Planning
+rejects due before start but permits equality and preserves an untouched invalid
+source pair.
 
 `RELATED-TO` without `RELTYPE`, and `RELATED-TO;RELTYPE=PARENT`, both name a
 parent. Other relationship types are preserved but do not affect indentation.

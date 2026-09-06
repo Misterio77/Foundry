@@ -271,6 +271,8 @@ mod tests {
                     completed: false,
                     priority: Priority::None,
                     parent: None,
+                    start: None,
+                    due: None,
                 }],
             }],
         };

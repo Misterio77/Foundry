@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::dates::DateValue;
+
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct TaskId(String);
 
@@ -86,6 +88,10 @@ pub struct Task {
     /// are normalized to `None` and preserved unless indentation changes.
     #[serde(default)]
     pub parent: Option<TaskId>,
+    #[serde(default)]
+    pub start: Option<DateValue>,
+    #[serde(default)]
+    pub due: Option<DateValue>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -114,6 +120,8 @@ pub struct EditedTask {
     pub completed: bool,
     pub priority: Priority,
     pub parent: Option<TaskReference>,
+    pub start: Option<DateValue>,
+    pub due: Option<DateValue>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

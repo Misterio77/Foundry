@@ -13,7 +13,7 @@ fn renders_requested_lists_in_order() {
     assert_eq!(
         rendered.markdown,
         "# Postgrad\n\n\
-- [ ] Write paper draft <!-- todomd:id=t1 -->\n\
+- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\
 \n\
 # Personal\n\n\
 - [ ] Buy milk, bread <!-- todomd:id=t2 -->\n"

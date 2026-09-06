@@ -14,8 +14,8 @@ $ todomd show             # print active-root task trees as JSON
 $ todomd show --completed # include every task
 ```
 
-Creating, renaming, nesting, prioritizing, completing, reopening, moving, and
-deleting tasks is supported. Due dates, categories, and descriptions are
+Creating, renaming, nesting, scheduling, prioritizing, completing, reopening,
+moving, and deleting tasks is supported. Categories and descriptions are
 preserved but not editable. Watch mode is not implemented. See
 [DESIGN.md](DESIGN.md) and [ROADMAP.md](ROADMAP.md).
 
@@ -84,8 +84,8 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] !!! Write paper draft <!-- todomd:id=t1 -->
-  - [ ] ! Read related work <!-- todomd:id=t3 -->
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! Paper <!-- todomd:id=t1 -->
+  - [ ] -2026-09-11 ! Read related work <!-- todomd:id=t3 -->
 
 # Personal
 
@@ -95,8 +95,11 @@ back to `$EDITOR`:
 | Edit | Result |
 |---|---|
 | Change task text | Rename |
+| Add or change `-DATE` | Set the due date or time |
+| Add or change `+DATE` | Set the start date or time |
+| Remove a date marker | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
-| Remove the marker | Clear priority |
+| Remove the priority marker | Clear priority |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
 | Add a `- [ ]` line without an identity | Create in that list |
@@ -117,8 +120,29 @@ another parent. Moving a nested block moves every line in it. Empty and
 dangling source relationships render as roots and remain untouched; cyclic
 relationships abort the read because they cannot form a tree.
 
-An optional priority marker sits between the checkbox and the summary: `!!!`
-high, `!!` medium, `!` low, absent for none.
+Leading fields may be entered in any order. Rerendering puts due, start, then
+priority before the summary. `-` means due, `+` means start, and `!!!`, `!!`, or
+`!` means high, medium, or low priority.
+
+Date-only values render as `YYYY-MM-DD`. Datetimes render in local time as
+`"YYYY-MM-DD HH:MM"`. Input additionally accepts RFC 3339 or ISO timestamps,
+with or without an offset, and English expressions such as `friday`, `tomorrow
+morning`, and `tonight`. Multiword values must be quoted. Relative expressions
+are resolved when the edited document is read; a plain weekday includes today.
+Part-of-day defaults are morning 09:00, noon 12:00, afternoon 15:00, evening
+18:00, tonight 20:00, and midnight 00:00.
+
+Datetime input is resolved to an instant and written with the machine's local
+IANA `TZID`; floating source values are treated as local. Existing UTC or `TZID`
+values are converted to local time for Markdown. A date paired with a datetime
+is promoted to local midnight. A due value earlier than its start is rejected;
+equality is allowed.
+
+Canonical Markdown hides seconds, but unchanged markers do not rewrite source
+seconds or timezone representation. Explicit seconds on changed input are
+written to ICS. Fractional seconds are rejected because RFC 5545 DATE-TIME
+cannot represent them. Existing `VTIMEZONE` components are preserved, but new
+ones are not generated.
 
 Each sibling set renders unfinished first, then by priority, then
 alphabetically. Parents precede their recursively sorted descendants. Ordering
@@ -134,8 +158,8 @@ ordinary text is never quoted:
 | `!urgent thing` | `- [ ] "!urgent thing"` |
 | `"quoted" start` | `- [ ] """quoted"" start"` |
 
-Quote a summary yourself if you start it with `!` or `"`, or if it needs leading
-or trailing spaces. Inside quotes, write `""` for a literal `"`.
+Quote a summary yourself if you start it with `!`, `+`, `-`, or `"`, or if it
+needs leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
 The dialect is strict. It allows selected level-one headings and `- [ ]` or
 `- [x]` items indented by exactly two spaces per nesting level. Nesting may be
@@ -189,6 +213,8 @@ $ todomd show Personal
     "summary": "Buy milk, bread",
     "completed": false,
     "priority": "medium",
+    "start": "2026-09-07 09:00",
+    "due": "2026-09-12",
     "parent_uid": null,
     "file": "/home/gabriel/Calendars/personal/Personal/groceries.ics"
   }
@@ -198,8 +224,8 @@ $ todomd show Personal
 Tasks are ordered by list and tree. Each sibling set is ordered unfinished
 before finished, then by priority and summary. `completed` may be `true` in the
 default scope for a subtask below active ancestors. `priority` is `none`, `low`,
-`medium`, or `high`; `parent_uid` is the parent VTODO UID or `null` for a
-rendered root.
+`medium`, or `high`. `start` and `due` use canonical local strings or `null`;
+`parent_uid` is the parent VTODO UID or `null` for a rendered root.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.
@@ -217,9 +243,9 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
   verified, and each staged operation is rechecked immediately before it runs.
 - Originals are backed up, writes use temporary files and atomic rename, and a
   mid-apply failure triggers a hash-guarded best-effort rollback.
-- Patches preserve unexposed data, including `DUE`, `CATEGORIES`,
-  `DESCRIPTION`, unrelated `RELATED-TO` representations, `X-` properties, and
-  nested components such as `VALARM`.
+- Patches preserve unexposed data, including `CATEGORIES`, `DESCRIPTION`,
+  unrelated `RELATED-TO` representations, `X-` properties, and nested
+  components such as `VALARM`. Unchanged date properties keep their raw form.
 - `PRIORITY` is written only when the marker's level changes, so a stored value
   like `4` survives edits that leave the level alone.
 
@@ -252,8 +278,8 @@ parsing, conflict, staging, application, and post-apply failures.
 
 - Active tasks only, unless `--completed` is given.
 - Tasks without a summary are never rendered, only reported.
-- Summaries, hierarchy, priority, completion, and list membership are the only
-  editable fields.
+- Summaries, hierarchy, start and due dates, priority, completion, and list
+  membership are the only editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
 - No CalDAV, no watch mode, no automatic crash recovery.
