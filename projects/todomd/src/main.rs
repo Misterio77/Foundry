@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 use todomd::{config::Config, edit, repository::Scope, show};
 
 #[derive(Debug, Parser)]
@@ -10,6 +11,10 @@ struct Cli {
     /// Use a specific configuration file.
     #[arg(long, global = true)]
     config: Option<PathBuf>,
+
+    /// Generate a shell completion script.
+    #[arg(long, value_enum, hide = true)]
+    generate_completion: Option<Shell>,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -67,6 +72,10 @@ fn scope(completed: bool) -> Scope {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Some(shell) = cli.generate_completion {
+        generate(shell, &mut Cli::command(), "todomd", &mut std::io::stdout());
+        return Ok(());
+    }
     let config = Config::load(cli.config.as_deref())?;
 
     match cli.command {

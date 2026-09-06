@@ -42,11 +42,6 @@ Likely shape: a configured list of sort keys, overridable per list. Whatever the
 keys, rendering the same state must stay deterministic, since the accepted-state
 refresh and any future watch mode compare rendered documents.
 
-## Shell completions
-
-`todo <TAB>` completed while todoman was installed; the replacement dropped it.
-Generate completions with `clap_complete` during the Nix build, fish at minimum.
-
 ## Watch mode
 
 `edit --watch` applies valid Markdown saves automatically and rerenders when the

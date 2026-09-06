@@ -1,4 +1,5 @@
 {
+  installShellFiles,
   lib,
   rustPlatform,
 }:
@@ -17,6 +18,15 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ./Cargo.lock;
+
+  nativeBuildInputs = [installShellFiles];
+
+  postInstall = ''
+    installShellCompletion --cmd todomd \
+      --bash <($out/bin/todomd --generate-completion bash) \
+      --fish <($out/bin/todomd --generate-completion fish) \
+      --zsh <($out/bin/todomd --generate-completion zsh)
+  '';
 
   meta = {
     description = "Edit vdir-backed VTODO lists as Markdown";

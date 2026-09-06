@@ -99,6 +99,25 @@ impl Case {
 }
 
 #[test]
+fn generates_completions_without_loading_configuration() {
+    let output = Command::new(env!("CARGO_BIN_EXE_todomd"))
+        .args([
+            "--config",
+            "/definitely/missing",
+            "--generate-completion",
+            "fish",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    let completion = String::from_utf8(output.stdout).unwrap();
+    assert!(completion.contains("complete -c todomd"));
+    assert!(completion.contains("-a \"edit\""));
+    assert!(completion.contains("-l completed"));
+}
+
+#[test]
 fn no_change_runs_session_hooks_without_after_apply() {
     let case = Case::new(0);
     let output = case.edit_command("true").output().unwrap();

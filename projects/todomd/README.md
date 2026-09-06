@@ -26,6 +26,8 @@ $ nix run github:Misterio77/Foundry#todomd -- edit Postgrad
 $ nix run .#todomd -- edit Postgrad
 ```
 
+The Nix package installs Bash, Fish, and Zsh completions.
+
 ## Configure
 
 `todomd` reads `$XDG_CONFIG_HOME/todomd/config.toml`, falling back to
