@@ -34,6 +34,7 @@ pub enum Operation {
         draft_id: usize,
         list: String,
         summary: String,
+        priority: Priority,
     },
     Move {
         id: TaskId,
@@ -174,6 +175,7 @@ fn build_plan(
             draft_id: *draft_id,
             list: task.list.clone(),
             summary: task.summary.clone(),
+            priority: task.priority,
         });
     }
 
@@ -325,9 +327,14 @@ impl fmt::Display for ChangePlan {
                             to.label()
                         )?;
                     }
-                    Operation::Create { summary, .. } => {
-                        writeln!(formatter, "  created   {summary}")?;
-                    }
+                    Operation::Create {
+                        summary, priority, ..
+                    } => match priority {
+                        Priority::None => writeln!(formatter, "  created   {summary}")?,
+                        priority => {
+                            writeln!(formatter, "  created   {summary} ({})", priority.label())?;
+                        }
+                    },
                     Operation::Move { summary, from, .. } => {
                         writeln!(formatter, "  moved     {summary} <- {from}")?;
                     }
@@ -370,6 +377,41 @@ mod tests {
             completed,
             priority: Priority::None,
         }
+    }
+
+    #[test]
+    fn a_new_task_carries_its_priority_marker() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    priority: Priority::High,
+                    ..edited(None, "Foo", false)
+                }],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert_eq!(
+            plan.operations,
+            vec![Operation::Create {
+                draft_id: 1,
+                list: "Postgrad".into(),
+                summary: "Foo".into(),
+                priority: Priority::High,
+            }]
+        );
+        assert!(format!("{plan}").contains("created   Foo (!!!)"));
     }
 
     #[test]

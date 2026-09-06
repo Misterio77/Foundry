@@ -254,6 +254,56 @@ fn a_list_name_is_not_mistaken_for_a_subcommand() {
 }
 
 #[test]
+fn a_created_task_keeps_the_priority_it_was_written_with() {
+    let case = Case::new(0);
+    let editor = case.root.path().join("prio-editor");
+    write_executable(
+        &editor,
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] !!! Foo\n- [ ] Plain\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+    );
+
+    let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
+    let text = output_text(&output);
+
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("created   Foo (!!!)"), "{text}");
+    assert!(text.contains("created   Plain"), "{text}");
+    assert!(!text.contains("created   Plain ("), "{text}");
+
+    let created = fs::read_dir(case.calendars.join("Postgrad"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "ics"))
+        .map(|path| fs::read_to_string(path).unwrap())
+        .filter(|contents| contents.contains("SUMMARY:Foo") || contents.contains("SUMMARY:Plain"))
+        .collect::<Vec<_>>();
+    assert_eq!(created.len(), 2, "{created:?}");
+
+    let foo = created
+        .iter()
+        .find(|contents| contents.contains("SUMMARY:Foo"))
+        .unwrap();
+    assert!(foo.contains("PRIORITY:1"), "{foo}");
+
+    let plain = created
+        .iter()
+        .find(|contents| contents.contains("SUMMARY:Plain"))
+        .unwrap();
+    assert!(!plain.contains("PRIORITY"), "{plain}");
+
+    // The marker also survives the round trip back out of the vdir.
+    let shown = case.base("false").arg("show").output().unwrap();
+    let tasks: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    let foo = tasks
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["summary"] == "Foo")
+        .unwrap();
+    assert_eq!(foo["priority"], "high");
+}
+
+#[test]
 fn editor_failure_retains_the_session_and_runs_cleanup() {
     let case = Case::new(0);
     let output = case.edit_command("false").output().unwrap();

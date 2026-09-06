@@ -117,7 +117,8 @@ pub fn stage(
                 draft_id,
                 list,
                 summary,
-            } => creates.push((*draft_id, list, summary)),
+                priority,
+            } => creates.push((*draft_id, list, summary, *priority)),
         }
     }
 
@@ -195,7 +196,7 @@ pub fn stage(
     }
 
     let mut created_tasks = BTreeMap::new();
-    for (draft_id, list, summary) in creates {
+    for (draft_id, list, summary, priority) in creates {
         let task_id = TaskId::new(Uuid::new_v4().to_string());
         let destination_dir = sources
             .list_dirs
@@ -211,7 +212,7 @@ pub fn stage(
 
         let index = changes.len() + 1;
         let staged = staged_dir.join(format!("{index:04}.ics"));
-        let contents = new_todo(&task_id, summary, now);
+        let contents = new_todo(&task_id, summary, priority, now);
         let staged_sha256 = hash_bytes(contents.as_bytes());
         fs::write(&staged, contents)
             .with_context(|| format!("failed to write staged file {}", staged.display()))?;
@@ -457,16 +458,20 @@ fn optional_property<'a>(
     }
 }
 
-fn new_todo(task_id: &TaskId, summary: &str, now: DateTime<Utc>) -> String {
-    let todo = Todo::new()
+fn new_todo(task_id: &TaskId, summary: &str, priority: Priority, now: DateTime<Utc>) -> String {
+    let mut builder = Todo::new();
+    let builder = builder
         .uid(task_id.as_str())
         .summary(summary)
         .status(TodoStatus::NeedsAction)
         .created(now)
         .timestamp(now)
         .last_modified(now)
-        .sequence(0)
-        .done();
+        .sequence(0);
+    if let Some(value) = priority.to_ics() {
+        builder.add_property("PRIORITY", value);
+    }
+    let todo = builder.done();
     let mut calendar = Calendar::new();
     calendar.push(todo);
     calendar.to_string()
@@ -868,6 +873,23 @@ mod tests {
             now,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn a_new_task_is_written_with_its_priority() {
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let high = new_todo(&TaskId::new("new"), "Foo", Priority::High, now);
+        assert!(high.contains("PRIORITY:1"), "{high}");
+        assert!(high.contains("SUMMARY:Foo"), "{high}");
+
+        let low = new_todo(&TaskId::new("new"), "Foo", Priority::Low, now);
+        assert!(low.contains("PRIORITY:9"), "{low}");
+
+        let none = new_todo(&TaskId::new("new"), "Foo", Priority::None, now);
+        assert!(!none.contains("PRIORITY"), "{none}");
     }
 
     #[test]
