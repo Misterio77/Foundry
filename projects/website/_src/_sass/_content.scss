@@ -39,6 +39,37 @@ main > article > header :is(p, .inline-list) {
   }
 }
 
+// Style details as a link
+details.link-details {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: inline;
+
+  summary {
+    display: inline;
+    width: fit-content;
+    list-style: none;
+    color: var(--links);
+    text-decoration-line: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
+    text-decoration-thickness: var(--rule-width);
+    text-underline-offset: 0.14em;
+    transition: color var(--duration-normal) var(--ease-linear), text-decoration-color var(--duration-normal) var(--ease-linear), text-decoration-thickness var(--duration-normal) var(--ease-linear), text-underline-offset var(--duration-normal) var(--ease-out);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--primary);
+      text-decoration-color: var(--primary);
+      text-decoration-thickness: 2px;
+      text-underline-offset: 0.2em;
+    }
+  }
+  &[open] {
+    display: contents;
+  }
+}
+
 main > article > section > p {
   margin-bottom: 1.15rem;
 }

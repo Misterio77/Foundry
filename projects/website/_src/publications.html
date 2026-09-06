@@ -25,8 +25,14 @@ listing: true
     <footer>
       <ul class="inline-list">
         <li><a href="{{ pub.url }}">Web edition</a></li>
-        <li><a class="file" href="{{ pub.citation.pdf_url }}">PDF</a></li>
-        <li><a class="doi" href="https://doi.org/{{ pub.citation.doi }}">{{ pub.citation.doi }}</a></li>
+        <li><a href="{{ pub.citation.pdf_url }}">PDF</a></li>
+        <li><a href="https://doi.org/{{ pub.citation.doi }}">{{ pub.citation.doi }}</a></li>
+        <li>
+          <details class="link-details">
+            <summary>Cite</summary>
+            {% highlight bibtex %}{% include bibtex.liquid publication=pub %}{% endhighlight %}
+          </details>
+        </li>
       </ul>
     </footer>
   </article>

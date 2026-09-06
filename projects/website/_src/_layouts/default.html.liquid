@@ -25,6 +25,12 @@ layout: root.html
           {% if page.citation.doi %}
             <li><a href="https://doi.org/{{ page.citation.doi }}">{{ page.citation.doi }}</a></li>
           {% endif %}
+          <li>
+            <details class="link-details">
+              <summary>Cite</summary>
+              {% highlight bibtex %}{% include bibtex.liquid publication=page %}{% endhighlight %}
+            </details>
+          </li>
         </ul>
         {% if page.citation.author %}
           <ul class="inline-list">

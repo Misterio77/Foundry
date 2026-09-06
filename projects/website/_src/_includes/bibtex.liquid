@@ -1,0 +1,33 @@
+{%- assign pub = include.publication -%}
+{%- assign c = pub.citation -%}
+{%- assign ob = "{" -%}
+{%- assign cb = "}" -%}
+{%- assign key = c.bibtex_key | default: pub.slug -%}
+{%- assign booktitle = c.inbook_title | default: c.conference_title -%}
+{%- assign title = c.title | default: pub.title -%}
+
+@inproceedings{{ ob }}{{ key }},
+  author    = {{ ob }}{{ c.author | join: " and " }}{{ cb }},
+  title     = {{ ob }}{{ ob }}{{ title }}{{ cb }}{{ cb }},
+  booktitle = {{ ob }}{{ booktitle }}{{ cb }},
+{%- if c.conference_title_short %}
+  series    = {{ ob }}{{ c.conference_title_short }}{{ cb }},
+{%- endif %}
+  year      = {{ ob }}{{ pub.date | date: "%Y" }}{{ cb }},
+  month     = {{ pub.date | date: "%b" | downcase }},
+{%- if c.firstpage and c.lastpage %}
+  pages     = {{ ob }}{{ c.firstpage }}--{{ c.lastpage }}{{ cb }},
+{%- endif %}
+{%- if c.publisher %}
+  publisher = {{ ob }}{{ c.publisher }}{{ cb }},
+{%- endif %}
+{%- if c.isbn %}
+  isbn      = {{ ob }}{{ c.isbn }}{{ cb }},
+{%- endif %}
+{%- if c.doi %}
+  doi       = {{ ob }}{{ c.doi }}{{ cb }},
+  url       = {{ ob }}https://doi.org/{{ c.doi }}{{ cb }},
+{%- else %}
+  url       = {{ ob }}{{ site.url }}{{ pub.url }}{{ cb }},
+{%- endif %}
+{{ cb }}
