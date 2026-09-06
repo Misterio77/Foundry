@@ -18,8 +18,8 @@ later `edit --watch` can synchronize both directions without replacing it.
 Supported:
 
 - selecting whole lists by display name;
-- creating, renaming, prioritizing, completing, reopening, moving, and deleting
-  tasks;
+- creating, renaming, nesting, prioritizing, completing, reopening, moving, and
+  deleting tasks;
 - previewing and confirming a semantic change plan;
 - preserving iCalendar data the Markdown does not expose;
 - detecting source changes made during a session;
@@ -30,7 +30,7 @@ Supported:
 Not supported:
 
 - CalDAV, or controlling synchronization software directly;
-- editing categories, descriptions, recurrence, alarms, or task relationships;
+- editing categories, descriptions, recurrence, or alarms;
 - persistent task ordering;
 - silently merging concurrent semantic edits; or
 - general-purpose iCalendar editing.
@@ -83,7 +83,7 @@ watch driver ────┘
 
 | Component | Responsibility |
 |---|---|
-| Canonical model | Editable meaning only: list identity, task identity, list membership, summary, completion state |
+| Canonical model | Editable meaning only: list identity, task identity, parent identity, list membership, summary, completion state |
 | Source snapshot | Patch context: source paths, raw file hashes, parsed objects, unexposed properties |
 | ICS repository | Discovers lists, reads VTODOs, patches objects, stages and applies filesystem operations |
 | Markdown codec | Deterministic rendering and strict parsing |
@@ -123,8 +123,9 @@ command resolves that set once and reuses it, so a list appearing mid-session
 cannot become a spurious inbound change.
 
 `show` is the read surface for scripts and agents. It emits a JSON array of
-tasks, each with its list, UID, summary, completion flag, and absolute source
-file, and performs no session, editor, hook, or terminal work. The file is
+tasks, each with its list, UID, summary, completion flag, priority, rendered
+parent UID, and absolute source file, and performs no session, editor, hook, or
+terminal work. The file is
 required because vdir item filenames are chosen by whatever created them, so a
 UID cannot be mapped to a path without reading the collection.
 
@@ -150,16 +151,18 @@ are preserved.
 
 A command operates either on active tasks or, with `--completed`, on every task.
 Completed and cancelled tasks are one set: both are finished states the default
-scope hides, and both render as `[x]`.
+scope hides, and both render as `[x]`. Hiding a finished task also hides its
+full descendant subtree, so an active child never appears without its parent.
 
 The scope is resolved once and reused for the initial read, the reread after the
 editor exits, and the accepted-state refresh. Reading a different set at any of
 those points would turn tasks outside the scope into phantom deletions.
 
 `SUMMARY` is optional in RFC 5545, so a task without one is valid but has no
-Markdown representation. Such tasks are excluded from every scope, regardless of
-completion, and reported on stderr rather than failing the command or vanishing
-silently. They stay editable through their `.ics` file.
+Markdown representation. Such a task and its descendant subtree are excluded
+from every scope, regardless of completion, and the task is reported on stderr
+rather than failing the command or vanishing silently. They stay editable
+through their `.ics` files.
 
 Status is never rewritten unless the checkbox changes, so a cancelled task keeps
 its status unless it is explicitly reopened.
@@ -170,7 +173,7 @@ its status unless it is explicitly reopened.
 # Postgrad
 
 - [ ] !!! Write paper draft <!-- todomd:id=t1 -->
-- [ ] Email advisor
+  - [ ] Email advisor
 
 # Personal
 
@@ -181,14 +184,16 @@ A task line is a checkbox, an optional priority marker, a summary, and an
 optional identity marker. `!!!`, `!!`, and `!` are high, medium, and low; an
 absent marker is no priority.
 
-Tasks render unfinished first, then by descending priority, then alphabetically
-by summary, with the task identity breaking ties so the same state always
-renders identically. Sorting finished tasks last keeps the wider scope usable
-when a list holds one open task among hundreds.
+Within each sibling set, tasks render unfinished first, then by descending
+priority, then alphabetically by summary, with the task identity breaking ties.
+A parent precedes its recursively sorted descendants, so the same state always
+renders identically. Sorting finished siblings last keeps the wider scope
+usable when a list holds one open task among hundreds.
 
-Ordering carries no meaning: it is presentational, and reordering lines is not a
-change. Because Markdown flattens nine iCalendar priorities into three levels,
-tasks stored as `PRIORITY:1` and `PRIORITY:4` interleave alphabetically.
+Sibling ordering carries no meaning: it is presentational, and reordering lines
+is not a change. Indentation alone carries hierarchy. Because Markdown flattens
+nine iCalendar priorities into three levels, sibling tasks stored as
+`PRIORITY:1` and `PRIORITY:4` interleave alphabetically.
 
 Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
@@ -208,14 +213,23 @@ unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen |
 | Add an item without an ID | Create in the containing list |
-| Move an identified item under another heading | Move to that list |
-| Remove an identified item | Delete |
-| Reorder items | No change |
+| Indent an item | Set its parent to the preceding item one level up |
+| Unindent or reindent an item | Detach or reparent it |
+| Move an item or nested block under another heading | Move those tasks to that list |
+| Remove an identified item | Delete that VTODO only |
+| Reorder siblings | No change |
 
-Only top-level task-list items are editable. Blank lines are insignificant.
-Additional headings, missing or renamed selected headings, duplicate or unknown
-IDs, malformed checkboxes, empty summaries, and unsupported Markdown are parse
-errors.
+Task-list items use exactly two spaces per nesting level and may nest to
+arbitrary depth. A task cannot skip a level or have a parent in another list.
+Blank lines are insignificant. Additional headings, missing or renamed selected
+headings, duplicate or unknown IDs, malformed indentation or checkboxes, empty
+summaries, and unsupported Markdown are parse errors.
+
+Deleting a parent line deletes only that VTODO. Removing its nested block also
+deletes each child line; retaining and unindenting a child explicitly detaches
+it. Moving a nested block moves every represented task. Completion is
+independent of hierarchy, so a parent may be completed while children remain
+open.
 
 ### Quoting
 
@@ -232,9 +246,12 @@ a reserved character is a parse error rather than a guess.
 This generalizes: fields added later can reserve leading syntax without
 inventing their own escape.
 
-A new task receives a VTODO UID and session ID during planning. After a
-successful apply, `tasks.md` is rerendered atomically with that session ID, so a
-later transaction cannot mistake the task for another creation.
+New tasks receive draft identities in document order during parsing. Parent
+references may name either an existing task or an earlier draft at the preceding
+indentation level. Planning allocates every new VTODO UID before staging any
+file, so arbitrarily nested new trees can be written in any plan order. After a
+successful apply, `tasks.md` is rerendered atomically with session IDs, so a
+later transaction cannot mistake a task for another creation.
 
 ## Reconciliation
 
@@ -363,7 +380,7 @@ Existing files are patched, never rebuilt from Markdown fields, preserving:
 - categories;
 - descriptions;
 - alarms and recurrence;
-- `RELATED-TO` relationships;
+- unchanged `RELATED-TO` representations;
 - time zone components; and
 - vendor-specific properties.
 
@@ -375,6 +392,13 @@ Changing an existing task increments `SEQUENCE` and updates `DTSTAMP` and
 consistently; reopening sets `STATUS` to `NEEDS-ACTION` and removes `COMPLETED`
 and `PERCENT-COMPLETE`. Source filenames and VTODO UIDs are independent
 identities.
+
+`RELATED-TO` without `RELTYPE`, and `RELATED-TO;RELTYPE=PARENT`, both name a
+parent. Other relationship types are preserved but do not affect indentation.
+Empty and dangling values render as roots and stay untouched unless the item is
+reindented. Identical duplicate parent properties are accepted and
+preserved through unrelated edits; conflicting values and relationship cycles
+abort the read. An explicit relationship change updates or removes the property.
 
 `PRIORITY` is 1-9 in iCalendar but three levels in Markdown: 1-4 read as `!!!`,
 5 as `!!`, 6-9 as `!`, and anything absent or out of range as no marker. A value

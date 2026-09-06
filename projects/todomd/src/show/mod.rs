@@ -20,6 +20,7 @@ pub struct ShownTask {
     pub summary: String,
     pub completed: bool,
     pub priority: Priority,
+    pub parent_uid: Option<String>,
     pub file: PathBuf,
 }
 
@@ -53,6 +54,10 @@ pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<Sh
                 summary: task.summary.clone(),
                 completed: task.completed,
                 priority: task.priority,
+                parent_uid: task
+                    .parent
+                    .as_ref()
+                    .map(|parent| parent.as_str().to_owned()),
                 file: file.clone(),
             });
         }

@@ -304,6 +304,114 @@ fn a_created_task_keeps_the_priority_it_was_written_with() {
 }
 
 #[test]
+fn nested_created_tasks_keep_their_generated_relationships() {
+    let case = Case::new(0);
+    let editor = case.root.path().join("subtask-editor");
+    write_executable(
+        &editor,
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+    );
+
+    let mut command = case.edit_command(editor.to_str().unwrap());
+    command.arg("--keep");
+    let output = run_in_pty(&mut command, b"y\n");
+    let text = output_text(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("created   Child under Parent"), "{text}");
+    assert!(text.contains("created   Grandchild under Child"), "{text}");
+    let retained = retained_session(&text);
+    let refreshed = fs::read_to_string(retained.join("tasks.md")).unwrap();
+    assert!(
+        refreshed
+            .lines()
+            .any(|line| line.starts_with("  - [ ] Child <!-- todomd:id=")),
+        "{refreshed}"
+    );
+    assert!(
+        refreshed
+            .lines()
+            .any(|line| line.starts_with("    - [ ] Grandchild <!-- todomd:id=")),
+        "{refreshed}"
+    );
+
+    let created = fs::read_dir(case.calendars.join("Postgrad"))
+        .unwrap()
+        .map(|entry| fs::read_to_string(entry.unwrap().path()).unwrap())
+        .filter(|contents| {
+            contents.contains("SUMMARY:Parent")
+                || contents.contains("SUMMARY:Child")
+                || contents.contains("SUMMARY:Grandchild")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(created.len(), 3, "{created:?}");
+    let uid = |summary: &str| {
+        created
+            .iter()
+            .find(|contents| contents.contains(&format!("SUMMARY:{summary}")))
+            .unwrap()
+            .lines()
+            .find_map(|line| line.strip_prefix("UID:"))
+            .unwrap()
+            .trim_end_matches('\r')
+            .to_owned()
+    };
+    let parent_uid = uid("Parent");
+    let child_uid = uid("Child");
+    let child = created
+        .iter()
+        .find(|contents| contents.contains("SUMMARY:Child"))
+        .unwrap();
+    let grandchild = created
+        .iter()
+        .find(|contents| contents.contains("SUMMARY:Grandchild"))
+        .unwrap();
+    assert!(
+        child.contains(&format!("RELATED-TO:{parent_uid}")),
+        "{child}"
+    );
+    assert!(
+        grandchild.contains(&format!("RELATED-TO:{child_uid}")),
+        "{grandchild}"
+    );
+
+    let shown = case.base("false").arg("show").output().unwrap();
+    let tasks: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    let grandchild = tasks
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["summary"] == "Grandchild")
+        .unwrap();
+    assert_eq!(grandchild["parent_uid"], child_uid);
+}
+
+#[test]
+fn moving_a_task_under_a_parent_moves_and_reparents_it() {
+    let case = Case::new(0);
+    let editor = case.root.path().join("reparent-editor");
+    write_executable(
+        &editor,
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] Write paper draft <!-- todomd:id=t1 -->\n  - [ ] Buy milk, bread <!-- todomd:id=t2 -->\n\n# Personal\n\nEOF\n",
+    );
+
+    let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
+    let text = output_text(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("nested    Buy milk, bread under Write paper draft"),
+        "{text}"
+    );
+    assert!(
+        text.contains("moved     Buy milk, bread <- Personal"),
+        "{text}"
+    );
+
+    assert!(!case.calendars.join("Personal/groceries.ics").exists());
+    let child = fs::read_to_string(case.calendars.join("Postgrad/groceries.ics")).unwrap();
+    assert!(child.contains("RELATED-TO:write@example.test"), "{child}");
+}
+
+#[test]
 fn editor_failure_retains_the_session_and_runs_cleanup() {
     let case = Case::new(0);
     let output = case.edit_command("false").output().unwrap();

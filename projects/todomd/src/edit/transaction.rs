@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use super::planner::{ChangePlan, Operation};
 use crate::{
-    model::{Priority, TaskId},
+    model::{Priority, TaskId, TaskReference},
     repository::{SourceSnapshot, verify_snapshot},
 };
 
@@ -56,6 +56,7 @@ struct ExistingEdit {
     summary: Option<String>,
     completion: CompletionChange,
     priority: Option<Priority>,
+    parent: Option<Option<TaskReference>>,
     move_to: Option<String>,
     delete: bool,
 }
@@ -107,6 +108,9 @@ pub fn stage(
             Operation::Reprioritize { id, to, .. } => {
                 existing.entry(id.clone()).or_default().priority = Some(*to);
             }
+            Operation::Reparent { id, to, .. } => {
+                existing.entry(id.clone()).or_default().parent = Some(to.clone());
+            }
             Operation::Move { id, to, .. } => {
                 existing.entry(id.clone()).or_default().move_to = Some(to.clone());
             }
@@ -118,9 +122,24 @@ pub fn stage(
                 list,
                 summary,
                 priority,
-            } => creates.push((*draft_id, list, summary, *priority)),
+                parent,
+                ..
+            } => creates.push((
+                *draft_id,
+                list.clone(),
+                summary.clone(),
+                *priority,
+                parent.clone(),
+            )),
         }
     }
+
+    // Allocate every UID first: an existing or new child may name a new parent
+    // whose create operation sorts later in the plan.
+    let created_tasks = creates
+        .iter()
+        .map(|(draft_id, ..)| (*draft_id, TaskId::new(Uuid::new_v4().to_string())))
+        .collect::<BTreeMap<_, _>>();
 
     let mut changes = Vec::new();
     for (task_id, edit) in existing {
@@ -163,13 +182,25 @@ pub fn stage(
         let contents = if edit.summary.is_some()
             || edit.completion != CompletionChange::Unchanged
             || edit.priority.is_some()
+            || edit.parent.is_some()
         {
+            let parent = edit
+                .parent
+                .as_ref()
+                .map(|parent| {
+                    parent
+                        .as_ref()
+                        .map(|reference| resolve_reference(reference, &created_tasks))
+                        .transpose()
+                })
+                .transpose()?;
             patch_existing(
                 &source.contents,
                 &task_id,
                 edit.summary.as_deref(),
                 edit.completion,
                 edit.priority,
+                parent.as_ref().map(|parent| parent.as_ref()),
                 now,
             )?
         } else {
@@ -195,12 +226,15 @@ pub fn stage(
         });
     }
 
-    let mut created_tasks = BTreeMap::new();
-    for (draft_id, list, summary, priority) in creates {
-        let task_id = TaskId::new(Uuid::new_v4().to_string());
+    for (draft_id, list, summary, priority, parent) in creates {
+        let task_id = &created_tasks[&draft_id];
+        let parent = parent
+            .as_ref()
+            .map(|reference| resolve_reference(reference, &created_tasks))
+            .transpose()?;
         let destination_dir = sources
             .list_dirs
-            .get(list)
+            .get(&list)
             .with_context(|| format!("unknown destination list {list:?}"))?;
         let destination = destination_dir.join(format!("{}.ics", task_id.as_str()));
         if destination.exists() {
@@ -212,7 +246,7 @@ pub fn stage(
 
         let index = changes.len() + 1;
         let staged = staged_dir.join(format!("{index:04}.ics"));
-        let contents = new_todo(&task_id, summary, priority, now);
+        let contents = new_todo(task_id, &summary, priority, parent.as_ref(), now);
         let staged_sha256 = hash_bytes(contents.as_bytes());
         fs::write(&staged, contents)
             .with_context(|| format!("failed to write staged file {}", staged.display()))?;
@@ -225,7 +259,6 @@ pub fn stage(
             staged_sha256: Some(staged_sha256),
             backup: None,
         });
-        created_tasks.insert(draft_id, task_id);
     }
 
     let transaction = StagedTransaction {
@@ -346,9 +379,24 @@ fn patch_existing(
     summary: Option<&str>,
     completion: CompletionChange,
     priority: Option<Priority>,
+    parent: Option<Option<&TaskId>>,
     now: DateTime<Utc>,
 ) -> Result<String> {
     let unfolded = unfold(contents);
+    let original_relationships = related_to_lines(&unfolded, task_id);
+    let relationships = match parent {
+        None => original_relationships,
+        Some(parent) => {
+            let mut relationships = original_relationships
+                .into_iter()
+                .filter(|line| !is_parent_related_to_line(line))
+                .collect::<Vec<_>>();
+            if let Some(parent) = parent {
+                relationships.push(format!("RELATED-TO:{}", parent.as_str()));
+            }
+            relationships
+        }
+    };
     let mut calendar = read_calendar(&unfolded).map_err(anyhow::Error::msg)?;
     let matching = calendar
         .components
@@ -386,6 +434,12 @@ fn patch_existing(
             None => remove_property(todo, "PRIORITY"),
         }
     }
+    if let Some(parent) = parent {
+        remove_parent_properties(todo);
+        if let Some(parent) = parent {
+            set_parent_property(todo, parent.as_str());
+        }
+    }
 
     match completion {
         CompletionChange::Unchanged => {}
@@ -412,13 +466,211 @@ fn patch_existing(
     set_property(todo, "DTSTAMP", &format_timestamp(now))?;
     set_property(todo, "LAST-MODIFIED", &format_timestamp(now))?;
 
-    Ok(Calendar::from(calendar).to_string())
+    let serialized = Calendar::from(calendar).to_string();
+    Ok(restore_related_to_lines(
+        &serialized,
+        task_id,
+        &relationships,
+    ))
+}
+
+fn related_to_lines(contents: &str, task_id: &TaskId) -> Vec<String> {
+    let mut todo = Vec::new();
+    let mut depth = 0;
+    for line in contents.lines() {
+        if depth == 0 {
+            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
+                todo.push(line);
+                depth = 1;
+            }
+            continue;
+        }
+
+        todo.push(line);
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+        } else if line.starts_with("END:") {
+            depth -= 1;
+            if depth == 0 {
+                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
+                if matches {
+                    return direct_property_lines(&todo, "RELATED-TO");
+                }
+                todo.clear();
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn direct_property_value<'a>(component: &'a [&str], name: &str) -> Option<&'a str> {
+    let mut depth = 0;
+    for line in component {
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+            continue;
+        }
+        if line.starts_with("END:") {
+            depth -= 1;
+            continue;
+        }
+        if depth == 1
+            && line
+                .split([';', ':'])
+                .next()
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        {
+            return line.split_once(':').map(|(_, value)| value);
+        }
+    }
+    None
+}
+
+fn direct_property_lines(component: &[&str], name: &str) -> Vec<String> {
+    let mut depth = 0;
+    let mut properties = Vec::new();
+    for line in component {
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+            continue;
+        }
+        if line.starts_with("END:") {
+            depth -= 1;
+            continue;
+        }
+        if depth == 1
+            && line
+                .split([';', ':'])
+                .next()
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        {
+            properties.push((*line).to_owned());
+        }
+    }
+    properties
+}
+
+fn is_parent_related_to_line(line: &str) -> bool {
+    let Some(header) = line.split_once(':').map(|(header, _)| header) else {
+        return false;
+    };
+    let mut fields = header.split(';');
+    if !fields
+        .next()
+        .is_some_and(|name| name.eq_ignore_ascii_case("RELATED-TO"))
+    {
+        return false;
+    }
+    fields.all(|field| {
+        !field.eq_ignore_ascii_case("RELTYPE")
+            && !field.split_once('=').is_some_and(|(key, value)| {
+                key.eq_ignore_ascii_case("RELTYPE") && !value.eq_ignore_ascii_case("PARENT")
+            })
+    })
+}
+
+fn restore_related_to_lines(
+    serialized: &str,
+    task_id: &TaskId,
+    relationships: &[String],
+) -> String {
+    let mut output = String::with_capacity(serialized.len());
+    let mut todo = Vec::new();
+    let mut depth = 0;
+
+    for line in serialized.lines() {
+        if depth == 0 {
+            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
+                todo.push(line);
+                depth = 1;
+            } else {
+                output.push_str(line);
+                output.push_str("\r\n");
+            }
+            continue;
+        }
+
+        todo.push(line);
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+        } else if line.starts_with("END:") {
+            depth -= 1;
+            if depth == 0 {
+                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
+                write_todo_lines(&mut output, &todo, matches.then_some(relationships));
+                todo.clear();
+            }
+        }
+    }
+    output
+}
+
+fn write_todo_lines(output: &mut String, todo: &[&str], relationships: Option<&[String]>) {
+    let mut depth = 0;
+    for line in todo {
+        if line.starts_with("BEGIN:") {
+            depth += 1;
+        }
+        let is_relationship = depth == 1
+            && line
+                .split([';', ':'])
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("RELATED-TO"));
+        if relationships.is_some() && is_relationship {
+            continue;
+        }
+        if depth == 1 && line.eq_ignore_ascii_case("END:VTODO") {
+            for relationship in relationships.unwrap_or_default() {
+                output.push_str(relationship);
+                output.push_str("\r\n");
+            }
+        }
+        output.push_str(line);
+        output.push_str("\r\n");
+        if line.starts_with("END:") {
+            depth -= 1;
+        }
+    }
 }
 
 fn remove_property(component: &mut ParsedComponent<'_>, name: &str) {
     component
         .properties
         .retain(|property| !property.name.as_str().eq_ignore_ascii_case(name));
+}
+
+fn is_parent_property(property: &ParsedProperty<'_>) -> bool {
+    property.name.as_str().eq_ignore_ascii_case("RELATED-TO")
+        && property.params.iter().all(|parameter| {
+            !parameter.key.as_str().eq_ignore_ascii_case("RELTYPE")
+                || parameter
+                    .val
+                    .as_ref()
+                    .is_some_and(|value| value.as_str().eq_ignore_ascii_case("PARENT"))
+        })
+}
+
+fn remove_parent_properties(component: &mut ParsedComponent<'_>) {
+    component
+        .properties
+        .retain(|property| !is_parent_property(property));
+}
+
+fn set_parent_property(component: &mut ParsedComponent<'_>, value: &str) {
+    let mut found = false;
+    for property in &mut component.properties {
+        if is_parent_property(property) {
+            property.val = value.to_owned().into();
+            found = true;
+        }
+    }
+    if !found {
+        component.properties.push(ParsedProperty {
+            name: "RELATED-TO".to_owned().into(),
+            val: value.to_owned().into(),
+            params: Vec::new(),
+        });
+    }
 }
 
 fn set_property(component: &mut ParsedComponent<'_>, name: &str, value: &str) -> Result<()> {
@@ -458,7 +710,26 @@ fn optional_property<'a>(
     }
 }
 
-fn new_todo(task_id: &TaskId, summary: &str, priority: Priority, now: DateTime<Utc>) -> String {
+fn resolve_reference(
+    reference: &TaskReference,
+    created_tasks: &BTreeMap<usize, TaskId>,
+) -> Result<TaskId> {
+    match reference {
+        TaskReference::Existing(id) => Ok(id.clone()),
+        TaskReference::Draft(draft_id) => created_tasks
+            .get(draft_id)
+            .cloned()
+            .with_context(|| format!("no generated UID for draft task {draft_id}")),
+    }
+}
+
+fn new_todo(
+    task_id: &TaskId,
+    summary: &str,
+    priority: Priority,
+    parent: Option<&TaskId>,
+    now: DateTime<Utc>,
+) -> String {
     let mut builder = Todo::new();
     let builder = builder
         .uid(task_id.as_str())
@@ -470,6 +741,9 @@ fn new_todo(task_id: &TaskId, summary: &str, priority: Priority, now: DateTime<U
         .sequence(0);
     if let Some(value) = priority.to_ics() {
         builder.add_property("PRIORITY", value);
+    }
+    if let Some(parent) = parent {
+        builder.add_property("RELATED-TO", parent.as_str());
     }
     let todo = builder.done();
     let mut calendar = Calendar::new();
@@ -821,6 +1095,7 @@ mod tests {
             None,
             CompletionChange::Reopen,
             None,
+            None,
             now,
         )
         .unwrap();
@@ -870,6 +1145,7 @@ mod tests {
             summary,
             CompletionChange::Unchanged,
             priority,
+            None,
             now,
         )
         .unwrap()
@@ -881,15 +1157,84 @@ mod tests {
             .unwrap()
             .with_timezone(&Utc);
 
-        let high = new_todo(&TaskId::new("new"), "Foo", Priority::High, now);
+        let high = new_todo(&TaskId::new("new"), "Foo", Priority::High, None, now);
         assert!(high.contains("PRIORITY:1"), "{high}");
         assert!(high.contains("SUMMARY:Foo"), "{high}");
 
-        let low = new_todo(&TaskId::new("new"), "Foo", Priority::Low, now);
+        let low = new_todo(&TaskId::new("new"), "Foo", Priority::Low, None, now);
         assert!(low.contains("PRIORITY:9"), "{low}");
 
-        let none = new_todo(&TaskId::new("new"), "Foo", Priority::None, now);
+        let none = new_todo(&TaskId::new("new"), "Foo", Priority::None, None, now);
         assert!(!none.contains("PRIORITY"), "{none}");
+    }
+
+    #[test]
+    fn writes_relationships_for_created_and_existing_tasks() {
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let parent = TaskId::new("parent");
+        let created = new_todo(
+            &TaskId::new("child"),
+            "Child",
+            Priority::None,
+            Some(&parent),
+            now,
+        );
+        assert!(created.contains("RELATED-TO:parent"), "{created}");
+
+        let source = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nRELATED-TO:event-peer\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=PARENT:old\r\nRELATED-TO:old\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        let changed = patch_existing(
+            source,
+            &TaskId::new("child"),
+            None,
+            CompletionChange::Unchanged,
+            None,
+            Some(Some(&parent)),
+            now,
+        )
+        .unwrap();
+        assert!(changed.contains("RELATED-TO:parent"), "{changed}");
+        assert!(!changed.contains("RELATED-TO;RELTYPE=PARENT"), "{changed}");
+        assert!(
+            changed.contains("RELATED-TO;RELTYPE=SIBLING:peer"),
+            "{changed}"
+        );
+        assert!(changed.contains("RELATED-TO:event-peer"), "{changed}");
+
+        let detached = patch_existing(
+            source,
+            &TaskId::new("child"),
+            None,
+            CompletionChange::Unchanged,
+            None,
+            Some(None),
+            now,
+        )
+        .unwrap();
+        assert!(!detached.contains("RELATED-TO:old"), "{detached}");
+        assert!(!detached.contains("RELTYPE=PARENT"), "{detached}");
+        assert!(
+            detached.contains("RELATED-TO;RELTYPE=SIBLING:peer"),
+            "{detached}"
+        );
+        assert!(detached.contains("RELATED-TO:event-peer"), "{detached}");
+
+        let renamed = patch_existing(
+            source,
+            &TaskId::new("child"),
+            Some("Renamed"),
+            CompletionChange::Unchanged,
+            None,
+            None,
+            now,
+        )
+        .unwrap();
+        assert!(
+            renamed.contains("RELATED-TO;RELTYPE=PARENT:old"),
+            "{renamed}"
+        );
+        assert!(renamed.contains("RELATED-TO:old"), "{renamed}");
     }
 
     #[test]
@@ -933,6 +1278,7 @@ mod tests {
             &TaskId::new("write@example.test"),
             Some(r"Comma, semicolon; slash\value"),
             CompletionChange::Unchanged,
+            None,
             None,
             now,
         )

@@ -155,7 +155,7 @@ pub fn load_lists(
         snapshot
             .list_dirs
             .insert(requested.clone(), list_dir.clone());
-        let mut tasks = Vec::new();
+        let mut loaded = BTreeMap::new();
 
         for path in ics_files(list_dir)? {
             let bytes =
@@ -163,7 +163,7 @@ pub fn load_lists(
             let sha256 = Sha256::digest(&bytes).into();
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
-            let task = parse_task(&contents, &path, scope)?;
+            let task = parse_task(&contents, &path)?;
             snapshot.files.push(SourceFile {
                 list_name: requested.clone(),
                 path: path.clone(),
@@ -174,36 +174,17 @@ pub fn load_lists(
             let Some(task) = task else {
                 continue;
             };
-
-            if task.summary.is_empty() {
-                snapshot.unrepresentable.push(path);
-                continue;
-            }
-
             if !seen_task_ids.insert(task.id.clone()) {
                 bail!(
                     "duplicate VTODO UID {:?} in selected lists",
                     task.id.as_str()
                 );
             }
-            snapshot.task_files.insert(task.id.clone(), path);
-            tasks.push(task);
+            loaded.insert(task.id.clone(), (task, path));
         }
 
-        // Unfinished first, then highest priority, then alphabetical, with the
-        // identity breaking ties. Ordering is presentational: the planner
-        // ignores it.
-        tasks.sort_by(|left, right| {
-            left.completed
-                .cmp(&right.completed)
-                .then_with(|| right.priority.cmp(&left.priority))
-                .then_with(|| {
-                    left.summary
-                        .to_lowercase()
-                        .cmp(&right.summary.to_lowercase())
-                })
-                .then_with(|| left.id.cmp(&right.id))
-        });
+        let tasks = project_tasks(loaded, scope, &mut snapshot)
+            .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
         state.lists.push(TaskList {
             name: requested.clone(),
             tasks,
@@ -293,7 +274,107 @@ fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>> {
+type LoadedTasks = BTreeMap<TaskId, (Task, PathBuf)>;
+
+fn task_order(left: &Task, right: &Task) -> std::cmp::Ordering {
+    left.completed
+        .cmp(&right.completed)
+        .then_with(|| right.priority.cmp(&left.priority))
+        .then_with(|| {
+            left.summary
+                .to_lowercase()
+                .cmp(&right.summary.to_lowercase())
+        })
+        .then_with(|| left.id.cmp(&right.id))
+}
+
+fn project_tasks(
+    mut loaded: LoadedTasks,
+    scope: Scope,
+    snapshot: &mut SourceSnapshot,
+) -> Result<Vec<Task>> {
+    let ids = loaded.keys().cloned().collect::<BTreeSet<_>>();
+    for (task, _) in loaded.values_mut() {
+        if task
+            .parent
+            .as_ref()
+            .is_some_and(|parent| !ids.contains(parent))
+        {
+            // Empty and dangling relationships are top-level in Markdown. The
+            // raw property remains in SourceSnapshot and is not rewritten.
+            task.parent = None;
+        }
+    }
+    validate_acyclic(&loaded)?;
+
+    let mut children: BTreeMap<Option<TaskId>, Vec<TaskId>> = BTreeMap::new();
+    for task in loaded.values().map(|(task, _)| task) {
+        children
+            .entry(task.parent.clone())
+            .or_default()
+            .push(task.id.clone());
+    }
+    for siblings in children.values_mut() {
+        siblings.sort_by(|left, right| task_order(&loaded[left].0, &loaded[right].0));
+    }
+
+    fn append_subtree(
+        id: &TaskId,
+        loaded: &LoadedTasks,
+        children: &BTreeMap<Option<TaskId>, Vec<TaskId>>,
+        scope: Scope,
+        snapshot: &mut SourceSnapshot,
+        output: &mut Vec<Task>,
+    ) {
+        let (task, path) = &loaded[id];
+        let hidden_by_scope = scope == Scope::Active && task.completed;
+        if hidden_by_scope || task.summary.is_empty() {
+            if task.summary.is_empty() && !hidden_by_scope {
+                snapshot.unrepresentable.push(path.clone());
+            }
+            return;
+        }
+
+        snapshot.task_files.insert(task.id.clone(), path.clone());
+        output.push(task.clone());
+        if let Some(descendants) = children.get(&Some(task.id.clone())) {
+            for child in descendants {
+                append_subtree(child, loaded, children, scope, snapshot, output);
+            }
+        }
+    }
+
+    let mut output = Vec::new();
+    if let Some(roots) = children.get(&None) {
+        for root in roots {
+            append_subtree(root, &loaded, &children, scope, snapshot, &mut output);
+        }
+    }
+    Ok(output)
+}
+
+fn validate_acyclic(loaded: &LoadedTasks) -> Result<()> {
+    for start in loaded.keys() {
+        let mut path = Vec::new();
+        let mut positions = BTreeMap::new();
+        let mut current = Some(start);
+        while let Some(id) = current {
+            if let Some(index) = positions.insert(id, path.len()) {
+                let mut cycle = path[index..]
+                    .iter()
+                    .map(|id: &&TaskId| format!("{:?}", id.as_str()))
+                    .collect::<Vec<_>>();
+                cycle.push(format!("{:?}", id.as_str()));
+                bail!("RELATED-TO cycle: {}", cycle.join(" -> "));
+            }
+            path.push(id);
+            current = loaded[id].0.parent.as_ref();
+        }
+    }
+    Ok(())
+}
+
+fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
     let unfolded = unfold(contents);
     let calendar = read_calendar(&unfolded)
         .map_err(anyhow::Error::msg)
@@ -314,14 +395,11 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
     let completed = status.as_deref().is_some_and(|status| {
         status.eq_ignore_ascii_case("COMPLETED") || status.eq_ignore_ascii_case("CANCELLED")
     });
-    if completed && scope == Scope::Active {
-        return Ok(None);
-    }
-
     let uid = required_property(todo, "UID", path)?;
     let priority = optional_property(todo, "PRIORITY", path)?
         .map(|value| Priority::from_ics(&value))
         .unwrap_or_default();
+    let parent = parent_property(todo, path)?.map(TaskId::new);
     // SUMMARY is optional in RFC 5545, so a task without one is valid but has
     // nothing to render. Every scope skips it and reports it instead.
     let Some(summary) =
@@ -332,6 +410,7 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
             summary: String::new(),
             completed,
             priority,
+            parent,
         }));
     };
 
@@ -340,7 +419,36 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
         summary,
         completed,
         priority,
+        parent,
     }))
+}
+
+fn parent_property(component: &Component<'_>, path: &Path) -> Result<Option<String>> {
+    let values = component
+        .properties
+        .iter()
+        .filter(|property| {
+            property.name.as_str().eq_ignore_ascii_case("RELATED-TO")
+                && property.params.iter().all(|parameter| {
+                    !parameter.key.as_str().eq_ignore_ascii_case("RELTYPE")
+                        || parameter
+                            .val
+                            .as_ref()
+                            .is_some_and(|value| value.as_str().eq_ignore_ascii_case("PARENT"))
+                })
+        })
+        .map(|property| property.val.as_str().trim())
+        .filter(|value| !value.is_empty())
+        .collect::<BTreeSet<_>>();
+    match values.len() {
+        0 => Ok(None),
+        1 => Ok(values.first().map(|value| (*value).to_owned())),
+        _ => bail!(
+            "VTODO in {} names conflicting RELATED-TO parents: {}",
+            path.display(),
+            values.into_iter().collect::<Vec<_>>().join(", ")
+        ),
+    }
 }
 
 fn required_property(component: &Component<'_>, name: &str, path: &Path) -> Result<String> {
@@ -374,6 +482,26 @@ fn optional_property(component: &Component<'_>, name: &str, path: &Path) -> Resu
 mod tests {
     use super::*;
 
+    fn write_todo(
+        list: &Path,
+        uid: &str,
+        summary: Option<&str>,
+        status: Option<&str>,
+        related_to: Option<&str>,
+    ) {
+        let summary = summary.map_or(String::new(), |value| format!("SUMMARY:{value}\r\n"));
+        let status = status.map_or(String::new(), |value| format!("STATUS:{value}\r\n"));
+        let related_to =
+            related_to.map_or(String::new(), |value| format!("RELATED-TO:{value}\r\n"));
+        fs::write(
+            list.join(format!("{uid}.ics")),
+            format!(
+                "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:{uid}\r\n{summary}{status}{related_to}END:VTODO\r\nEND:VCALENDAR\r\n"
+            ),
+        )
+        .unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn rejects_symlinked_ics_files() {
@@ -394,32 +522,23 @@ mod tests {
     fn ignores_non_todo_components() {
         let event =
             "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        assert!(
-            parse_task(event, Path::new("event.ics"), Scope::Active)
-                .unwrap()
-                .is_none()
-        );
+        assert!(parse_task(event, Path::new("event.ics")).unwrap().is_none());
     }
 
     #[test]
     fn rejects_multiple_todos() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:A\r\nEND:VTODO\r\nBEGIN:VTODO\r\nUID:b\r\nSUMMARY:B\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        assert!(parse_task(calendar, Path::new("multiple.ics"), Scope::Active).is_err());
+        assert!(parse_task(calendar, Path::new("multiple.ics")).is_err());
     }
 
     #[test]
-    fn never_renders_completed_todos_without_summaries() {
+    fn parses_completed_todos_without_summaries_for_tree_projection() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:COMPLETED\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        // Out of scope entirely when active, unrenderable when included.
-        assert!(
-            parse_task(calendar, Path::new("done.ics"), Scope::Active)
-                .unwrap()
-                .is_none()
-        );
-        let task = parse_task(calendar, Path::new("done.ics"), Scope::All)
+        let task = parse_task(calendar, Path::new("done.ics"))
             .unwrap()
             .unwrap();
+        assert!(task.completed);
         assert!(task.summary.is_empty());
     }
 
@@ -430,13 +549,11 @@ mod tests {
             "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
         let blank = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nSUMMARY:   \r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        for scope in [Scope::Active, Scope::All] {
-            for calendar in [missing, blank] {
-                let task = parse_task(calendar, Path::new("open.ics"), scope)
-                    .unwrap()
-                    .unwrap();
-                assert!(task.summary.is_empty());
-            }
+        for calendar in [missing, blank] {
+            let task = parse_task(calendar, Path::new("open.ics"))
+                .unwrap()
+                .unwrap();
+            assert!(task.summary.is_empty());
         }
     }
 
@@ -498,6 +615,102 @@ mod tests {
     }
 
     #[test]
+    fn orders_each_sibling_set_beneath_its_parent() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+        write_todo(&list, "root", Some("Root"), None, None);
+        write_todo(&list, "z", Some("Zulu child"), None, Some("root"));
+        write_todo(&list, "a", Some("Alpha child"), None, Some("root"));
+        write_todo(&list, "grand", Some("Grandchild"), None, Some("a"));
+        write_todo(&list, "dangling", Some("Dangling"), None, Some("missing"));
+        write_todo(&list, "empty", Some("Empty relation"), None, Some(""));
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+
+        let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
+        let tasks = &state.lists[0].tasks;
+        let order = tasks
+            .iter()
+            .map(|task| (task.id.as_str(), task.parent.as_ref().map(TaskId::as_str)))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            order,
+            [
+                ("dangling", None),
+                ("empty", None),
+                ("root", None),
+                ("a", Some("root")),
+                ("grand", Some("a")),
+                ("z", Some("root")),
+            ]
+        );
+    }
+
+    #[test]
+    fn hidden_parents_hide_their_descendant_subtrees() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+        write_todo(&list, "done", Some("Done parent"), Some("COMPLETED"), None);
+        write_todo(
+            &list,
+            "active-child",
+            Some("Active child"),
+            None,
+            Some("done"),
+        );
+        write_todo(&list, "blank", None, None, None);
+        write_todo(
+            &list,
+            "blank-child",
+            Some("Hidden child"),
+            None,
+            Some("blank"),
+        );
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+
+        let (active, active_sources) =
+            load_lists(&config, &["Work".to_owned()], Scope::Active).unwrap();
+        assert!(active.lists[0].tasks.is_empty());
+        assert_eq!(active_sources.unrepresentable.len(), 1);
+
+        let (all, all_sources) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
+        assert_eq!(
+            all.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.id.as_str())
+                .collect::<Vec<_>>(),
+            ["done", "active-child"]
+        );
+        assert_eq!(all_sources.unrepresentable.len(), 1);
+    }
+
+    #[test]
+    fn rejects_related_to_cycles() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+        write_todo(&list, "a", Some("A"), None, Some("b"));
+        write_todo(&list, "b", Some("B"), None, Some("a"));
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+
+        let error = load_lists(&config, &["Work".to_owned()], Scope::Active).unwrap_err();
+
+        let message = format!("{error:#}");
+        assert!(message.contains("RELATED-TO cycle"), "{message}");
+        assert!(
+            message.contains("\"a\" -> \"b\" -> \"a\"")
+                || message.contains("\"b\" -> \"a\" -> \"b\""),
+            "{message}"
+        );
+    }
+
+    #[test]
     fn records_unrepresentable_tasks_instead_of_failing() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/calendars");
         let config = Config::new(vec![root]).unwrap();
@@ -545,18 +758,45 @@ mod tests {
     }
 
     #[test]
-    fn reports_completed_and_cancelled_tasks_only_in_the_wider_scope() {
+    fn reads_bare_explicit_and_duplicate_parent_relationships() {
+        for property in [
+            "RELATED-TO:parent",
+            "RELATED-TO;RELTYPE=PARENT:parent",
+            "RELATED-TO:parent\r\nRELATED-TO;RELTYPE=PARENT:parent",
+        ] {
+            let calendar = format!(
+                "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\n{property}\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
+            );
+            let task = parse_task(&calendar, Path::new("child.ics"))
+                .unwrap()
+                .unwrap();
+            assert_eq!(task.parent.as_ref().map(TaskId::as_str), Some("parent"));
+        }
+
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        let task = parse_task(calendar, Path::new("child.ics"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(task.parent, None);
+    }
+
+    #[test]
+    fn rejects_conflicting_parent_relationships() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO:a\r\nRELATED-TO;RELTYPE=PARENT:b\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let error = parse_task(calendar, Path::new("child.ics")).unwrap_err();
+
+        assert!(error.to_string().contains("conflicting RELATED-TO parents"));
+    }
+
+    #[test]
+    fn recognizes_completed_and_cancelled_tasks() {
         for status in ["COMPLETED", "CANCELLED"] {
             let calendar = format!(
                 "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:{status}\r\nSUMMARY:Done\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
             );
 
-            assert!(
-                parse_task(&calendar, Path::new("done.ics"), Scope::Active)
-                    .unwrap()
-                    .is_none()
-            );
-            let task = parse_task(&calendar, Path::new("done.ics"), Scope::All)
+            let task = parse_task(&calendar, Path::new("done.ics"))
                 .unwrap()
                 .unwrap();
             assert!(task.completed);
@@ -568,7 +808,7 @@ mod tests {
     fn keeps_in_process_tasks_active() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:doing\r\nSTATUS:IN-PROCESS\r\nSUMMARY:Doing\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
-        let task = parse_task(calendar, Path::new("doing.ics"), Scope::Active)
+        let task = parse_task(calendar, Path::new("doing.ics"))
             .unwrap()
             .unwrap();
 

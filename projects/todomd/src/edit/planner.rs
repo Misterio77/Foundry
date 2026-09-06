@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt};
 use anyhow::{Result, bail};
 use serde::Serialize;
 
-use crate::model::{EditedTaskState, Priority, TaskId, TaskState};
+use crate::model::{EditedTaskState, Priority, TaskId, TaskReference, TaskState};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -30,11 +30,22 @@ pub enum Operation {
         from: Priority,
         to: Priority,
     },
+    Reparent {
+        id: TaskId,
+        list: String,
+        summary: String,
+        from: Option<TaskReference>,
+        to: Option<TaskReference>,
+        from_summary: Option<String>,
+        to_summary: Option<String>,
+    },
     Create {
         draft_id: usize,
         list: String,
         summary: String,
         priority: Priority,
+        parent: Option<TaskReference>,
+        parent_summary: Option<String>,
     },
     Move {
         id: TaskId,
@@ -69,6 +80,7 @@ struct ComparableTask {
     summary: String,
     completed: bool,
     priority: Priority,
+    parent: Option<TaskReference>,
 }
 
 type IdentifiedTasks = BTreeMap<TaskId, ComparableTask>;
@@ -155,6 +167,17 @@ fn build_plan(
                 to: edited.priority,
             });
         }
+        if original.parent != edited.parent {
+            operations.push(Operation::Reparent {
+                id: id.clone(),
+                list: edited.list.clone(),
+                summary: edited.summary.clone(),
+                from: original.parent.clone(),
+                to: edited.parent.clone(),
+                from_summary: parent_summary(original.parent.as_ref(), baseline_tasks, new_tasks),
+                to_summary: parent_summary(edited.parent.as_ref(), markdown_tasks, new_tasks),
+            });
+        }
         match (original.completed, edited.completed) {
             (false, true) => operations.push(Operation::Complete {
                 id: id.clone(),
@@ -176,6 +199,8 @@ fn build_plan(
             list: task.list.clone(),
             summary: task.summary.clone(),
             priority: task.priority,
+            parent: task.parent.clone(),
+            parent_summary: parent_summary(task.parent.as_ref(), markdown_tasks, new_tasks),
         });
     }
 
@@ -212,6 +237,7 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
                         summary: task.summary.clone(),
                         completed: task.completed,
                         priority: task.priority,
+                        parent: task.parent.clone().map(TaskReference::Existing),
                     },
                 )
             })
@@ -231,6 +257,7 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
                 summary: task.summary.clone(),
                 completed: task.completed,
                 priority: task.priority,
+                parent: task.parent.clone(),
             };
             match &task.id {
                 Some(id) => {
@@ -249,7 +276,64 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
         }
     }
 
+    validate_edited_hierarchy(&identified, &new)?;
     Ok((identified, new))
+}
+
+fn parent_summary(
+    parent: Option<&TaskReference>,
+    identified: &IdentifiedTasks,
+    new_tasks: &DraftTasks,
+) -> Option<String> {
+    match parent? {
+        TaskReference::Existing(id) => identified.get(id).map(|task| task.summary.clone()),
+        TaskReference::Draft(draft_id) => new_tasks
+            .iter()
+            .find(|(candidate, _)| candidate == draft_id)
+            .map(|(_, task)| task.summary.clone()),
+    }
+}
+
+fn validate_edited_hierarchy(identified: &IdentifiedTasks, new_tasks: &DraftTasks) -> Result<()> {
+    let mut tasks = BTreeMap::new();
+    for (id, task) in identified {
+        tasks.insert(TaskReference::Existing(id.clone()), task);
+    }
+    for (draft_id, task) in new_tasks {
+        tasks.insert(TaskReference::Draft(*draft_id), task);
+    }
+
+    for (reference, task) in &tasks {
+        let Some(parent) = &task.parent else {
+            continue;
+        };
+        let parent_task = tasks.get(parent).ok_or_else(|| {
+            anyhow::anyhow!("task {reference:?} names a parent absent from Markdown")
+        })?;
+        if task.list != parent_task.list {
+            bail!("a task and its parent must remain in the same list");
+        }
+    }
+
+    for start in tasks.keys() {
+        let mut seen = BTreeMap::new();
+        let mut path = Vec::new();
+        let mut current = Some(start);
+        while let Some(reference) = current {
+            if let Some(index) = seen.insert(reference, path.len()) {
+                let cycle = path[index..]
+                    .iter()
+                    .chain(std::iter::once(&reference))
+                    .map(|item| format!("{item:?}"))
+                    .collect::<Vec<_>>()
+                    .join(" -> ");
+                bail!("Markdown task hierarchy contains a cycle: {cycle}");
+            }
+            path.push(reference);
+            current = tasks.get(reference).and_then(|task| task.parent.as_ref());
+        }
+    }
+    Ok(())
 }
 
 fn operation_sort_key<'a>(
@@ -261,9 +345,10 @@ fn operation_sort_key<'a>(
         Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
         Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
         Operation::Reprioritize { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 5, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
+        Operation::Reparent { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
+        Operation::Create { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
+        Operation::Move { to, summary, .. } => (to.as_str(), 6, summary.as_str()),
+        Operation::Delete { list, summary, .. } => (list.as_str(), 7, summary.as_str()),
     };
     (
         *list_positions.get(list).unwrap_or(&usize::MAX),
@@ -279,6 +364,7 @@ impl Operation {
             | Self::Complete { list, .. }
             | Self::Reopen { list, .. }
             | Self::Reprioritize { list, .. }
+            | Self::Reparent { list, .. }
             | Self::Create { list, .. }
             | Self::Delete { list, .. } => list,
             Self::Move { to, .. } => to,
@@ -327,14 +413,38 @@ impl fmt::Display for ChangePlan {
                             to.label()
                         )?;
                     }
-                    Operation::Create {
-                        summary, priority, ..
-                    } => match priority {
-                        Priority::None => writeln!(formatter, "  created   {summary}")?,
-                        priority => {
-                            writeln!(formatter, "  created   {summary} ({})", priority.label())?;
+                    Operation::Reparent {
+                        summary,
+                        from_summary,
+                        to_summary,
+                        ..
+                    } => match (from_summary, to_summary) {
+                        (None, Some(parent)) => {
+                            writeln!(formatter, "  nested    {summary} under {parent}")?;
                         }
+                        (Some(parent), None) => {
+                            writeln!(formatter, "  detached  {summary} from {parent}")?;
+                        }
+                        (Some(from), Some(to)) => {
+                            writeln!(formatter, "  reparented {summary} ({from} -> {to})")?;
+                        }
+                        (None, None) => writeln!(formatter, "  reparented {summary}")?,
                     },
+                    Operation::Create {
+                        summary,
+                        priority,
+                        parent_summary,
+                        ..
+                    } => {
+                        let priority = match priority {
+                            Priority::None => String::new(),
+                            priority => format!(" ({})", priority.label()),
+                        };
+                        let parent = parent_summary
+                            .as_ref()
+                            .map_or_else(String::new, |parent| format!(" under {parent}"));
+                        writeln!(formatter, "  created   {summary}{priority}{parent}")?;
+                    }
                     Operation::Move { summary, from, .. } => {
                         writeln!(formatter, "  moved     {summary} <- {from}")?;
                     }
@@ -360,6 +470,7 @@ mod tests {
             summary: summary.into(),
             completed: false,
             priority: Priority::None,
+            parent: None,
         }
     }
 
@@ -376,6 +487,7 @@ mod tests {
             summary: summary.into(),
             completed,
             priority: Priority::None,
+            parent: None,
         }
     }
 
@@ -409,6 +521,8 @@ mod tests {
                 list: "Postgrad".into(),
                 summary: "Foo".into(),
                 priority: Priority::High,
+                parent: None,
+                parent_summary: None,
             }]
         );
         assert!(format!("{plan}").contains("created   Foo (!!!)"));
@@ -670,6 +784,80 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(draft_ids, [1, 2]);
+    }
+
+    #[test]
+    fn creates_nested_tasks_with_draft_parent_references() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Personal".into(),
+                tasks: vec![
+                    edited(None, "Parent", false),
+                    EditedTask {
+                        parent: Some(TaskReference::Draft(1)),
+                        ..edited(None, "Child", false)
+                    },
+                ],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert!(plan.operations.iter().any(|operation| matches!(
+            operation,
+            Operation::Create {
+                draft_id: 2,
+                parent: Some(TaskReference::Draft(1)),
+                parent_summary: Some(parent),
+                ..
+            } if parent == "Parent"
+        )));
+        assert!(format!("{plan}").contains("created   Child under Parent"));
+    }
+
+    #[test]
+    fn deleting_a_parent_detaches_a_retained_child() {
+        let parent = task("parent", "Parent");
+        let child = Task {
+            parent: Some(parent.id.clone()),
+            ..task("child", "Child")
+        };
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![parent, child],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Personal".into(),
+                tasks: vec![edited(Some("child"), "Child", false)],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert!(plan.operations.iter().any(|operation| matches!(
+            operation,
+            Operation::Delete { id, .. } if id.as_str() == "parent"
+        )));
+        assert!(plan.operations.iter().any(|operation| matches!(
+            operation,
+            Operation::Reparent { id, to: None, .. } if id.as_str() == "child"
+        )));
+        assert!(format!("{plan}").contains("detached  Child from Parent"));
     }
 
     #[test]

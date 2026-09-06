@@ -82,6 +82,10 @@ pub struct Task {
     pub completed: bool,
     #[serde(default)]
     pub priority: Priority,
+    /// The renderable parent. Empty, dangling, and hidden source relationships
+    /// are normalized to `None` and preserved unless indentation changes.
+    #[serde(default)]
+    pub parent: Option<TaskId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -95,12 +99,21 @@ pub struct TaskState {
     pub lists: Vec<TaskList>,
 }
 
+/// A parent named by an existing VTODO UID or by a new task's session-local
+/// draft identity.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum TaskReference {
+    Existing(TaskId),
+    Draft(usize),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EditedTask {
     pub id: Option<TaskId>,
     pub summary: String,
     pub completed: bool,
     pub priority: Priority,
+    pub parent: Option<TaskReference>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

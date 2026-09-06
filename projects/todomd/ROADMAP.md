@@ -25,30 +25,6 @@ so new leading markers can reuse it instead of inventing an escape. Categories
 remain the harder case: `@tag` is natural but unbounded, and tags can appear
 anywhere in a line rather than only at its start.
 
-## Subtasks
-
-VTODO relates a child to its parent through `RELATED-TO`. `todomd` preserves the
-property but renders every task flat, so hierarchy is invisible and nothing
-stops a parent from being deleted while its children survive.
-
-What the real vdirs contain:
-
-- 201 tasks carry `RELATED-TO`, and nesting is one level deep throughout;
-- 47 carry an empty `RELATED-TO:`, which must read as no parent;
-- 4 name a parent that is not present;
-- no parent and child live in different lists; and
-- both `RELATED-TO:` and `RELATED-TO;RELTYPE=PARENT:` appear, the bare form
-  meaning the same thing.
-
-Nested list items are the obvious rendering, which reverses the current rule
-that only top-level items are editable. Ordering becomes partly structural too,
-since children have to follow their parent whatever the sort says.
-
-Decisions needed: what deleting a parent does to its children, whether a parent
-can be completed while children are open, and whether a child may move to a list
-its parent is not in. An empty or dangling parent reference must render as a
-top-level task rather than an error.
-
 ## Configurable sorting
 
 Tasks render unfinished first, then by priority, then alphabetically, with the

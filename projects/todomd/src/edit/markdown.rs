@@ -3,7 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskState};
+use crate::model::{
+    EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskReference, TaskState,
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IdentityManifest {
@@ -51,8 +53,21 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
         output.push_str(&list.name);
         output.push_str("\n\n");
 
+        let mut depths = BTreeMap::new();
         for task in &list.tasks {
             validate_summary(&task.summary)?;
+            let depth = match &task.parent {
+                Some(parent) => {
+                    depths.get(parent).copied().with_context(|| {
+                        format!(
+                            "task {:?} appears before its parent {:?}",
+                            task.id.as_str(),
+                            parent.as_str()
+                        )
+                    })? + 1
+                }
+                None => 0,
+            };
             let checked = if task.completed { 'x' } else { ' ' };
             let priority = match task.priority.marker() {
                 "" => String::new(),
@@ -60,9 +75,11 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
             };
             let summary = render_summary(&task.summary);
             let session_id = manifest.get_or_insert(&task.id);
+            output.push_str(&"  ".repeat(depth));
             output.push_str(&format!(
                 "- [{checked}] {priority}{summary} <!-- todomd:id={session_id} -->\n"
             ));
+            depths.insert(task.id.clone(), depth);
         }
     }
 
@@ -82,6 +99,8 @@ pub fn parse(
     let mut parsed_lists: BTreeMap<String, Vec<EditedTask>> = BTreeMap::new();
     let mut current_list: Option<String> = None;
     let mut seen_ids = BTreeSet::new();
+    let mut ancestors: Vec<TaskReference> = Vec::new();
+    let mut next_draft_id = 1;
 
     for (index, line) in input.lines().enumerate() {
         let line_number = index + 1;
@@ -97,6 +116,7 @@ pub fn parse(
                 bail!("line {line_number}: duplicate list heading {name:?}");
             }
             current_list = Some(name.to_owned());
+            ancestors.clear();
             continue;
         }
 
@@ -107,12 +127,27 @@ pub fn parse(
         let list_name = current_list
             .as_ref()
             .with_context(|| format!("line {line_number}: task appears before a list heading"))?;
-        let task = parse_task_line(line, line_number, manifest)?;
+        let (depth, task_line) = split_indentation(line, line_number)?;
+        if depth > ancestors.len() {
+            bail!("line {line_number}: task nesting jumps more than one level");
+        }
+        let mut task = parse_task_line(task_line, line_number, manifest)?;
         if let Some(task_id) = &task.id
             && !seen_ids.insert(task_id.clone())
         {
             bail!("line {line_number}: duplicate task identity");
         }
+        let task_reference = match &task.id {
+            Some(task_id) => TaskReference::Existing(task_id.clone()),
+            None => {
+                let reference = TaskReference::Draft(next_draft_id);
+                next_draft_id += 1;
+                reference
+            }
+        };
+        task.parent = depth.checked_sub(1).map(|index| ancestors[index].clone());
+        ancestors.truncate(depth);
+        ancestors.push(task_reference);
         parsed_lists
             .get_mut(list_name)
             .expect("current list heading was inserted")
@@ -140,6 +175,17 @@ pub fn parse(
         .collect();
 
     Ok(EditedTaskState { lists })
+}
+
+fn split_indentation(line: &str, line_number: usize) -> Result<(usize, &str)> {
+    let spaces = line.bytes().take_while(|byte| *byte == b' ').count();
+    if line[..spaces].contains('\t') || line.as_bytes().get(spaces) == Some(&b'\t') {
+        bail!("line {line_number}: task indentation must use spaces, not tabs");
+    }
+    if spaces % 2 != 0 {
+        bail!("line {line_number}: task indentation must be a multiple of two spaces");
+    }
+    Ok((spaces / 2, &line[spaces..]))
 }
 
 fn parse_task_line(
@@ -186,6 +232,7 @@ fn parse_task_line(
         summary,
         completed,
         priority,
+        parent: None,
     })
 }
 
@@ -288,6 +335,7 @@ mod tests {
                     summary: "Buy groceries".into(),
                     completed: false,
                     priority: Priority::None,
+                    parent: None,
                 }],
             }],
         };
@@ -324,6 +372,7 @@ mod tests {
                         summary: "Write paper".into(),
                         completed: false,
                         priority: Priority::None,
+                        parent: None,
                     }],
                 },
                 TaskList {
@@ -377,24 +426,28 @@ mod tests {
                         summary: "Urgent".into(),
                         completed: false,
                         priority: Priority::High,
+                        parent: None,
                     },
                     Task {
                         id: TaskId::new("medium"),
                         summary: "Middling".into(),
                         completed: false,
                         priority: Priority::Medium,
+                        parent: None,
                     },
                     Task {
                         id: TaskId::new("low"),
                         summary: "Whenever".into(),
                         completed: false,
                         priority: Priority::Low,
+                        parent: None,
                     },
                     Task {
                         id: TaskId::new("none"),
                         summary: "Unset".into(),
                         completed: false,
                         priority: Priority::None,
+                        parent: None,
                     },
                 ],
             }],
@@ -446,6 +499,7 @@ mod tests {
                         summary: (*summary).into(),
                         completed: false,
                         priority: Priority::Medium,
+                        parent: None,
                     })
                     .collect(),
             }],
@@ -481,6 +535,7 @@ mod tests {
                     summary: r#"He said "hi" to me"#.into(),
                     completed: false,
                     priority: Priority::None,
+                    parent: None,
                 }],
             }],
         };
@@ -506,6 +561,7 @@ mod tests {
                     summary: "Ordinary".into(),
                     completed: false,
                     priority: Priority::None,
+                    parent: None,
                 }],
             }],
         };
@@ -567,10 +623,103 @@ mod tests {
                     summary: "first\nsecond".into(),
                     completed: false,
                     priority: Priority::None,
+                    parent: None,
                 }],
             }],
         };
 
         assert!(render(&state, &mut IdentityManifest::default()).is_err());
+    }
+
+    #[test]
+    fn round_trips_arbitrarily_nested_tasks() {
+        let root = TaskId::new("root");
+        let child = TaskId::new("child");
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![
+                    Task {
+                        id: root.clone(),
+                        summary: "Root".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        parent: None,
+                    },
+                    Task {
+                        id: child.clone(),
+                        summary: "Child".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        parent: Some(root.clone()),
+                    },
+                    Task {
+                        id: TaskId::new("grandchild"),
+                        summary: "Grandchild".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        parent: Some(child.clone()),
+                    },
+                ],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+        assert!(document.contains("  - [ ] Child <!-- todomd:id=t2 -->"));
+        assert!(document.contains("    - [ ] Grandchild <!-- todomd:id=t3 -->"));
+
+        let parsed = parse(&document, &state, &manifest).unwrap();
+        assert_eq!(
+            parsed.lists[0].tasks[1].parent,
+            Some(TaskReference::Existing(root))
+        );
+        assert_eq!(
+            parsed.lists[0].tasks[2].parent,
+            Some(TaskReference::Existing(child))
+        );
+    }
+
+    #[test]
+    fn nested_new_tasks_reference_parent_drafts() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        let document = "# Personal\n\n- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n";
+
+        let parsed = parse(document, &baseline, &IdentityManifest::default()).unwrap();
+
+        assert_eq!(parsed.lists[0].tasks[0].parent, None);
+        assert_eq!(
+            parsed.lists[0].tasks[1].parent,
+            Some(TaskReference::Draft(1))
+        );
+        assert_eq!(
+            parsed.lists[0].tasks[2].parent,
+            Some(TaskReference::Draft(2))
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_indentation() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        for document in [
+            "# Personal\n\n   - [ ] Odd\n",
+            "# Personal\n\n    - [ ] Jump\n",
+            "# Personal\n\n\t- [ ] Tab\n",
+        ] {
+            assert!(
+                parse(document, &baseline, &IdentityManifest::default()).is_err(),
+                "expected a parse error for {document:?}"
+            );
+        }
     }
 }

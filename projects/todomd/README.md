@@ -14,10 +14,10 @@ $ todomd show             # print active tasks as JSON
 $ todomd show --completed # include finished tasks
 ```
 
-Creating, renaming, prioritizing, completing, reopening, moving, and deleting
-tasks is supported. Due dates, categories, and descriptions are preserved but
-not editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md) and
-[ROADMAP.md](ROADMAP.md).
+Creating, renaming, nesting, prioritizing, completing, reopening, moving, and
+deleting tasks is supported. Due dates, categories, and descriptions are
+preserved but not editable. Watch mode is not implemented. See
+[DESIGN.md](DESIGN.md) and [ROADMAP.md](ROADMAP.md).
 
 ## Install
 
@@ -83,7 +83,7 @@ back to `$EDITOR`:
 # Postgrad
 
 - [ ] !!! Write paper draft <!-- todomd:id=t1 -->
-- [ ] ! Read related work <!-- todomd:id=t3 -->
+  - [ ] ! Read related work <!-- todomd:id=t3 -->
 
 # Personal
 
@@ -97,9 +97,11 @@ back to `$EDITOR`:
 | Remove the marker | Clear priority |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
-| Add a `- [ ]` line without a marker | Create in that list |
-| Move a line under another heading | Move between lists |
-| Delete a line | Delete |
+| Add a `- [ ]` line without an identity | Create in that list |
+| Indent a line by two spaces | Make it a child of the preceding task |
+| Unindent or reindent a line | Detach or reparent it |
+| Move a line or nested block under another heading | Move between lists |
+| Delete a line | Delete that VTODO |
 | Reorder lines | Nothing |
 
 The `<!-- todomd:id=... -->` markers are session-local identities, not VTODO
@@ -107,11 +109,18 @@ UIDs, and track a task across renames and moves. Removing one is treated as
 intentional: the old task is deleted and a new one created, which the preview
 states.
 
+Indentation edits the child's `RELATED-TO` parent. Removing a parent line
+deletes only that VTODO. Retained children must be unindented or nested under
+another parent. Moving a nested block moves every line in it. Empty and
+dangling source relationships render as roots and remain untouched; cyclic
+relationships abort the read because they cannot form a tree.
+
 An optional priority marker sits between the checkbox and the summary: `!!!`
 high, `!!` medium, `!` low, absent for none.
 
-Tasks render unfinished first, then by priority, then alphabetically. Ordering
-is presentational, so rearranging lines changes nothing.
+Each sibling set renders unfinished first, then by priority, then
+alphabetically. Parents precede their recursively sorted descendants. Ordering
+among siblings is presentational, so rearranging their lines changes nothing.
 
 A summary is quoted only when its start would otherwise be read as syntax, so
 ordinary text is never quoted:
@@ -126,17 +135,19 @@ ordinary text is never quoted:
 Quote a summary yourself if you start it with `!` or `"`, or if it needs leading
 or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
-The dialect is strict. Only the selected level-one headings and top-level
-`- [ ]` and `- [x]` items are allowed, every selected list must keep its
+The dialect is strict. It allows selected level-one headings and `- [ ]` or
+`- [x]` items indented by exactly two spaces per nesting level. Nesting may be
+arbitrarily deep, but cannot skip a level. Every selected list must keep its
 heading, and summaries must be single-line and non-empty.
 
 Only active tasks are rendered by default, so finished history is neither shown
-nor touched. `--completed` adds completed and cancelled tasks as `[x]` lines,
-making them editable: unticking one reopens it, and deleting its line deletes
-it.
+nor touched. A hidden finished parent hides its entire descendant subtree.
+`--completed` adds completed and cancelled trees as `[x]` lines, making them
+editable: unticking one reopens it, and deleting its line deletes it.
 
 `SUMMARY` is optional in iCalendar. A task without one has nothing to render, so
-it is skipped in every scope and reported on stderr; edit its `.ics` directly.
+it and its descendant subtree are skipped in every scope and the task is
+reported on stderr; edit its `.ics` directly.
 
 After the editor exits, `todomd` rereads the sources, reconciles, and previews
 both the semantic and filesystem changes:
@@ -152,7 +163,7 @@ Personal:
   moved     Submit paper <- Postgrad
 
 Files:
-  move   ~/Calendars/personal/Personal/groceries.ics -> ~/Calendars/personal/Postgrad/groceries.ics
+  move   .../Personal/groceries.ics -> .../Postgrad/groceries.ics
   create ~/Calendars/personal/Postgrad/fa62b7c0-ac46-47dd-899c-0aa6dd3f58b6.ics
 
 Apply these changes? [y/N]
@@ -176,14 +187,16 @@ $ todomd show Personal
     "summary": "Buy milk, bread",
     "completed": false,
     "priority": "medium",
+    "parent_uid": null,
     "file": "/home/gabriel/Calendars/personal/Personal/groceries.ics"
   }
 ]
 ```
 
-Tasks are ordered by list, then unfinished before finished, then priority, then
-summary. `completed` is `true` only for tasks revealed by `--completed`.
-`priority` is `none`, `low`, `medium`, or `high`.
+Tasks are ordered by list and tree. Each sibling set is ordered unfinished
+before finished, then by priority and summary. `completed` is `true` only for
+tasks revealed by `--completed`. `priority` is `none`, `low`, `medium`, or
+`high`; `parent_uid` is the parent VTODO UID or `null` for a rendered root.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.
@@ -202,8 +215,8 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
 - Originals are backed up, writes use temporary files and atomic rename, and a
   mid-apply failure triggers a hash-guarded best-effort rollback.
 - Patches preserve unexposed data, including `DUE`, `CATEGORIES`,
-  `DESCRIPTION`, `RELATED-TO`, `X-` properties, and nested components such as
-  `VALARM`.
+  `DESCRIPTION`, unrelated `RELATED-TO` representations, `X-` properties, and
+  nested components such as `VALARM`.
 - `PRIORITY` is written only when the marker's level changes, so a stored value
   like `4` survives edits that leave the level alone.
 
@@ -236,8 +249,8 @@ parsing, conflict, staging, application, and post-apply failures.
 
 - Active tasks only, unless `--completed` is given.
 - Tasks without a summary are never rendered, only reported.
-- Summaries, priority, completion, and list membership are the only editable
-  fields.
+- Summaries, hierarchy, priority, completion, and list membership are the only
+  editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
 - No CalDAV, no watch mode, no automatic crash recovery.

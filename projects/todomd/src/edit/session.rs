@@ -270,6 +270,7 @@ mod tests {
                     summary: "Accepted".into(),
                     completed: false,
                     priority: Priority::None,
+                    parent: None,
                 }],
             }],
         };
