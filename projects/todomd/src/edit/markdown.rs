@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EditedTask, EditedTaskList, EditedTaskState, TaskId, TaskState};
+use crate::model::{EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskState};
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IdentityManifest {
@@ -54,10 +54,14 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
         for task in &list.tasks {
             validate_summary(&task.summary)?;
             let checked = if task.completed { 'x' } else { ' ' };
+            let priority = match task.priority.marker() {
+                "" => String::new(),
+                marker => format!("{marker} "),
+            };
+            let summary = render_summary(&task.summary);
             let session_id = manifest.get_or_insert(&task.id);
             output.push_str(&format!(
-                "- [{checked}] {} <!-- todomd:id={session_id} -->\n",
-                task.summary
+                "- [{checked}] {priority}{summary} <!-- todomd:id={session_id} -->\n"
             ));
         }
     }
@@ -172,11 +176,16 @@ fn parse_task_line(
         }
     };
 
-    validate_summary(summary).with_context(|| format!("line {line_number}"))?;
+    let (priority, field) =
+        split_priority(summary).with_context(|| format!("line {line_number}"))?;
+    let summary = parse_summary(field).with_context(|| format!("line {line_number}"))?;
+    validate_summary(&summary).with_context(|| format!("line {line_number}"))?;
+
     Ok(EditedTask {
         id,
-        summary: summary.to_owned(),
+        summary,
         completed,
+        priority,
     })
 }
 
@@ -185,6 +194,69 @@ fn validate_heading(heading: &str) -> Result<()> {
         bail!("list display name cannot be empty or contain a newline");
     }
     Ok(())
+}
+
+/// Quotes a summary only when its start would otherwise be read as syntax, or
+/// when edge whitespace would be lost. Interior quotes stay literal.
+fn render_summary(summary: &str) -> String {
+    if !needs_quoting(summary) {
+        return summary.to_owned();
+    }
+    format!("\"{}\"", summary.replace('"', "\"\""))
+}
+
+fn needs_quoting(summary: &str) -> bool {
+    summary.starts_with(['!', '"']) || summary.trim() != summary
+}
+
+/// Splits an optional priority marker off the front of a task line.
+fn split_priority(remainder: &str) -> Result<(Priority, &str)> {
+    if !remainder.starts_with('!') {
+        return Ok((Priority::None, remainder));
+    }
+
+    let marker_len = remainder.chars().take_while(|c| *c == '!').count();
+    let (marker, rest) = remainder.split_at(marker_len);
+    let priority = Priority::from_marker(marker)
+        .with_context(|| format!("unknown priority marker {marker:?}"))?;
+    let summary = rest.strip_prefix(' ').context(
+        "a summary starting with '!' must be quoted so it is not read as a priority marker",
+    )?;
+
+    Ok((priority, summary))
+}
+
+/// Reads a summary field, honouring optional quoting.
+fn parse_summary(field: &str) -> Result<String> {
+    let Some(inner) = field.strip_prefix('"') else {
+        if field.starts_with('!') {
+            bail!("a summary starting with '!' must be quoted");
+        }
+        if field.trim() != field {
+            bail!("a summary with leading or trailing whitespace must be quoted");
+        }
+        return Ok(field.to_owned());
+    };
+
+    let inner = inner
+        .strip_suffix('"')
+        .context("a quoted summary must end with '\"'")?;
+
+    let mut summary = String::with_capacity(inner.len());
+    let mut characters = inner.chars();
+    while let Some(character) = characters.next() {
+        if character != '"' {
+            summary.push(character);
+            continue;
+        }
+        // Inside quotes, '"' is only legal as the doubled pair '""'.
+        if characters.next() != Some('"') {
+            bail!("a quoted summary must double any '\"' it contains");
+        }
+        summary.push('"');
+    }
+
+    Ok(summary)
 }
 
 fn validate_summary(summary: &str) -> Result<()> {
@@ -215,6 +287,7 @@ mod tests {
                     id: TaskId::new("groceries@example.test"),
                     summary: "Buy groceries".into(),
                     completed: false,
+                    priority: Priority::None,
                 }],
             }],
         };
@@ -250,6 +323,7 @@ mod tests {
                         id: TaskId::new("paper@example.test"),
                         summary: "Write paper".into(),
                         completed: false,
+                        priority: Priority::None,
                     }],
                 },
                 TaskList {
@@ -293,6 +367,166 @@ mod tests {
     }
 
     #[test]
+    fn renders_and_parses_priority_markers() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![
+                    Task {
+                        id: TaskId::new("high"),
+                        summary: "Urgent".into(),
+                        completed: false,
+                        priority: Priority::High,
+                    },
+                    Task {
+                        id: TaskId::new("medium"),
+                        summary: "Middling".into(),
+                        completed: false,
+                        priority: Priority::Medium,
+                    },
+                    Task {
+                        id: TaskId::new("low"),
+                        summary: "Whenever".into(),
+                        completed: false,
+                        priority: Priority::Low,
+                    },
+                    Task {
+                        id: TaskId::new("none"),
+                        summary: "Unset".into(),
+                        completed: false,
+                        priority: Priority::None,
+                    },
+                ],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+
+        assert!(document.contains("- [ ] !!! Urgent <!-- todomd:id=t1 -->"));
+        assert!(document.contains("- [ ] !! Middling <!-- todomd:id=t2 -->"));
+        assert!(document.contains("- [ ] ! Whenever <!-- todomd:id=t3 -->"));
+        assert!(document.contains("- [ ] Unset <!-- todomd:id=t4 -->"));
+
+        let parsed = parse(&document, &state, &manifest).unwrap();
+        let priorities = parsed.lists[0]
+            .tasks
+            .iter()
+            .map(|task| task.priority)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            priorities,
+            [
+                Priority::High,
+                Priority::Medium,
+                Priority::Low,
+                Priority::None
+            ]
+        );
+    }
+
+    #[test]
+    fn round_trips_summaries_that_need_quoting() {
+        let awkward = [
+            "!urgent looking",
+            "!!! literal marker",
+            "\"quoted\" start",
+            "  padded  ",
+            "trailing space ",
+            "\"",
+        ];
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: awkward
+                    .iter()
+                    .enumerate()
+                    .map(|(index, summary)| Task {
+                        id: TaskId::new(format!("task{index}")),
+                        summary: (*summary).into(),
+                        completed: false,
+                        priority: Priority::Medium,
+                    })
+                    .collect(),
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+        let parsed = parse(&document, &state, &manifest).unwrap();
+
+        let summaries = parsed.lists[0]
+            .tasks
+            .iter()
+            .map(|task| task.summary.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(summaries, awkward);
+        assert!(
+            parsed.lists[0]
+                .tasks
+                .iter()
+                .all(|task| task.priority == Priority::Medium)
+        );
+        assert!(document.contains(r#"!! "!urgent looking""#), "{document}");
+        assert!(document.contains(r#"!! """quoted"" start""#), "{document}");
+    }
+
+    #[test]
+    fn leaves_summaries_with_interior_quotes_unquoted() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("quotes"),
+                    summary: r#"He said "hi" to me"#.into(),
+                    completed: false,
+                    priority: Priority::None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+
+        assert!(
+            document.contains(r#"- [ ] He said "hi" to me <!-- todomd:id=t1 -->"#),
+            "{document}"
+        );
+        let parsed = parse(&document, &state, &manifest).unwrap();
+        assert_eq!(parsed.lists[0].tasks[0].summary, r#"He said "hi" to me"#);
+    }
+
+    #[test]
+    fn rejects_ambiguous_unquoted_summaries() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("task"),
+                    summary: "Ordinary".into(),
+                    completed: false,
+                    priority: Priority::None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+        render(&state, &mut manifest).unwrap();
+
+        for line in [
+            "- [ ] !!!! Too many <!-- todomd:id=t1 -->",
+            "- [ ] !unquoted start <!-- todomd:id=t1 -->",
+            "- [ ] \"unterminated <!-- todomd:id=t1 -->",
+            "- [ ] \"bad \" quoting\" <!-- todomd:id=t1 -->",
+        ] {
+            let document = format!("# Postgrad\n\n{line}\n");
+            assert!(
+                parse(&document, &state, &manifest).is_err(),
+                "expected a parse error for {line:?}"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_missing_headings() {
         let baseline = TaskState {
             lists: vec![TaskList {
@@ -332,6 +566,7 @@ mod tests {
                     id: TaskId::new("bad@example.test"),
                     summary: "first\nsecond".into(),
                     completed: false,
+                    priority: Priority::None,
                 }],
             }],
         };

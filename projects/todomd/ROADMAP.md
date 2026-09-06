@@ -5,23 +5,25 @@ build on.
 
 ## Editable fields
 
-Summaries, completion, and list membership are the only editable fields, so due
-dates, priorities, and categories can only be changed in the `.ics` file.
+Priority is editable through `!`, `!!`, and `!!!` markers. Due and start dates
+and categories still have to be changed in the `.ics` file.
 
-Due and start dates are the extension the design already anticipates. Priorities
-and categories are currently listed as non-goals; adding them is a deliberate
-reversal of that boundary, not an oversight to fix quietly.
+Due and start dates are the extension the design already anticipates.
+Categories are listed as a non-goal; adding them is a deliberate reversal of
+that boundary, as priority already was.
 
-Constraints:
+Constraints, all of which priority markers now demonstrate:
 
 - absence from Markdown must never delete or alter an existing property;
+- a value is written only when the rendered form changes, so representations the
+  dialect flattens are not rewritten;
 - ambiguous syntax must be a parse error rather than a guess; and
 - the dialect must stay diffable and easy to type.
 
-Open question: how fields appear. Trailing markers such as `!!!` for priority
-and `@tag` for categories read naturally and match existing habits, but they
-collide with ordinary summary text and need an exact grammar. A separate
-metadata suffix avoids the collision at the cost of terseness.
+Quoting already exists for summaries whose start would otherwise read as syntax,
+so new leading markers can reuse it instead of inventing an escape. Categories
+remain the harder case: `@tag` is natural but unbounded, and tags can appear
+anywhere in a line rather than only at its start.
 
 ## Subtasks
 

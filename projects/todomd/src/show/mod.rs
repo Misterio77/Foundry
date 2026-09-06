@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::{
     config::Config,
+    model::Priority,
     repository::{Scope, load_lists, resolve_lists},
 };
 
@@ -18,6 +19,7 @@ pub struct ShownTask {
     pub uid: String,
     pub summary: String,
     pub completed: bool,
+    pub priority: Priority,
     pub file: PathBuf,
 }
 
@@ -50,6 +52,7 @@ pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<Sh
                 uid: task.id.as_str().to_owned(),
                 summary: task.summary.clone(),
                 completed: task.completed,
+                priority: task.priority,
                 file: file.clone(),
             });
         }

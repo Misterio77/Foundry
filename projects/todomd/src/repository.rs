@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     config::Config,
-    model::{Task, TaskId, TaskList, TaskState},
+    model::{Priority, Task, TaskId, TaskList, TaskState},
 };
 
 /// Which tasks a command operates on.
@@ -311,6 +311,9 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
     }
 
     let uid = required_property(todo, "UID", path)?;
+    let priority = optional_property(todo, "PRIORITY", path)?
+        .map(|value| Priority::from_ics(&value))
+        .unwrap_or_default();
     // SUMMARY is optional in RFC 5545, so a task without one is valid but has
     // nothing to render. Every scope skips it and reports it instead.
     let Some(summary) =
@@ -320,6 +323,7 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
             id: TaskId::new(uid),
             summary: String::new(),
             completed,
+            priority,
         }));
     };
 
@@ -327,6 +331,7 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
         id: TaskId::new(uid),
         summary,
         completed,
+        priority,
     }))
 }
 

@@ -18,7 +18,8 @@ later `edit --watch` can synchronize both directions without replacing it.
 Supported:
 
 - selecting whole lists by display name;
-- creating, renaming, completing, reopening, moving, and deleting tasks;
+- creating, renaming, prioritizing, completing, reopening, moving, and deleting
+  tasks;
 - previewing and confirming a semantic change plan;
 - preserving iCalendar data the Markdown does not expose;
 - detecting source changes made during a session;
@@ -29,8 +30,7 @@ Supported:
 Not supported:
 
 - CalDAV, or controlling synchronization software directly;
-- editing priorities, categories, descriptions, recurrence, alarms, or task
-  relationships;
+- editing categories, descriptions, recurrence, alarms, or task relationships;
 - persistent task ordering;
 - silently merging concurrent semantic edits; or
 - general-purpose iCalendar editing.
@@ -169,13 +169,17 @@ its status unless it is explicitly reopened.
 ```markdown
 # Postgrad
 
-- [ ] Write paper draft <!-- todomd:id=t1 -->
+- [ ] !!! Write paper draft <!-- todomd:id=t1 -->
 - [ ] Email advisor
 
 # Personal
 
-- [ ] Buy groceries <!-- todomd:id=t3 -->
+- [ ] ! Buy groceries <!-- todomd:id=t3 -->
 ```
+
+A task line is a checkbox, an optional priority marker, a summary, and an
+optional identity marker. `!!!`, `!!`, and `!` are high, medium, and low; an
+absent marker is no priority.
 
 Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
@@ -190,6 +194,8 @@ unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
 | Markdown edit | Operation |
 |---|---|
 | Change task text | Rename |
+| Add or change `!`, `!!`, `!!!` | Set priority |
+| Remove the priority marker | Clear priority |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen |
 | Add an item without an ID | Create in the containing list |
@@ -201,6 +207,21 @@ Only top-level task-list items are editable. Blank lines are insignificant.
 Additional headings, missing or renamed selected headings, duplicate or unknown
 IDs, malformed checkboxes, empty summaries, and unsupported Markdown are parse
 errors.
+
+### Quoting
+
+A summary is quoted only when reading it back would otherwise be ambiguous: when
+it starts with `!` or `"`, or when leading or trailing whitespace would be lost.
+Inside quotes a literal `"` is doubled, so the dialect needs no second escape
+character.
+
+The summary's right edge is already delimited by the identity marker, so only
+its first character can be ambiguous. Interior quotes are therefore left alone
+and ordinary prose never acquires quoting. An unquoted summary that starts with
+a reserved character is a parse error rather than a guess.
+
+This generalizes: fields added later can reserve leading syntax without
+inventing their own escape.
 
 A new task receives a VTODO UID and session ID during planning. After a
 successful apply, `tasks.md` is rerendered atomically with that session ID, so a
@@ -330,7 +351,7 @@ Signals that cannot be handled, notably `SIGKILL`, cannot promise cleanup.
 Existing files are patched, never rebuilt from Markdown fields, preserving:
 
 - due and start dates;
-- priorities and categories;
+- categories;
 - descriptions;
 - alarms and recurrence;
 - `RELATED-TO` relationships;
@@ -345,6 +366,12 @@ Changing an existing task increments `SEQUENCE` and updates `DTSTAMP` and
 consistently; reopening sets `STATUS` to `NEEDS-ACTION` and removes `COMPLETED`
 and `PERCENT-COMPLETE`. Source filenames and VTODO UIDs are independent
 identities.
+
+`PRIORITY` is 1-9 in iCalendar but three levels in Markdown: 1-4 read as `!!!`,
+5 as `!!`, 6-9 as `!`, and anything absent or out of range as no marker. A value
+is written only when the level changes, so a task stored as `PRIORITY:4` keeps
+that value through edits that leave its marker alone. Clearing the marker
+removes the property; setting one writes the canonical 1, 5, or 9.
 
 ## Hooks
 

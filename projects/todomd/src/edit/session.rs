@@ -252,7 +252,7 @@ mod tests {
 
     #[test]
     fn atomically_records_an_accepted_state() {
-        use crate::model::{Task, TaskId, TaskList};
+        use crate::model::{Priority, Task, TaskId, TaskList};
 
         let parent = tempfile::tempdir().unwrap();
         let rendered = RenderedSession {
@@ -269,6 +269,7 @@ mod tests {
                     id: TaskId::new("new@example.test"),
                     summary: "Accepted".into(),
                     completed: false,
+                    priority: Priority::None,
                 }],
             }],
         };

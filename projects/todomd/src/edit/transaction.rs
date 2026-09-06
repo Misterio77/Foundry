@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use super::planner::{ChangePlan, Operation};
 use crate::{
-    model::TaskId,
+    model::{Priority, TaskId},
     repository::{SourceSnapshot, verify_snapshot},
 };
 
@@ -55,6 +55,7 @@ pub struct StagedTransaction {
 struct ExistingEdit {
     summary: Option<String>,
     completion: CompletionChange,
+    priority: Option<Priority>,
     move_to: Option<String>,
     delete: bool,
 }
@@ -102,6 +103,9 @@ pub fn stage(
             }
             Operation::Reopen { id, .. } => {
                 existing.entry(id.clone()).or_default().completion = CompletionChange::Reopen;
+            }
+            Operation::Reprioritize { id, to, .. } => {
+                existing.entry(id.clone()).or_default().priority = Some(*to);
             }
             Operation::Move { id, to, .. } => {
                 existing.entry(id.clone()).or_default().move_to = Some(to.clone());
@@ -155,12 +159,16 @@ pub fn stage(
             bail!("move destination {} already exists", destination.display());
         }
 
-        let contents = if edit.summary.is_some() || edit.completion != CompletionChange::Unchanged {
+        let contents = if edit.summary.is_some()
+            || edit.completion != CompletionChange::Unchanged
+            || edit.priority.is_some()
+        {
             patch_existing(
                 &source.contents,
                 &task_id,
                 edit.summary.as_deref(),
                 edit.completion,
+                edit.priority,
                 now,
             )?
         } else {
@@ -336,6 +344,7 @@ fn patch_existing(
     task_id: &TaskId,
     summary: Option<&str>,
     completion: CompletionChange,
+    priority: Option<Priority>,
     now: DateTime<Utc>,
 ) -> Result<String> {
     let unfolded = unfold(contents);
@@ -368,6 +377,15 @@ fn patch_existing(
     if let Some(summary) = summary {
         set_property(todo, "SUMMARY", summary)?;
     }
+    // Only written when the marker changed, so values like PRIORITY:4 survive
+    // edits that leave the level alone.
+    if let Some(priority) = priority {
+        match priority.to_ics() {
+            Some(value) => set_property(todo, "PRIORITY", value)?,
+            None => remove_property(todo, "PRIORITY"),
+        }
+    }
+
     match completion {
         CompletionChange::Unchanged => {}
         CompletionChange::Complete => {
@@ -797,6 +815,7 @@ mod tests {
             &TaskId::new("read@example.test"),
             None,
             CompletionChange::Reopen,
+            None,
             now,
         )
         .unwrap();
@@ -834,6 +853,53 @@ mod tests {
         assert!(reopened.contains("X-PRESERVED:yes"), "{reopened}");
     }
 
+    const PRIORITISED: &str = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//todomd test//EN\r\nBEGIN:VTODO\r\nUID:prio@example.test\r\nSUMMARY:Prioritised\r\nPRIORITY:4\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+    fn patch_priority(priority: Option<Priority>, summary: Option<&str>) -> String {
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        patch_existing(
+            PRIORITISED,
+            &TaskId::new("prio@example.test"),
+            summary,
+            CompletionChange::Unchanged,
+            priority,
+            now,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn keeps_an_uncanonical_priority_when_the_level_is_unchanged() {
+        // PRIORITY:4 buckets to !!!, so an unrelated rename must not rewrite it.
+        let patched = patch_priority(None, Some("Renamed"));
+
+        assert!(patched.contains("PRIORITY:4"), "{patched}");
+        assert!(patched.contains("SUMMARY:Renamed"), "{patched}");
+    }
+
+    #[test]
+    fn writes_a_canonical_priority_when_the_level_changes() {
+        let lowered = patch_priority(Some(Priority::Low), None);
+        assert!(lowered.contains("PRIORITY:9"), "{lowered}");
+        assert!(!lowered.contains("PRIORITY:4"), "{lowered}");
+
+        let medium = patch_priority(Some(Priority::Medium), None);
+        assert!(medium.contains("PRIORITY:5"), "{medium}");
+
+        let high = patch_priority(Some(Priority::High), None);
+        assert!(high.contains("PRIORITY:1"), "{high}");
+    }
+
+    #[test]
+    fn removes_the_property_when_the_marker_is_dropped() {
+        let patched = patch_priority(Some(Priority::None), None);
+
+        assert!(!patched.contains("PRIORITY"), "{patched}");
+        assert!(patched.contains("SUMMARY:Prioritised"), "{patched}");
+    }
+
     #[test]
     fn escapes_edited_summary_text() {
         let source = include_str!("../../tests/fixtures/calendars/Postgrad/write.ics");
@@ -845,6 +911,7 @@ mod tests {
             &TaskId::new("write@example.test"),
             Some(r"Comma, semicolon; slash\value"),
             CompletionChange::Unchanged,
+            None,
             now,
         )
         .unwrap();

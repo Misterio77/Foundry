@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt};
 use anyhow::{Result, bail};
 use serde::Serialize;
 
-use crate::model::{EditedTaskState, TaskId, TaskState};
+use crate::model::{EditedTaskState, Priority, TaskId, TaskState};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Operation {
@@ -22,6 +22,13 @@ pub enum Operation {
         id: TaskId,
         list: String,
         summary: String,
+    },
+    Reprioritize {
+        id: TaskId,
+        list: String,
+        summary: String,
+        from: Priority,
+        to: Priority,
     },
     Create {
         draft_id: usize,
@@ -60,6 +67,7 @@ struct ComparableTask {
     list: String,
     summary: String,
     completed: bool,
+    priority: Priority,
 }
 
 type IdentifiedTasks = BTreeMap<TaskId, ComparableTask>;
@@ -137,6 +145,15 @@ fn build_plan(
                 to: edited.summary.clone(),
             });
         }
+        if original.priority != edited.priority {
+            operations.push(Operation::Reprioritize {
+                id: id.clone(),
+                list: edited.list.clone(),
+                summary: edited.summary.clone(),
+                from: original.priority,
+                to: edited.priority,
+            });
+        }
         match (original.completed, edited.completed) {
             (false, true) => operations.push(Operation::Complete {
                 id: id.clone(),
@@ -192,6 +209,7 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
                         list: list.name.clone(),
                         summary: task.summary.clone(),
                         completed: task.completed,
+                        priority: task.priority,
                     },
                 )
             })
@@ -210,6 +228,7 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
                 list: list.name.clone(),
                 summary: task.summary.clone(),
                 completed: task.completed,
+                priority: task.priority,
             };
             match &task.id {
                 Some(id) => {
@@ -239,9 +258,10 @@ fn operation_sort_key<'a>(
         Operation::Rename { list, to, .. } => (list.as_str(), 0, to.as_str()),
         Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
         Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 4, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
+        Operation::Reprioritize { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
+        Operation::Create { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
+        Operation::Move { to, summary, .. } => (to.as_str(), 5, summary.as_str()),
+        Operation::Delete { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
     };
     (
         *list_positions.get(list).unwrap_or(&usize::MAX),
@@ -256,6 +276,7 @@ impl Operation {
             Self::Rename { list, .. }
             | Self::Complete { list, .. }
             | Self::Reopen { list, .. }
+            | Self::Reprioritize { list, .. }
             | Self::Create { list, .. }
             | Self::Delete { list, .. } => list,
             Self::Move { to, .. } => to,
@@ -294,6 +315,16 @@ impl fmt::Display for ChangePlan {
                     Operation::Reopen { summary, .. } => {
                         writeln!(formatter, "  reopened  {summary}")?;
                     }
+                    Operation::Reprioritize {
+                        summary, from, to, ..
+                    } => {
+                        writeln!(
+                            formatter,
+                            "  priority  {summary} ({} -> {})",
+                            from.label(),
+                            to.label()
+                        )?;
+                    }
                     Operation::Create { summary, .. } => {
                         writeln!(formatter, "  created   {summary}")?;
                     }
@@ -321,6 +352,7 @@ mod tests {
             id: TaskId::new(id),
             summary: summary.into(),
             completed: false,
+            priority: Priority::None,
         }
     }
 
@@ -336,7 +368,76 @@ mod tests {
             id: id.map(TaskId::new),
             summary: summary.into(),
             completed,
+            priority: Priority::None,
         }
+    }
+
+    #[test]
+    fn changing_a_priority_marker_plans_a_reprioritize() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    priority: Priority::High,
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    priority: Priority::Low,
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert_eq!(
+            plan.operations,
+            vec![Operation::Reprioritize {
+                id: TaskId::new("paper"),
+                list: "Postgrad".into(),
+                summary: "Write paper".into(),
+                from: Priority::High,
+                to: Priority::Low,
+            }]
+        );
+        assert!(format!("{plan}").contains("priority  Write paper (!!! -> !)"));
+    }
+
+    #[test]
+    fn an_unchanged_priority_level_is_not_a_change() {
+        // A task stored as PRIORITY:4 reads as !!!; leaving the marker alone
+        // must not plan anything, so the stored value survives.
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    priority: Priority::High,
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    priority: Priority::High,
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        assert_eq!(
+            reconcile(&baseline, &markdown, &baseline).unwrap(),
+            Reconciliation::NoChange
+        );
     }
 
     #[test]

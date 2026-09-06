@@ -14,8 +14,8 @@ $ todomd show             # print active tasks as JSON
 $ todomd show --completed # include finished tasks
 ```
 
-Creating, renaming, completing, reopening, moving, and deleting tasks is
-supported. Due dates, priorities, categories, and descriptions are preserved but
+Creating, renaming, prioritizing, completing, reopening, moving, and deleting
+tasks is supported. Due dates, categories, and descriptions are preserved but
 not editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md) and
 [ROADMAP.md](ROADMAP.md).
 
@@ -82,8 +82,8 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] Write paper draft <!-- todomd:id=t1 -->
-- [ ] Read related work <!-- todomd:id=t3 -->
+- [ ] !!! Write paper draft <!-- todomd:id=t1 -->
+- [ ] ! Read related work <!-- todomd:id=t3 -->
 
 # Personal
 
@@ -93,6 +93,8 @@ back to `$EDITOR`:
 | Edit | Result |
 |---|---|
 | Change task text | Rename |
+| Add or change `!`, `!!`, `!!!` | Set priority |
+| Remove the marker | Clear priority |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
 | Add a `- [ ]` line without a marker | Create in that list |
@@ -104,6 +106,22 @@ The `<!-- todomd:id=... -->` markers are session-local identities, not VTODO
 UIDs, and track a task across renames and moves. Removing one is treated as
 intentional: the old task is deleted and a new one created, which the preview
 states.
+
+An optional priority marker sits between the checkbox and the summary: `!!!`
+high, `!!` medium, `!` low, absent for none.
+
+A summary is quoted only when its start would otherwise be read as syntax, so
+ordinary text is never quoted:
+
+| Summary | Rendered |
+|---|---|
+| `Write paper draft` | `- [ ] Write paper draft` |
+| `He said "hi" to me` | `- [ ] He said "hi" to me` |
+| `!urgent thing` | `- [ ] "!urgent thing"` |
+| `"quoted" start` | `- [ ] """quoted"" start"` |
+
+Quote a summary yourself if you start it with `!` or `"`, or if it needs leading
+or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
 The dialect is strict. Only the selected level-one headings and top-level
 `- [ ]` and `- [x]` items are allowed, every selected list must keep its
@@ -154,13 +172,14 @@ $ todomd show Personal
     "uid": "f29e1dbd-b8b4-4327-89c2-608898269a01",
     "summary": "Buy milk, bread",
     "completed": false,
+    "priority": "medium",
     "file": "/home/gabriel/Calendars/personal/Personal/groceries.ics"
   }
 ]
 ```
 
 Tasks are ordered by list, then summary. `completed` is `true` only for tasks
-revealed by `--completed`.
+revealed by `--completed`. `priority` is `none`, `low`, `medium`, or `high`.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.
@@ -178,9 +197,11 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
   verified, and each staged operation is rechecked immediately before it runs.
 - Originals are backed up, writes use temporary files and atomic rename, and a
   mid-apply failure triggers a hash-guarded best-effort rollback.
-- Patches preserve unexposed data, including `DUE`, `PRIORITY`, `CATEGORIES`,
+- Patches preserve unexposed data, including `DUE`, `CATEGORIES`,
   `DESCRIPTION`, `RELATED-TO`, `X-` properties, and nested components such as
   `VALARM`.
+- `PRIORITY` is written only when the marker's level changes, so a stored value
+  like `4` survives edits that leave the level alone.
 
 A multi-file change cannot be truly atomic. `todomd` never intentionally applies
 part of a plan, but a crash mid-apply can leave one; the retained session and
@@ -211,7 +232,8 @@ parsing, conflict, staging, application, and post-apply failures.
 
 - Active tasks only, unless `--completed` is given.
 - Tasks without a summary are never rendered, only reported.
-- Summaries, completion, and list membership are the only editable fields.
+- Summaries, priority, completion, and list membership are the only editable
+  fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
 - No CalDAV, no watch mode, no automatic crash recovery.
