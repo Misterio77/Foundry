@@ -27,6 +27,9 @@ in {
         "/assets/".extraConfig = ''
           add_header Cache-Control "max-age=${toString (hours 1)}, stale-while-revalidate=${toString (days 30)}";
         '';
+        "=/404.html".extraConfig = ''
+          internal;
+        '';
         "/.well-known/caldav".return = "302 https://dav.m7.rs";
         "/.well-known/carddav".return = "302 https://dav.m7.rs";
 
@@ -36,6 +39,9 @@ in {
         "=/ssh.pub".alias = sshKey;
         "=/ssh".alias = sshKey;
       };
+      extraConfig = ''
+        error_page 404 /404.html;
+      '';
     };
     "m7.rs" = redir;
     "misterio.me" = redir;
