@@ -3,7 +3,7 @@
     ./khal.nix
     ./gtkhal.nix
     ./khard.nix
-    ./todoman.nix
+    ./todomd.nix
     ./oama.nix
     ./aerc.nix
 
