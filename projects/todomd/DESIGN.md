@@ -111,8 +111,8 @@ later `--watch` flag on `edit` needs no mode exclusions.
 | `todomd edit [LISTS]...` | Edit the named lists, with `--no-hooks` and `--keep` |
 | `todomd show [LISTS]...` | Print tasks as JSON |
 
-Both subcommands take `--completed`, which widens the task set from active tasks
-to every task.
+Both subcommands take `--completed`, which widens the task set from active-root
+trees to every task.
 
 Lists are positional only inside a subcommand. The top level takes no list
 arguments, so a list sharing a subcommand's name stays addressable and an
@@ -149,10 +149,11 @@ are preserved.
 
 ## Task scope
 
-A command operates either on active tasks or, with `--completed`, on every task.
-Completed and cancelled tasks are one set: both are finished states the default
-scope hides, and both render as `[x]`. Hiding a finished task also hides its
-full descendant subtree, so an active child never appears without its parent.
+A command operates on active root trees or, with `--completed`, on every task.
+Completed and cancelled tasks are one set, and both render as `[x]`. The default
+scope includes a finished subtask when all of its ancestors are active, then
+stops before that subtask's descendants. A finished root therefore hides its
+full descendant subtree, and a task never appears without its parent.
 
 The scope is resolved once and reused for the initial read, the reread after the
 editor exits, and the accepted-state refresh. Reading a different set at any of
@@ -200,10 +201,11 @@ carry opaque, session-local IDs mapped to source identities by the manifest.
 Session IDs rather than raw VTODO UIDs avoid leaking or misparsing arbitrary UID
 contents. A task without an ID is new.
 
-In the default scope only active tasks render, and they render unchecked. Tasks
-outside the current scope are absent from the document, so their absence is
-never read as deletion. An unchanged `IN-PROCESS` task stays `IN-PROCESS`;
-unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
+In the default scope active roots and their descendants render. Completed
+subtasks render checked, and traversal stops below them. Tasks outside the
+current scope are absent from the document, so their absence is never read as
+deletion. An unchanged `IN-PROCESS` task stays `IN-PROCESS`; unchecked syntax
+alone does not normalize it to `NEEDS-ACTION`.
 
 | Markdown edit | Operation |
 |---|---|

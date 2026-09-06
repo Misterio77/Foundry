@@ -10,8 +10,8 @@ never runs a syncer itself; hooks pause and resume whatever does.
 ```console
 $ todomd                  # edit every list
 $ todomd edit Postgrad    # edit chosen lists
-$ todomd show             # print active tasks as JSON
-$ todomd show --completed # include finished tasks
+$ todomd show             # print active-root task trees as JSON
+$ todomd show --completed # include every task
 ```
 
 Creating, renaming, nesting, prioritizing, completing, reopening, moving, and
@@ -140,10 +140,10 @@ The dialect is strict. It allows selected level-one headings and `- [ ]` or
 arbitrarily deep, but cannot skip a level. Every selected list must keep its
 heading, and summaries must be single-line and non-empty.
 
-Only active tasks are rendered by default, so finished history is neither shown
-nor touched. A hidden finished parent hides its entire descendant subtree.
-`--completed` adds completed and cancelled trees as `[x]` lines, making them
-editable: unticking one reopens it, and deleting its line deletes it.
+Only active root tasks are rendered by default. Their completed subtasks remain
+visible as `[x]`, but descendants below a completed subtask are hidden. A hidden
+finished root therefore hides its entire subtree. `--completed` adds every
+completed and cancelled tree.
 
 `SUMMARY` is optional in iCalendar. A task without one has nothing to render, so
 it and its descendant subtree are skipped in every scope and the task is
@@ -176,7 +176,7 @@ terminal.
 ## Scripting
 
 `todomd show` is read-only: no session, no editor, no hooks, no terminal.
-`--completed` includes finished tasks.
+`--completed` includes finished roots and descendants below completed subtasks.
 
 ```console
 $ todomd show Personal
@@ -194,9 +194,10 @@ $ todomd show Personal
 ```
 
 Tasks are ordered by list and tree. Each sibling set is ordered unfinished
-before finished, then by priority and summary. `completed` is `true` only for
-tasks revealed by `--completed`. `priority` is `none`, `low`, `medium`, or
-`high`; `parent_uid` is the parent VTODO UID or `null` for a rendered root.
+before finished, then by priority and summary. `completed` may be `true` in the
+default scope for a subtask below active ancestors. `priority` is `none`, `low`,
+`medium`, or `high`; `parent_uid` is the parent VTODO UID or `null` for a
+rendered root.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.
@@ -206,8 +207,8 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
 
 ## Safety
 
-- Only active tasks are rendered unless `--completed` is given, so finished
-  history is not disturbed by default.
+- Only active-root trees are rendered unless `--completed` is given. Completed
+  subtasks stay visible, but traversal stops below them.
 - Sources are reread after the editor exits; a source change during the session
   is reported as an inbound change or conflict instead of applying stale edits.
 - Before writing, list identity, membership, and SHA-256 content hashes are

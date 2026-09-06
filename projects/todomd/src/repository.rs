@@ -16,7 +16,7 @@ use crate::{
 /// Which tasks a command operates on.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Scope {
-    /// Tasks that are neither completed nor cancelled.
+    /// Active-root trees, stopping below any completed descendant.
     #[default]
     Active,
     /// Every task, including completed and cancelled ones.
@@ -327,16 +327,23 @@ fn project_tasks(
         output: &mut Vec<Task>,
     ) {
         let (task, path) = &loaded[id];
-        let hidden_by_scope = scope == Scope::Active && task.completed;
-        if hidden_by_scope || task.summary.is_empty() {
-            if task.summary.is_empty() && !hidden_by_scope {
+        let hidden_completed_root =
+            scope == Scope::Active && task.completed && task.parent.is_none();
+        if task.summary.is_empty() {
+            if !hidden_completed_root {
                 snapshot.unrepresentable.push(path.clone());
             }
+            return;
+        }
+        if hidden_completed_root {
             return;
         }
 
         snapshot.task_files.insert(task.id.clone(), path.clone());
         output.push(task.clone());
+        if scope == Scope::Active && task.completed {
+            return;
+        }
         if let Some(descendants) = children.get(&Some(task.id.clone())) {
             for child in descendants {
                 append_subtree(child, loaded, children, scope, snapshot, output);
@@ -670,11 +677,33 @@ mod tests {
             None,
             Some("blank"),
         );
+        write_todo(&list, "active", Some("Active parent"), None, None);
+        write_todo(
+            &list,
+            "done-child",
+            Some("Done child"),
+            Some("COMPLETED"),
+            Some("active"),
+        );
+        write_todo(
+            &list,
+            "active-grandchild",
+            Some("Active grandchild"),
+            None,
+            Some("done-child"),
+        );
         let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
 
         let (active, active_sources) =
             load_lists(&config, &["Work".to_owned()], Scope::Active).unwrap();
-        assert!(active.lists[0].tasks.is_empty());
+        assert_eq!(
+            active.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.id.as_str())
+                .collect::<Vec<_>>(),
+            ["active", "done-child"]
+        );
         assert_eq!(active_sources.unrepresentable.len(), 1);
 
         let (all, all_sources) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
@@ -684,7 +713,13 @@ mod tests {
                 .iter()
                 .map(|task| task.id.as_str())
                 .collect::<Vec<_>>(),
-            ["done", "active-child"]
+            [
+                "active",
+                "done-child",
+                "active-grandchild",
+                "done",
+                "active-child",
+            ]
         );
         assert_eq!(all_sources.unrepresentable.len(), 1);
     }
