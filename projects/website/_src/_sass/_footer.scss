@@ -65,7 +65,11 @@ body > footer {
     .stars {
       position: relative;
       width: 100%;
-      height: clamp(10rem, 22vw, 13rem);
+      max-width: 34rem;
+      margin-inline: auto;
+      // stars sit at true J2000 positions inside a 6%/10% margin, so the
+      // usable area is 0.88w by 0.8h; 1.5 makes that the real 1.65:1 field
+      aspect-ratio: 1.5;
 
       svg {
         position: absolute;
@@ -79,6 +83,11 @@ body > footer {
           stroke: var(--border);
           stroke-width: 0.45;
           vector-effect: non-scaling-stroke;
+
+          // let the dipper silhouette carry the shape; the odd stars out are detail
+          &.spurs {
+            stroke-opacity: 0.5;
+          }
         }
       }
 
