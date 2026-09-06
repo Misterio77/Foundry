@@ -26,8 +26,9 @@ backups, atomic file replacement, and best-effort rollback. Rejected, conflicted
 and invalid sessions are retained for inspection; unchanged and successfully
 applied sessions are removed.
 
-Lifecycle hooks are not implemented yet. Until they are, pause external writers
-such as vdirsyncer before applying changes.
+Optional lifecycle hooks can pause external writers for the session and trigger
+synchronization after a successful apply. `after_session` still runs when an
+edited session fails, conflicts, or receives a handled termination signal.
 
 See [DESIGN.md](DESIGN.md) for the complete design.
 
@@ -37,7 +38,24 @@ Create `~/.config/todomd/config.toml`:
 
 ```toml
 calendar_roots = ["~/Calendars/personal"]
+
+[hooks]
+before_session = [
+  "systemctl", "--user", "stop",
+  "vdirsyncer.timer", "vdirsyncer.service",
+]
+after_apply = [
+  "systemctl", "--user", "start",
+  "vdirsyncer.service",
+]
+after_session = [
+  "systemctl", "--user", "start",
+  "vdirsyncer.timer",
+]
 ```
+
+Hooks are argument arrays executed directly without a shell. Use `--no-hooks`
+to disable them for one invocation.
 
 Then run:
 

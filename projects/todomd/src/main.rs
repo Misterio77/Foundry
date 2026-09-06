@@ -8,7 +8,9 @@ use chrono::Utc;
 use clap::Parser;
 use todomd::{
     config::Config,
-    editor, markdown,
+    editor,
+    hooks::{Lifecycle, Termination},
+    markdown,
     planner::{self, Reconciliation},
     render_lists, repository,
     session::Session,
@@ -22,6 +24,10 @@ struct Cli {
     #[arg(long)]
     config: Option<PathBuf>,
 
+    /// Disable configured lifecycle hooks for this run.
+    #[arg(long)]
+    no_hooks: bool,
+
     /// Whole VTODO lists to render, in document order.
     #[arg(required = true)]
     lists: Vec<String>,
@@ -30,10 +36,26 @@ struct Cli {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = Config::load(cli.config.as_deref())?;
-    let rendered = render_lists(&config, &cli.lists)?;
+    let termination = Termination::install()?;
+    let lifecycle = Lifecycle::start(&config.hooks, !cli.no_hooks)?;
+    let result = run(&cli, &config, &lifecycle, &termination);
+    let result = lifecycle.finish(result);
+    if result.is_ok() {
+        termination.check()?;
+    }
+    result
+}
+
+fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Termination) -> Result<()> {
+    termination.check()?;
+    let rendered = render_lists(config, &cli.lists)?;
     let session = Session::create(&rendered)?;
 
-    if let Err(error) = editor::open(session.tasks_path()) {
+    if let Err(error) = editor::open(session.tasks_path(), || termination.is_requested()) {
+        retain_and_report(session);
+        return Err(error);
+    }
+    if let Err(error) = termination.check() {
         retain_and_report(session);
         return Err(error);
     }
@@ -41,7 +63,7 @@ fn main() -> Result<()> {
     let reconciliation = (|| {
         let edited_document = session.read_tasks()?;
         let edited = markdown::parse(&edited_document, &rendered.baseline, &rendered.manifest)?;
-        let (current_ics, sources) = repository::load_lists(&config, &cli.lists)?;
+        let (current_ics, sources) = repository::load_lists(config, &cli.lists)?;
         Ok((
             planner::reconcile(&rendered.baseline, &edited, &current_ics)?,
             sources,
@@ -55,6 +77,11 @@ fn main() -> Result<()> {
             return Err(error);
         }
     };
+
+    if let Err(error) = termination.check() {
+        retain_and_report(session);
+        return Err(error);
+    }
 
     match reconciliation {
         Reconciliation::NoChange => {
@@ -74,7 +101,12 @@ fn main() -> Result<()> {
                 return Err(error);
             }
 
-            let confirmed = match transaction::confirm() {
+            if let Err(error) = termination.check() {
+                retain_and_report(session);
+                return Err(error);
+            }
+
+            let confirmed = match transaction::confirm(|| termination.is_requested()) {
                 Ok(confirmed) => confirmed,
                 Err(error) => {
                     retain_and_report(session);
@@ -87,8 +119,21 @@ fn main() -> Result<()> {
                 eprintln!("todomd: changes cancelled; source files were not changed");
                 return Ok(());
             }
+            if let Err(error) = termination.check() {
+                retain_and_report(session);
+                return Err(error);
+            }
 
             if let Err(error) = transaction::apply(&staged, &sources) {
+                retain_and_report(session);
+                return Err(error);
+            }
+
+            if let Err(error) = lifecycle.after_apply() {
+                retain_and_report(session);
+                return Err(error);
+            }
+            if let Err(error) = termination.check() {
                 retain_and_report(session);
                 return Err(error);
             }

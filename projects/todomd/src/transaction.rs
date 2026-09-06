@@ -3,6 +3,9 @@ use std::{
     fmt, fs,
     io::{self, IsTerminal, Write},
     path::{Path, PathBuf},
+    sync::mpsc,
+    thread,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, bail};
@@ -240,7 +243,7 @@ pub fn apply(transaction: &StagedTransaction, sources: &SourceSnapshot) -> Resul
     Ok(())
 }
 
-pub fn confirm() -> Result<bool> {
+pub fn confirm(interrupted: impl Fn() -> bool) -> Result<bool> {
     if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
         bail!("confirmation requires an interactive terminal");
     }
@@ -249,11 +252,29 @@ pub fn confirm() -> Result<bool> {
     io::stderr()
         .flush()
         .context("failed to flush confirmation prompt")?;
-    let mut answer = String::new();
-    io::stdin()
-        .read_line(&mut answer)
-        .context("failed to read confirmation")?;
-    Ok(is_confirmed(&answer))
+
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let mut answer = String::new();
+        let result = io::stdin().read_line(&mut answer).map(|_| answer);
+        let _ = sender.send(result);
+    });
+    loop {
+        match receiver.recv_timeout(Duration::from_millis(50)) {
+            Ok(answer) => {
+                return Ok(is_confirmed(
+                    &answer.context("failed to read confirmation")?,
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) if interrupted() => {
+                bail!("termination requested");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                bail!("confirmation reader stopped unexpectedly");
+            }
+        }
+    }
 }
 
 impl StagedTransaction {

@@ -1,5 +1,6 @@
 pub mod config;
 pub mod editor;
+pub mod hooks;
 pub mod markdown;
 pub mod model;
 pub mod planner;

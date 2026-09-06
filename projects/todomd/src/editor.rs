@@ -1,10 +1,10 @@
-use std::{env, path::Path, process::Command};
+use std::{env, path::Path, process::Command, thread, time::Duration};
 
 use anyhow::{Context, Result, bail};
 
-pub fn open(path: &Path) -> Result<()> {
+pub fn open(path: &Path, interrupted: impl Fn() -> bool) -> Result<()> {
     let command_line = editor_command()?;
-    run(&command_line, path)
+    run(&command_line, path, interrupted)
 }
 
 fn editor_command() -> Result<String> {
@@ -19,22 +19,36 @@ fn editor_command() -> Result<String> {
     bail!("neither VISUAL nor EDITOR names an editor")
 }
 
-fn run(command_line: &str, path: &Path) -> Result<()> {
+fn run(command_line: &str, path: &Path, interrupted: impl Fn() -> bool) -> Result<()> {
     let arguments = parse_command(command_line)?;
     let (program, editor_arguments) = arguments
         .split_first()
         .context("editor command cannot be empty")?;
-    let status = Command::new(program)
+    let mut child = Command::new(program)
         .args(editor_arguments)
         .arg(path)
-        .status()
+        .spawn()
         .with_context(|| format!("failed to start editor {program:?}"))?;
 
-    if !status.success() {
-        bail!("editor exited with {status}");
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .with_context(|| format!("failed to wait for editor {program:?}"))?
+        {
+            if !status.success() {
+                bail!("editor exited with {status}");
+            }
+            return Ok(());
+        }
+        if interrupted() {
+            child
+                .kill()
+                .with_context(|| format!("failed to stop editor {program:?}"))?;
+            let _ = child.wait();
+            bail!("termination requested");
+        }
+        thread::sleep(Duration::from_millis(50));
     }
-
-    Ok(())
 }
 
 fn parse_command(command_line: &str) -> Result<Vec<String>> {
