@@ -111,7 +111,10 @@ heading, and summaries must be single-line and non-empty.
 Only active tasks are rendered by default, so finished history is neither shown
 nor touched. `--completed` adds completed and cancelled tasks as `[x]` lines,
 making them editable: unticking one reopens it, and deleting its line deletes
-it. A finished task with no summary has nothing to render and stays hidden.
+it.
+
+`SUMMARY` is optional in iCalendar. A task without one has nothing to render, so
+it is skipped in every scope and reported on stderr; edit its `.ics` directly.
 
 After the editor exits, `todomd` rereads the sources, reconciles, and previews
 both the semantic and filesystem changes:
@@ -206,7 +209,7 @@ parsing, conflict, staging, application, and post-apply failures.
 ## Limitations
 
 - Active tasks only, unless `--completed` is given.
-- Finished tasks without a summary are never rendered.
+- Tasks without a summary are never rendered, only reported.
 - Summaries, completion, and list membership are the only editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.

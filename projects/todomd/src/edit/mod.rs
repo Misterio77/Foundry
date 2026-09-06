@@ -75,6 +75,9 @@ fn session(
 ) -> Result<()> {
     termination.check()?;
     let rendered = render_lists(config, lists, options.scope)?;
+    if let Some(warning) = rendered.sources.unrepresentable_warning() {
+        eprintln!("todomd: {warning}");
+    }
     let session = Session::create(&rendered)?;
 
     if let Err(error) = editor::open(session.tasks_path(), || termination.is_requested()) {

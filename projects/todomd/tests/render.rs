@@ -18,7 +18,7 @@ fn renders_requested_lists_in_order() {
 # Personal\n\n\
 - [ ] Buy milk, bread <!-- todomd:id=t2 -->\n"
     );
-    assert_eq!(rendered.sources.files.len(), 4);
+    assert_eq!(rendered.sources.files.len(), 5);
     assert_eq!(rendered.sources.task_files.len(), 2);
     assert!(
         rendered

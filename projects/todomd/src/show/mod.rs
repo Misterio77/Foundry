@@ -34,6 +34,9 @@ pub fn run(config: &Config, requested_lists: &[String], scope: Scope) -> Result<
 
 pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<ShownTask>> {
     let (state, sources) = load_lists(config, lists, scope)?;
+    if let Some(warning) = sources.unrepresentable_warning() {
+        eprintln!("todomd: {warning}");
+    }
     let mut shown = Vec::new();
 
     for list in &state.lists {

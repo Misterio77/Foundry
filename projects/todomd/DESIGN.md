@@ -140,7 +140,8 @@ their directory name.
 
 Missing names, duplicate display names, unreadable lists, and malformed VTODO
 files are reported before the document opens. A file is never silently omitted
-from a selected list because parsing it failed.
+from a selected list: parse failures abort, and valid tasks that cannot be
+rendered are reported.
 
 One primary VTODO per `.ics` file is supported. Auxiliary components in the file
 are preserved.
@@ -155,11 +156,13 @@ The scope is resolved once and reused for the initial read, the reread after the
 editor exits, and the accepted-state refresh. Reading a different set at any of
 those points would turn tasks outside the scope into phantom deletions.
 
-A finished task whose `SUMMARY` is missing or blank has nothing to render, so it
-is excluded from both scopes rather than failing the command. An active task
-without a summary is still an error, because it cannot be shown at all. Status
-is never rewritten unless the checkbox changes, so a cancelled task keeps its
-status unless it is explicitly reopened.
+`SUMMARY` is optional in RFC 5545, so a task without one is valid but has no
+Markdown representation. Such tasks are excluded from every scope, regardless of
+completion, and reported on stderr rather than failing the command or vanishing
+silently. They stay editable through their `.ics` file.
+
+Status is never rewritten unless the checkbox changes, so a cancelled task keeps
+its status unless it is explicitly reopened.
 
 ## Markdown format
 

@@ -36,12 +36,31 @@ pub struct SourceSnapshot {
     pub list_dirs: BTreeMap<String, PathBuf>,
     pub files: Vec<SourceFile>,
     pub task_files: BTreeMap<TaskId, PathBuf>,
+    /// In-scope VTODOs with no summary to render. `SUMMARY` is optional in
+    /// RFC 5545, so these are valid but cannot appear in the document.
+    pub unrepresentable: Vec<PathBuf>,
 }
 
 impl SourceSnapshot {
     pub fn file_for_task(&self, task_id: &TaskId) -> Option<&SourceFile> {
         let path = self.task_files.get(task_id)?;
         self.files.iter().find(|source| &source.path == path)
+    }
+
+    /// Describes in-scope tasks left out of the document, so that they are
+    /// never omitted silently.
+    pub fn unrepresentable_warning(&self) -> Option<String> {
+        let (first, rest) = self.unrepresentable.split_first()?;
+        let count = self.unrepresentable.len();
+        let tasks = if count == 1 { "task" } else { "tasks" };
+        let more = match rest.len() {
+            0 => String::new(),
+            remaining => format!(", and {remaining} more"),
+        };
+        Some(format!(
+            "{count} {tasks} without a summary not shown: {}{more}",
+            first.display()
+        ))
     }
 }
 
@@ -155,6 +174,11 @@ pub fn load_lists(
             let Some(task) = task else {
                 continue;
             };
+
+            if task.summary.is_empty() {
+                snapshot.unrepresentable.push(path);
+                continue;
+            }
 
             if !seen_task_ids.insert(task.id.clone()) {
                 bail!(
@@ -287,15 +311,16 @@ fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>>
     }
 
     let uid = required_property(todo, "UID", path)?;
-    let summary = match optional_property(todo, "SUMMARY", path)? {
-        Some(summary) if !summary.trim().is_empty() => summary,
-        // A finished task with nothing to render stays out of the editable set
-        // rather than failing the command.
-        _ if completed => return Ok(None),
-        _ => bail!(
-            "VTODO in {} is missing required SUMMARY property",
-            path.display()
-        ),
+    // SUMMARY is optional in RFC 5545, so a task without one is valid but has
+    // nothing to render. Every scope skips it and reports it instead.
+    let Some(summary) =
+        optional_property(todo, "SUMMARY", path)?.filter(|summary| !summary.trim().is_empty())
+    else {
+        return Ok(Some(Task {
+            id: TaskId::new(uid),
+            summary: String::new(),
+            completed,
+        }));
     };
 
     Ok(Some(Task {
@@ -370,24 +395,83 @@ mod tests {
     }
 
     #[test]
-    fn ignores_completed_todos_without_summaries() {
+    fn never_renders_completed_todos_without_summaries() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:COMPLETED\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
 
+        // Out of scope entirely when active, unrenderable when included.
+        assert!(
+            parse_task(calendar, Path::new("done.ics"), Scope::Active)
+                .unwrap()
+                .is_none()
+        );
+        let task = parse_task(calendar, Path::new("done.ics"), Scope::All)
+            .unwrap()
+            .unwrap();
+        assert!(task.summary.is_empty());
+    }
+
+    #[test]
+    fn skips_todos_without_a_summary_in_every_scope() {
+        // SUMMARY is optional in RFC 5545: valid, but nothing to render.
+        let missing =
+            "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        let blank = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nSUMMARY:   \r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
         for scope in [Scope::Active, Scope::All] {
-            assert!(
-                parse_task(calendar, Path::new("done.ics"), scope)
+            for calendar in [missing, blank] {
+                let task = parse_task(calendar, Path::new("open.ics"), scope)
                     .unwrap()
-                    .is_none()
-            );
+                    .unwrap();
+                assert!(task.summary.is_empty());
+            }
         }
     }
 
     #[test]
-    fn requires_a_summary_on_active_todos() {
-        let calendar =
-            "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+    fn records_unrepresentable_tasks_instead_of_failing() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/calendars");
+        let config = Config::new(vec![root]).unwrap();
 
-        assert!(parse_task(calendar, Path::new("open.ics"), Scope::Active).is_err());
+        let (state, sources) =
+            load_lists(&config, &["Postgrad".to_owned()], Scope::Active).unwrap();
+
+        assert!(
+            state.lists[0]
+                .tasks
+                .iter()
+                .all(|task| !task.summary.is_empty())
+        );
+        assert_eq!(sources.unrepresentable.len(), 1);
+        assert!(sources.unrepresentable[0].ends_with("Postgrad/nosummary.ics"));
+        assert_eq!(
+            sources.unrepresentable_warning().unwrap(),
+            format!(
+                "1 task without a summary not shown: {}",
+                sources.unrepresentable[0].display()
+            )
+        );
+    }
+
+    #[test]
+    fn summarizes_several_unrepresentable_tasks() {
+        let snapshot = SourceSnapshot {
+            unrepresentable: vec![
+                PathBuf::from("/lists/a.ics"),
+                PathBuf::from("/lists/b.ics"),
+                PathBuf::from("/lists/c.ics"),
+            ],
+            ..SourceSnapshot::default()
+        };
+
+        assert_eq!(
+            snapshot.unrepresentable_warning().unwrap(),
+            "3 tasks without a summary not shown: /lists/a.ics, and 2 more"
+        );
+        assert!(
+            SourceSnapshot::default()
+                .unrepresentable_warning()
+                .is_none()
+        );
     }
 
     #[test]

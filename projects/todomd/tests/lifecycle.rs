@@ -145,6 +145,30 @@ fn show_prints_every_list_as_json_without_hooks_or_a_terminal() {
 }
 
 #[test]
+fn show_reports_tasks_it_cannot_render_without_breaking_json() {
+    let case = Case::new(0);
+    let output = case
+        .base("false")
+        .args(["show", "Postgrad"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("1 task without a summary not shown"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("nosummary.ics"), "{stderr}");
+
+    let tasks: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = tasks.as_array().unwrap();
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0]["uid"], "write@example.test");
+}
+
+#[test]
 fn show_completed_includes_finished_tasks() {
     let case = Case::new(0);
     let output = case
@@ -478,7 +502,7 @@ fn assert_complete_apply(calendars: &Path) {
                     .is_some_and(|extension| extension == "ics")
             })
             .count(),
-        3
+        4
     );
     assert_eq!(
         fs::read_dir(calendars.join("Personal"))
