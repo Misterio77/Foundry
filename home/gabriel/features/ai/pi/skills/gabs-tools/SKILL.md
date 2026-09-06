@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Manage Gabs's todos (todoman), appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail)
+description: Manage Gabs's todos (todomd), appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail)
 ---
 
 ## Syncing vdir-backed data
@@ -11,62 +11,51 @@ After creating, editing, moving, or deleting anything backed by vdir (todos, cal
 systemctl --user start vdirsyncer
 ```
 
-## Todos (todoman)
+## Todos (todomd + `.ics`)
 
-Todos live in a vdir at `~/Calendars/personal/`. Use the `todo` CLI (todoman).
+Todos live in a vdir at `~/Calendars/personal/`. `todomd` is the CLI, and `todo`
+is a fish abbreviation for it. Todoman is no longer installed.
 
-```bash
-todo                           # list all todos (with IDs, priorities, categories)
-todo done <id>                 # mark a todo as completed
-todo new "task text"           # create a new todo (prompts for details interactively)
-```
+### Reading
 
-### Lists vs categories
-
-`todo list <NAME>` filters by **list** (a vdir directory/calendary), not category. Use `--category` to filter by category instead.
-
-Lists are separate vdir directories under `~/Calendars/personal/` — e.g. list "Personal" lives in `~/Calendars/personal/Personal/`, list "Lumis" lives in a UUID-named directory. The UUID->name can be found by looking at the `displayname` file each list has.
+`todomd show` prints tasks as JSON. It is read-only: no editor, no hooks, no
+terminal needed.
 
 ```bash
-todo list Lumis                         # todos in the "Lumis" list
-todo list --category '@Blocked'         # todos tagged with @Blocked across all lists
+todomd show                       # active tasks in every list
+todomd show Postgrad Casa         # chosen lists
+todomd show --completed Postgrad  # include completed and cancelled
 ```
 
-Gabs uses categories as tags.
+Each entry has `list`, `uid`, `summary`, `completed`, and `file`:
 
-Priority markers: `!!!` (high), `!!` (medium), `!` (low), `Quick Win` (category).
-Status markers: `Blocked` (category) — means an **external** dependency prevents progress (e.g. out of supplies, waiting on someone else). NOT "I haven't gotten to it" or "it's my turn." If Gabs could do it right now but hasn't, that's not blocked — that's just pending.
-
-### Creating todos non-interactively
-
-`todo new` accepts flags to skip the interactive prompt:
-
-```bash
-todo new -l <list> --priority high --category Blocked "summary text"
+```json
+{
+  "list": "Casa",
+  "uid": "542812992406319126",
+  "summary": "Arrumar fechadura escritório",
+  "completed": false,
+  "file": "/home/gabriel/Calendars/personal/7eebf97d-.../542812992406319126.ics"
+}
 ```
 
-Flags: `-l` (list), `-r` (read description from stdin), `--priority` (low/medium/high), `--category`, `--due`, `--start`.
+Use `file` to reach an item. Filenames are chosen by whatever created the task,
+so a UID is not a path: don't construct one, and don't grep for the summary.
+`list` is already the display name, so there is no need to map UUID directories
+through their `displayname` files.
 
-To create subtasks, first create the parent task, capture its numeric ID from `todo new`/`todo list`, then pass `--subtask-for <id>` for each child:
+`SUMMARY` is optional in iCalendar. A task without one cannot be rendered, so
+`todomd` skips it and reports the path on stderr.
 
-```bash
-todo new -l Casa --priority medium "mercado"
-todo new -l Casa --subtask-for <parent-id> "sal"
-todo new -l Casa --subtask-for <parent-id> "detergente de louça"
-```
+### Do not run `todomd edit`
 
-Use this pattern for shopping-list batches: one parent task like `mercado` in list `Casa`, with each item as its own subtask.
+`todomd edit`, and bare `todomd`, opens `$VISUAL` and asks `[y/N]` on an
+interactive terminal. It also stops vdirsyncer for the duration. That is Gabs's
+path, not an agent's. Write through the `.ics` file instead.
 
-### Modifying todos via .ics files
+### Writing
 
-`todo edit` is limited non-interactively (no `--summary`, no `--list`). For any field change,
-edit the `.ics` file directly:
-
-```bash
-grep -rl "match text" ~/Calendars/personal/
-```
-
-Key fields in the `.ics`:
+Edit the `.ics` at `file`, then sync. Increment `SEQUENCE` on every change.
 
 | Field | Purpose |
 |---|---|
@@ -74,16 +63,50 @@ Key fields in the `.ics`:
 | `DESCRIPTION:` | Body text |
 | `PRIORITY:` | 1=high/`!!!`, 5=medium/`!!`, 9=low/`!` (ical default: 1 highest) |
 | `CATEGORIES:` | Comma-separated tags (delete line to remove all categories) |
-| `DUE:` | Due date (`YYYYMMDDTHHMMSSZ`) |
-| `SEQUENCE:` | Bump this on each edit (increment by 1) |
+| `DUE:` | Due date (`YYYYMMDDTHHMMSSZ`, or `DUE;VALUE=DATE:YYYYMMDD`) |
+| `STATUS:` | `NEEDS-ACTION`, `IN-PROCESS`, `COMPLETED`, `CANCELLED` |
+| `RELATED-TO;RELTYPE=PARENT:` | Parent task's UID, set on the child |
+| `SEQUENCE:` | Bump on each edit |
 
-**Moving between lists:** move the `.ics` file to the target list's vdir directory:
+**Completing:** set `STATUS:COMPLETED`, `COMPLETED:<timestamp>`, and
+`PERCENT-COMPLETE:100`. Reopening means `STATUS:NEEDS-ACTION` with `COMPLETED`
+and `PERCENT-COMPLETE` removed.
+
+**Creating:** write a new `<uid>.ics` in the list's directory. Minimum viable
+VTODO:
+
+```ics
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//agent//EN
+BEGIN:VTODO
+UID:<fresh uuid>
+DTSTAMP:20260906T010239Z
+CREATED:20260906T010239Z
+LAST-MODIFIED:20260906T010239Z
+SEQUENCE:0
+STATUS:NEEDS-ACTION
+SUMMARY:Task text
+END:VTODO
+END:VCALENDAR
+```
+
+**Subtasks:** create the parent first, then put
+`RELATED-TO;RELTYPE=PARENT:<parent-uid>` in each child. Use this for shopping
+batches: one parent like `mercado` in `Casa`, one child per item.
+
+**Moving between lists:** move the file into the target list's directory.
 
 ```bash
 mv ~/Calendars/personal/<from-dir>/<uid>.ics ~/Calendars/personal/<to-dir>/
 ```
 
-Todoman currently throws parse errors on some `.ics` files due to a known upstream bug with `RELATED-TO` param handling (`'list' object has no attribute 'params'`). The list still loads — these are cosmetic warnings.
+### Conventions
+
+Gabs uses categories as tags.
+
+Priority markers: `!!!` (high), `!!` (medium), `!` (low), `Quick Win` (category).
+Status markers: `Blocked` (category) — means an **external** dependency prevents progress (e.g. out of supplies, waiting on someone else). NOT "I haven't gotten to it" or "it's my turn." If Gabs could do it right now but hasn't, that's not blocked — that's just pending.
 
 ## Appointments (khal)
 
@@ -121,7 +144,7 @@ Plain markdown files. Key locations:
 
 | Path | Purpose |
 |---|---|
-| `~/Atelier/notes/TODO` | Main working todo (text-based, not todoman) |
+| `~/Atelier/notes/TODO` | Main working todo (plain text, not a vdir todo) |
 | `~/Atelier/notes/Elisa/` | Advisor meeting notes, dated `YYYY-MM-DD.md` |
 | `~/Atelier/notes/old/` | Archived/older notes |
 | `~/Atelier/notes/old/very-old/` | Ancient notes, GELOS, classes, etc. |
