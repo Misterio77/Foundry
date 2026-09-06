@@ -87,7 +87,7 @@ impl Case {
         command
     }
 
-    fn command(&self, editor: &str) -> Command {
+    fn edit_command(&self, editor: &str) -> Command {
         let mut command = self.base(editor);
         command.args(["edit", "Postgrad", "Personal"]);
         command
@@ -101,7 +101,7 @@ impl Case {
 #[test]
 fn no_change_runs_session_hooks_without_after_apply() {
     let case = Case::new(0);
-    let output = case.command("true").output().unwrap();
+    let output = case.edit_command("true").output().unwrap();
 
     assert!(output.status.success(), "{}", output_text(&output));
     assert_eq!(case.hooks(), "before\nafter\n");
@@ -172,7 +172,7 @@ fn a_list_name_is_not_mistaken_for_a_subcommand() {
 #[test]
 fn editor_failure_retains_the_session_and_runs_cleanup() {
     let case = Case::new(0);
-    let output = case.command("false").output().unwrap();
+    let output = case.edit_command("false").output().unwrap();
 
     assert!(!output.status.success());
     assert_eq!(case.hooks(), "before\nafter\n");
@@ -182,7 +182,11 @@ fn editor_failure_retains_the_session_and_runs_cleanup() {
 #[test]
 fn no_hooks_bypasses_every_configured_hook() {
     let case = Case::new(0);
-    let output = case.command("true").arg("--no-hooks").output().unwrap();
+    let output = case
+        .edit_command("true")
+        .arg("--no-hooks")
+        .output()
+        .unwrap();
 
     assert!(output.status.success(), "{}", output_text(&output));
     assert!(!case.hook_log.exists());
@@ -192,7 +196,7 @@ fn no_hooks_bypasses_every_configured_hook() {
 fn rejected_plan_changes_no_sources_and_runs_cleanup() {
     let case = Case::new(0);
     let before = source_contents(&case.calendars);
-    let mut command = case.command(case.editor.to_str().unwrap());
+    let mut command = case.edit_command(case.editor.to_str().unwrap());
     let output = run_in_pty(&mut command, b"n\n");
 
     assert!(output.status.success(), "{}", output_text(&output));
@@ -204,7 +208,7 @@ fn rejected_plan_changes_no_sources_and_runs_cleanup() {
 #[test]
 fn confirmed_plan_refreshes_a_retained_session_before_hooks_finish() {
     let case = Case::new(0);
-    let mut command = case.command(case.editor.to_str().unwrap());
+    let mut command = case.edit_command(case.editor.to_str().unwrap());
     command.arg("--keep");
     let output = run_in_pty(&mut command, b"y\n");
     let text = output_text(&output);
@@ -235,7 +239,7 @@ fn confirmed_plan_refreshes_a_retained_session_before_hooks_finish() {
 #[test]
 fn after_apply_failure_keeps_applied_sources_and_runs_cleanup() {
     let case = Case::new(7);
-    let mut command = case.command(case.editor.to_str().unwrap());
+    let mut command = case.edit_command(case.editor.to_str().unwrap());
     let output = run_in_pty(&mut command, b"y\n");
     let text = output_text(&output);
 
@@ -258,7 +262,7 @@ fn sigterm_interrupts_the_editor_and_runs_cleanup() {
             editor_started = editor_started.to_string_lossy()
         ),
     );
-    let mut command = case.command(sleeper.to_str().unwrap());
+    let mut command = case.edit_command(sleeper.to_str().unwrap());
     command
         .process_group(0)
         .stdout(Stdio::piped())
