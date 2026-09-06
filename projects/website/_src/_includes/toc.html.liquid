@@ -1,0 +1,65 @@
+{%- comment -%}
+Nested h2-h3 outline built from the already-rendered page content.
+
+Kramdown emits headings as `<hN id="slug">Title</hN>`, so we walk the markup at
+build time: split on `<h`, keep chunks whose level and `id="` prefix match, and
+skip anything else (headings without ids, escaped markup inside code blocks).
+Renders nothing for pages with fewer than two headings.
+{%- endcomment -%}
+{%- assign toc_items = "" -%}
+{%- assign toc_count = 0 -%}
+{%- assign toc_prev = 0 -%}
+{%- assign toc_chunks = content | split: "<h" -%}
+{%- for toc_chunk in toc_chunks -%}
+  {%- assign toc_level_str = toc_chunk | slice: 0, 1 -%}
+  {%- unless toc_level_str == "2" or toc_level_str == "3" -%}
+    {%- continue -%}
+  {%- endunless -%}
+  {%- assign toc_head = toc_chunk | split: "</h" | first -%}
+  {%- assign toc_quoted = toc_head | split: '"' -%}
+  {%- if toc_quoted.size < 2 -%}
+    {%- continue -%}
+  {%- endif -%}
+  {%- assign toc_id = toc_quoted[1] -%}
+  {%- assign toc_prefix = toc_level_str | append: ' id="' | append: toc_id | append: '">' -%}
+  {%- assign toc_prefix_size = toc_prefix | size -%}
+  {%- assign toc_head_start = toc_head | slice: 0, toc_prefix_size -%}
+  {%- unless toc_head_start == toc_prefix -%}
+    {%- continue -%}
+  {%- endunless -%}
+  {%- assign toc_title = toc_head | remove_first: toc_prefix | strip_html | strip -%}
+  {%- if toc_title == "" -%}
+    {%- continue -%}
+  {%- endif -%}
+  {%- assign toc_level = toc_level_str | plus: 0 -%}
+  {%- if toc_prev == 0 -%}
+    {%- assign toc_items = toc_items | append: "<ol>" -%}
+  {%- elsif toc_level > toc_prev -%}
+    {%- assign toc_depth = toc_level | minus: toc_prev -%}
+    {%- for toc_step in (1..toc_depth) -%}
+      {%- assign toc_items = toc_items | append: "<ol>" -%}
+    {%- endfor -%}
+  {%- elsif toc_level == toc_prev -%}
+    {%- assign toc_items = toc_items | append: "</li>" -%}
+  {%- else -%}
+    {%- assign toc_depth = toc_prev | minus: toc_level -%}
+    {%- for toc_step in (1..toc_depth) -%}
+      {%- assign toc_items = toc_items | append: "</li></ol>" -%}
+    {%- endfor -%}
+    {%- assign toc_items = toc_items | append: "</li>" -%}
+  {%- endif -%}
+  {%- assign toc_items = toc_items | append: '<li><a href="#' | append: toc_id | append: '">' | append: toc_title | append: "</a>" -%}
+  {%- assign toc_prev = toc_level -%}
+  {%- assign toc_count = toc_count | plus: 1 -%}
+{%- endfor -%}
+{%- if toc_count > 1 -%}
+  {%- assign toc_depth = toc_prev | minus: 2 -%}
+  {%- for toc_step in (1..toc_depth) -%}
+    {%- assign toc_items = toc_items | append: "</li></ol>" -%}
+  {%- endfor -%}
+  {%- assign toc_items = toc_items | append: "</li></ol>" -%}
+<details class="toc" open>
+  <summary>Contents</summary>
+  <nav aria-label="Table of contents">{{ toc_items }}</nav>
+</details>
+{%- endif -%}

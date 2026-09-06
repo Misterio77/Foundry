@@ -38,6 +38,11 @@ layout: root.html
     </header>
 
     <section>
+      {%- if page.collection == "posts" or page.collection == "publications" -%}
+        {%- unless page.toc == false -%}
+          {% include toc.html.liquid %}
+        {%- endunless -%}
+      {%- endif -%}
       {{ content }}
     </section>
   </article>

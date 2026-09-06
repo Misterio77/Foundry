@@ -90,6 +90,80 @@ main > article > section > ul {
   }
 }
 
+// Table of contents: delimited by starlight rules like the site's other
+// structural blocks, rather than as a filled panel (which here reads as code).
+.toc {
+  margin: 0 0 var(--space-8);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-top: var(--rule-width) solid var(--border);
+  border-bottom: var(--rule-width) solid var(--border);
+  border-image: var(--starlight-rule);
+
+  > summary {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    transition: color var(--duration-normal) var(--ease-linear);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--primary);
+    }
+  }
+
+  &[open] > summary {
+    margin-bottom: var(--space-3);
+  }
+
+  ol {
+    margin: 0;
+    padding-left: 0;
+    counter-reset: toc;
+    list-style: none;
+  }
+
+  ol ol {
+    padding-left: var(--space-4);
+  }
+
+  li {
+    margin: 0.15rem 0;
+    counter-increment: toc;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  // Flex keeps wrapped entries hanging-indented past their number.
+  li > a {
+    display: flex;
+    gap: 0.5em;
+    width: fit-content;
+    color: var(--text-main);
+    text-decoration: none;
+
+    &::before {
+      flex: none;
+      min-width: 1.7em;
+      color: var(--text-muted);
+      content: counters(toc, ".") " ";
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      transition: color var(--duration-normal) var(--ease-linear);
+    }
+
+    &:hover,
+    &:focus-visible {
+      color: var(--primary);
+      text-decoration: underline;
+
+      &::before {
+        color: var(--primary);
+      }
+    }
+  }
+}
+
 // Keep ambient stars clear of article content while softly feathering the edges.
 article > section {
   // Wide children provide their own scrollers; don't let them widen the page.
