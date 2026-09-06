@@ -19,30 +19,16 @@ in {
     "gsfontes.com" = {
       forceSSL = true;
       enableACME = true;
+      root = "${website}/public";
       locations = {
-        "/" = {
-          root = "${website}/public";
-          extraConfig = ''
-            add_header Cache-Control "max-age=${toString (minutes 5)}, stale-while-revalidate=${toString (minutes 15)}";
-          '';
-        };
-        "/assets/" = {
-          root = "${website}/public";
-          extraConfig = ''
-            add_header Cache-Control "max-age=${toString (hours 1)}, stale-while-revalidate=${toString (days 30)}";
-          '';
-        };
+        "/".extraConfig = ''
+          add_header Cache-Control "max-age=${toString (minutes 5)}, stale-while-revalidate=${toString (minutes 15)}";
+        '';
+        "/assets/".extraConfig = ''
+          add_header Cache-Control "max-age=${toString (hours 1)}, stale-while-revalidate=${toString (days 30)}";
+        '';
         "/.well-known/caldav".return = "302 https://dav.m7.rs";
         "/.well-known/carddav".return = "302 https://dav.m7.rs";
-
-        "=/nix" = {
-          # Script to download static nix
-          alias = ./scripts/nix-installer.sh;
-        };
-
-        "=/setup-gpg" = {
-          alias = ./scripts/setup-gpg.sh;
-        };
 
         "=/7088C7421873E0DB97FF17C2245CAB70B4C225E9.asc".alias = pgpKey;
         "=/pgp.asc".alias = pgpKey;
