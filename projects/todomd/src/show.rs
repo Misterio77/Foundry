@@ -1,9 +1,12 @@
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::{config::Config, repository::load_lists};
+use crate::{config::Config, repository::load_lists, resolve_lists};
 
 /// One active task, with the source file an external tool would edit.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -13,6 +16,17 @@ pub struct ShownTask {
     pub summary: String,
     pub completed: bool,
     pub file: PathBuf,
+}
+
+/// Prints the active tasks of the selected lists as JSON.
+pub fn run(config: &Config, requested_lists: &[String]) -> Result<()> {
+    let lists = resolve_lists(config, requested_lists)?;
+    let json = to_json(&collect(config, &lists)?)?;
+    let mut stdout = io::stdout().lock();
+    stdout
+        .write_all(json.as_bytes())
+        .context("failed to write tasks")?;
+    stdout.flush().context("failed to flush tasks")
 }
 
 pub fn collect(config: &Config, lists: &[String]) -> Result<Vec<ShownTask>> {
