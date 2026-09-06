@@ -1,132 +1,60 @@
 # todomd design
 
-## Purpose
+## Goal
 
-`todomd` edits local, vdir-backed VTODO lists through Markdown. A user selects
-one or more whole lists, edits their tasks in a temporary document, reviews the
-semantic changes, and applies those changes back to the source `.ics` files.
+Edit local, vdir-backed VTODO lists through a temporary Markdown document. A
+user selects whole lists, edits their tasks, reviews the resulting semantic
+change plan, and applies it to the source `.ics` files.
 
-```console
-$ todomd Postgrad Personal
-```
+The `.ics` files are the source of truth. Markdown is a session-scoped editing
+surface, not a second task store. `todomd` does not speak CalDAV; synchronizing
+the vdirs is an independent concern reached through hooks.
 
-The `.ics` files remain the source of truth. Markdown is a session-scoped
-editing surface, not another persistent task store. `todomd` does not speak
-CalDAV; synchronization software such as vdirsyncer remains an independent
-concern.
+The current driver is one-shot. The core supports repeated transactions so a
+later `edit --watch` can synchronize both directions without replacing it.
 
-The first release is deliberately one-shot. Its internals must nevertheless
-support repeated synchronization transactions so a later `--watch` driver can
-synchronize Markdown and ICS in both directions without replacing the core.
+## Scope
 
-## Implementation status
+Supported:
 
-The one-shot MVP described below is implemented in Rust and covered by unit and
-CLI lifecycle tests. Watch mode, due and start dates, and automatic crash
-recovery remain unimplemented.
-
-## Command surface
-
-Modes are subcommands rather than mode flags, so each carries only the options
-that apply to it and a later `watch` flag on `edit` does not have to be made
-mutually exclusive with anything:
-
-- `todomd` edits every discovered list;
-- `todomd edit [LISTS]...` edits the named lists, with `--no-hooks` and
-  `--keep`; and
-- `todomd show [LISTS]...` prints active tasks as JSON.
-
-Lists are positional only inside a subcommand. The top level takes no list
-arguments, so a list sharing a subcommand's name stays addressable and an
-unknown verb is reported instead of being read as a list.
-
-Omitting list names selects every discovered list, ordered by display name. A
-command resolves that set once and reuses it, so a list appearing mid-session
-cannot turn into a spurious inbound change.
-
-### Read-only view
-
-`show` exists because agents and scripts mostly need to read, and because
-editing arbitrary VTODO fields is better done against the `.ics` file than
-through a Markdown dialect that deliberately exposes very little.
-
-It emits a JSON array of active tasks, each with its list, UID, summary,
-completion flag, and absolute source file. The file is required: vdir item
-filenames are chosen by whatever created them, so a UID cannot be mapped to a
-path without reading the collection.
-
-`show` performs no session, editor, hook, or terminal work, so it is safe to
-call from a non-interactive context. It intentionally offers no write path;
-unexposed fields are edited in the `.ics` directly.
-
-## Product boundaries
-
-### MVP
-
-The MVP supports:
-
-- selecting the complete active-task set of multiple lists by display name;
-- creating tasks;
-- editing summaries;
-- completing tasks;
-- deleting tasks;
-- moving tasks between the selected lists;
+- selecting whole lists by display name;
+- creating, renaming, completing, moving, and deleting active tasks;
 - previewing and confirming a semantic change plan;
-- preserving iCalendar data not exposed in Markdown;
-- detecting source changes made during an editing session;
-- staging, backup, and best-effort rollback; and
-- optional hooks around the one-shot session and after a successful apply; and
-- a read-only JSON view for scripts and agents.
+- preserving iCalendar data the Markdown does not expose;
+- detecting source changes made during a session;
+- staging, backup, and best-effort rollback;
+- hooks around the session and after an apply; and
+- a read-only JSON view.
 
-### Next field extension
+Not supported:
 
-Due and start dates are the first planned editable fields after the MVP. Their
-absence from the initial Markdown format must not remove or alter existing date
-properties.
-
-### Deferred watch mode
-
-A later explicit `--watch` mode will:
-
-- apply valid Markdown saves automatically;
-- rerender Markdown when selected vdirs change;
-- keep the editor process open across transactions;
-- detect changes made independently on both sides;
-- rely on the editor to surface divergence from unsaved buffer contents; and
-- retain transaction artifacts for inspection and manual recovery.
-
-Watch mode is opt-in because saving becomes approval to change the vdirs. The
-one-shot mode remains the default and retains interactive confirmation.
-
-### Non-goals
-
-The initial project will not:
-
-- communicate with a CalDAV server;
-- require or directly control vdirsyncer;
-- edit priorities, categories, descriptions, recurrence, alarms, or task
+- CalDAV, or controlling synchronization software directly;
+- editing priorities, categories, descriptions, recurrence, alarms, or task
   relationships;
-- browse or reopen tasks completed before the session;
-- assign a persistent ordering to tasks;
-- silently merge concurrent semantic edits; or
-- serve as a general-purpose iCalendar editor.
+- reopening tasks completed before the session;
+- persistent task ordering;
+- silently merging concurrent semantic edits; or
+- general-purpose iCalendar editing.
 
-## Design principles
+Deferred: due and start dates, watch mode, automatic crash recovery. Adding
+date fields must not disturb existing date properties.
 
-1. **Model tasks, not files.** Diffs describe task operations; filesystem paths
-   are an application detail shown for safety.
-2. **Preserve what is not exposed.** Editing a summary must not discard an alarm,
-   recurrence rule, relationship, or vendor property.
-3. **Plan before mutation.** Parsing, validation, reconciliation, and staging all
-   finish before source files change.
-4. **Treat concurrency as normal.** Every transaction compares both sides with a
-   last-agreed baseline.
-5. **Keep drivers thin.** Editor exit and filesystem notifications only trigger
-   transactions; they do not contain synchronization logic.
-6. **Make repeated transactions possible immediately.** The core cannot assume
-   that a session has exactly one parse or apply cycle.
+## Principles
+
+1. **Model tasks, not files.** Plans describe task operations; paths appear in
+   the preview for safety only.
+2. **Preserve what is not exposed.** Editing a summary must not discard an
+   alarm, recurrence rule, relationship, or vendor property.
+3. **Plan before mutation.** Parsing, validation, reconciliation, and staging
+   finish before any source file changes.
+4. **Treat concurrency as normal.** Every transaction compares both sides
+   against a last-agreed baseline.
+5. **Keep drivers thin.** Editor exit and filesystem events trigger
+   transactions; they contain no synchronization logic.
+6. **Assume repeated transactions.** The core never assumes one parse or apply
+   cycle per session.
 7. **Reject ambiguity.** Invalid Markdown, unknown identities, duplicate lists,
-   and concurrent edits stop the transaction rather than inviting guesses.
+   and concurrent edits stop the transaction.
 
 ## Architecture
 
@@ -150,166 +78,77 @@ Markdown codec ─▶│                      │
                          applier
 
 one-shot driver ─┐
-                 ├─ triggers the same transaction engine
+                 ├─ trigger the same transaction engine
 watch driver ────┘
 ```
 
-### Canonical model
+| Component | Responsibility |
+|---|---|
+| Canonical model | Editable meaning only: list identity, task identity, list membership, summary, completion state |
+| Source snapshot | Patch context: source paths, raw file hashes, parsed objects, unexposed properties |
+| ICS repository | Discovers lists, reads VTODOs, patches objects, stages and applies filesystem operations |
+| Markdown codec | Deterministic rendering and strict parsing |
+| Reconciliation planner | Classifies divergence and produces a change set |
+| Transaction engine | Validates, stages, applies, and advances the baseline |
+| Drivers | Own interaction and event policy |
 
-The canonical model represents only the editable meaning shared by both
-formats:
+The canonical model holds no paths, raw files, parsed iCalendar objects, editor
+state, or watcher state, which keeps baselines and planning format-independent.
+The source snapshot carries that material separately, so raw hashes can guard
+application against changes the model and Markdown do not represent.
 
-- selected list identity and display name;
-- task identity;
-- list membership;
-- summary; and
-- completion state.
+Module layout follows this split: `config`, `model`, and `repository` are
+shared; each subcommand is a directory, with the editing machinery under
+`edit/`.
 
-It contains no paths, raw files, parsed iCalendar objects, editor state, or
-watcher state. The model has a deterministic semantic representation and hash
-used by reconciliation.
+## Commands
 
-### Source snapshot
+Modes are subcommands, so each carries only the options that apply to it and a
+later `--watch` flag on `edit` needs no mode exclusions.
 
-A separate source snapshot maps canonical identities to the material needed to
-patch the vdirs safely: source paths, raw file hashes, original iCalendar
-objects, and properties outside the MVP. Raw hashes guard application against
-changes that the canonical model and Markdown do not expose.
+| Command | Effect |
+|---|---|
+| `todomd` | Edit every discovered list |
+| `todomd edit [LISTS]...` | Edit the named lists, with `--no-hooks` and `--keep` |
+| `todomd show [LISTS]...` | Print active tasks as JSON |
 
-Keeping patch context outside the canonical model allows baselines and planners
-to remain format-independent. The applier receives both a semantic change set
-and the fresh source snapshot from which its stage was built.
+Lists are positional only inside a subcommand. The top level takes no list
+arguments, so a list sharing a subcommand's name stays addressable and an
+unknown verb is reported rather than read as a list name.
 
-### ICS repository
+Omitting list names selects every discovered list, ordered by display name. A
+command resolves that set once and reuses it, so a list appearing mid-session
+cannot become a spurious inbound change.
 
-The ICS repository:
+`show` is the read surface for scripts and agents. It emits a JSON array of
+active tasks, each with its list, UID, summary, completion flag, and absolute
+source file, and performs no session, editor, hook, or terminal work. The file
+is required because vdir item filenames are chosen by whatever created them, so
+a UID cannot be mapped to a path without reading the collection.
 
-- discovers lists below configured roots;
-- resolves display names through each list's `displayname` file;
-- reads VTODO components and source metadata;
-- produces canonical models and separate source snapshots;
-- patches existing objects without rebuilding them from Markdown fields;
-- stages new, modified, moved, and deleted files; and
-- applies staged filesystem operations with raw-hash guards.
-
-It does not invoke the editor, ask for confirmation, watch directories, or make
-synchronization policy decisions.
-
-### Markdown codec
-
-The Markdown codec is responsible only for deterministic rendering and strict
-parsing. Rendering the same canonical model with the same identity manifest
-must produce the same document. Parsing does not read ICS files or infer missing
-identities from summaries.
-
-### Reconciliation planner
-
-The planner receives three semantic states:
-
-- **baseline:** the last state known to agree on both sides;
-- **Markdown:** the current parsed document; and
-- **ICS:** a fresh read of the selected source lists.
-
-It classifies divergence before producing a change set:
-
-| Markdown vs baseline | ICS vs baseline | Classification |
-|---|---|---|
-| unchanged | unchanged | no change |
-| changed | unchanged | Markdown-to-ICS plan |
-| unchanged | changed | ICS-to-Markdown update |
-| changed | changed | conflict |
-
-The MVP one-shot driver uses the Markdown-to-ICS plan. If ICS changed while the
-editor was open, it reports the external change and retains the session instead
-of applying stale edits. The future watch driver also consumes
-ICS-to-Markdown updates.
-
-The first implementation treats any semantic changes on both sides as a
-conflict, even when they appear unrelated. Per-task automatic merging may be
-added later without changing the planner's inputs.
-
-A raw ICS change that does not alter editable semantics still refreshes source
-metadata. It must not cause an unnecessary Markdown rewrite, but an outgoing
-apply may proceed only against the refreshed source object after validating that
-the intended patch remains safe.
-
-### Transaction engine
-
-A transaction is callable independently of an editor process. It:
-
-1. reads the current Markdown document;
-2. reads the current selected vdirs;
-3. parses both into canonical states;
-4. reconciles them against the baseline;
-5. validates the complete result;
-6. constructs a semantic change set;
-7. stages all filesystem operations;
-8. delegates approval to the driver policy;
-9. applies the approved stage;
-10. renders the accepted result back to Markdown when machine identities were
-    added or changed;
-11. advances the semantic baseline and source snapshot after a successful local
-    apply or accepted inbound update; and
-12. runs any configured post-apply hook after a local apply.
-
-New tasks receive identities during planning. After their ICS files are applied,
-the accepted canonical result is atomically rendered back to `tasks.md`, so the
-new session IDs are present before another transaction can parse the document.
-The resulting self-write is identified by its accepted hash and ignored by a
-future watch driver.
-
-A failure before local application leaves the previous baseline valid. A
-post-apply hook failure does not undo valid local changes or their new baseline;
-a later transaction can continue from the locally accepted state.
-
-### Drivers
-
-Drivers own interaction and event policy, not data conversion.
-
-The one-shot driver:
-
-- creates the session;
-- performs the initial render;
-- invokes the editor;
-- triggers one transaction after a successful editor exit;
-- prints the plan;
-- asks for confirmation; and
-- cleans up or retains the session.
-
-The future watch driver:
-
-- watches the Markdown session directory and selected list directories;
-- debounces and classifies events;
-- triggers the same transaction engine repeatedly;
-- automatically approves valid Markdown-to-ICS plans;
-- atomically writes accepted ICS-to-Markdown updates; and
-- reports conflicts without overwriting either saved side.
+`show` has no write counterpart. Fields the Markdown does not expose are edited
+in the `.ics` directly, which suits both scripts and a deliberately narrow
+Markdown dialect.
 
 ## List discovery
 
-The configuration contains one or more vdir roots. Immediate child directories
-are candidate lists. A list argument matches the content of its `displayname`
-file, not its directory name.
+Configuration holds one or more vdir roots. Immediate child directories are
+candidate lists, matched by the content of their `displayname` file rather than
+their directory name.
 
-Missing names, duplicate display names, unreadable lists, and malformed
-supported VTODO files are reported before the initial Markdown document opens.
-`todomd` never silently omits a file from a selected list merely because parsing
-it failed.
+Missing names, duplicate display names, unreadable lists, and malformed VTODO
+files are reported before the document opens. A file is never silently omitted
+from a selected list because parsing it failed.
 
-The MVP supports one primary VTODO per `.ics` file. Auxiliary components needed
-by that VTODO may remain in the file and must be preserved. Exact compatibility
-rules for recurring VTODOs and unusual multi-component files will be fixed when
-selecting the iCalendar library.
+One primary VTODO per `.ics` file is supported. Auxiliary components in the file
+are preserved.
 
 ## Markdown format
-
-A rendered session resembles:
 
 ```markdown
 # Postgrad
 
 - [ ] Write paper draft <!-- todomd:id=t1 -->
-- [x] Read chapter four <!-- todomd:id=t2 -->
 - [ ] Email advisor
 
 # Personal
@@ -319,80 +158,103 @@ A rendered session resembles:
 
 Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
-Using session IDs rather than raw VTODO UIDs avoids leaking or misparsing
-arbitrary UID contents. A task without an ID is new.
+Session IDs rather than raw VTODO UIDs avoid leaking or misparsing arbitrary UID
+contents. A task without an ID is new.
 
-Only top-level task-list items are editable in the MVP. Blank lines are
-insignificant. Additional headings, missing or renamed selected headings,
-duplicate or unknown IDs, malformed checkboxes, and unsupported Markdown are
-parse errors. Task ordering has no semantic effect.
+Only active tasks render, and they render unchecked. Tasks completed or
+cancelled before the session are outside the editable set, so their absence is
+never read as deletion. An unchanged `IN-PROCESS` task stays `IN-PROCESS`;
+unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
 
-Only active tasks render initially, and they render unchecked. Existing
-completed and cancelled tasks are outside the editable set and remain untouched;
-their absence cannot be interpreted as deletion. A task checked during the
-session is completed and disappears from the next rendered active-task state.
-An unchanged `IN-PROCESS` task remains `IN-PROCESS`; unchecked syntax alone does
-not normalize it to `NEEDS-ACTION`.
-
-### Edit semantics
-
-| Markdown edit | Semantic operation |
+| Markdown edit | Operation |
 |---|---|
-| Change task text | Rename task |
-| Change `[ ]` to `[x]` | Complete task |
-| Add an item without an ID | Create task in the containing list |
-| Move an identified item beneath another heading | Move task to that list |
-| Remove an identified item | Delete task |
+| Change task text | Rename |
+| Change `[ ]` to `[x]` | Complete |
+| Add an item without an ID | Create in the containing list |
+| Move an identified item under another heading | Move to that list |
+| Remove an identified item | Delete |
 | Reorder items | No change |
 
-A new task receives a VTODO UID and session ID while planning and staging.
-After a successful apply, `tasks.md` is rerendered atomically with that session
-ID so a later transaction cannot mistake the task for another creation. Empty
-summaries are rejected.
+Only top-level task-list items are editable. Blank lines are insignificant.
+Additional headings, missing or renamed selected headings, duplicate or unknown
+IDs, malformed checkboxes, empty summaries, and unsupported Markdown are parse
+errors.
 
-## One-shot MVP lifecycle
+A new task receives a VTODO UID and session ID during planning. After a
+successful apply, `tasks.md` is rerendered atomically with that session ID, so a
+later transaction cannot mistake the task for another creation.
 
-The command is:
+## Reconciliation
 
-```text
-todomd [OPTIONS] LIST...
-```
+The planner receives three semantic states: the **baseline** last known to agree
+on both sides, the parsed **Markdown**, and a fresh read of the selected
+**ICS** lists.
 
-Provisional options are:
+| Markdown vs baseline | ICS vs baseline | Classification |
+|---|---|---|
+| unchanged | unchanged | no change |
+| changed | unchanged | Markdown-to-ICS plan |
+| unchanged | changed | ICS-to-Markdown update |
+| changed | changed | conflict |
 
-```text
---config PATH   use a specific configuration file
---keep          retain the session after a successful run
---no-hooks      disable configured hooks for this run
-```
+The one-shot driver applies Markdown-to-ICS plans. If ICS changed while the
+editor was open it reports the external change and retains the session instead
+of applying stale edits. A watch driver would also consume ICS-to-Markdown
+updates.
 
-The lifecycle is:
+Semantic changes on both sides are a conflict even when they appear unrelated.
+Per-task merging could be added later without changing the planner's inputs.
 
-1. Create a private session directory.
-2. Run the configured `before_session` hook.
-3. Discover and validate the requested lists.
-4. Read the initial ICS state as the baseline.
-5. Render the baseline to Markdown.
-6. Invoke `$VISUAL`, falling back to `$EDITOR`.
-7. If the editor exits successfully, run one synchronization transaction.
-8. If there is an outgoing plan, display its semantic and filesystem effects.
-9. Ask `Apply these changes? [y/N]`.
-10. Apply only after an explicit `y`.
-11. Update the manifest, Markdown machine IDs, baseline, and source snapshot.
-12. Run `after_apply` following a successful source apply.
-13. Run `after_session` on every exit path after `before_session` succeeds.
+A raw ICS change that alters no editable semantics refreshes source metadata
+only. It must not force a Markdown rewrite, and an outgoing apply may proceed
+only against the refreshed source object.
 
-A missing editor or non-zero editor exit does not produce a plan. An empty
-semantic diff exits successfully without a confirmation prompt.
+## Transactions
 
-If only ICS changed while the editor was open, the one-shot command reports the
-external update without rewriting the edited document. If both sides changed,
-it reports a conflict. Both cases retain the session for inspection.
+A transaction is callable without an editor process. It:
 
-## Session storage
+1. reads the Markdown document and the selected vdirs;
+2. parses both into canonical states;
+3. reconciles them against the baseline;
+4. validates the result and builds a semantic change set;
+5. stages every filesystem operation;
+6. delegates approval to the driver's policy;
+7. applies the approved stage;
+8. rerenders accepted Markdown when identities were added or changed;
+9. advances the baseline and source snapshot; and
+10. runs any post-apply hook.
 
-Sessions are private directories with mode `0700` below
-`$XDG_RUNTIME_DIR/todomd`, falling back to the system temporary directory:
+A failure before application leaves the previous baseline valid. A post-apply
+hook failure does not undo valid local changes or their new baseline.
+
+### Application safety
+
+Each initial read records the membership and raw content hashes of every file in
+the selected lists, including data absent from Markdown. Immediately before
+application, the applier rechecks that list identity, membership, and all raw
+hashes still match the snapshot the stage was built from, and rechecks each
+operation's own inputs before running it.
+
+Replacements are written to temporary files on the destination filesystem and
+renamed into place. Originals are copied into the transaction's `backup/`
+directory before being replaced, moved, or deleted. Moves keep the source
+filename; a destination collision fails the transaction rather than overwriting.
+
+A change spanning several files cannot be truly atomic. If an operation fails
+after mutation begins, `todomd` rolls back under the same hash guards, retains
+the session, and reports both the original and rollback failures. It never
+intentionally applies part of a plan. Process or machine failure can still
+interrupt rollback; the retained stage and backups support manual recovery, but
+automatic crash recovery is not claimed.
+
+Hash checks reduce but cannot eliminate a race with an uncooperative concurrent
+writer. A `before_session` hook can pause one. Watch mode instead relies on
+short transactions, fresh reads, and explicit conflict handling.
+
+### Session storage
+
+Sessions are private `0700` directories below `$XDG_RUNTIME_DIR/todomd`, falling
+back to the system temporary directory:
 
 ```text
 session-XXXXXX/
@@ -406,15 +268,12 @@ session-XXXXXX/
         └── backup/
 ```
 
-The layout supports multiple transactions even though the MVP driver triggers
-only one. Transaction numbering, manifests, and baseline replacement must not
-assume one-shot operation.
+Numbering supports multiple transactions even though the one-shot driver
+triggers one. Rejected, conflicted, and failed sessions are retained and their
+paths printed; others are removed unless `--keep` is given. Backups contain task
+data and inherit the private permissions.
 
-Rejected, conflicted, and failed sessions are retained and their paths printed.
-Successful sessions are removed unless `--keep` is used. Backups contain task
-data and inherit the private session permissions.
-
-## Change preview and approval
+## Approval
 
 The plan reports semantic operations and every affected path:
 
@@ -436,16 +295,17 @@ Apply these changes? [y/N]
 ```
 
 Confirmation requires an interactive terminal and an explicit `y`. Empty input
-rejects the plan. The MVP has no unattended one-shot apply option.
+rejects the plan. There is no unattended one-shot apply. Watch mode would use a
+different policy, where opting in makes a valid save its own approval.
 
-Watch mode will use a different approval policy: selecting `--watch` explicitly
-opts into automatic application after every valid Markdown save.
+Discovery, hook, editor, parsing, conflict, staging, and application failures
+exit non-zero. Rejecting a plan is a successful cancellation. The post-session
+hook's result is reported separately so it cannot hide a primary failure.
+Signals that cannot be handled, notably `SIGKILL`, cannot promise cleanup.
 
-## iCalendar preservation
+## iCalendar handling
 
-Existing files are never reconstructed solely from Markdown fields. The ICS
-repository patches the original parsed object and preserves unexposed
-properties, including:
+Existing files are patched, never rebuilt from Markdown fields, preserving:
 
 - due and start dates;
 - priorities and categories;
@@ -455,181 +315,64 @@ properties, including:
 - time zone components; and
 - vendor-specific properties.
 
-Files untouched by a change set are not rewritten. Changed files may be
-reserialized by the selected library, but unexposed data must remain
-semantically equivalent.
+Files untouched by a change set are not rewritten. Patched components are
+serialized through a typed writer so edited `TEXT` values are escaped.
 
-An existing task change increments `SEQUENCE` and updates the appropriate
-modification timestamp. Completion updates `STATUS`, `COMPLETED`, and relevant
-progress properties consistently. Exact normalization rules are chosen and
-tested alongside the iCalendar library.
-
-Source filenames and VTODO UIDs are independent identities. Moves preserve the
-source filename unless it collides in the destination, in which case staging
-fails before source mutation.
-
-## Application safety
-
-Every initial read records the membership and raw content hashes of all files in
-each selected list, including data not represented in Markdown. Staging uses
-freshly read source objects. Immediately before application, the applier checks
-that the complete selected-list membership and all raw hashes still match the
-source snapshot used to construct the stage.
-
-All validation and staging complete before approval. Replacements are written
-to temporary files on the destination filesystem and renamed into place.
-Originals are copied into the transaction's `backup/` directory before they are
-replaced, moved, or deleted.
-
-A change spanning several files or directories cannot be truly atomic. If an
-operation fails after mutation begins, `todomd` attempts rollback, retains the
-session, and reports both the original and rollback failures. It never
-intentionally applies only the valid subset of a plan. Process or machine failure
-can also interrupt rollback; the retained stage and backups support manual
-recovery, but automatic crash recovery is not an MVP claim.
-
-Raw hash checks reduce but cannot eliminate a race with an uncooperative writer
-between verification and multiple filesystem operations. A `before_session`
-hook can pause such a writer in one-shot mode. Watch mode instead expects short
-transactions, fresh reads, optimistic guards, and explicit conflict handling.
+Changing an existing task increments `SEQUENCE` and updates `DTSTAMP` and
+`LAST-MODIFIED`. Completion sets `STATUS`, `COMPLETED`, and `PERCENT-COMPLETE`
+consistently. Source filenames and VTODO UIDs are independent identities.
 
 ## Hooks
 
-The default configuration path is
-`$XDG_CONFIG_HOME/todomd/config.toml`, falling back to
-`~/.config/todomd/config.toml`.
+Configuration lives at `$XDG_CONFIG_HOME/todomd/config.toml`, falling back to
+`~/.config/todomd/config.toml`. Paths support home-directory expansion. Hooks
+are argument arrays executed directly, never shell strings.
 
-Example:
+| Hook | Contract |
+|---|---|
+| `before_session` | Runs once before any list is read; failure aborts the command |
+| `after_apply` | Runs only after source files changed; failure does not roll back |
+| `after_session` | Runs on every exit once `before_session` succeeded, including cancellation, failure, and handled termination signals |
 
-```toml
-calendar_roots = ["~/Calendars/personal"]
+Session-lifetime pause hooks do not suit a long-running watch process. Watch
+mode would run neither `before_session` nor `after_session`, only `after_apply`
+after each successful transaction.
 
-[hooks]
-before_session = [
-  "systemctl", "--user", "stop",
-  "vdirsyncer.timer", "vdirsyncer.service",
-]
-after_session = [
-  "systemctl", "--user", "start",
-  "vdirsyncer.timer",
-]
-after_apply = [
-  "systemctl", "--user", "start",
-  "vdirsyncer.service",
-]
-```
+## Deferred watch mode
 
-Paths support home-directory expansion. Hooks are argument arrays executed
-directly, never shell strings.
+`edit --watch` would apply valid Markdown saves automatically, rerender when the
+selected vdirs change, keep the editor open across transactions, and retain
+transaction artifacts for recovery. Saving becomes approval, so it stays opt-in
+and one-shot remains the default.
 
-If `before_session` fails, the command aborts. Once it succeeds,
-`after_session` runs on cancellation, editor failure, parse failure, conflict,
-application failure, and handled termination signals. An `after_apply` failure
-does not roll back already valid local changes; it is reported as a
-synchronization-hook failure and produces a non-zero exit.
+The watcher observes parent directories rather than existing inodes, because
+editors and synchronization tools commonly save by temporary-file rename. Events
+are debounced and reduced to content and semantic hashes; self-generated events
+matching the accepted transaction are ignored.
 
-Session-lifetime pause hooks are unsuitable for a long-running watch process.
-Watch mode will not run `before_session` or `after_session`; it may run
-`after_apply` after each successful Markdown-to-ICS transaction.
+On a Markdown save it parses the document, reads fresh ICS state, reconciles,
+applies a valid outgoing plan, rerenders generated identities, advances the
+baseline, and runs `after_apply`. An invalid intermediate save changes nothing
+and a later valid save retries.
 
-## Future bidirectional watch driver
+On an ICS change it validates the new state, reconciles against saved Markdown,
+and atomically replaces `tasks.md` for an ICS-only change. Unsaved editor buffer
+contents are invisible to `todomd`; the replacement makes editors report a
+diverged buffer.
 
-The future interface is:
+If both sides changed since the baseline, neither is rewritten or applied and
+the conflict awaits explicit resolution.
 
-```console
-todomd --watch Postgrad Personal
-```
+The architecture already satisfies what this requires: rendering, parsing, and
+the repository have no editor or watcher dependencies, transactions can run
+repeatedly against an updated baseline, approval is driver policy, inbound and
+outbound divergence share one classification, and session storage is numbered.
 
-The watcher observes parent directories rather than only existing file inodes,
-because editors and synchronization tools commonly save by temporary-file
-rename. Events are debounced, then reduced to content and semantic hashes.
-Self-generated events whose resulting hashes match the accepted transaction are
-ignored.
-
-### Markdown save
-
-When `tasks.md` changes, the driver:
-
-1. waits for the write burst to settle;
-2. parses the complete document;
-3. reads fresh ICS state;
-4. reconciles both with the baseline;
-5. automatically applies a valid Markdown-to-ICS plan;
-6. rerenders any generated machine identities into `tasks.md`;
-7. advances the baseline and source snapshot; and
-8. runs `after_apply`.
-
-An invalid intermediate save prints an error and changes neither ICS nor the
-baseline. A later valid save retries normally.
-
-### ICS change
-
-When a selected list changes, the driver:
-
-1. waits for the write burst to settle;
-2. reads and validates the complete selected ICS state;
-3. parses the saved Markdown document;
-4. reconciles both with the baseline;
-5. atomically replaces `tasks.md` for an ICS-only change; and
-6. advances the baseline and source snapshot.
-
-If the editor buffer has unsaved changes, those changes are invisible to
-`todomd`. The atomic replacement changes the file on disk; editors such as Helix
-then report that the buffer diverged and let the user reload or resolve it.
-
-If saved Markdown and ICS both changed since the baseline, `todomd` does not
-rewrite or apply either side. It reports a conflict and waits for explicit user
-resolution. Exact watch-mode conflict commands and recovery UX are deferred.
-
-## Exit behavior
-
-Discovery, hook, editor, parsing, conflict, staging, and application failures
-produce non-zero exits. Rejecting a one-shot plan is a successful cancellation
-and exits zero after printing the retained session path.
-
-The post-session hook's result is reported separately so it cannot hide the
-primary failure. Signals that cannot be handled, notably `SIGKILL`, cannot
-promise hook execution or cleanup.
-
-## Architectural acceptance criteria
-
-The MVP architecture is ready for a watch driver when:
-
-- Markdown rendering and parsing have no editor or watcher dependencies;
-- the ICS repository has no confirmation or event-loop dependencies;
-- a transaction can be invoked repeatedly in one process with an updated
-  baseline;
-- tests can exercise two consecutive transactions without launching an editor;
-- the one-shot driver supplies approval as policy rather than embedding it in
-  the applier;
-- inbound and outbound divergence are classified from the same three states;
-- session storage can contain multiple numbered transactions; and
-- no core API assumes that editor exit caused the change.
-
-## Resolved implementation decisions
-
-The MVP settled the following:
-
-- Rust, using the `icalendar` crate with its parser for patching and its typed
-  serializer for writing, so edited `TEXT` values are escaped;
-- one primary VTODO per `.ics` file, with all other components preserved
-  verbatim;
-- `DTSTAMP` and `LAST-MODIFIED` set to the transaction timestamp and `SEQUENCE`
-  incremented on every patched component;
-- SHA-256 over raw file bytes for source guards, and structural equality of the
-  canonical model for semantic comparison;
-- session artifacts as `tasks.md`, `baseline.json`, `manifest.json`, and
-  numbered `transactions/`, with staged files, per-file backups, and
-  `plan.json`; and
-- hooks as argument arrays executed without a shell.
-
-## Deferred implementation decisions
-
-Implementation work still needs to select:
+## Deferred decisions
 
 - compatibility rules for recurring VTODOs and unusual multi-component files;
 - session manifest migration policy;
 - event-watching abstraction;
 - durable crash-recovery protocol;
 - watch-mode conflict and recovery commands; and
-- whether per-task three-way merging is eventually worthwhile.
+- whether per-task merging is worthwhile.
