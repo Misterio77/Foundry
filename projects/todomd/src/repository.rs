@@ -75,6 +75,21 @@ pub fn verify_snapshot(snapshot: &SourceSnapshot) -> Result<()> {
     Ok(())
 }
 
+/// Resolves the lists a command operates on, defaulting to every discovered
+/// list in display-name order.
+pub fn resolve_lists(config: &Config, requested_lists: &[String]) -> Result<Vec<String>> {
+    if requested_lists.is_empty() {
+        return list_names(config);
+    }
+
+    let unique = requested_lists.iter().collect::<BTreeSet<_>>();
+    if unique.len() != requested_lists.len() {
+        bail!("list names must not be repeated");
+    }
+
+    Ok(requested_lists.to_vec())
+}
+
 pub fn list_names(config: &Config) -> Result<Vec<String>> {
     let discovered = discover_lists(config)?;
     if discovered.is_empty() {

@@ -8,7 +8,8 @@ use anyhow::{Context, Error, Result, anyhow};
 use serde::Serialize;
 use tempfile::{Builder, NamedTempFile, TempDir};
 
-use crate::{RenderedSession, markdown::IdentityManifest, model::TaskState};
+use super::{RenderedSession, markdown::IdentityManifest};
+use crate::model::TaskState;
 
 #[derive(Debug)]
 pub struct Session {
@@ -213,7 +214,9 @@ fn restrict_directory(_path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{markdown::IdentityManifest, model::TaskState, repository::SourceSnapshot};
+    use crate::{model::TaskState, repository::SourceSnapshot};
+
+    use super::super::markdown::IdentityManifest;
 
     use super::*;
 
@@ -270,7 +273,7 @@ mod tests {
             }],
         };
         let mut manifest = IdentityManifest::default();
-        let markdown = crate::markdown::render(&accepted, &mut manifest).unwrap();
+        let markdown = super::super::markdown::render(&accepted, &mut manifest).unwrap();
 
         session.accept(&markdown, &manifest, &accepted).unwrap();
 

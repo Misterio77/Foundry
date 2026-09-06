@@ -6,7 +6,10 @@ use std::{
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::{config::Config, repository::load_lists, resolve_lists};
+use crate::{
+    config::Config,
+    repository::{load_lists, resolve_lists},
+};
 
 /// One active task, with the source file an external tool would edit.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]

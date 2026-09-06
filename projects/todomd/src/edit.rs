@@ -1,3 +1,10 @@
+pub mod editor;
+pub mod hooks;
+pub mod markdown;
+pub mod planner;
+pub mod session;
+pub mod transaction;
+
 use std::io::{self, Write};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -5,19 +12,39 @@ use chrono::Utc;
 
 use crate::{
     config::Config,
-    editor,
-    hooks::{Lifecycle, Termination},
-    markdown,
-    planner::{self, Reconciliation},
-    render_lists, repository, resolve_lists,
-    session::Session,
-    transaction,
+    model::TaskState,
+    repository::{self, SourceSnapshot, resolve_lists},
 };
+use hooks::{Lifecycle, Termination};
+use markdown::{IdentityManifest, render};
+use planner::Reconciliation;
+use session::Session;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Options {
     pub no_hooks: bool,
     pub keep: bool,
+}
+
+#[derive(Debug)]
+pub struct RenderedSession {
+    pub markdown: String,
+    pub manifest: IdentityManifest,
+    pub baseline: TaskState,
+    pub sources: SourceSnapshot,
+}
+
+pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<RenderedSession> {
+    let (state, sources) = repository::load_lists(config, requested_lists)?;
+    let mut manifest = IdentityManifest::default();
+    let markdown = render(&state, &mut manifest)?;
+
+    Ok(RenderedSession {
+        markdown,
+        manifest,
+        baseline: state,
+        sources,
+    })
 }
 
 /// Renders the selected lists, opens them in an editor, and applies confirmed

@@ -19,9 +19,9 @@ use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
+use super::planner::{ChangePlan, Operation};
 use crate::{
     model::TaskId,
-    planner::{ChangePlan, Operation},
     repository::{SourceSnapshot, verify_snapshot},
 };
 
@@ -673,13 +673,12 @@ fn staged(change: &StagedFileChange) -> Result<&Path> {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{
-        config::Config,
+    use crate::{config::Config, repository::load_lists};
+
+    use super::super::{
         markdown::{IdentityManifest, parse, render},
         planner::{Reconciliation, reconcile},
-        repository::load_lists,
     };
-
     use super::*;
 
     fn fixture_root() -> PathBuf {
@@ -752,7 +751,7 @@ mod tests {
 
     #[test]
     fn escapes_edited_summary_text() {
-        let source = include_str!("../tests/fixtures/calendars/Postgrad/write.ics");
+        let source = include_str!("../../tests/fixtures/calendars/Postgrad/write.ics");
         let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
             .unwrap()
             .with_timezone(&Utc);

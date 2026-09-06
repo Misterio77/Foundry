@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use todomd::{config::Config, render_lists};
+use todomd::{config::Config, edit::render_lists};
 
 #[test]
 fn renders_requested_lists_in_order() {
