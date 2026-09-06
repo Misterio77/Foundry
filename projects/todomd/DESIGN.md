@@ -19,6 +19,12 @@ The first release is deliberately one-shot. Its internals must nevertheless
 support repeated synchronization transactions so a later `--watch` driver can
 synchronize Markdown and ICS in both directions without replacing the core.
 
+## Implementation status
+
+The one-shot MVP described below is implemented in Rust and covered by unit and
+CLI lifecycle tests. Watch mode, due and start dates, and automatic crash
+recovery remain unimplemented.
+
 ## Product boundaries
 
 ### MVP
@@ -565,15 +571,29 @@ The MVP architecture is ready for a watch driver when:
 - session storage can contain multiple numbered transactions; and
 - no core API assumes that editor exit caused the change.
 
+## Resolved implementation decisions
+
+The MVP settled the following:
+
+- Rust, using the `icalendar` crate with its parser for patching and its typed
+  serializer for writing, so edited `TEXT` values are escaped;
+- one primary VTODO per `.ics` file, with all other components preserved
+  verbatim;
+- `DTSTAMP` and `LAST-MODIFIED` set to the transaction timestamp and `SEQUENCE`
+  incremented on every patched component;
+- SHA-256 over raw file bytes for source guards, and structural equality of the
+  canonical model for semantic comparison;
+- session artifacts as `tasks.md`, `baseline.json`, `manifest.json`, and
+  numbered `transactions/`, with staged files, per-file backups, and
+  `plan.json`; and
+- hooks as argument arrays executed without a shell.
+
 ## Deferred implementation decisions
 
 Implementation work still needs to select:
 
-- language and iCalendar library;
-- exact component compatibility rules;
-- timestamp, progress, and `SEQUENCE` normalization;
-- semantic and raw hashing formats;
-- session manifest schema and migration policy;
+- compatibility rules for recurring VTODOs and unusual multi-component files;
+- session manifest migration policy;
 - event-watching abstraction;
 - durable crash-recovery protocol;
 - watch-mode conflict and recovery commands; and
