@@ -54,9 +54,17 @@ pub struct StagedTransaction {
 #[derive(Default)]
 struct ExistingEdit {
     summary: Option<String>,
-    complete: bool,
+    completion: CompletionChange,
     move_to: Option<String>,
     delete: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CompletionChange {
+    #[default]
+    Unchanged,
+    Complete,
+    Reopen,
 }
 
 #[derive(Serialize)]
@@ -90,7 +98,10 @@ pub fn stage(
                 existing.entry(id.clone()).or_default().summary = Some(to.clone());
             }
             Operation::Complete { id, .. } => {
-                existing.entry(id.clone()).or_default().complete = true;
+                existing.entry(id.clone()).or_default().completion = CompletionChange::Complete;
+            }
+            Operation::Reopen { id, .. } => {
+                existing.entry(id.clone()).or_default().completion = CompletionChange::Reopen;
             }
             Operation::Move { id, to, .. } => {
                 existing.entry(id.clone()).or_default().move_to = Some(to.clone());
@@ -144,12 +155,12 @@ pub fn stage(
             bail!("move destination {} already exists", destination.display());
         }
 
-        let contents = if edit.summary.is_some() || edit.complete {
+        let contents = if edit.summary.is_some() || edit.completion != CompletionChange::Unchanged {
             patch_existing(
                 &source.contents,
                 &task_id,
                 edit.summary.as_deref(),
-                edit.complete,
+                edit.completion,
                 now,
             )?
         } else {
@@ -324,7 +335,7 @@ fn patch_existing(
     contents: &str,
     task_id: &TaskId,
     summary: Option<&str>,
-    complete: bool,
+    completion: CompletionChange,
     now: DateTime<Utc>,
 ) -> Result<String> {
     let unfolded = unfold(contents);
@@ -357,10 +368,18 @@ fn patch_existing(
     if let Some(summary) = summary {
         set_property(todo, "SUMMARY", summary)?;
     }
-    if complete {
-        set_property(todo, "STATUS", "COMPLETED")?;
-        set_property(todo, "COMPLETED", &format_timestamp(now))?;
-        set_property(todo, "PERCENT-COMPLETE", "100")?;
+    match completion {
+        CompletionChange::Unchanged => {}
+        CompletionChange::Complete => {
+            set_property(todo, "STATUS", "COMPLETED")?;
+            set_property(todo, "COMPLETED", &format_timestamp(now))?;
+            set_property(todo, "PERCENT-COMPLETE", "100")?;
+        }
+        CompletionChange::Reopen => {
+            set_property(todo, "STATUS", "NEEDS-ACTION")?;
+            remove_property(todo, "COMPLETED");
+            remove_property(todo, "PERCENT-COMPLETE");
+        }
     }
 
     let sequence = optional_property(todo, "SEQUENCE")?
@@ -375,6 +394,12 @@ fn patch_existing(
     set_property(todo, "LAST-MODIFIED", &format_timestamp(now))?;
 
     Ok(Calendar::from(calendar).to_string())
+}
+
+fn remove_property(component: &mut ParsedComponent<'_>, name: &str) {
+    component
+        .properties
+        .retain(|property| !property.name.as_str().eq_ignore_ascii_case(name));
 }
 
 fn set_property(component: &mut ParsedComponent<'_>, name: &str, value: &str) -> Result<()> {
@@ -673,7 +698,10 @@ fn staged(change: &StagedFileChange) -> Result<&Path> {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{config::Config, repository::load_lists};
+    use crate::{
+        config::Config,
+        repository::{Scope, load_lists},
+    };
 
     use super::super::{
         markdown::{IdentityManifest, parse, render},
@@ -700,12 +728,20 @@ mod tests {
     }
 
     fn plan_for(config: &Config, markdown: &str) -> (ChangePlan, SourceSnapshot) {
+        plan_in_scope(config, markdown, Scope::Active)
+    }
+
+    fn plan_in_scope(
+        config: &Config,
+        markdown: &str,
+        scope: Scope,
+    ) -> (ChangePlan, SourceSnapshot) {
         let requested = vec!["Postgrad".to_owned(), "Personal".to_owned()];
-        let (baseline, _) = load_lists(config, &requested).unwrap();
+        let (baseline, _) = load_lists(config, &requested, scope).unwrap();
         let mut manifest = IdentityManifest::default();
         render(&baseline, &mut manifest).unwrap();
         let edited = parse(markdown, &baseline, &manifest).unwrap();
-        let (current, sources) = load_lists(config, &requested).unwrap();
+        let (current, sources) = load_lists(config, &requested, scope).unwrap();
         let Reconciliation::Outgoing(plan) = reconcile(&baseline, &edited, &current).unwrap()
         else {
             panic!("expected outgoing plan");
@@ -750,6 +786,55 @@ mod tests {
     }
 
     #[test]
+    fn reopening_clears_completion_and_keeps_hidden_properties() {
+        let source = include_str!("../../tests/fixtures/calendars/Postgrad/read.ics");
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let patched = patch_existing(
+            source,
+            &TaskId::new("read@example.test"),
+            None,
+            CompletionChange::Reopen,
+            now,
+        )
+        .unwrap();
+
+        assert!(patched.contains("STATUS:NEEDS-ACTION"), "{patched}");
+        assert!(!patched.contains("COMPLETED:"), "{patched}");
+        assert!(!patched.contains("PERCENT-COMPLETE"), "{patched}");
+        assert!(patched.contains("X-PRESERVED:yes"), "{patched}");
+        assert!(patched.contains("SUMMARY:Read chapter four"), "{patched}");
+    }
+
+    #[test]
+    fn applies_a_reopen_to_the_source_file() {
+        let calendars = copy_fixtures();
+        let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
+        let markdown = "# Postgrad\n\n\
+            - [ ] Read chapter four <!-- todomd:id=t1 -->\n\
+            - [ ] Write paper draft <!-- todomd:id=t2 -->\n\
+            \n\
+            # Personal\n\n\
+            - [ ] Buy milk, bread <!-- todomd:id=t3 -->\n";
+        let (plan, sources) = plan_in_scope(&config, markdown, Scope::All);
+        let session = tempfile::tempdir().unwrap();
+        fs::create_dir(session.path().join("transactions")).unwrap();
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let transaction = stage(&plan, &sources, session.path(), now).unwrap();
+
+        apply(&transaction, &sources).unwrap();
+
+        let reopened = fs::read_to_string(calendars.path().join("Postgrad/read.ics")).unwrap();
+        assert!(reopened.contains("STATUS:NEEDS-ACTION"), "{reopened}");
+        assert!(!reopened.contains("PERCENT-COMPLETE"), "{reopened}");
+        assert!(reopened.contains("X-PRESERVED:yes"), "{reopened}");
+    }
+
+    #[test]
     fn escapes_edited_summary_text() {
         let source = include_str!("../../tests/fixtures/calendars/Postgrad/write.ics");
         let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
@@ -759,7 +844,7 @@ mod tests {
             source,
             &TaskId::new("write@example.test"),
             Some(r"Comma, semicolon; slash\value"),
-            false,
+            CompletionChange::Unchanged,
             now,
         )
         .unwrap();

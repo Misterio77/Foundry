@@ -18,6 +18,11 @@ pub enum Operation {
         list: String,
         summary: String,
     },
+    Reopen {
+        id: TaskId,
+        list: String,
+        summary: String,
+    },
     Create {
         draft_id: usize,
         list: String,
@@ -132,12 +137,18 @@ fn build_plan(
                 to: edited.summary.clone(),
             });
         }
-        if !original.completed && edited.completed {
-            operations.push(Operation::Complete {
+        match (original.completed, edited.completed) {
+            (false, true) => operations.push(Operation::Complete {
                 id: id.clone(),
                 list: edited.list.clone(),
                 summary: edited.summary.clone(),
-            });
+            }),
+            (true, false) => operations.push(Operation::Reopen {
+                id: id.clone(),
+                list: edited.list.clone(),
+                summary: edited.summary.clone(),
+            }),
+            _ => {}
         }
     }
 
@@ -227,9 +238,10 @@ fn operation_sort_key<'a>(
     let (list, kind, summary) = match operation {
         Operation::Rename { list, to, .. } => (list.as_str(), 0, to.as_str()),
         Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 3, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
+        Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
+        Operation::Create { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
+        Operation::Move { to, summary, .. } => (to.as_str(), 4, summary.as_str()),
+        Operation::Delete { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
     };
     (
         *list_positions.get(list).unwrap_or(&usize::MAX),
@@ -243,6 +255,7 @@ impl Operation {
         match self {
             Self::Rename { list, .. }
             | Self::Complete { list, .. }
+            | Self::Reopen { list, .. }
             | Self::Create { list, .. }
             | Self::Delete { list, .. } => list,
             Self::Move { to, .. } => to,
@@ -278,6 +291,9 @@ impl fmt::Display for ChangePlan {
                     Operation::Complete { summary, .. } => {
                         writeln!(formatter, "  completed {summary}")?;
                     }
+                    Operation::Reopen { summary, .. } => {
+                        writeln!(formatter, "  reopened  {summary}")?;
+                    }
                     Operation::Create { summary, .. } => {
                         writeln!(formatter, "  created   {summary}")?;
                     }
@@ -308,12 +324,71 @@ mod tests {
         }
     }
 
+    fn completed_task(id: &str, summary: &str) -> Task {
+        Task {
+            completed: true,
+            ..task(id, summary)
+        }
+    }
+
     fn edited(id: Option<&str>, summary: &str, completed: bool) -> EditedTask {
         EditedTask {
             id: id.map(TaskId::new),
             summary: summary.into(),
             completed,
         }
+    }
+
+    #[test]
+    fn unchecking_a_completed_task_plans_a_reopen() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![completed_task("read", "Read chapter four")],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![edited(Some("read"), "Read chapter four", false)],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert_eq!(
+            plan.operations,
+            vec![Operation::Reopen {
+                id: TaskId::new("read"),
+                list: "Postgrad".into(),
+                summary: "Read chapter four".into(),
+            }]
+        );
+        assert!(format!("{plan}").contains("reopened  Read chapter four"));
+    }
+
+    #[test]
+    fn leaving_a_completed_task_checked_is_not_a_change() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![completed_task("read", "Read chapter four")],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![edited(Some("read"), "Read chapter four", true)],
+            }],
+        };
+
+        assert_eq!(
+            reconcile(&baseline, &markdown, &baseline).unwrap(),
+            Reconciliation::NoChange
+        );
     }
 
     #[test]

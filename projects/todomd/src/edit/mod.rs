@@ -13,7 +13,7 @@ use chrono::Utc;
 use crate::{
     config::Config,
     model::TaskState,
-    repository::{self, SourceSnapshot, resolve_lists},
+    repository::{self, Scope, SourceSnapshot, resolve_lists},
 };
 use hooks::{Lifecycle, Termination};
 use markdown::{IdentityManifest, render};
@@ -24,6 +24,7 @@ use session::Session;
 pub struct Options {
     pub no_hooks: bool,
     pub keep: bool,
+    pub scope: Scope,
 }
 
 #[derive(Debug)]
@@ -34,8 +35,12 @@ pub struct RenderedSession {
     pub sources: SourceSnapshot,
 }
 
-pub fn render_lists(config: &Config, requested_lists: &[String]) -> Result<RenderedSession> {
-    let (state, sources) = repository::load_lists(config, requested_lists)?;
+pub fn render_lists(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+) -> Result<RenderedSession> {
+    let (state, sources) = repository::load_lists(config, requested_lists, scope)?;
     let mut manifest = IdentityManifest::default();
     let markdown = render(&state, &mut manifest)?;
 
@@ -53,7 +58,7 @@ pub fn run(config: &Config, requested_lists: &[String], options: Options) -> Res
     let lists = resolve_lists(config, requested_lists)?;
     let termination = Termination::install()?;
     let lifecycle = Lifecycle::start(&config.hooks, !options.no_hooks)?;
-    let result = session(config, &lists, options.keep, &lifecycle, &termination);
+    let result = session(config, &lists, options, &lifecycle, &termination);
     let result = lifecycle.finish(result);
     if result.is_ok() {
         termination.check()?;
@@ -64,12 +69,12 @@ pub fn run(config: &Config, requested_lists: &[String], options: Options) -> Res
 fn session(
     config: &Config,
     lists: &[String],
-    keep: bool,
+    options: Options,
     lifecycle: &Lifecycle,
     termination: &Termination,
 ) -> Result<()> {
     termination.check()?;
-    let rendered = render_lists(config, lists)?;
+    let rendered = render_lists(config, lists, options.scope)?;
     let session = Session::create(&rendered)?;
 
     if let Err(error) = editor::open(session.tasks_path(), || termination.is_requested()) {
@@ -84,7 +89,7 @@ fn session(
     let reconciliation = (|| {
         let edited_document = session.read_tasks()?;
         let edited = markdown::parse(&edited_document, &rendered.baseline, &rendered.manifest)?;
-        let (current_ics, sources) = repository::load_lists(config, lists)?;
+        let (current_ics, sources) = repository::load_lists(config, lists, options.scope)?;
         Ok((
             planner::reconcile(&rendered.baseline, &edited, &current_ics)?,
             sources,
@@ -107,7 +112,7 @@ fn session(
     match reconciliation {
         Reconciliation::NoChange => {
             eprintln!("todomd: no changes");
-            retain_if_requested(session, keep);
+            retain_if_requested(session, options.keep);
             Ok(())
         }
         Reconciliation::Outgoing(plan) => {
@@ -151,7 +156,13 @@ fn session(
                 return Err(error);
             }
 
-            let refresh = refresh_accepted_session(&session, &rendered.manifest, config, lists);
+            let refresh = refresh_accepted_session(
+                &session,
+                &rendered.manifest,
+                config,
+                lists,
+                options.scope,
+            );
             let hook = lifecycle.after_apply();
             if let Err(error) = combine_post_apply(refresh, hook) {
                 retain_and_report(session);
@@ -163,7 +174,7 @@ fn session(
             }
 
             eprintln!("todomd: changes applied");
-            retain_if_requested(session, keep);
+            retain_if_requested(session, options.keep);
             Ok(())
         }
         Reconciliation::Inbound => {
@@ -191,8 +202,9 @@ fn refresh_accepted_session(
     manifest: &markdown::IdentityManifest,
     config: &Config,
     lists: &[String],
+    scope: Scope,
 ) -> Result<()> {
-    let (accepted, _) = repository::load_lists(config, lists)
+    let (accepted, _) = repository::load_lists(config, lists, scope)
         .context("source changes were applied, but the accepted state could not be read")?;
     let mut manifest = manifest.clone();
     let document = markdown::render(&accepted, &mut manifest)

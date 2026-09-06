@@ -18,7 +18,7 @@ later `edit --watch` can synchronize both directions without replacing it.
 Supported:
 
 - selecting whole lists by display name;
-- creating, renaming, completing, moving, and deleting active tasks;
+- creating, renaming, completing, reopening, moving, and deleting tasks;
 - previewing and confirming a semantic change plan;
 - preserving iCalendar data the Markdown does not expose;
 - detecting source changes made during a session;
@@ -31,7 +31,6 @@ Not supported:
 - CalDAV, or controlling synchronization software directly;
 - editing priorities, categories, descriptions, recurrence, alarms, or task
   relationships;
-- reopening tasks completed before the session;
 - persistent task ordering;
 - silently merging concurrent semantic edits; or
 - general-purpose iCalendar editing.
@@ -110,7 +109,10 @@ later `--watch` flag on `edit` needs no mode exclusions.
 |---|---|
 | `todomd` | Edit every discovered list |
 | `todomd edit [LISTS]...` | Edit the named lists, with `--no-hooks` and `--keep` |
-| `todomd show [LISTS]...` | Print active tasks as JSON |
+| `todomd show [LISTS]...` | Print tasks as JSON |
+
+Both subcommands take `--completed`, which widens the task set from active tasks
+to every task.
 
 Lists are positional only inside a subcommand. The top level takes no list
 arguments, so a list sharing a subcommand's name stays addressable and an
@@ -121,10 +123,10 @@ command resolves that set once and reuses it, so a list appearing mid-session
 cannot become a spurious inbound change.
 
 `show` is the read surface for scripts and agents. It emits a JSON array of
-active tasks, each with its list, UID, summary, completion flag, and absolute
-source file, and performs no session, editor, hook, or terminal work. The file
-is required because vdir item filenames are chosen by whatever created them, so
-a UID cannot be mapped to a path without reading the collection.
+tasks, each with its list, UID, summary, completion flag, and absolute source
+file, and performs no session, editor, hook, or terminal work. The file is
+required because vdir item filenames are chosen by whatever created them, so a
+UID cannot be mapped to a path without reading the collection.
 
 `show` has no write counterpart. Fields the Markdown does not expose are edited
 in the `.ics` directly, which suits both scripts and a deliberately narrow
@@ -142,6 +144,22 @@ from a selected list because parsing it failed.
 
 One primary VTODO per `.ics` file is supported. Auxiliary components in the file
 are preserved.
+
+## Task scope
+
+A command operates either on active tasks or, with `--completed`, on every task.
+Completed and cancelled tasks are one set: both are finished states the default
+scope hides, and both render as `[x]`.
+
+The scope is resolved once and reused for the initial read, the reread after the
+editor exits, and the accepted-state refresh. Reading a different set at any of
+those points would turn tasks outside the scope into phantom deletions.
+
+A finished task whose `SUMMARY` is missing or blank has nothing to render, so it
+is excluded from both scopes rather than failing the command. An active task
+without a summary is still an error, because it cannot be shown at all. Status
+is never rewritten unless the checkbox changes, so a cancelled task keeps its
+status unless it is explicitly reopened.
 
 ## Markdown format
 
@@ -161,8 +179,8 @@ carry opaque, session-local IDs mapped to source identities by the manifest.
 Session IDs rather than raw VTODO UIDs avoid leaking or misparsing arbitrary UID
 contents. A task without an ID is new.
 
-Only active tasks render, and they render unchecked. Tasks completed or
-cancelled before the session are outside the editable set, so their absence is
+In the default scope only active tasks render, and they render unchecked. Tasks
+outside the current scope are absent from the document, so their absence is
 never read as deletion. An unchanged `IN-PROCESS` task stays `IN-PROCESS`;
 unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
 
@@ -170,6 +188,7 @@ unchecked syntax alone does not normalize it to `NEEDS-ACTION`.
 |---|---|
 | Change task text | Rename |
 | Change `[ ]` to `[x]` | Complete |
+| Change `[x]` to `[ ]` | Reopen |
 | Add an item without an ID | Create in the containing list |
 | Move an identified item under another heading | Move to that list |
 | Remove an identified item | Delete |
@@ -320,7 +339,9 @@ serialized through a typed writer so edited `TEXT` values are escaped.
 
 Changing an existing task increments `SEQUENCE` and updates `DTSTAMP` and
 `LAST-MODIFIED`. Completion sets `STATUS`, `COMPLETED`, and `PERCENT-COMPLETE`
-consistently. Source filenames and VTODO UIDs are independent identities.
+consistently; reopening sets `STATUS` to `NEEDS-ACTION` and removes `COMPLETED`
+and `PERCENT-COMPLETE`. Source filenames and VTODO UIDs are independent
+identities.
 
 ## Hooks
 

@@ -40,8 +40,8 @@ impl Case {
         write_executable(
             &hook,
             "#!/bin/sh\nprintf '%s\\n' \"$2\" >> \"$1\"\n\
-             if [ \"$2\" = apply ]; then\n\
-               grep -q 'New task <!-- todomd:id=t3 -->' \"$4\"/todomd/session-*/tasks.md || exit 9\n\
+             if [ \"$2\" = apply ] && [ -n \"${TODOMD_REFRESH_MARKER:-}\" ]; then\n\
+               grep -q \"$TODOMD_REFRESH_MARKER\" \"$4\"/todomd/session-*/tasks.md || exit 9\n\
              fi\n\
              exit \"$3\"\n",
         );
@@ -145,6 +145,66 @@ fn show_prints_every_list_as_json_without_hooks_or_a_terminal() {
 }
 
 #[test]
+fn show_completed_includes_finished_tasks() {
+    let case = Case::new(0);
+    let output = case
+        .base("false")
+        .args(["show", "--completed", "Postgrad"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    let tasks: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = tasks.as_array().unwrap();
+    assert_eq!(tasks.len(), 2);
+    let done = tasks
+        .iter()
+        .find(|task| task["uid"] == "read@example.test")
+        .unwrap();
+    assert_eq!(done["completed"], true);
+    assert_eq!(done["summary"], "Read chapter four");
+}
+
+#[test]
+fn edit_completed_renders_and_reopens_finished_tasks() {
+    let case = Case::new(0);
+    let reopen = case.root.path().join("reopen-editor");
+    write_executable(
+        &reopen,
+        "#!/bin/sh\n\
+         set -eu\n\
+         grep -q '^- \\[x\\] Read chapter four' \"$1\"\n\
+         sed -i 's/^- \\[x\\] Read chapter four/- [ ] Read chapter four/' \"$1\"\n",
+    );
+    let mut command = case.base(reopen.to_str().unwrap());
+    command.args(["edit", "--completed", "Postgrad", "Personal"]);
+    let output = run_in_pty(&mut command, b"y\n");
+    let text = output_text(&output);
+
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("reopened  Read chapter four"), "{text}");
+    let reopened = fs::read_to_string(case.calendars.join("Postgrad/read.ics")).unwrap();
+    assert!(reopened.contains("STATUS:NEEDS-ACTION"), "{reopened}");
+    assert!(!reopened.contains("PERCENT-COMPLETE"), "{reopened}");
+    assert!(reopened.contains("X-PRESERVED:yes"), "{reopened}");
+}
+
+#[test]
+fn edit_hides_completed_tasks_by_default() {
+    let case = Case::new(0);
+    let check = case.root.path().join("assert-editor");
+    write_executable(
+        &check,
+        "#!/bin/sh\nif grep -q 'Read chapter four' \"$1\"; then exit 1; fi\nexit 0\n",
+    );
+
+    let output = case.base(check.to_str().unwrap()).output().unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("todomd: no changes"));
+}
+
+#[test]
 fn show_accepts_selected_lists() {
     let case = Case::new(0);
     let output = case
@@ -209,7 +269,9 @@ fn rejected_plan_changes_no_sources_and_runs_cleanup() {
 fn confirmed_plan_refreshes_a_retained_session_before_hooks_finish() {
     let case = Case::new(0);
     let mut command = case.edit_command(case.editor.to_str().unwrap());
-    command.arg("--keep");
+    command
+        .arg("--keep")
+        .env("TODOMD_REFRESH_MARKER", "New task <!-- todomd:id=t3 -->");
     let output = run_in_pty(&mut command, b"y\n");
     let text = output_text(&output);
 

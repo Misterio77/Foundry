@@ -13,6 +13,16 @@ use crate::{
     model::{Task, TaskId, TaskList, TaskState},
 };
 
+/// Which tasks a command operates on.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Scope {
+    /// Tasks that are neither completed nor cancelled.
+    #[default]
+    Active,
+    /// Every task, including completed and cancelled ones.
+    All,
+}
+
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     pub list_name: String,
@@ -101,6 +111,7 @@ pub fn list_names(config: &Config) -> Result<Vec<String>> {
 pub fn load_lists(
     config: &Config,
     requested_lists: &[String],
+    scope: Scope,
 ) -> Result<(TaskState, SourceSnapshot)> {
     let discovered = discover_lists(config)?;
     let mut state = TaskState { lists: Vec::new() };
@@ -133,7 +144,7 @@ pub fn load_lists(
             let sha256 = Sha256::digest(&bytes).into();
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
-            let task = parse_task(&contents, &path)?;
+            let task = parse_task(&contents, &path, scope)?;
             snapshot.files.push(SourceFile {
                 list_name: requested.clone(),
                 path: path.clone(),
@@ -250,7 +261,7 @@ fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
+fn parse_task(contents: &str, path: &Path, scope: Scope) -> Result<Option<Task>> {
     let unfolded = unfold(contents);
     let calendar = read_calendar(&unfolded)
         .map_err(anyhow::Error::msg)
@@ -268,19 +279,29 @@ fn parse_task(contents: &str, path: &Path) -> Result<Option<Task>> {
     };
 
     let status = optional_property(todo, "STATUS", path)?;
-    if status.as_deref().is_some_and(|status| {
+    let completed = status.as_deref().is_some_and(|status| {
         status.eq_ignore_ascii_case("COMPLETED") || status.eq_ignore_ascii_case("CANCELLED")
-    }) {
+    });
+    if completed && scope == Scope::Active {
         return Ok(None);
     }
 
     let uid = required_property(todo, "UID", path)?;
-    let summary = required_property(todo, "SUMMARY", path)?;
+    let summary = match optional_property(todo, "SUMMARY", path)? {
+        Some(summary) if !summary.trim().is_empty() => summary,
+        // A finished task with nothing to render stays out of the editable set
+        // rather than failing the command.
+        _ if completed => return Ok(None),
+        _ => bail!(
+            "VTODO in {} is missing required SUMMARY property",
+            path.display()
+        ),
+    };
 
     Ok(Some(Task {
         id: TaskId::new(uid),
         summary,
-        completed: false,
+        completed,
     }))
 }
 
@@ -335,22 +356,68 @@ mod tests {
     fn ignores_non_todo_components() {
         let event =
             "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
-        assert!(parse_task(event, Path::new("event.ics")).unwrap().is_none());
+        assert!(
+            parse_task(event, Path::new("event.ics"), Scope::Active)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
     fn rejects_multiple_todos() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:A\r\nEND:VTODO\r\nBEGIN:VTODO\r\nUID:b\r\nSUMMARY:B\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        assert!(parse_task(calendar, Path::new("multiple.ics")).is_err());
+        assert!(parse_task(calendar, Path::new("multiple.ics"), Scope::Active).is_err());
     }
 
     #[test]
     fn ignores_completed_todos_without_summaries() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:COMPLETED\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-        assert!(
-            parse_task(calendar, Path::new("done.ics"))
+
+        for scope in [Scope::Active, Scope::All] {
+            assert!(
+                parse_task(calendar, Path::new("done.ics"), scope)
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn requires_a_summary_on_active_todos() {
+        let calendar =
+            "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:open\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        assert!(parse_task(calendar, Path::new("open.ics"), Scope::Active).is_err());
+    }
+
+    #[test]
+    fn reports_completed_and_cancelled_tasks_only_in_the_wider_scope() {
+        for status in ["COMPLETED", "CANCELLED"] {
+            let calendar = format!(
+                "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:done\r\nSTATUS:{status}\r\nSUMMARY:Done\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
+            );
+
+            assert!(
+                parse_task(&calendar, Path::new("done.ics"), Scope::Active)
+                    .unwrap()
+                    .is_none()
+            );
+            let task = parse_task(&calendar, Path::new("done.ics"), Scope::All)
                 .unwrap()
-                .is_none()
-        );
+                .unwrap();
+            assert!(task.completed);
+            assert_eq!(task.summary, "Done");
+        }
+    }
+
+    #[test]
+    fn keeps_in_process_tasks_active() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:doing\r\nSTATUS:IN-PROCESS\r\nSUMMARY:Doing\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let task = parse_task(calendar, Path::new("doing.ics"), Scope::Active)
+            .unwrap()
+            .unwrap();
+
+        assert!(!task.completed);
     }
 }

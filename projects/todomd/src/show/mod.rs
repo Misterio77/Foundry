@@ -8,10 +8,10 @@ use serde::Serialize;
 
 use crate::{
     config::Config,
-    repository::{load_lists, resolve_lists},
+    repository::{Scope, load_lists, resolve_lists},
 };
 
-/// One active task, with the source file an external tool would edit.
+/// One task, with the source file an external tool would edit.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ShownTask {
     pub list: String,
@@ -21,10 +21,10 @@ pub struct ShownTask {
     pub file: PathBuf,
 }
 
-/// Prints the active tasks of the selected lists as JSON.
-pub fn run(config: &Config, requested_lists: &[String]) -> Result<()> {
+/// Prints the tasks of the selected lists as JSON.
+pub fn run(config: &Config, requested_lists: &[String], scope: Scope) -> Result<()> {
     let lists = resolve_lists(config, requested_lists)?;
-    let json = to_json(&collect(config, &lists)?)?;
+    let json = to_json(&collect(config, &lists, scope)?)?;
     let mut stdout = io::stdout().lock();
     stdout
         .write_all(json.as_bytes())
@@ -32,8 +32,8 @@ pub fn run(config: &Config, requested_lists: &[String]) -> Result<()> {
     stdout.flush().context("failed to flush tasks")
 }
 
-pub fn collect(config: &Config, lists: &[String]) -> Result<Vec<ShownTask>> {
-    let (state, sources) = load_lists(config, lists)?;
+pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<ShownTask>> {
+    let (state, sources) = load_lists(config, lists, scope)?;
     let mut shown = Vec::new();
 
     for list in &state.lists {
@@ -78,7 +78,12 @@ mod tests {
     fn reports_active_tasks_with_their_source_files() {
         let config = fixture_config();
 
-        let shown = collect(&config, &["Postgrad".to_owned(), "Personal".to_owned()]).unwrap();
+        let shown = collect(
+            &config,
+            &["Postgrad".to_owned(), "Personal".to_owned()],
+            Scope::Active,
+        )
+        .unwrap();
 
         assert_eq!(shown.len(), 2);
         assert_eq!(shown[0].list, "Postgrad");
@@ -91,6 +96,24 @@ mod tests {
     }
 
     #[test]
+    fn reports_completed_tasks_only_in_the_wider_scope() {
+        let config = fixture_config();
+        let lists = ["Postgrad".to_owned()];
+
+        let active = collect(&config, &lists, Scope::Active).unwrap();
+        let all = collect(&config, &lists, Scope::All).unwrap();
+
+        assert!(active.iter().all(|task| !task.completed));
+        assert_eq!(all.len(), active.len() + 1);
+        let reopened = all
+            .iter()
+            .find(|task| task.uid == "read@example.test")
+            .unwrap();
+        assert!(reopened.completed);
+        assert!(reopened.file.ends_with("Postgrad/read.ics"));
+    }
+
+    #[test]
     fn serializes_an_empty_selection_as_an_empty_array() {
         assert_eq!(to_json(&[]).unwrap(), "[]\n");
     }
@@ -99,7 +122,7 @@ mod tests {
     fn serializes_documented_fields() {
         let config = fixture_config();
 
-        let shown = collect(&config, &["Postgrad".to_owned()]).unwrap();
+        let shown = collect(&config, &["Postgrad".to_owned()], Scope::Active).unwrap();
         let json: serde_json::Value = serde_json::from_str(&to_json(&shown).unwrap()).unwrap();
 
         let task = &json[0];

@@ -11,11 +11,12 @@ never runs a syncer itself; hooks pause and resume whatever does.
 $ todomd                  # edit every list
 $ todomd edit Postgrad    # edit chosen lists
 $ todomd show             # print active tasks as JSON
+$ todomd show --completed # include finished tasks
 ```
 
-Creating, renaming, completing, moving, and deleting active tasks is supported.
-Due dates, priorities, categories, and descriptions are preserved but not
-editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md).
+Creating, renaming, completing, reopening, moving, and deleting tasks is
+supported. Due dates, priorities, categories, and descriptions are preserved but
+not editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md).
 
 ## Install
 
@@ -59,11 +60,12 @@ shell.
 |---|---|
 | `todomd` | Edit every discovered list. |
 | `todomd edit [LISTS]...` | Edit the named lists, or every list. |
-| `todomd show [LISTS]...` | Print active tasks as JSON. |
+| `todomd show [LISTS]...` | Print tasks as JSON. |
 
 | Option | Effect |
 |---|---|
 | `--config <PATH>` | Use a specific configuration file. Accepted anywhere. |
+| `--completed` | Include completed and cancelled tasks. |
 | `--no-hooks` | `edit` only. Skip configured hooks for this run. |
 | `--keep` | `edit` only. Retain the session after an unchanged or successful run. |
 
@@ -91,6 +93,7 @@ back to `$EDITOR`:
 |---|---|
 | Change task text | Rename |
 | Change `[ ]` to `[x]` | Complete |
+| Change `[x]` to `[ ]` | Reopen, with `--completed` |
 | Add a `- [ ]` line without a marker | Create in that list |
 | Move a line under another heading | Move between lists |
 | Delete a line | Delete |
@@ -105,8 +108,10 @@ The dialect is strict. Only the selected level-one headings and top-level
 `- [ ]` and `- [x]` items are allowed, every selected list must keep its
 heading, and summaries must be single-line and non-empty.
 
-Only active tasks are rendered, so completed and cancelled history is neither
-shown nor touched.
+Only active tasks are rendered by default, so finished history is neither shown
+nor touched. `--completed` adds completed and cancelled tasks as `[x]` lines,
+making them editable: unticking one reopens it, and deleting its line deletes
+it. A finished task with no summary has nothing to render and stays hidden.
 
 After the editor exits, `todomd` rereads the sources, reconciles, and previews
 both the semantic and filesystem changes:
@@ -135,6 +140,7 @@ terminal.
 ## Scripting
 
 `todomd show` is read-only: no session, no editor, no hooks, no terminal.
+`--completed` includes finished tasks.
 
 ```console
 $ todomd show Personal
@@ -149,8 +155,8 @@ $ todomd show Personal
 ]
 ```
 
-Tasks are ordered by list, then summary. `completed` is always `false`, since
-only active tasks are shown.
+Tasks are ordered by list, then summary. `completed` is `true` only for tasks
+revealed by `--completed`.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.
@@ -160,7 +166,8 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
 
 ## Safety
 
-- Only active tasks are rendered, so completed history cannot be disturbed.
+- Only active tasks are rendered unless `--completed` is given, so finished
+  history is not disturbed by default.
 - Sources are reread after the editor exits; a source change during the session
   is reported as an inbound change or conflict instead of applying stale edits.
 - Before writing, list identity, membership, and SHA-256 content hashes are
@@ -198,8 +205,9 @@ parsing, conflict, staging, application, and post-apply failures.
 
 ## Limitations
 
-- Active tasks only.
-- Summaries and list membership are the only editable fields.
+- Active tasks only, unless `--completed` is given.
+- Finished tasks without a summary are never rendered.
+- Summaries, completion, and list membership are the only editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
 - No CalDAV, no watch mode, no automatic crash recovery.
