@@ -6,26 +6,26 @@ layout: root.html
 </header>
 
 <main>
-  <article class="{% if page.citation %}publication {% endif %}{% if page.listing %}listing{% else %}document{% endif %}">
-    <header>
-      <h1>{{ page.title }}</h1>
+  <article aria-labelledby="page-title" class="{% if page.citation %}publication {% endif %}{% if page.listing %}listing{% else %}document{% endif %}">
+    <header aria-label="Header">
+      <h1 id="page-title">{{ page.title }}</h1>
       {% if page.subtitle %}
           <p><em>{{ page.subtitle }}</em></p>
       {% endif %}
       {% if page.date %}
-        <p>
+        <p aria-label="Publication date">
           <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date_to_long_string: "ordinal" }}</time>
         </p>
       {% endif %}
       {% if page.citation %}
         <ul class="inline-list">
           {% if page.citation.pdf_url %}
-            <li><a href="{{ page.citation.pdf_url }}">PDF</a></li>
+            <li aria-label="PDF link"><a href="{{ page.citation.pdf_url }}">PDF</a></li>
           {% endif %}
           {% if page.citation.doi %}
-            <li><a href="https://doi.org/{{ page.citation.doi }}">{{ page.citation.doi }}</a></li>
+            <li aria-label="DOI link"><a href="https://doi.org/{{ page.citation.doi }}">{{ page.citation.doi }}</a></li>
           {% endif %}
-          <li>
+          <li aria-label="Bibtex citation">
             <details class="link-details">
               <summary>Cite</summary>
               {% highlight bibtex %}{% include bibtex.liquid publication=page %}{% endhighlight %}
@@ -33,17 +33,17 @@ layout: root.html
           </li>
         </ul>
         {% if page.citation.author %}
-          <ul class="inline-list">
+          <ul aria-label="Authors" class="inline-list">
             {% for author in page.citation.author %}<li>{{ author }}</li>{% endfor %}
           </ul>
         {% endif %}
         {% if page.citation.conference_title %}
-          <p>{{ page.citation.conference_title }}</p>
+          <p aria-label="Conference title">{{ page.citation.conference_title }}</p>
         {% endif %}
       {% endif %}
     </header>
 
-    <section>
+    <section aria-label="Content">
       {%- if page.collection == "posts" or page.collection == "publications" -%}
         {%- unless page.toc == false -%}
           {% include toc.html.liquid %}

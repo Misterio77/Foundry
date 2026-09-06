@@ -177,7 +177,7 @@ main > article > section > ul {
       flex: none;
       min-width: 1.7em;
       color: var(--text-muted);
-      content: counters(toc, ".") " ";
+      content: counters(toc, ".") ". ";
       font-family: var(--font-mono);
       font-size: 0.85em;
       transition: color var(--duration-normal) var(--ease-linear);

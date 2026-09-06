@@ -1,11 +1,3 @@
-{%- comment -%}
-Nested h2-h3 outline built from the already-rendered page content.
-
-Kramdown emits headings as `<hN id="slug">Title</hN>`, so we walk the markup at
-build time: split on `<h`, keep chunks whose level and `id="` prefix match, and
-skip anything else (headings without ids, escaped markup inside code blocks).
-Renders nothing for pages with fewer than two headings.
-{%- endcomment -%}
 {%- assign toc_items = "" -%}
 {%- assign toc_count = 0 -%}
 {%- assign toc_prev = 0 -%}
@@ -58,8 +50,8 @@ Renders nothing for pages with fewer than two headings.
     {%- assign toc_items = toc_items | append: "</li></ol>" -%}
   {%- endfor -%}
   {%- assign toc_items = toc_items | append: "</li></ol>" -%}
-<details class="toc" open>
-  <summary>Contents</summary>
+<details aria-label="Table of contents" class="toc">
+  <summary>Table of contents</summary>
   <nav aria-label="Table of contents">{{ toc_items }}</nav>
 </details>
 {%- endif -%}
