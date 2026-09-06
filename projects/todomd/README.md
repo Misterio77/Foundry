@@ -110,6 +110,9 @@ states.
 An optional priority marker sits between the checkbox and the summary: `!!!`
 high, `!!` medium, `!` low, absent for none.
 
+Tasks render unfinished first, then by priority, then alphabetically. Ordering
+is presentational, so rearranging lines changes nothing.
+
 A summary is quoted only when its start would otherwise be read as syntax, so
 ordinary text is never quoted:
 
@@ -178,8 +181,9 @@ $ todomd show Personal
 ]
 ```
 
-Tasks are ordered by list, then summary. `completed` is `true` only for tasks
-revealed by `--completed`. `priority` is `none`, `low`, `medium`, or `high`.
+Tasks are ordered by list, then unfinished before finished, then priority, then
+summary. `completed` is `true` only for tasks revealed by `--completed`.
+`priority` is `none`, `low`, `medium`, or `high`.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
 turned into a path; use `file` to read or edit an item directly.

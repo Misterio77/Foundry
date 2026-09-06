@@ -181,6 +181,15 @@ A task line is a checkbox, an optional priority marker, a summary, and an
 optional identity marker. `!!!`, `!!`, and `!` are high, medium, and low; an
 absent marker is no priority.
 
+Tasks render unfinished first, then by descending priority, then alphabetically
+by summary, with the task identity breaking ties so the same state always
+renders identically. Sorting finished tasks last keeps the wider scope usable
+when a list holds one open task among hundreds.
+
+Ordering carries no meaning: it is presentational, and reordering lines is not a
+change. Because Markdown flattens nine iCalendar priorities into three levels,
+tasks stored as `PRIORITY:1` and `PRIORITY:4` interleave alphabetically.
+
 Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
 Session IDs rather than raw VTODO UIDs avoid leaking or misparsing arbitrary UID

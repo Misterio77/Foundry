@@ -190,10 +190,18 @@ pub fn load_lists(
             tasks.push(task);
         }
 
+        // Unfinished first, then highest priority, then alphabetical, with the
+        // identity breaking ties. Ordering is presentational: the planner
+        // ignores it.
         tasks.sort_by(|left, right| {
-            left.summary
-                .to_lowercase()
-                .cmp(&right.summary.to_lowercase())
+            left.completed
+                .cmp(&right.completed)
+                .then_with(|| right.priority.cmp(&left.priority))
+                .then_with(|| {
+                    left.summary
+                        .to_lowercase()
+                        .cmp(&right.summary.to_lowercase())
+                })
                 .then_with(|| left.id.cmp(&right.id))
         });
         state.lists.push(TaskList {
@@ -430,6 +438,63 @@ mod tests {
                 assert!(task.summary.is_empty());
             }
         }
+    }
+
+    #[test]
+    fn sorts_by_status_then_priority_then_name() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+
+        for (uid, summary, priority, done) in [
+            ("a", "zulu", Some("1"), false),
+            ("b", "alpha", None, false),
+            ("c", "Bravo", Some("9"), false),
+            ("d", "alpha", Some("1"), false),
+            ("e", "mike", Some("5"), false),
+            ("f", "delta", Some("4"), false),
+            ("g", "aardvark", Some("1"), true),
+            ("h", "yankee", None, true),
+        ] {
+            let priority = priority.map_or(String::new(), |value| format!("PRIORITY:{value}\r\n"));
+            let status = if done {
+                "STATUS:COMPLETED\r\n"
+            } else {
+                "STATUS:NEEDS-ACTION\r\n"
+            };
+            fs::write(
+                list.join(format!("{uid}.ics")),
+                format!(
+                    "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:{uid}\r\nSUMMARY:{summary}\r\n{priority}{status}END:VTODO\r\nEND:VCALENDAR\r\n"
+                ),
+            )
+            .unwrap();
+        }
+
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+        let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
+
+        let order = state.lists[0]
+            .tasks
+            .iter()
+            .map(|task| (task.completed, task.priority, task.summary.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            [
+                // 1 and 4 both read as high, so they interleave alphabetically.
+                (false, Priority::High, "alpha"),
+                (false, Priority::High, "delta"),
+                (false, Priority::High, "zulu"),
+                (false, Priority::Medium, "mike"),
+                (false, Priority::Low, "Bravo"),
+                (false, Priority::None, "alpha"),
+                // Finished tasks sink below every unfinished one.
+                (true, Priority::High, "aardvark"),
+                (true, Priority::None, "yankee"),
+            ]
+        );
     }
 
     #[test]

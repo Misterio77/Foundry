@@ -42,12 +42,29 @@ What the real vdirs contain:
 
 Nested list items are the obvious rendering, which reverses the current rule
 that only top-level items are editable. Ordering becomes partly structural too,
-since tasks sort by summary today but children have to follow their parent.
+since children have to follow their parent whatever the sort says.
 
 Decisions needed: what deleting a parent does to its children, whether a parent
 can be completed while children are open, and whether a child may move to a list
 its parent is not in. An empty or dangling parent reference must render as a
 top-level task rather than an error.
+
+## Configurable sorting
+
+Tasks render unfinished first, then by priority, then alphabetically, with the
+task identity breaking ties. Ordering is presentational, so changing it is safe:
+the planner ignores line order.
+
+The fixed default does not suit everything:
+
+- 323 tasks already carry `X-APPLE-SORT-ORDER` from other clients, so a manual
+  order exists in the data and is currently discarded;
+- due date is an obvious sort key once dates are editable; and
+- grouping by priority rather than sorting by it suits some lists better.
+
+Likely shape: a configured list of sort keys, overridable per list. Whatever the
+keys, rendering the same state must stay deterministic, since the accepted-state
+refresh and any future watch mode compare rendered documents.
 
 ## Shell completions
 
