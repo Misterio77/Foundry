@@ -1,0 +1,18 @@
+{%- assign scheme = site.data.colorscheme[site.default_scheme] -%}
+{%- comment -%}
+  One icon per colour scheme, so each mode gets its own URL: a favicon is
+  rasterised once per URL and the bitmap is cached, so a single URL expected to
+  render two ways is at the mercy of that cache. Dark is unconditional and light
+  overrides it, as the colours are declared in the layout, which also leaves a
+  candidate for user agents reporting no preference.
+{%- endcomment -%}
+{%- capture dark_icon -%}
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='{{ scheme.colors.dark.primary }}' d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/></svg>
+{%- endcapture -%}
+{%- capture light_icon -%}
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='{{ scheme.colors.light.primary }}' d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/></svg>
+{%- endcapture -%}
+{%- assign dark_icon = dark_icon | strip | replace: "%", "%25" | replace: "#", "%23" | replace: "<", "%3C" | replace: ">", "%3E" | replace: " ", "%20" -%}
+{%- assign light_icon = light_icon | strip | replace: "%", "%25" | replace: "#", "%23" | replace: "<", "%3C" | replace: ">", "%3E" | replace: " ", "%20" -%}
+<link rel="icon" href="data:image/svg+xml,{{ dark_icon }}">
+<link rel="icon" media="(prefers-color-scheme: light)" href="data:image/svg+xml,{{ light_icon }}">

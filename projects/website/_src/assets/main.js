@@ -5,6 +5,37 @@ layout: null
 var schemes = {{ site.data.colorscheme | jsonify }};
 var schemeNames = Object.keys(schemes);
 var chosenSchemeStyle = null;
+var starPath = "M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z";
+
+// One icon per colour scheme, matching the markup in favicon.html.liquid: a
+// favicon URL is rasterised once and cached, so each mode needs its own URL
+// rather than one URL expected to render two ways.
+function faviconUri(color) {
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
+        "<path fill='" + color + "' d='" + starPath + "'/></svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+function setFavicon(media, href) {
+    var link = document.querySelector(media
+        ? "link[rel='icon'][media='" + media + "']"
+        : "link[rel='icon']:not([media])");
+    if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", "icon");
+        if (media) link.setAttribute("media", media);
+        document.head.appendChild(link);
+    }
+    link.setAttribute("href", href);
+}
+
+function updateFavicon(scheme) {
+    var colors = schemes[scheme] && schemes[scheme].colors;
+    if (!colors) return;
+
+    setFavicon(null, faviconUri(colors.dark.primary));
+    setFavicon("(prefers-color-scheme: light)", faviconUri(colors.light.primary));
+}
 
 function setCookie(name, value, days) {
     var expires = "";
@@ -58,6 +89,7 @@ function setTheme(scheme, persist) {
         "@media print {\n  :root {\n" + colorDeclarations(colors.light) + "  }\n}";
 
     updateThemeControls(scheme);
+    updateFavicon(scheme);
     if (persist !== false) setCookie("fontes_theme", scheme, 365);
 }
 
@@ -74,6 +106,7 @@ function resetTheme() {
     eraseCookie("fontes_theme");
 
     updateThemeControls("{{ site.default_scheme }}");
+    updateFavicon("{{ site.default_scheme }}");
 }
 
 function updateThemeControls(scheme) {
