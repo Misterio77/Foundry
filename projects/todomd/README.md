@@ -16,7 +16,8 @@ $ todomd show --completed # include finished tasks
 
 Creating, renaming, completing, reopening, moving, and deleting tasks is
 supported. Due dates, priorities, categories, and descriptions are preserved but
-not editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md).
+not editable. Watch mode is not implemented. See [DESIGN.md](DESIGN.md) and
+[ROADMAP.md](ROADMAP.md).
 
 ## Install
 
