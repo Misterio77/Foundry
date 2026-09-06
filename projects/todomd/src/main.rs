@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use chrono::Utc;
 use clap::Parser;
 use todomd::{
@@ -27,6 +27,10 @@ struct Cli {
     /// Disable configured lifecycle hooks for this run.
     #[arg(long)]
     no_hooks: bool,
+
+    /// Retain the session after an unchanged or successful run.
+    #[arg(long)]
+    keep: bool,
 
     /// Whole VTODO lists to render, in document order.
     #[arg(required = true)]
@@ -86,6 +90,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
     match reconciliation {
         Reconciliation::NoChange => {
             eprintln!("todomd: no changes");
+            retain_if_requested(session, cli.keep);
             Ok(())
         }
         Reconciliation::Outgoing(plan) => {
@@ -129,7 +134,10 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
                 return Err(error);
             }
 
-            if let Err(error) = lifecycle.after_apply() {
+            let refresh =
+                refresh_accepted_session(&session, &rendered.manifest, config, &cli.lists);
+            let hook = lifecycle.after_apply();
+            if let Err(error) = combine_post_apply(refresh, hook) {
                 retain_and_report(session);
                 return Err(error);
             }
@@ -139,6 +147,7 @@ fn run(cli: &Cli, config: &Config, lifecycle: &Lifecycle, termination: &Terminat
             }
 
             eprintln!("todomd: changes applied");
+            retain_if_requested(session, cli.keep);
             Ok(())
         }
         Reconciliation::Inbound => {
@@ -159,6 +168,38 @@ fn write_preview(
     let mut stdout = io::stdout().lock();
     write!(stdout, "{plan}\n{staged}").context("failed to write change preview")?;
     stdout.flush().context("failed to flush change preview")
+}
+
+fn refresh_accepted_session(
+    session: &Session,
+    manifest: &markdown::IdentityManifest,
+    config: &Config,
+    lists: &[String],
+) -> Result<()> {
+    let (accepted, _) = repository::load_lists(config, lists)
+        .context("source changes were applied, but the accepted state could not be read")?;
+    let mut manifest = manifest.clone();
+    let document = markdown::render(&accepted, &mut manifest)
+        .context("source changes were applied, but the accepted state could not be rendered")?;
+    session
+        .accept(&document, &manifest, &accepted)
+        .context("source changes were applied, but the session could not be refreshed")
+}
+
+fn combine_post_apply(refresh: Result<()>, hook: Result<()>) -> Result<()> {
+    match (refresh, hook) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(refresh), Err(hook)) => Err(anyhow!(
+            "{refresh:#}; after_apply hook also failed: {hook:#}"
+        )),
+    }
+}
+
+fn retain_if_requested(session: Session, keep: bool) {
+    if keep {
+        retain_and_report(session);
+    }
 }
 
 fn retain_and_report(session: Session) {

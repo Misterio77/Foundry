@@ -22,9 +22,10 @@ document in `$VISUAL` or `$EDITOR`.
 After the editor exits, `todomd` strictly parses the document, rereads the source
 vdirs, performs three-way reconciliation, and stages the semantic and filesystem
 changes. An explicit `[y/N]` confirmation applies them with source-hash guards,
-backups, atomic file replacement, and best-effort rollback. Rejected, conflicted,
-and invalid sessions are retained for inspection; unchanged and successfully
-applied sessions are removed.
+backups, atomic file replacement, and best-effort rollback. After application,
+the accepted Markdown, identity manifest, and baseline are refreshed atomically
+per file. Rejected, conflicted, and invalid sessions are retained for inspection;
+unchanged and successfully applied sessions are removed by default.
 
 Optional lifecycle hooks can pause external writers for the session and trigger
 synchronization after a successful apply. `after_session` still runs when an
@@ -55,7 +56,8 @@ after_session = [
 ```
 
 Hooks are argument arrays executed directly without a shell. Use `--no-hooks`
-to disable them for one invocation.
+to disable them for one invocation, or `--keep` to retain a coherent unchanged
+or successfully applied session.
 
 Then run:
 
