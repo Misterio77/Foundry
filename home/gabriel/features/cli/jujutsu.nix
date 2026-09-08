@@ -56,5 +56,8 @@ in {
     };
   };
 
-  home.packages = [jjw];
+  home.packages = [
+    jjw
+    pkgs.jj-hunk-tool
+  ];
 }

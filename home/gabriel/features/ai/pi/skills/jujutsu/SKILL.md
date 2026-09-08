@@ -134,10 +134,11 @@ For any rewrite or destructive-looking operation:
 3. Use explicit revisions and non-interactive flags.
 4. Verify graph, status, diff, bookmarks, and conflicts afterward.
 
+For splits, prefer `jj-hunk-tool`: inspect selections with `jj-hunk-tool hunks -r <revision>`, then run `jj-hunk-tool split <hunk-id>... -r <revision> -m "<first description>"`. It supports line ranges such as `<hunk-id>:1-3,7-9`; verify the rewrite as usual.
+
 Examples:
 
 ```bash
-jj split path/to/file -m "<first description>"
 jj squash --from <source> --into <destination> \
   -m "<resulting description>"
 jj rebase -s <source> -d <destination>
