@@ -100,6 +100,16 @@ jj show @-
 - Review the complete diff before closing the change; do not use `jj new` to hide unfinished or unchecked work.
 - End the task with the completed, described change at `@-` and a new empty, undescribed `@` for future edits.
 - If the user explicitly requests `jj commit`, use `jj commit -m ...` instead of the separate `jj describe` and final `jj new`. Do not move bookmarks without inspecting them.
+- Do not use a destination bookmark as shorthand until `jj log` proves which commit it resolves to.
+
+## Safe mutation pattern
+
+For any rewrite or destructive-looking operation:
+
+1. Inspect `jj status`, `jj log`, and `jj show <change-id>`/`jj diff`.
+2. State exactly which change(s) will move and where.
+3. Use explicit revisions and non-interactive flags.
+4. Verify graph, status, diff, bookmarks, and conflicts afterward.
 
 ## Stack cleanup recommendations
 
@@ -125,28 +135,38 @@ jj describe -r <change-id> -m "<new description>"
 
 Afterward, verify status, graph, destination diff, descriptions, bookmarks, and conflicts. If the result differs from the approved plan, stop and inspect `jj op log`.
 
-## Safe mutation pattern
+Do not use a bare `jj squash` when both descriptions may be non-empty; it can request message editing or produce the wrong description.
 
-For any rewrite or destructive-looking operation:
-
-1. Inspect `jj status`, `jj log`, and `jj show <change-id>`/`jj diff`.
-2. State exactly which change(s) will move and where.
-3. Use explicit revisions and non-interactive flags.
-4. Verify graph, status, diff, bookmarks, and conflicts afterward.
+## Splitting
 
 For splits, prefer `jj-hunk-tool`: inspect selections with `jj-hunk-tool hunks -r <revision>`, then run `jj-hunk-tool split <hunk-id>... -r <revision> -m "<first description>"`. It supports line ranges such as `<hunk-id>:1-3,7-9`; verify the rewrite as usual.
 
-Examples:
+### Splitting with a constructed intermediate state
+
+`jj-hunk-tool` works when a split can be made by partitioning existing changed lines. If the split needs intermediate content absent from both the parent and final states—such as overlapping same-line edits or a transitional implementation—construct it manually and recover the combined state from the change's evolution log:
 
 ```bash
-jj squash --from <source> --into <destination> \
-  -m "<resulting description>"
-jj rebase -s <source> -d <destination>
-jj restore --from <revision> path/to/file
-jj abandon <change-id>
+# Snapshot the original combined state before editing it.
+jj status
+
+# Edit into the intermediate state containing only change A.
+jj diff
+jj commit -m "<change A description>"
+
+# Find and inspect the older incarnation that contains both A and B.
+jj evolog -r @-
+jj show <combined-state-commit-id>
+
+# Restore only the affected path from that incarnation; this reapplies B above A.
+jj restore --from <combined-state-commit-id> path/to/file
+jj diff
+jj commit -m "<change B description>"
+
+jj status
+jj log -r 'ancestors(@, 4)'
 ```
 
-Do not use a bare `jj squash` when both descriptions may be non-empty; it can request message editing or produce the wrong description. Do not use a destination bookmark as shorthand until `jj log` proves which commit it resolves to.
+Use the hexadecimal commit ID from `jj evolog` here because the incarnations share a change ID. Confirm with `jj show` that it contains the intended combined state before restoring. If the revision contains other separable work, split that out first so it does not accidentally land in change A.
 
 ## Push gate
 
