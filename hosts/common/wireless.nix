@@ -43,6 +43,9 @@
       "Nijland" = {
         pskRaw = "ext:nijland";
       };
+      "NET_2G0D0993" = {
+        pskRaw = "ext:net_2g0d0993";
+      };
       "eduroam" = {
         authProtocols = ["WPA-EAP"];
         auth = ''
