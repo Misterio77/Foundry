@@ -41,10 +41,23 @@
       exit "$status"
     '';
   };
+  # Refresh info/refs and objects/info/packs, so repos are fetchable and
+  # browsable over dumb HTTP
+  postUpdateHook = pkgs.writeShellApplication {
+    name = "post-update";
+    runtimeInputs = [pkgs.git];
+    text = ''
+      exec git update-server-info
+    '';
+  };
   gitHooks = pkgs.linkFarm "git-server-hooks" [
     {
       name = "post-receive";
       path = "${postReceiveHook}/bin/post-receive";
+    }
+    {
+      name = "post-update";
+      path = "${postUpdateHook}/bin/post-update";
     }
   ];
   gitConfig = pkgs.writeText "gitconfig" ''
@@ -59,6 +72,21 @@ in {
     basePath = "/srv/git";
   };
   networking.firewall.allowedTCPPorts = [9418];
+
+  # Dumb HTTP protocol: just plain static files, so things like browsegit work.
+  # Only repos marked with git-daemon-export-ok are served, same as gitDaemon.
+  services.nginx.virtualHosts."git.m7.rs" = {
+    forceSSL = true;
+    enableACME = true;
+    root = "/srv/git";
+    locations."~ ^/(?<repo>[^/]+\\.git)(?<repoPath>/.*)$".extraConfig = ''
+      if (!-f /srv/git/$repo/git-daemon-export-ok) {
+        return 404;
+      }
+      add_header Access-Control-Allow-Origin "*" always;
+      try_files /$repo$repoPath =404;
+    '';
+  };
 
   users = {
     users.git = {
