@@ -3,16 +3,6 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
-## Categories
-
-Categories still have to be changed in the `.ics` file. Adding them is a
-deliberate reversal of the original scope boundary, as priority and dates
-already were.
-
-`@tag` is natural but unbounded, and tags can appear anywhere in a line rather
-than only at its start. The syntax must remain unambiguous and preserve source
-representations unless the rendered category set changes.
-
 ## Configurable sorting
 
 Tasks render unfinished first, then by priority, then alphabetically, with the

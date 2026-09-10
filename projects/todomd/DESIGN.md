@@ -172,8 +172,8 @@ its status unless it is explicitly reopened.
 ```markdown
 # Postgrad
 
-- [ ] -2026-09-12 +"2026-09-07 09:00" !!! Paper <!-- todomd:id=t1 -->
-  - [ ] -2026-09-11 Email advisor
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!-- todomd:id=t1 -->
+  - [ ] -2026-09-11 @"Quick Win" Email advisor
 
 # Personal
 
@@ -181,9 +181,14 @@ its status unless it is explicitly reopened.
 ```
 
 A task line is a checkbox, optional due (`-`) and start (`+`) fields, an
-optional priority marker, a summary, and an optional identity marker. Input
-fields may appear in any order; rendering canonicalizes them to due, start,
-then priority.
+optional priority marker, zero or more category markers (`@name`), a summary,
+and an optional identity marker. Input fields may appear in any order; rendering
+canonicalizes them to due, start, priority, then alphabetically sorted
+categories. Multiword categories use the same doubled-quote form as other
+fields, such as `@"Quick Win"`. Category markers are recognized only among the
+leading fields, so an `@` inside a summary is literal. Empty `CATEGORIES`
+properties emitted by other clients represent an empty set and are ignored;
+multiline category values cannot be represented and abort the read.
 
 Within each sibling set, tasks render unfinished first, then by descending
 priority, then alphabetically by summary, with the task identity breaking ties.
@@ -215,6 +220,7 @@ alone does not normalize it to `NEEDS-ACTION`.
 | Remove a date field | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
 | Remove the priority marker | Clear priority |
+| Add or remove `@category` | Change the category set |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen |
 | Add an item without an ID | Create in the containing list |
@@ -239,7 +245,7 @@ open.
 ### Quoting
 
 A summary is quoted only when reading it back would otherwise be ambiguous: when
-it starts with `!`, `+`, `-`, or `"`, or when leading or trailing whitespace
+it starts with `!`, `+`, `-`, `@`, or `"`, or when leading or trailing whitespace
 would be lost.
 Inside quotes a literal `"` is doubled, so the dialect needs no second escape
 character.
@@ -382,8 +388,7 @@ Signals that cannot be handled, notably `SIGKILL`, cannot promise cleanup.
 
 Existing files are patched, never rebuilt from Markdown fields, preserving:
 
-- unchanged due and start representations;
-- categories;
+- unchanged due, start, and category representations;
 - descriptions;
 - alarms and recurrence;
 - unchanged `RELATED-TO` representations;
@@ -419,6 +424,12 @@ Empty and dangling values render as roots and stay untouched unless the item is
 reindented. Identical duplicate parent properties are accepted and
 preserved through unrelated edits; conflicting values and relationship cycles
 abort the read. An explicit relationship change updates or removes the property.
+
+`CATEGORIES` properties and comma-separated category lists read as one sorted,
+deduplicated set. A category is written only when that set changes, so untouched
+property count, ordering, parameters, and escaping survive unrelated edits.
+Changed categories are written canonically as one escaped `CATEGORIES` property
+per value; removing every marker clears the properties.
 
 `PRIORITY` is 1-9 in iCalendar but three levels in Markdown: 1-4 read as `!!!`,
 5 as `!!`, 6-9 as `!`, and anything absent or out of range as no marker. A value

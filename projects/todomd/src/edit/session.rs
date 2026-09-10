@@ -270,6 +270,7 @@ mod tests {
                     summary: "Accepted".into(),
                     completed: false,
                     priority: Priority::None,
+                    categories: vec![],
                     parent: None,
                     start: None,
                     due: None,

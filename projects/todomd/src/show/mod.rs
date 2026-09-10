@@ -20,6 +20,7 @@ pub struct ShownTask {
     pub summary: String,
     pub completed: bool,
     pub priority: Priority,
+    pub categories: Vec<String>,
     pub start: Option<String>,
     pub due: Option<String>,
     pub parent_uid: Option<String>,
@@ -56,6 +57,7 @@ pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<Sh
                 summary: task.summary.clone(),
                 completed: task.completed,
                 priority: task.priority,
+                categories: task.categories.clone(),
                 start: task.start.as_ref().map(|value| value.canonical()),
                 due: task.due.as_ref().map(|value| value.canonical()),
                 parent_uid: task
@@ -147,6 +149,7 @@ mod tests {
         assert_eq!(task["uid"], "write@example.test");
         assert_eq!(task["summary"], "Write paper draft");
         assert_eq!(task["completed"], false);
+        assert_eq!(task["categories"], serde_json::json!([]));
         assert_eq!(task["start"], serde_json::Value::Null);
         assert_eq!(task["due"], "2026-09-10");
         assert!(

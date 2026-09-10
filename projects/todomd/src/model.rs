@@ -84,6 +84,9 @@ pub struct Task {
     pub completed: bool,
     #[serde(default)]
     pub priority: Priority,
+    /// The canonical category set, sorted and deduplicated.
+    #[serde(default)]
+    pub categories: Vec<String>,
     /// The renderable parent. Empty, dangling, and hidden source relationships
     /// are normalized to `None` and preserved unless indentation changes.
     #[serde(default)]
@@ -119,6 +122,7 @@ pub struct EditedTask {
     pub summary: String,
     pub completed: bool,
     pub priority: Priority,
+    pub categories: Vec<String>,
     pub parent: Option<TaskReference>,
     pub start: Option<DateValue>,
     pub due: Option<DateValue>,

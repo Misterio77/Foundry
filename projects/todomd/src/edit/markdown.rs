@@ -59,6 +59,9 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
         let mut depths = BTreeMap::new();
         for task in &list.tasks {
             validate_summary(&task.summary)?;
+            for category in &task.categories {
+                validate_category(category)?;
+            }
             let depth = match &task.parent {
                 Some(parent) => {
                     depths.get(parent).copied().with_context(|| {
@@ -84,11 +87,16 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
                 "" => String::new(),
                 marker => format!("{marker} "),
             };
+            let categories = task
+                .categories
+                .iter()
+                .map(|category| format!("{} ", render_category_marker(category)))
+                .collect::<String>();
             let summary = render_summary(&task.summary);
             let session_id = manifest.get_or_insert(&task.id);
             output.push_str(&"  ".repeat(depth));
             output.push_str(&format!(
-                "- [{checked}] {due}{start}{priority}{summary} <!-- todomd:id={session_id} -->\n"
+                "- [{checked}] {due}{start}{priority}{categories}{summary} <!-- todomd:id={session_id} -->\n"
             ));
             depths.insert(task.id.clone(), depth);
         }
@@ -235,19 +243,20 @@ fn parse_task_line(
         }
     };
 
-    let (priority, start, due, field) =
+    let fields =
         split_fields(summary, date_context).with_context(|| format!("line {line_number}"))?;
-    let summary = parse_summary(field).with_context(|| format!("line {line_number}"))?;
+    let summary = parse_summary(fields.summary).with_context(|| format!("line {line_number}"))?;
     validate_summary(&summary).with_context(|| format!("line {line_number}"))?;
 
     Ok(EditedTask {
         id,
         summary,
         completed,
-        priority,
+        priority: fields.priority,
+        categories: fields.categories,
         parent: None,
-        start,
-        due,
+        start: fields.start,
+        due: fields.due,
     })
 }
 
@@ -268,14 +277,38 @@ fn render_summary(summary: &str) -> String {
 }
 
 fn needs_quoting(summary: &str) -> bool {
-    summary.starts_with(['!', '+', '-', '"']) || summary.trim() != summary
+    summary.starts_with(['!', '+', '-', '@', '"']) || summary.trim() != summary
+}
+
+pub(super) fn validate_category(category: &str) -> Result<()> {
+    if category.is_empty() || category.contains(['\r', '\n']) {
+        bail!("task category cannot be empty or contain a newline");
+    }
+    Ok(())
+}
+
+pub(super) fn render_category_marker(category: &str) -> String {
+    if category.contains(char::is_whitespace) || category.contains('"') {
+        format!("@\"{}\"", category.replace('"', "\"\""))
+    } else {
+        format!("@{category}")
+    }
+}
+
+struct ParsedFields<'a> {
+    priority: Priority,
+    categories: Vec<String>,
+    start: Option<DateValue>,
+    due: Option<DateValue>,
+    summary: &'a str,
 }
 
 fn split_fields<'a>(
     mut remainder: &'a str,
     date_context: &DateContext,
-) -> Result<(Priority, Option<DateValue>, Option<DateValue>, &'a str)> {
+) -> Result<ParsedFields<'a>> {
     let mut priority = None;
+    let mut categories = BTreeSet::new();
     let mut start = None;
     let mut due = None;
 
@@ -297,6 +330,15 @@ fn split_fields<'a>(
             continue;
         }
 
+        if let Some(rest) = remainder.strip_prefix('@') {
+            let (category, rest) = take_marker_value(rest, "category")?;
+            if !categories.insert(category.clone()) {
+                bail!("duplicate category marker {category:?}");
+            }
+            remainder = marker_remainder(rest, "category marker")?;
+            continue;
+        }
+
         let (slot, name) = if remainder.starts_with('-') {
             (&mut due, "due")
         } else if remainder.starts_with('+') {
@@ -307,7 +349,7 @@ fn split_fields<'a>(
         if slot.is_some() {
             bail!("task contains more than one {name} marker");
         }
-        let (value, rest) = take_marker_value(&remainder[1..])?;
+        let (value, rest) = take_marker_value(&remainder[1..], "date")?;
         *slot = Some(
             dates::parse_markdown_at(&value, date_context)
                 .with_context(|| format!("invalid {name} marker"))?,
@@ -315,7 +357,13 @@ fn split_fields<'a>(
         remainder = marker_remainder(rest, &format!("{name} marker"))?;
     }
 
-    Ok((priority.unwrap_or_default(), start, due, remainder))
+    Ok(ParsedFields {
+        priority: priority.unwrap_or_default(),
+        categories: categories.into_iter().collect(),
+        start,
+        due,
+        summary: remainder,
+    })
 }
 
 fn marker_remainder<'a>(remainder: &'a str, marker: &str) -> Result<&'a str> {
@@ -324,13 +372,13 @@ fn marker_remainder<'a>(remainder: &'a str, marker: &str) -> Result<&'a str> {
         .with_context(|| format!("{marker} must be followed by a space and the next field"))
 }
 
-fn take_marker_value(input: &str) -> Result<(String, &str)> {
+fn take_marker_value<'a>(input: &'a str, field: &str) -> Result<(String, &'a str)> {
     let Some(mut remainder) = input.strip_prefix('"') else {
         let (value, remainder) = input
             .find(' ')
             .map_or((input, ""), |index| (&input[..index], &input[index..]));
         if value.is_empty() {
-            bail!("date marker cannot be empty");
+            bail!("{field} marker cannot be empty");
         }
         return Ok((value.to_owned(), remainder));
     };
@@ -341,7 +389,7 @@ fn take_marker_value(input: &str) -> Result<(String, &str)> {
             let length = character.len_utf8();
             (character, &remainder[length..])
         }) else {
-            bail!("quoted date marker must end with '\"'");
+            bail!("quoted {field} marker must end with '\"'");
         };
         remainder = rest;
         if character != '"' {
@@ -354,7 +402,7 @@ fn take_marker_value(input: &str) -> Result<(String, &str)> {
             continue;
         }
         if value.is_empty() {
-            bail!("date marker cannot be empty");
+            bail!("{field} marker cannot be empty");
         }
         return Ok((value, remainder));
     }
@@ -363,8 +411,8 @@ fn take_marker_value(input: &str) -> Result<(String, &str)> {
 /// Reads a summary field, honouring optional quoting.
 fn parse_summary(field: &str) -> Result<String> {
     let Some(inner) = field.strip_prefix('"') else {
-        if field.starts_with(['!', '+', '-']) {
-            bail!("a summary starting with '!', '+', or '-' must be quoted");
+        if field.starts_with(['!', '+', '-', '@']) {
+            bail!("a summary starting with '!', '+', '-', or '@' must be quoted");
         }
         if field.trim() != field {
             bail!("a summary with leading or trailing whitespace must be quoted");
@@ -424,6 +472,7 @@ mod tests {
                     summary: "Buy groceries".into(),
                     completed: false,
                     priority: Priority::None,
+                    categories: vec![],
                     parent: None,
                     start: None,
                     due: None,
@@ -463,6 +512,7 @@ mod tests {
                         summary: "Write paper".into(),
                         completed: false,
                         priority: Priority::None,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -519,6 +569,7 @@ mod tests {
                         summary: "Urgent".into(),
                         completed: false,
                         priority: Priority::High,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -528,6 +579,7 @@ mod tests {
                         summary: "Middling".into(),
                         completed: false,
                         priority: Priority::Medium,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -537,6 +589,7 @@ mod tests {
                         summary: "Whenever".into(),
                         completed: false,
                         priority: Priority::Low,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -546,6 +599,7 @@ mod tests {
                         summary: "Unset".into(),
                         completed: false,
                         priority: Priority::None,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -580,6 +634,102 @@ mod tests {
     }
 
     #[test]
+    fn renders_and_parses_category_markers() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("tagged"),
+                    summary: "Email @Gabs".into(),
+                    completed: false,
+                    priority: Priority::Low,
+                    categories: vec!["Blocked".into(), "Quick Win".into(), "say \"hi\"".into()],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+        assert!(
+            document.contains("- [ ] ! @Blocked @\"Quick Win\" @\"say \"\"hi\"\"\" Email @Gabs <!-- todomd:id=t1 -->"),
+            "{document}"
+        );
+
+        let reordered = "# Personal\n\n- [ ] @\"Quick Win\" ! @\"say \"\"hi\"\"\" @Blocked Email @Gabs <!-- todomd:id=t1 -->\n";
+        let parsed = parse(reordered, &state, &manifest).unwrap();
+        assert_eq!(
+            parsed.lists[0].tasks[0].categories,
+            ["Blocked", "Quick Win", "say \"hi\""]
+        );
+    }
+
+    #[test]
+    fn rejects_unrenderable_categories() {
+        for category in ["", "line\nfeed"] {
+            let state = TaskState {
+                lists: vec![TaskList {
+                    name: "Personal".into(),
+                    tasks: vec![Task {
+                        id: TaskId::new("bad-category"),
+                        summary: "Task".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        categories: vec![category.into()],
+                        parent: None,
+                        start: None,
+                        due: None,
+                    }],
+                }],
+            };
+
+            assert!(render(&state, &mut IdentityManifest::default()).is_err());
+        }
+    }
+
+    #[test]
+    fn quotes_summaries_that_start_like_categories() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("at-sign"),
+                    summary: "@home is literal".into(),
+                    completed: false,
+                    priority: Priority::None,
+                    categories: vec![],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+        assert!(document.contains("\"@home is literal\""), "{document}");
+        assert_eq!(
+            parse(&document, &state, &manifest).unwrap().lists[0].tasks[0].summary,
+            "@home is literal"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_category_markers() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        let document = "# Personal\n\n- [ ] @Work @Work Duplicate\n";
+
+        assert!(parse(document, &baseline, &IdentityManifest::default()).is_err());
+    }
+
+    #[test]
     fn renders_dates_canonically_and_accepts_fields_in_any_order() {
         let context = DateContext::in_timezone(
             "America/Sao_Paulo",
@@ -594,6 +744,7 @@ mod tests {
                     summary: "Write grant".into(),
                     completed: false,
                     priority: Priority::Low,
+                    categories: vec![],
                     parent: None,
                     start: Some(
                         dates::parse_markdown_at("2026-09-06T10:00:42-03:00", &context).unwrap(),
@@ -665,6 +816,7 @@ mod tests {
                         summary: (*summary).into(),
                         completed: false,
                         priority: Priority::Medium,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -703,6 +855,7 @@ mod tests {
                     summary: r#"He said "hi" to me"#.into(),
                     completed: false,
                     priority: Priority::None,
+                    categories: vec![],
                     parent: None,
                     start: None,
                     due: None,
@@ -731,6 +884,7 @@ mod tests {
                     summary: "Ordinary".into(),
                     completed: false,
                     priority: Priority::None,
+                    categories: vec![],
                     parent: None,
                     start: None,
                     due: None,
@@ -795,6 +949,7 @@ mod tests {
                     summary: "first\nsecond".into(),
                     completed: false,
                     priority: Priority::None,
+                    categories: vec![],
                     parent: None,
                     start: None,
                     due: None,
@@ -818,6 +973,7 @@ mod tests {
                         summary: "Root".into(),
                         completed: false,
                         priority: Priority::None,
+                        categories: vec![],
                         parent: None,
                         start: None,
                         due: None,
@@ -827,6 +983,7 @@ mod tests {
                         summary: "Child".into(),
                         completed: false,
                         priority: Priority::None,
+                        categories: vec![],
                         parent: Some(root.clone()),
                         start: None,
                         due: None,
@@ -836,6 +993,7 @@ mod tests {
                         summary: "Grandchild".into(),
                         completed: false,
                         priority: Priority::None,
+                        categories: vec![],
                         parent: Some(child.clone()),
                         start: None,
                         due: None,

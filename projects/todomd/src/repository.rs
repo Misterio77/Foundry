@@ -411,6 +411,7 @@ fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result
     let parent = parent_property(todo, path)?.map(TaskId::new);
     let start = temporal_property(todo, "DTSTART", path, date_context)?;
     let due = temporal_property(todo, "DUE", path, date_context)?;
+    let categories = category_properties(&unfolded, path)?;
     // SUMMARY is optional in RFC 5545, so a task without one is valid but has
     // nothing to render. Every scope skips it and reports it instead.
     let Some(summary) =
@@ -421,6 +422,7 @@ fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result
             summary: String::new(),
             completed,
             priority,
+            categories,
             parent,
             start,
             due,
@@ -432,10 +434,96 @@ fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result
         summary,
         completed,
         priority,
+        categories,
         parent,
         start,
         due,
     }))
+}
+
+fn category_properties(contents: &str, path: &Path) -> Result<Vec<String>> {
+    let mut categories = BTreeSet::new();
+    let mut in_todo = false;
+    let mut depth = 0usize;
+
+    for line in contents.lines() {
+        if !in_todo {
+            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
+                in_todo = true;
+                depth = 1;
+            }
+            continue;
+        }
+        if line
+            .split_once(':')
+            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("BEGIN"))
+        {
+            depth += 1;
+            continue;
+        }
+        if line
+            .split_once(':')
+            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("END"))
+        {
+            depth -= 1;
+            if depth == 0 {
+                break;
+            }
+            continue;
+        }
+        if depth != 1 {
+            continue;
+        }
+        let Some((header, value)) = line.split_once(':') else {
+            continue;
+        };
+        if !header
+            .split(';')
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("CATEGORIES"))
+        {
+            continue;
+        }
+        for category in split_category_values(value) {
+            let category = category
+                .with_context(|| format!("invalid CATEGORIES property in {}", path.display()))?;
+            // Some clients emit an empty CATEGORIES property to represent an
+            // empty set. Empty members are therefore harmless rather than an
+            // unrenderable task.
+            if category.is_empty() {
+                continue;
+            }
+            if category.contains(['\r', '\n']) {
+                bail!("VTODO in {} contains a multiline category", path.display());
+            }
+            categories.insert(category);
+        }
+    }
+
+    Ok(categories.into_iter().collect())
+}
+
+fn split_category_values(value: &str) -> Vec<Result<String>> {
+    let mut values = Vec::new();
+    let mut current = String::new();
+    let mut characters = value.chars();
+    while let Some(character) = characters.next() {
+        match character {
+            ',' => values.push(Ok(std::mem::take(&mut current))),
+            '\\' => match characters.next() {
+                Some('n' | 'N') => current.push('\n'),
+                Some(escaped @ (',' | ';' | '\\')) => current.push(escaped),
+                Some(other) => {
+                    current.push('\\');
+                    current.push(other);
+                }
+                None => values.push(Err(anyhow::anyhow!("trailing escape in category value"))),
+            },
+            _ => current.push(character),
+        }
+    }
+    values.push(Ok(current));
+    values
 }
 
 fn temporal_property(
@@ -603,6 +691,51 @@ mod tests {
     fn rejects_multiple_todos() {
         let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:A\r\nEND:VTODO\r\nBEGIN:VTODO\r\nUID:b\r\nSUMMARY:B\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
         assert!(parse_task(calendar, Path::new("multiple.ics"), &date_context()).is_err());
+    }
+
+    #[test]
+    fn parses_repeated_and_comma_separated_categories() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:tagged\r\nSUMMARY:Tagged\r\nCATEGORIES:Work,Quick Win\r\nCATEGORIES:comma\\,tag,semi\\;tag,slash\\\\tag\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let task = parse_task(calendar, Path::new("tagged.ics"), &date_context())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            task.categories,
+            ["Quick Win", "Work", "comma,tag", "semi;tag", "slash\\tag"]
+        );
+    }
+
+    #[test]
+    fn accepts_empty_category_properties() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:tagged\r\nSUMMARY:Tagged\r\nCATEGORIES:\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let task = parse_task(calendar, Path::new("tagged.ics"), &date_context())
+            .unwrap()
+            .unwrap();
+
+        assert!(task.categories.is_empty());
+    }
+
+    #[test]
+    fn rejects_invalid_categories() {
+        for value in ["trailing\\", "line\\nfeed"] {
+            let calendar = format!(
+                "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:tagged\r\nSUMMARY:Tagged\r\nCATEGORIES:{value}\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
+            );
+            assert!(parse_task(&calendar, Path::new("tagged.ics"), &date_context()).is_err());
+        }
+    }
+
+    #[test]
+    fn category_scanning_handles_mixed_case_component_boundaries() {
+        let calendar = "BEGIN:VCALENDAR\r\nbegin:vtodo\r\nUID:tagged\r\nSUMMARY:Tagged\r\nbegin:valarm\r\nCATEGORIES:Nested\r\nend:valarm\r\nCATEGORIES:Direct\r\nend:vtodo\r\nEND:VCALENDAR\r\n";
+
+        assert_eq!(
+            category_properties(&unfold(calendar), Path::new("tagged.ics")).unwrap(),
+            ["Direct"]
+        );
     }
 
     #[test]

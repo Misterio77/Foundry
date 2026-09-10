@@ -84,8 +84,8 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] -2026-09-12 +"2026-09-07 09:00" !!! Paper <!-- todomd:id=t1 -->
-  - [ ] -2026-09-11 ! Read related work <!-- todomd:id=t3 -->
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!-- todomd:id=t1 -->
+  - [ ] -2026-09-11 ! @"Quick Win" Read related work <!-- todomd:id=t3 -->
 
 # Personal
 
@@ -100,6 +100,7 @@ back to `$EDITOR`:
 | Remove a date marker | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
 | Remove the priority marker | Clear priority |
+| Add or remove `@category` | Change categories |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
 | Add a `- [ ]` line without an identity | Create in that list |
@@ -120,9 +121,11 @@ another parent. Moving a nested block moves every line in it. Empty and
 dangling source relationships render as roots and remain untouched; cyclic
 relationships abort the read because they cannot form a tree.
 
-Leading fields may be entered in any order. Rerendering puts due, start, then
-priority before the summary. `-` means due, `+` means start, and `!!!`, `!!`, or
-`!` means high, medium, or low priority.
+Leading fields may be entered in any order. Rerendering puts due, start,
+priority, then alphabetically sorted categories before the summary. `-` means
+due, `+` means start, `!!!`, `!!`, or `!` means high, medium, or low priority,
+and `@name` adds a category. Quote multiword categories, as in `@"Quick Win"`.
+An `@` elsewhere in the summary is ordinary text.
 
 Date-only values render as `YYYY-MM-DD`. Datetimes render in local time as
 `"YYYY-MM-DD HH:MM"`. Input additionally accepts RFC 3339 or ISO timestamps,
@@ -156,10 +159,11 @@ ordinary text is never quoted:
 | `Write paper draft` | `- [ ] Write paper draft` |
 | `He said "hi" to me` | `- [ ] He said "hi" to me` |
 | `!urgent thing` | `- [ ] "!urgent thing"` |
+| `@home is literal` | `- [ ] "@home is literal"` |
 | `"quoted" start` | `- [ ] """quoted"" start"` |
 
-Quote a summary yourself if you start it with `!`, `+`, `-`, or `"`, or if it
-needs leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
+Quote a summary yourself if you start it with `!`, `+`, `-`, `@`, or `"`, or if
+it needs leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
 The dialect is strict. It allows selected level-one headings and `- [ ]` or
 `- [x]` items indented by exactly two spaces per nesting level. Nesting may be
@@ -213,6 +217,7 @@ $ todomd show Personal
     "summary": "Buy milk, bread",
     "completed": false,
     "priority": "medium",
+    "categories": ["Errands", "Quick Win"],
     "start": "2026-09-07 09:00",
     "due": "2026-09-12",
     "parent_uid": null,
@@ -224,7 +229,8 @@ $ todomd show Personal
 Tasks are ordered by list and tree. Each sibling set is ordered unfinished
 before finished, then by priority and summary. `completed` may be `true` in the
 default scope for a subtask below active ancestors. `priority` is `none`, `low`,
-`medium`, or `high`. `start` and `due` use canonical local strings or `null`;
+`medium`, or `high`; `categories` is a sorted array of category names. `start`
+and `due` use canonical local strings or `null`;
 `parent_uid` is the parent VTODO UID or `null` for a rendered root.
 
 vdir filenames are chosen by whatever created the item, so a UID cannot be
@@ -243,9 +249,9 @@ expose, edit the `.ics` at `file`, increment its `SEQUENCE`, and run the syncer.
   verified, and each staged operation is rechecked immediately before it runs.
 - Originals are backed up, writes use temporary files and atomic rename, and a
   mid-apply failure triggers a hash-guarded best-effort rollback.
-- Patches preserve unexposed data, including `CATEGORIES`, `DESCRIPTION`,
-  unrelated `RELATED-TO` representations, `X-` properties, and nested
-  components such as `VALARM`. Unchanged date properties keep their raw form.
+- Patches preserve unexposed data, including `DESCRIPTION`, unrelated
+  `RELATED-TO` representations, `X-` properties, and nested components such as
+  `VALARM`. Unchanged categories and date properties keep their raw form.
 - `PRIORITY` is written only when the marker's level changes, so a stored value
   like `4` survives edits that leave the level alone.
 

@@ -323,6 +323,56 @@ fn a_created_task_keeps_the_priority_it_was_written_with() {
 }
 
 #[test]
+fn creates_changes_and_round_trips_categories() {
+    let case = Case::new(0);
+    let editor = case.root.path().join("category-editor");
+    write_executable(
+        &editor,
+        "#!/bin/sh\ncat > \"$1\" <<'EOF'\n# Postgrad\n\n- [ ] @\"Quick Win\" @Work Tagged task\n- [ ] @Blocked @\"Quick Win\" -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\n# Personal\n\n- [ ] Buy milk, bread <!-- todomd:id=t2 -->\nEOF\n",
+    );
+
+    let output = run_in_pty(&mut case.edit_command(editor.to_str().unwrap()), b"y\n");
+    let text = output_text(&output);
+    assert!(output.status.success(), "{text}");
+    assert!(
+        text.contains("categories Write paper draft (none -> @Blocked @\"Quick Win\")"),
+        "{text}"
+    );
+    assert!(
+        text.contains("created   Tagged task (@\"Quick Win\" @Work)"),
+        "{text}"
+    );
+
+    let written = fs::read_to_string(case.calendars.join("Postgrad/write.ics")).unwrap();
+    assert!(written.contains("CATEGORIES:Blocked"), "{written}");
+    assert!(written.contains("CATEGORIES:Quick Win"), "{written}");
+    assert!(written.contains("X-TODOMD-TEST;ANSWER=42:preserve me"));
+
+    let shown = case.base("false").arg("show").output().unwrap();
+    let tasks: serde_json::Value = serde_json::from_slice(&shown.stdout).unwrap();
+    let tagged = tasks
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["summary"] == "Tagged task")
+        .unwrap();
+    assert_eq!(
+        tagged["categories"],
+        serde_json::json!(["Quick Win", "Work"])
+    );
+    let paper = tasks
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|task| task["summary"] == "Write paper draft")
+        .unwrap();
+    assert_eq!(
+        paper["categories"],
+        serde_json::json!(["Blocked", "Quick Win"])
+    );
+}
+
+#[test]
 fn nested_created_tasks_keep_their_generated_relationships() {
     let case = Case::new(0);
     let editor = case.root.path().join("subtask-editor");

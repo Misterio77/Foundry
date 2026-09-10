@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, fmt};
 use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
+use super::markdown::render_category_marker;
 use crate::{
     dates::{self, DateValue},
     model::{EditedTaskState, Priority, TaskId, TaskReference, TaskState},
@@ -33,6 +34,13 @@ pub enum Operation {
         from: Priority,
         to: Priority,
     },
+    Recategorize {
+        id: TaskId,
+        list: String,
+        summary: String,
+        from: Vec<String>,
+        to: Vec<String>,
+    },
     Reschedule {
         id: TaskId,
         list: String,
@@ -56,6 +64,7 @@ pub enum Operation {
         list: String,
         summary: String,
         priority: Priority,
+        categories: Vec<String>,
         start: Option<DateValue>,
         due: Option<DateValue>,
         parent: Option<TaskReference>,
@@ -94,6 +103,7 @@ struct ComparableTask {
     summary: String,
     completed: bool,
     priority: Priority,
+    categories: Vec<String>,
     parent: Option<TaskReference>,
     start: Option<DateValue>,
     due: Option<DateValue>,
@@ -184,6 +194,15 @@ fn build_plan(
                 to: edited.priority,
             });
         }
+        if original.categories != edited.categories {
+            operations.push(Operation::Recategorize {
+                id: id.clone(),
+                list: edited.list.clone(),
+                summary: edited.summary.clone(),
+                from: original.categories.clone(),
+                to: edited.categories.clone(),
+            });
+        }
         if original.start != edited.start || original.due != edited.due {
             operations.push(Operation::Reschedule {
                 id: id.clone(),
@@ -227,6 +246,7 @@ fn build_plan(
             list: task.list.clone(),
             summary: task.summary.clone(),
             priority: task.priority,
+            categories: task.categories.clone(),
             start: task.start.clone(),
             due: task.due.clone(),
             parent: task.parent.clone(),
@@ -267,6 +287,7 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
                         summary: task.summary.clone(),
                         completed: task.completed,
                         priority: task.priority,
+                        categories: task.categories.clone(),
                         parent: task.parent.clone().map(TaskReference::Existing),
                         start: task.start.clone(),
                         due: task.due.clone(),
@@ -289,6 +310,7 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
                 summary: task.summary.clone(),
                 completed: task.completed,
                 priority: task.priority,
+                categories: task.categories.clone(),
                 parent: task.parent.clone(),
                 start: task.start.clone(),
                 due: task.due.clone(),
@@ -406,11 +428,12 @@ fn operation_sort_key<'a>(
         Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
         Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
         Operation::Reprioritize { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
-        Operation::Reschedule { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
-        Operation::Reparent { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 7, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 8, summary.as_str()),
+        Operation::Recategorize { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
+        Operation::Reschedule { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
+        Operation::Reparent { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
+        Operation::Create { list, summary, .. } => (list.as_str(), 7, summary.as_str()),
+        Operation::Move { to, summary, .. } => (to.as_str(), 8, summary.as_str()),
+        Operation::Delete { list, summary, .. } => (list.as_str(), 9, summary.as_str()),
     };
     (
         *list_positions.get(list).unwrap_or(&usize::MAX),
@@ -426,6 +449,7 @@ impl Operation {
             | Self::Complete { list, .. }
             | Self::Reopen { list, .. }
             | Self::Reprioritize { list, .. }
+            | Self::Recategorize { list, .. }
             | Self::Reschedule { list, .. }
             | Self::Reparent { list, .. }
             | Self::Create { list, .. }
@@ -476,6 +500,27 @@ impl fmt::Display for ChangePlan {
                             to.label()
                         )?;
                     }
+                    Operation::Recategorize {
+                        summary, from, to, ..
+                    } => {
+                        let display = |categories: &[String]| {
+                            if categories.is_empty() {
+                                "none".to_owned()
+                            } else {
+                                categories
+                                    .iter()
+                                    .map(|category| render_category_marker(category))
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            }
+                        };
+                        writeln!(
+                            formatter,
+                            "  categories {summary} ({} -> {})",
+                            display(from),
+                            display(to)
+                        )?;
+                    }
                     Operation::Reschedule {
                         summary,
                         from_start,
@@ -513,6 +558,7 @@ impl fmt::Display for ChangePlan {
                     Operation::Create {
                         summary,
                         priority,
+                        categories,
                         start,
                         due,
                         parent_summary,
@@ -528,6 +574,11 @@ impl fmt::Display for ChangePlan {
                         if priority != &Priority::None {
                             fields.push(priority.label().to_owned());
                         }
+                        fields.extend(
+                            categories
+                                .iter()
+                                .map(|category| render_category_marker(category)),
+                        );
                         let fields = if fields.is_empty() {
                             String::new()
                         } else {
@@ -577,6 +628,7 @@ mod tests {
             summary: summary.into(),
             completed: false,
             priority: Priority::None,
+            categories: vec![],
             parent: None,
             start: None,
             due: None,
@@ -596,6 +648,7 @@ mod tests {
             summary: summary.into(),
             completed,
             priority: Priority::None,
+            categories: vec![],
             parent: None,
             start: None,
             due: None,
@@ -632,6 +685,7 @@ mod tests {
                 list: "Postgrad".into(),
                 summary: "Foo".into(),
                 priority: Priority::High,
+                categories: vec![],
                 start: None,
                 due: None,
                 parent: None,
@@ -678,6 +732,45 @@ mod tests {
             }]
         );
         assert!(format!("{plan}").contains("priority  Write paper (!!! -> !)"));
+    }
+
+    #[test]
+    fn changing_categories_plans_a_recategorize() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Postgrad".into(),
+                tasks: vec![Task {
+                    categories: vec!["Old".into()],
+                    ..task("paper", "Write paper")
+                }],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Postgrad".into(),
+                tasks: vec![EditedTask {
+                    categories: vec!["New".into(), "Quick Win".into()],
+                    ..edited(Some("paper"), "Write paper", false)
+                }],
+            }],
+        };
+
+        let Reconciliation::Outgoing(plan) = reconcile(&baseline, &markdown, &baseline).unwrap()
+        else {
+            panic!("expected outgoing plan");
+        };
+
+        assert_eq!(
+            plan.operations,
+            vec![Operation::Recategorize {
+                id: TaskId::new("paper"),
+                list: "Postgrad".into(),
+                summary: "Write paper".into(),
+                from: vec!["Old".into()],
+                to: vec!["New".into(), "Quick Win".into()],
+            }]
+        );
+        assert!(format!("{plan}").contains("categories Write paper (@Old -> @New @\"Quick Win\")"));
     }
 
     #[test]

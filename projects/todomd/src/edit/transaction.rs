@@ -60,6 +60,7 @@ struct ExistingEdit {
     summary: Option<String>,
     completion: CompletionChange,
     priority: Option<Priority>,
+    categories: Option<Vec<String>>,
     parent: Option<Option<TaskReference>>,
     start: Option<Option<DateValue>>,
     due: Option<Option<DateValue>>,
@@ -114,6 +115,9 @@ pub fn stage(
             Operation::Reprioritize { id, to, .. } => {
                 existing.entry(id.clone()).or_default().priority = Some(*to);
             }
+            Operation::Recategorize { id, to, .. } => {
+                existing.entry(id.clone()).or_default().categories = Some(to.clone());
+            }
             Operation::Reschedule {
                 id,
                 from_start,
@@ -144,6 +148,7 @@ pub fn stage(
                 list,
                 summary,
                 priority,
+                categories,
                 start,
                 due,
                 parent,
@@ -153,6 +158,7 @@ pub fn stage(
                 list.clone(),
                 summary.clone(),
                 *priority,
+                categories.clone(),
                 start.clone(),
                 due.clone(),
                 parent.clone(),
@@ -208,6 +214,7 @@ pub fn stage(
         let contents = if edit.summary.is_some()
             || edit.completion != CompletionChange::Unchanged
             || edit.priority.is_some()
+            || edit.categories.is_some()
             || edit.parent.is_some()
             || edit.start.is_some()
             || edit.due.is_some()
@@ -229,6 +236,7 @@ pub fn stage(
                     summary: edit.summary.as_deref(),
                     completion: edit.completion,
                     priority: edit.priority,
+                    categories: edit.categories.as_deref(),
                     parent: parent.as_ref().map(|parent| parent.as_ref()),
                     start: edit.start.as_ref().map(|value| value.as_ref()),
                     due: edit.due.as_ref().map(|value| value.as_ref()),
@@ -258,7 +266,7 @@ pub fn stage(
         });
     }
 
-    for (draft_id, list, summary, priority, start, due, parent) in creates {
+    for (draft_id, list, summary, priority, categories, start, due, parent) in creates {
         let task_id = &created_tasks[&draft_id];
         let parent = parent
             .as_ref()
@@ -280,11 +288,14 @@ pub fn stage(
         let staged = staged_dir.join(format!("{index:04}.ics"));
         let contents = new_todo(
             task_id,
-            &summary,
-            priority,
-            parent.as_ref(),
-            start.as_ref(),
-            due.as_ref(),
+            NewTodo {
+                summary: &summary,
+                priority,
+                categories: &categories,
+                parent: parent.as_ref(),
+                start: start.as_ref(),
+                due: due.as_ref(),
+            },
             now,
         );
         let staged_sha256 = hash_bytes(contents.as_bytes());
@@ -418,6 +429,7 @@ struct TodoPatch<'a> {
     summary: Option<&'a str>,
     completion: CompletionChange,
     priority: Option<Priority>,
+    categories: Option<&'a [String]>,
     parent: Option<Option<&'a TaskId>>,
     start: Option<Option<&'a DateValue>>,
     due: Option<Option<&'a DateValue>>,
@@ -431,6 +443,9 @@ fn patch_existing(
 ) -> Result<String> {
     let unfolded = unfold(contents);
     let original_relationships = related_to_lines(&unfolded, task_id);
+    let original_categories =
+        direct_component_property_lines_preserving_folds(contents, task_id, "CATEGORIES");
+    let preserve_categories = patch.categories.is_none();
     let relationships = match patch.parent {
         None => original_relationships,
         Some(parent) => {
@@ -481,6 +496,9 @@ fn patch_existing(
             None => remove_property(todo, "PRIORITY"),
         }
     }
+    if let Some(categories) = patch.categories {
+        set_categories(todo, categories);
+    }
     if let Some(parent) = patch.parent {
         remove_parent_properties(todo);
         if let Some(parent) = parent {
@@ -520,14 +538,87 @@ fn patch_existing(
     set_property(todo, "LAST-MODIFIED", &format_timestamp(now))?;
 
     let serialized = Calendar::from(calendar).to_string();
-    Ok(restore_related_to_lines(
-        &serialized,
-        task_id,
-        &relationships,
-    ))
+    let serialized =
+        restore_direct_property_lines(&serialized, task_id, "RELATED-TO", &relationships);
+    Ok(if preserve_categories {
+        restore_direct_property_lines(&serialized, task_id, "CATEGORIES", &original_categories)
+    } else {
+        serialized
+    })
 }
 
 fn related_to_lines(contents: &str, task_id: &TaskId) -> Vec<String> {
+    direct_component_property_lines(contents, task_id, "RELATED-TO")
+}
+
+fn direct_component_property_lines_preserving_folds(
+    contents: &str,
+    task_id: &TaskId,
+    name: &str,
+) -> Vec<String> {
+    let mut lines: Vec<(String, String)> = Vec::new();
+    for physical in contents.lines() {
+        if let Some(continuation) = physical.strip_prefix([' ', '\t'])
+            && let Some((logical, raw)) = lines.last_mut()
+        {
+            logical.push_str(continuation);
+            raw.push_str("\r\n");
+            raw.push_str(physical);
+        } else {
+            lines.push((physical.to_owned(), physical.to_owned()));
+        }
+    }
+
+    let logical = lines
+        .iter()
+        .map(|(logical, _)| logical.as_str())
+        .collect::<Vec<_>>();
+    let mut todo = Vec::new();
+    let mut todo_start = 0;
+    let mut depth = 0;
+    for (index, line) in logical.iter().enumerate() {
+        if depth == 0 {
+            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
+                todo_start = index;
+                todo.push(*line);
+                depth = 1;
+            }
+            continue;
+        }
+
+        todo.push(*line);
+        if line
+            .split_once(':')
+            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("BEGIN"))
+        {
+            depth += 1;
+        } else if line
+            .split_once(':')
+            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("END"))
+        {
+            depth -= 1;
+            if depth == 0 {
+                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
+                if matches {
+                    return lines[todo_start..=index]
+                        .iter()
+                        .filter(|(logical, _)| {
+                            logical
+                                .split([';', ':'])
+                                .next()
+                                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+                        })
+                        .map(|(_, raw)| raw.clone())
+                        .collect();
+                }
+                todo.clear();
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn direct_component_property_lines(contents: &str, task_id: &TaskId, name: &str) -> Vec<String> {
     let mut todo = Vec::new();
     let mut depth = 0;
     for line in contents.lines() {
@@ -547,7 +638,7 @@ fn related_to_lines(contents: &str, task_id: &TaskId) -> Vec<String> {
             if depth == 0 {
                 let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
                 if matches {
-                    return direct_property_lines(&todo, "RELATED-TO");
+                    return direct_property_lines(&todo, name);
                 }
                 todo.clear();
             }
@@ -622,10 +713,11 @@ fn is_parent_related_to_line(line: &str) -> bool {
     })
 }
 
-fn restore_related_to_lines(
+fn restore_direct_property_lines(
     serialized: &str,
     task_id: &TaskId,
-    relationships: &[String],
+    name: &str,
+    properties: &[String],
 ) -> String {
     let mut output = String::with_capacity(serialized.len());
     let mut todo = Vec::new();
@@ -650,7 +742,7 @@ fn restore_related_to_lines(
             depth -= 1;
             if depth == 0 {
                 let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
-                write_todo_lines(&mut output, &todo, matches.then_some(relationships));
+                write_todo_lines(&mut output, &todo, name, matches.then_some(properties));
                 todo.clear();
             }
         }
@@ -658,23 +750,23 @@ fn restore_related_to_lines(
     output
 }
 
-fn write_todo_lines(output: &mut String, todo: &[&str], relationships: Option<&[String]>) {
+fn write_todo_lines(output: &mut String, todo: &[&str], name: &str, properties: Option<&[String]>) {
     let mut depth = 0;
     for line in todo {
         if line.starts_with("BEGIN:") {
             depth += 1;
         }
-        let is_relationship = depth == 1
+        let is_target = depth == 1
             && line
                 .split([';', ':'])
                 .next()
-                .is_some_and(|name| name.eq_ignore_ascii_case("RELATED-TO"));
-        if relationships.is_some() && is_relationship {
+                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name));
+        if properties.is_some() && is_target {
             continue;
         }
         if depth == 1 && line.eq_ignore_ascii_case("END:VTODO") {
-            for relationship in relationships.unwrap_or_default() {
-                output.push_str(relationship);
+            for property in properties.unwrap_or_default() {
+                output.push_str(property);
                 output.push_str("\r\n");
             }
         }
@@ -724,6 +816,17 @@ fn set_parent_property(component: &mut ParsedComponent<'_>, value: &str) {
             params: Vec::new(),
         });
     }
+}
+
+fn set_categories(component: &mut ParsedComponent<'_>, categories: &[String]) {
+    remove_property(component, "CATEGORIES");
+    component
+        .properties
+        .extend(categories.iter().map(|category| ParsedProperty {
+            name: "CATEGORIES".to_owned().into(),
+            val: category.clone().into(),
+            params: Vec::new(),
+        }));
 }
 
 fn set_temporal_property(
@@ -802,15 +905,24 @@ fn resolve_reference(
     }
 }
 
-fn new_todo(
-    task_id: &TaskId,
-    summary: &str,
+struct NewTodo<'a> {
+    summary: &'a str,
     priority: Priority,
-    parent: Option<&TaskId>,
-    start: Option<&DateValue>,
-    due: Option<&DateValue>,
-    now: DateTime<Utc>,
-) -> String {
+    categories: &'a [String],
+    parent: Option<&'a TaskId>,
+    start: Option<&'a DateValue>,
+    due: Option<&'a DateValue>,
+}
+
+fn new_todo(task_id: &TaskId, fields: NewTodo<'_>, now: DateTime<Utc>) -> String {
+    let NewTodo {
+        summary,
+        priority,
+        categories,
+        parent,
+        start,
+        due,
+    } = fields;
     let mut builder = Todo::new();
     let builder = builder
         .uid(task_id.as_str())
@@ -822,6 +934,9 @@ fn new_todo(
         .sequence(0);
     if let Some(value) = priority.to_ics() {
         builder.add_property("PRIORITY", value);
+    }
+    for category in categories {
+        builder.add_multi_property("CATEGORIES", category);
     }
     if let Some(parent) = parent {
         builder.add_property("RELATED-TO", parent.as_str());
@@ -1271,11 +1386,14 @@ mod tests {
 
         let high = new_todo(
             &TaskId::new("new"),
-            "Foo",
-            Priority::High,
-            None,
-            None,
-            None,
+            NewTodo {
+                summary: "Foo",
+                priority: Priority::High,
+                categories: &[],
+                parent: None,
+                start: None,
+                due: None,
+            },
             now,
         );
         assert!(high.contains("PRIORITY:1"), "{high}");
@@ -1283,25 +1401,105 @@ mod tests {
 
         let low = new_todo(
             &TaskId::new("new"),
-            "Foo",
-            Priority::Low,
-            None,
-            None,
-            None,
+            NewTodo {
+                summary: "Foo",
+                priority: Priority::Low,
+                categories: &[],
+                parent: None,
+                start: None,
+                due: None,
+            },
             now,
         );
         assert!(low.contains("PRIORITY:9"), "{low}");
 
         let none = new_todo(
             &TaskId::new("new"),
-            "Foo",
-            Priority::None,
-            None,
-            None,
-            None,
+            NewTodo {
+                summary: "Foo",
+                priority: Priority::None,
+                categories: &[],
+                parent: None,
+                start: None,
+                due: None,
+            },
             now,
         );
         assert!(!none.contains("PRIORITY"), "{none}");
+    }
+
+    #[test]
+    fn writes_categories_and_preserves_unchanged_source_lines() {
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let source = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:tagged\r\nSUMMARY:Tagged\r\nCATEGORIES;X-STYLE=old:Work,\r\n Quick Win\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let renamed = patch_existing(
+            source,
+            &TaskId::new("tagged"),
+            TodoPatch {
+                summary: Some("Renamed"),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(
+            renamed.contains("CATEGORIES;X-STYLE=old:Work,\r\n Quick Win"),
+            "{renamed}"
+        );
+
+        let categories = vec![
+            "Quick Win".to_owned(),
+            "comma,tag".to_owned(),
+            "semi;tag".to_owned(),
+            "slash\\tag".to_owned(),
+        ];
+        let changed = patch_existing(
+            source,
+            &TaskId::new("tagged"),
+            TodoPatch {
+                categories: Some(&categories),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(changed.contains("CATEGORIES:Quick Win"), "{changed}");
+        assert!(changed.contains("CATEGORIES:comma\\,tag"), "{changed}");
+        assert!(changed.contains("CATEGORIES:semi\\;tag"), "{changed}");
+        assert!(changed.contains("CATEGORIES:slash\\\\tag"), "{changed}");
+        assert!(!changed.contains("X-STYLE=old"), "{changed}");
+
+        let cleared = patch_existing(
+            source,
+            &TaskId::new("tagged"),
+            TodoPatch {
+                categories: Some(&[]),
+                ..TodoPatch::default()
+            },
+            now,
+        )
+        .unwrap();
+        assert!(!cleared.contains("CATEGORIES"), "{cleared}");
+
+        let created = new_todo(
+            &TaskId::new("new"),
+            NewTodo {
+                summary: "New",
+                priority: Priority::None,
+                categories: &categories,
+                parent: None,
+                start: None,
+                due: None,
+            },
+            now,
+        );
+        assert!(created.contains("CATEGORIES:Quick Win"), "{created}");
+        assert!(created.contains("CATEGORIES:comma\\,tag"), "{created}");
+        assert!(created.contains("CATEGORIES:semi\\;tag"), "{created}");
+        assert!(created.contains("CATEGORIES:slash\\\\tag"), "{created}");
     }
 
     #[test]
@@ -1312,11 +1510,14 @@ mod tests {
         let parent = TaskId::new("parent");
         let created = new_todo(
             &TaskId::new("child"),
-            "Child",
-            Priority::None,
-            Some(&parent),
-            None,
-            None,
+            NewTodo {
+                summary: "Child",
+                priority: Priority::None,
+                categories: &[],
+                parent: Some(&parent),
+                start: None,
+                due: None,
+            },
             now,
         );
         assert!(created.contains("RELATED-TO:parent"), "{created}");
@@ -1444,11 +1645,14 @@ mod tests {
 
         let created = new_todo(
             &TaskId::new("dated"),
-            "Dated",
-            Priority::None,
-            None,
-            Some(&start),
-            Some(&due),
+            NewTodo {
+                summary: "Dated",
+                priority: Priority::None,
+                categories: &[],
+                parent: None,
+                start: Some(&start),
+                due: Some(&due),
+            },
             now,
         );
 
