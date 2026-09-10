@@ -15,7 +15,7 @@ in {
       # Keep vdirsyncer from writing to the vdirs mid-session, push whatever was
       # applied right away, and re-arm the timer however the session ended
       before_session = [systemctl "--user" "stop" "vdirsyncer.timer" "vdirsyncer.service"];
-      after_apply = [systemctl "--user" "start" "vdirsyncer.service"];
+      after_apply = [systemctl "--user" "start" "--no-block" "vdirsyncer.service"];
       after_session = [systemctl "--user" "start" "vdirsyncer.timer"];
     };
   };
