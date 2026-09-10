@@ -8,19 +8,22 @@
   nixosConfigs = builtins.attrNames outputs.nixosConfigurations;
   systemConfigs = builtins.attrNames outputs.systemConfigs;
   homeConfigs = map (n: lib.last (lib.splitString "@" n)) (builtins.attrNames outputs.homeConfigurations);
-  hostnames = lib.unique (homeConfigs ++ nixosConfigs ++ systemConfigs);
+  configNames = lib.unique (homeConfigs ++ nixosConfigs ++ systemConfigs);
+
+  trustedHosts = lib.flatten (["m7.rs"]
+    ++ (map (host: [
+        host
+        "${host}.m7.rs"
+        "${host}.ts.m7.rs"
+      ])
+      configNames));
 in {
   programs.ssh = {
     enable = true;
     enableDefaultConfig = false;
     settings = {
       net = {
-        header = "Host ${lib.concatStringsSep " " (lib.flatten (map (host: [
-            host
-            "${host}.m7.rs"
-            "${host}.ts.m7.rs"
-          ])
-          hostnames))}";
+        header = "Host ${lib.concatStringsSep " " trustedHosts}";
         ForwardAgent = true;
         RemoteForward = [
           {
