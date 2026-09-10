@@ -10,7 +10,7 @@ in {
   home.packages = [pkgs.todomd];
 
   xdg.configFile."todomd/config.toml".source = toml.generate "todomd-config.toml" {
-    calendar_roots = [config.accounts.calendar.accounts.personal.local.path];
+    calendar_roots = lib.mapAttrsToList (_: c: c.local.path) config.accounts.calendar.accounts;
     hooks = {
       # Keep vdirsyncer from writing to the vdirs mid-session, push whatever was
       # applied right away, and re-arm the timer however the session ended
