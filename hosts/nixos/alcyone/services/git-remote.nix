@@ -57,7 +57,6 @@ in {
   services.gitDaemon = {
     enable = true;
     basePath = "/srv/git";
-    exportAll = true;
   };
   networking.firewall.allowedTCPPorts = [9418];
 
