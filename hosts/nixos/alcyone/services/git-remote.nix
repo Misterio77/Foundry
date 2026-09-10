@@ -33,7 +33,9 @@
       for remote in "''${remotes[@]}"; do
         echo "Mirroring to $remote"
         GIT_SSH_COMMAND='ssh -o BatchMode=yes' \
-          git push --mirror "$remote" || status=1
+          git push --prune "$remote" \
+          '+refs/heads/*:refs/heads/*' \
+          '+refs/tags/*:refs/tags/*' || status=1
       done
 
       exit "$status"
