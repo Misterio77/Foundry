@@ -11,6 +11,7 @@
     ./font.nix
     ./gtk.nix
     ./kdeconnect.nix
+    ./jellyfin-tui.nix
     ./pavucontrol.nix
     ./playerctl.nix
     ./qt.nix
