@@ -208,8 +208,9 @@ The server ignores ordinary Markdown and attaches only to private todomd live
 sessions. It validates the current buffer while typing and reports errors on
 their lines. Saving valid Markdown applies it without confirmation, rerenders
 session identities, and sends the canonical document back as a versioned LSP
-workspace edit. This may leave the buffer marked modified, but does not require
-`:reload`.
+workspace edit. Tasks completed in the current active-scope session stay visible
+and can be reopened without restarting with `--completed`. This may leave the
+buffer marked modified, but does not require `:reload`.
 
 Selected list directories are watched for source changes. An ICS-only change is
 sent into the open buffer through the same mechanism. If both the buffer and

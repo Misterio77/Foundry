@@ -222,7 +222,9 @@ A summary that would itself end in one is quoted, which moves the line's final
 In the default scope active roots and their descendants render. Completed
 subtasks render checked, and traversal stops below them. Tasks outside the
 current scope are absent from the document, so their absence is never read as
-deletion. An unchanged `IN-PROCESS` task stays `IN-PROCESS`; unchecked syntax
+deletion. A task completed by the current live session remains in its active-scope
+document for the rest of the session, allowing an immediate reopen. An unchanged
+`IN-PROCESS` task stays `IN-PROCESS`; unchecked syntax
 alone does not normalize it to `NEEDS-ACTION`.
 
 | Markdown edit | Operation |

@@ -30,7 +30,7 @@ use crate::{
     edit::{
         hooks::Lifecycle,
         markdown::{self, IdentityManifest},
-        planner::{self, Reconciliation},
+        planner::{self, Operation, Reconciliation},
         session::{self, LoadedLiveSession},
         transaction,
     },
@@ -377,6 +377,7 @@ struct LiveDocument {
     lifecycle: Lifecycle,
     baseline: TaskState,
     recovery_baseline: TaskState,
+    completed_in_session: BTreeSet<TaskId>,
     manifest: IdentityManifest,
     parse_diagnostic: Option<Diagnostic>,
     state_diagnostic: Option<Diagnostic>,
@@ -393,6 +394,20 @@ impl LiveDocument {
         let lifecycle =
             Lifecycle::live(&loaded.metadata.config.hooks, loaded.metadata.hooks_enabled);
         let synchronized = text == loaded.accepted_text;
+        // Active scope never starts with completed roots, so any persisted here
+        // were completed by this session before an LSP restart.
+        let completed_in_session = if loaded.metadata.scope == Scope::Active {
+            loaded
+                .baseline
+                .lists
+                .iter()
+                .flat_map(|list| &list.tasks)
+                .filter(|task| task.completed && task.parent.is_none())
+                .map(|task| task.id.clone())
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
         Self {
             accepted_text: loaded.accepted_text,
             text,
@@ -405,6 +420,7 @@ impl LiveDocument {
             lifecycle,
             baseline: loaded.baseline,
             recovery_baseline: loaded.recovery_baseline,
+            completed_in_session,
             manifest: loaded.manifest,
             parse_diagnostic: None,
             state_diagnostic: None,
@@ -455,8 +471,7 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
         ));
     }
     let edited = markdown::parse(&document.text, &document.baseline, &document.manifest)?;
-    let (current, sources) =
-        repository::load_lists(&document.config, &document.lists, document.scope)?;
+    let (current, sources) = load_current(document, &document.completed_in_session)?;
     let missing = identities_outside(&edited, &document.baseline);
     let (reconciliation_baseline, reconciliation_current, sources) = if missing.is_empty() {
         (document.baseline.clone(), current.clone(), sources)
@@ -481,12 +496,16 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
         Reconciliation::Inbound => accept_inbound(document, current),
         Reconciliation::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
         Reconciliation::Outgoing(plan) => {
+            let mut completed_in_session = document.completed_in_session.clone();
+            for operation in &plan.operations {
+                if let Operation::Complete { id, .. } = operation {
+                    completed_in_session.insert(id.clone());
+                }
+            }
             let staged = transaction::stage(&plan, &sources, &document.root, Utc::now())?;
             transaction::apply(&staged, &sources)?;
-            let (accepted, accepted_sources) =
-                repository::load_lists(&document.config, &document.lists, document.scope).context(
-                    "source changes were applied, but the accepted state could not be read",
-                )?;
+            let (accepted, accepted_sources) = load_current(document, &completed_in_session)
+                .context("source changes were applied, but the accepted state could not be read")?;
             transaction::verify_applied(&staged, &sources, &accepted_sources).context(
                 "source changes were applied, but concurrent changes prevented acceptance",
             )?;
@@ -501,6 +520,7 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             let range = full_range(&document.text);
             document.baseline = accepted;
             document.recovery_baseline = recovery;
+            document.completed_in_session = completed_in_session;
             document.manifest = manifest;
             document.accepted_text = text.clone();
             document.state_diagnostic = None;
@@ -530,6 +550,22 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             Ok(Outcome::Message(MessageType::WARNING, message))
         }
     }
+}
+
+fn load_current(
+    document: &LiveDocument,
+    completed_in_session: &BTreeSet<TaskId>,
+) -> Result<(TaskState, repository::SourceSnapshot)> {
+    let (mut current, sources) =
+        repository::load_lists(&document.config, &document.lists, document.scope)?;
+    if document.scope == Scope::All || completed_in_session.is_empty() {
+        return Ok((current, sources));
+    }
+
+    let (current_all, sources) =
+        repository::load_lists(&document.config, &document.lists, Scope::All)?;
+    add_tasks(&mut current, &current_all, completed_in_session);
+    Ok((current, sources))
 }
 
 fn accept_inbound(document: &mut LiveDocument, current: TaskState) -> Result<Outcome> {

@@ -284,20 +284,44 @@ fn lsp_applies_saves_and_loads_source_changes() {
     let source = fs::read_to_string(&source_path).unwrap();
     assert!(source.contains("SUMMARY:LSP paper"));
 
+    let completed = canonical.replace("- [ ] -2026-09-10 LSP paper", "- [x] -2026-09-10 LSP paper");
     peer.send(json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
         "params": {
             "textDocument": {"uri": uri, "version": 3},
+            "contentChanges": [{"text": completed}]
+        }
+    }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didSave",
+        "params": {"textDocument": {"uri": uri}}
+    }));
+    let canonical = receive_workspace_edit(&mut peer, "LSP paper");
+    assert!(canonical.contains("- [x] -2026-09-10 LSP paper"));
+    assert!(
+        fs::read_to_string(&source_path)
+            .unwrap()
+            .contains("STATUS:COMPLETED")
+    );
+
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 4},
             "contentChanges": [{"text": canonical}]
         }
     }));
+    let source = fs::read_to_string(&source_path).unwrap();
     fs::write(
         &source_path,
         source.replace("SUMMARY:LSP paper", "SUMMARY:Changed externally"),
     )
     .unwrap();
-    receive_workspace_edit(&mut peer, "Changed externally");
+    let canonical = receive_workspace_edit(&mut peer, "Changed externally");
+    assert!(canonical.contains("- [x] -2026-09-10 Changed externally"));
 
     peer.send(json!({
         "jsonrpc": "2.0",
