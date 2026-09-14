@@ -13,10 +13,10 @@ fn renders_requested_lists_in_order() {
     assert_eq!(
         rendered.markdown,
         "# Postgrad\n\n\
-- [ ] -2026-09-10 Write paper draft <!-- todomd:id=t1 -->\n\
+- [ ] -2026-09-10 Write paper draft <!--t1-->\n\
 \n\
 # Personal\n\n\
-- [ ] Buy milk, bread <!-- todomd:id=t2 -->\n"
+- [ ] Buy milk, bread <!--t2-->\n"
     );
     assert_eq!(rendered.sources.files.len(), 5);
     assert_eq!(rendered.sources.task_files.len(), 2);

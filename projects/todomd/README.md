@@ -75,12 +75,12 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!-- todomd:id=t1 -->
-  - [ ] -2026-09-11 ! @"Quick Win" Read related work <!-- todomd:id=t3 -->
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!--t1-->
+  - [ ] -2026-09-11 ! @"Quick Win" Read related work <!--t3-->
 
 # Personal
 
-- [ ] Buy milk, bread <!-- todomd:id=t2 -->
+- [ ] Buy milk, bread <!--t2-->
 ```
 
 | Edit | Result |
@@ -101,9 +101,15 @@ back to `$EDITOR`:
 | Delete a line | Delete that VTODO |
 | Reorder lines | Nothing |
 
-The `<!-- todomd:id=... -->` markers are session-local identities, not VTODO
-UIDs, and track a task across renames and moves. Removing one is treated as
-intentional: the old task is deleted and a new one created on the next save.
+The `<!--t1-->` markers are session-local identities, not VTODO UIDs, and track
+a task across renames and moves. Removing one is treated as intentional: the old
+task is deleted and a new one created on the next save.
+
+Only a trailing comment whose body is a session identity, meaning `t` followed by
+digits, is read as a marker. Any other trailing HTML comment, such as
+`- [ ] Ship it <!--later-->`, is part of the summary, as is an identity-shaped
+one that is not at the end of the line. A summary that really does end with
+`<!--t1-->` is quoted, like any other summary the syntax would otherwise claim.
 
 Indentation edits the child's `RELATED-TO` parent, written as
 `RELATED-TO;RELTYPE=PARENT` so clients that do not infer the default
@@ -155,9 +161,11 @@ ordinary text is never quoted:
 | `!urgent thing` | `- [ ] "!urgent thing"` |
 | `@home is literal` | `- [ ] "@home is literal"` |
 | `"quoted" start` | `- [ ] """quoted"" start"` |
+| `Ship it <!--t1-->` | `- [ ] "Ship it <!--t1-->"` |
 
-Quote a summary yourself if you start it with `!`, `+`, `-`, `@`, or `"`, or if
-it needs leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
+Quote a summary yourself if you start it with `!`, `+`, `-`, `@`, or `"`, if it
+ends with an identity-shaped comment such as `<!--t1-->`, or if it needs leading
+or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
 The dialect is strict. It allows selected level-one headings and `- [ ]` or
 `- [x]` items indented by exactly two spaces per nesting level. Nesting may be

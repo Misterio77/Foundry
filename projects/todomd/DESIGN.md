@@ -177,12 +177,12 @@ its status unless it is explicitly reopened.
 ```markdown
 # Postgrad
 
-- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!-- todomd:id=t1 -->
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!--t1-->
   - [ ] -2026-09-11 @"Quick Win" Email advisor
 
 # Personal
 
-- [ ] ! Buy groceries <!-- todomd:id=t3 -->
+- [ ] ! Buy groceries <!--t3-->
 ```
 
 A task line is a checkbox, optional due (`-`) and start (`+`) fields, an
@@ -210,6 +210,14 @@ Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
 Session IDs rather than raw VTODO UIDs avoid leaking or misparsing arbitrary UID
 contents. A task without an ID is new.
+
+Markers render as `<!--t1-->`. The editor cannot be asked to hide buffer text,
+since LSP can add or recolor but never subtract, so the marker is kept short
+enough to ignore instead. Only a trailing comment whose body is a session
+identity, `t` followed by digits, is reserved; any other trailing HTML comment,
+and an identity-shaped one anywhere but the end of the line, is summary text.
+A summary that would itself end in one is quoted, which moves the line's final
+`-->` inside the quotes and leaves the real marker last.
 
 In the default scope active roots and their descendants render. Completed
 subtasks render checked, and traversal stops below them. Tasks outside the
@@ -255,13 +263,15 @@ would be lost.
 Inside quotes a literal `"` is doubled, so the dialect needs no second escape
 character.
 
-The summary's right edge is already delimited by the identity marker, so only
-its first character can be ambiguous. Interior quotes are therefore left alone
-and ordinary prose never acquires quoting. An unquoted summary that starts with
-a reserved character is a parse error rather than a guess.
+The summary's right edge is delimited by the identity marker, so only its first
+character and a trailing identity-shaped comment can be ambiguous. Interior
+quotes are therefore left alone and ordinary prose never acquires quoting. An
+unquoted summary that starts with a reserved character is a parse error rather
+than a guess, and an unquoted trailing marker is the task's identity rather than
+text.
 
-This generalizes: fields added later can reserve leading syntax without
-inventing their own escape.
+This generalizes: fields added later can reserve leading or trailing syntax
+without inventing their own escape.
 
 New tasks receive draft identities in document order during parsing. Parent
 references may name either an existing task or an earlier draft at the preceding

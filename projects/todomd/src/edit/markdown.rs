@@ -96,7 +96,7 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
             let session_id = manifest.get_or_insert(&task.id);
             output.push_str(&"  ".repeat(depth));
             output.push_str(&format!(
-                "- [{checked}] {due}{start}{priority}{categories}{summary} <!-- todomd:id={session_id} -->\n"
+                "- [{checked}] {due}{start}{priority}{categories}{summary}{MARKER_START}{session_id}{MARKER_END}\n"
             ));
             depths.insert(task.id.clone(), depth);
         }
@@ -208,6 +208,24 @@ fn split_indentation(line: &str, line_number: usize) -> Result<(usize, &str)> {
     Ok((spaces / 2, &line[spaces..]))
 }
 
+/// Identity markers stay compact so they add little visual noise to a task
+/// line. Only a trailing comment whose body is a session identity is reserved;
+/// any other trailing HTML comment belongs to the summary.
+const MARKER_START: &str = " <!--";
+const MARKER_END: &str = "-->";
+
+fn split_identity_marker(remainder: &str) -> Option<(&str, &str)> {
+    let (summary, marker) = remainder.rsplit_once(MARKER_START)?;
+    let session_id = marker.strip_suffix(MARKER_END)?;
+    is_session_id(session_id).then_some((summary, session_id))
+}
+
+fn is_session_id(value: &str) -> bool {
+    value.strip_prefix('t').is_some_and(|digits| {
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+    })
+}
+
 fn parse_task_line(
     line: &str,
     line_number: usize,
@@ -222,25 +240,17 @@ fn parse_task_line(
         bail!("line {line_number}: expected a '- [ ]' or '- [x]' task");
     };
 
-    let (summary, id) = match remainder.rsplit_once(" <!-- todomd:id=") {
-        Some((summary, marker)) => {
-            let session_id = marker
-                .strip_suffix(" -->")
-                .with_context(|| format!("line {line_number}: malformed todomd identity marker"))?;
-            if session_id.is_empty() || summary.contains("<!-- todomd:id=") {
-                bail!("line {line_number}: malformed todomd identity marker");
+    let (summary, id) = match split_identity_marker(remainder) {
+        Some((summary, session_id)) => {
+            if split_identity_marker(summary).is_some() {
+                bail!("line {line_number}: duplicate todomd identity marker");
             }
             let task_id = manifest
                 .resolve_session_id(session_id)
                 .with_context(|| format!("line {line_number}"))?;
             (summary, Some(task_id.clone()))
         }
-        None => {
-            if remainder.contains("<!-- todomd:id=") {
-                bail!("line {line_number}: malformed todomd identity marker");
-            }
-            (remainder, None)
-        }
+        None => (remainder, None),
     };
 
     let fields =
@@ -277,7 +287,11 @@ fn render_summary(summary: &str) -> String {
 }
 
 fn needs_quoting(summary: &str) -> bool {
-    summary.starts_with(['!', '+', '-', '@', '"']) || summary.trim() != summary
+    summary.starts_with(['!', '+', '-', '@', '"'])
+        || summary.trim() != summary
+        // A trailing identity-shaped comment would otherwise be read back as
+        // this task's marker.
+        || split_identity_marker(summary).is_some()
 }
 
 pub(super) fn validate_category(category: &str) -> Result<()> {
@@ -448,9 +462,6 @@ fn validate_summary(summary: &str) -> Result<()> {
     if summary.contains(['\r', '\n']) {
         bail!("task summary cannot contain a newline in the MVP format");
     }
-    if summary.contains("<!-- todomd:id=") {
-        bail!("task summary contains a reserved todomd identity marker");
-    }
     Ok(())
 }
 
@@ -526,7 +537,8 @@ mod tests {
         };
         let mut manifest = IdentityManifest::default();
         render(&baseline, &mut manifest).unwrap();
-        let input = "# Postgrad\n\n- [ ] Buy coffee\n\n# Personal\n\n- [x] Submit paper <!-- todomd:id=t1 -->\n";
+        let input =
+            "# Postgrad\n\n- [ ] Buy coffee\n\n# Personal\n\n- [x] Submit paper <!--t1-->\n";
 
         let parsed = parse(input, &baseline, &manifest).unwrap();
 
@@ -549,13 +561,128 @@ mod tests {
             }],
         };
         let error = parse(
-            "# Personal\n\n- [ ] Ghost <!-- todomd:id=t404 -->\n",
+            "# Personal\n\n- [ ] Ghost <!--t404-->\n",
             &baseline,
             &IdentityManifest::default(),
         )
         .unwrap_err();
 
         assert!(error.to_string().contains("line 3"));
+    }
+
+    #[test]
+    fn only_identity_shaped_trailing_comments_are_markers() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("paper@example.test"),
+                    summary: "Submit paper".into(),
+                    completed: false,
+                    priority: Priority::None,
+                    categories: vec![],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+        let document = render(&baseline, &mut manifest).unwrap();
+        assert!(
+            document.contains("- [ ] Submit paper <!--t1-->"),
+            "{document}"
+        );
+
+        let parsed = parse(
+            "# Personal\n\n\
+             - [ ] Submit paper <!--t1-->\n\
+             - [ ] Ship it <!--later-->\n\
+             - [ ] Note <!--t1--> in passing\n",
+            &baseline,
+            &manifest,
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed.lists[0].tasks[0].id.as_ref().map(TaskId::as_str),
+            Some("paper@example.test")
+        );
+        assert_eq!(parsed.lists[0].tasks[1].id, None);
+        assert_eq!(parsed.lists[0].tasks[1].summary, "Ship it <!--later-->");
+        assert_eq!(parsed.lists[0].tasks[2].id, None);
+        assert_eq!(
+            parsed.lists[0].tasks[2].summary,
+            "Note <!--t1--> in passing"
+        );
+    }
+
+    #[test]
+    fn quotes_summaries_that_end_with_an_identity_marker() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("paper@example.test"),
+                    summary: "Submit paper <!--t1-->".into(),
+                    completed: false,
+                    priority: Priority::None,
+                    categories: vec![],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render(&state, &mut manifest).unwrap();
+
+        assert!(
+            document.contains("- [ ] \"Submit paper <!--t1-->\" <!--t1-->"),
+            "{document}"
+        );
+
+        let parsed = parse(&document, &state, &manifest).unwrap();
+
+        assert_eq!(
+            parsed.lists[0].tasks[0].id.as_ref().map(TaskId::as_str),
+            Some("paper@example.test")
+        );
+        assert_eq!(parsed.lists[0].tasks[0].summary, "Submit paper <!--t1-->");
+    }
+
+    #[test]
+    fn rejects_duplicate_identity_markers() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("paper@example.test"),
+                    summary: "Submit paper".into(),
+                    completed: false,
+                    priority: Priority::None,
+                    categories: vec![],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let mut manifest = IdentityManifest::default();
+        render(&baseline, &mut manifest).unwrap();
+
+        let error = parse(
+            "# Personal\n\n- [ ] Submit paper <!--t1--> <!--t1-->\n",
+            &baseline,
+            &manifest,
+        )
+        .unwrap_err();
+
+        assert!(
+            format!("{error:#}").contains("duplicate todomd identity marker"),
+            "{error:#}"
+        );
     }
 
     #[test]
@@ -611,10 +738,10 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
 
-        assert!(document.contains("- [ ] !!! Urgent <!-- todomd:id=t1 -->"));
-        assert!(document.contains("- [ ] !! Middling <!-- todomd:id=t2 -->"));
-        assert!(document.contains("- [ ] ! Whenever <!-- todomd:id=t3 -->"));
-        assert!(document.contains("- [ ] Unset <!-- todomd:id=t4 -->"));
+        assert!(document.contains("- [ ] !!! Urgent <!--t1-->"));
+        assert!(document.contains("- [ ] !! Middling <!--t2-->"));
+        assert!(document.contains("- [ ] ! Whenever <!--t3-->"));
+        assert!(document.contains("- [ ] Unset <!--t4-->"));
 
         let parsed = parse(&document, &state, &manifest).unwrap();
         let priorities = parsed.lists[0]
@@ -654,11 +781,13 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
         assert!(
-            document.contains("- [ ] ! @Blocked @\"Quick Win\" @\"say \"\"hi\"\"\" Email @Gabs <!-- todomd:id=t1 -->"),
+            document.contains(
+                "- [ ] ! @Blocked @\"Quick Win\" @\"say \"\"hi\"\"\" Email @Gabs <!--t1-->"
+            ),
             "{document}"
         );
 
-        let reordered = "# Personal\n\n- [ ] @\"Quick Win\" ! @\"say \"\"hi\"\"\" @Blocked Email @Gabs <!-- todomd:id=t1 -->\n";
+        let reordered = "# Personal\n\n- [ ] @\"Quick Win\" ! @\"say \"\"hi\"\"\" @Blocked Email @Gabs <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(
             parsed.lists[0].tasks[0].categories,
@@ -757,13 +886,12 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
         assert!(
-            document.contains(
-                "- [ ] -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!-- todomd:id=t1 -->"
-            ),
+            document.contains("- [ ] -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!--t1-->"),
             "{document}"
         );
 
-        let reordered = "# Postgrad\n\n- [ ] ! +\"2026-09-06 10:00\" -2026-09-07 Write grant <!-- todomd:id=t1 -->\n";
+        let reordered =
+            "# Postgrad\n\n- [ ] ! +\"2026-09-06 10:00\" -2026-09-07 Write grant <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(parsed.lists[0].tasks[0].priority, Priority::Low);
         assert_eq!(
@@ -867,7 +995,7 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
 
         assert!(
-            document.contains(r#"- [ ] He said "hi" to me <!-- todomd:id=t1 -->"#),
+            document.contains(r#"- [ ] He said "hi" to me <!--t1-->"#),
             "{document}"
         );
         let parsed = parse(&document, &state, &manifest).unwrap();
@@ -895,10 +1023,10 @@ mod tests {
         render(&state, &mut manifest).unwrap();
 
         for line in [
-            "- [ ] !!!! Too many <!-- todomd:id=t1 -->",
-            "- [ ] !unquoted start <!-- todomd:id=t1 -->",
-            "- [ ] \"unterminated <!-- todomd:id=t1 -->",
-            "- [ ] \"bad \" quoting\" <!-- todomd:id=t1 -->",
+            "- [ ] !!!! Too many <!--t1-->",
+            "- [ ] !unquoted start <!--t1-->",
+            "- [ ] \"unterminated <!--t1-->",
+            "- [ ] \"bad \" quoting\" <!--t1-->",
         ] {
             let document = format!("# Postgrad\n\n{line}\n");
             assert!(
@@ -1004,8 +1132,8 @@ mod tests {
         let mut manifest = IdentityManifest::default();
 
         let document = render(&state, &mut manifest).unwrap();
-        assert!(document.contains("  - [ ] Child <!-- todomd:id=t2 -->"));
-        assert!(document.contains("    - [ ] Grandchild <!-- todomd:id=t3 -->"));
+        assert!(document.contains("  - [ ] Child <!--t2-->"));
+        assert!(document.contains("    - [ ] Grandchild <!--t3-->"));
 
         let parsed = parse(&document, &state, &manifest).unwrap();
         assert_eq!(

@@ -252,7 +252,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
     }));
 
     let canonical = receive_workspace_edit(&mut peer, "LSP paper");
-    assert!(canonical.contains("<!-- todomd:id="));
+    assert!(canonical.contains("<!--t"));
     assert!(session.is_attached());
     assert_eq!(case.hooks(), "apply\n");
     let source_path = case.calendars.join("Postgrad/write.ics");
