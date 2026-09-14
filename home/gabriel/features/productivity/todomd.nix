@@ -13,6 +13,4 @@ in {
     calendar_roots = lib.mapAttrsToList (_: c: c.local.path) config.accounts.calendar.accounts;
     hooks.after_apply = [systemctl "--user" "start" "--no-block" "vdirsyncer.service"];
   };
-
-  programs.fish.shellAbbrs.todo = "todomd";
 }
