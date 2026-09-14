@@ -189,6 +189,7 @@ fn edit_requires_an_attached_language_server() {
 #[test]
 fn lsp_applies_saves_and_loads_source_changes() {
     let case = Case::new(0);
+    fs::write(case.calendars.join("Postgrad/color"), "#336699\n").unwrap();
     let config = Config::load(Some(&case.config)).unwrap();
     let lists = vec!["Postgrad".to_owned(), "Personal".to_owned()];
     let rendered = edit::render_lists(&config, &lists, Scope::Active).unwrap();
@@ -225,7 +226,9 @@ fn lsp_applies_saves_and_loads_source_changes() {
             "workspaceEdit": {"documentChanges": true}
         }}}
     }));
-    assert_eq!(peer.read()["id"], 1);
+    let initialize = peer.read();
+    assert_eq!(initialize["id"], 1);
+    assert_eq!(initialize["result"]["capabilities"]["colorProvider"], true);
     peer.send(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
     peer.send(json!({
         "jsonrpc": "2.0",
@@ -237,6 +240,28 @@ fn lsp_applies_saves_and_loads_source_changes() {
             "text": rendered.markdown
         }}
     }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "textDocument/documentColor",
+        "params": {"textDocument": {"uri": uri}}
+    }));
+    let colors = read_response(&mut peer, 2);
+    assert_eq!(colors["result"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        colors["result"][0]["range"]["start"],
+        json!({"line": 0, "character": 2})
+    );
+    assert_eq!(
+        colors["result"][0]["range"]["end"],
+        json!({"line": 0, "character": 10})
+    );
+    let color = &colors["result"][0]["color"];
+    assert!((color["red"].as_f64().unwrap() - 0.2).abs() < 1e-6);
+    assert!((color["green"].as_f64().unwrap() - 0.4).abs() < 1e-6);
+    assert!((color["blue"].as_f64().unwrap() - 0.6).abs() < 1e-6);
+    assert_eq!(color["alpha"], 1.0);
+
     peer.send(json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
@@ -285,6 +310,15 @@ fn lsp_applies_saves_and_loads_source_changes() {
     drop(peer);
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success(), "{}", output_text(&output));
+}
+
+fn read_response(peer: &mut LspPeer, id: u64) -> Value {
+    loop {
+        let message = peer.read();
+        if message["id"] == id {
+            return message;
+        }
+    }
 }
 
 fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> String {

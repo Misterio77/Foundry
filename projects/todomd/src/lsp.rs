@@ -16,9 +16,10 @@ use tower_lsp::{
     Client, LanguageServer, LspService, Server,
     jsonrpc::Result as LspResult,
     lsp_types::{
-        ApplyWorkspaceEditResponse, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
-        DocumentChangeOperation, DocumentChanges, InitializeParams, InitializeResult,
+        ApplyWorkspaceEditResponse, Color, ColorInformation, ColorProviderCapability, Diagnostic,
+        DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+        DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentChangeOperation,
+        DocumentChanges, DocumentColorParams, InitializeParams, InitializeResult,
         InitializedParams, MessageType, OneOf, OptionalVersionedTextDocumentIdentifier, Position,
         Range, ServerCapabilities, ServerInfo, TextDocumentEdit, TextDocumentSyncCapability,
         TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, Url, WorkspaceEdit,
@@ -250,6 +251,7 @@ impl LanguageServer for Backend {
                         ..TextDocumentSyncOptions::default()
                     },
                 )),
+                color_provider: Some(ColorProviderCapability::Simple(true)),
                 ..ServerCapabilities::default()
             },
             server_info: Some(ServerInfo {
@@ -306,6 +308,36 @@ impl LanguageServer for Backend {
             }
         }
         self.reconcile(&uri, Trigger::Save).await;
+    }
+
+    async fn document_color(
+        &self,
+        params: DocumentColorParams,
+    ) -> LspResult<Vec<ColorInformation>> {
+        let Some(document) = self.document(&params.text_document.uri).await else {
+            return Ok(Vec::new());
+        };
+        let (config, lists, text) = {
+            let document = document.lock().await;
+            (
+                document.config.clone(),
+                document.lists.clone(),
+                document.text.clone(),
+            )
+        };
+        let colors = match repository::list_colors(&config, &lists) {
+            Ok(colors) => colors,
+            Err(error) => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("todomd: failed to load list colors: {error:#}"),
+                    )
+                    .await;
+                return Ok(Vec::new());
+            }
+        };
+        Ok(document_colors(&text, &colors))
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -634,6 +666,31 @@ fn add_tasks(target: &mut TaskState, source: &TaskState, ids: &BTreeSet<TaskId>)
     }
 }
 
+fn document_colors(
+    text: &str,
+    colors: &std::collections::BTreeMap<String, repository::ListColor>,
+) -> Vec<ColorInformation> {
+    text.lines()
+        .enumerate()
+        .filter_map(|(line, text)| {
+            let name = text.strip_prefix("# ")?;
+            let color = colors.get(name)?;
+            Some(ColorInformation {
+                range: Range::new(
+                    Position::new(line as u32, 2),
+                    Position::new(line as u32, utf16_len(text) as u32),
+                ),
+                color: Color {
+                    red: f32::from(color.red) / 255.0,
+                    green: f32::from(color.green) / 255.0,
+                    blue: f32::from(color.blue) / 255.0,
+                    alpha: 1.0,
+                },
+            })
+        })
+        .collect()
+}
+
 fn diagnostic(error: &anyhow::Error, text: &str, severity: DiagnosticSeverity) -> Diagnostic {
     let message = format!("{error:#}");
     let line = error_line(&message)
@@ -703,5 +760,39 @@ mod tests {
             full_range("# Personal\n"),
             Range::new(Position::new(0, 0), Position::new(1, 0))
         );
+    }
+
+    #[test]
+    fn document_colors_cover_known_heading_names() {
+        let colors = std::collections::BTreeMap::from([
+            (
+                "Pós-graduação".to_owned(),
+                repository::ListColor {
+                    red: 0x33,
+                    green: 0x66,
+                    blue: 0x99,
+                },
+            ),
+            (
+                "Personal".to_owned(),
+                repository::ListColor {
+                    red: 0xff,
+                    green: 0,
+                    blue: 0,
+                },
+            ),
+        ]);
+
+        let information = document_colors("# Pós-graduação\n\n- [ ] Task\n\n# Unknown\n", &colors);
+
+        assert_eq!(information.len(), 1);
+        assert_eq!(
+            information[0].range,
+            Range::new(Position::new(0, 2), Position::new(0, 15))
+        );
+        assert_eq!(information[0].color.red, 0x33 as f32 / 255.0);
+        assert_eq!(information[0].color.green, 0x66 as f32 / 255.0);
+        assert_eq!(information[0].color.blue, 0x99 as f32 / 255.0);
+        assert_eq!(information[0].color.alpha, 1.0);
     }
 }

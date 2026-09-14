@@ -83,6 +83,10 @@ back to `$EDITOR`:
 - [ ] Buy milk, bread <!--t2-->
 ```
 
+When a selected vdir has a `color` metadata file containing `#RRGGBB`, todomd
+exposes that color for its list heading through LSP. Supporting editors such as
+Helix 25.07 and newer show an inline color swatch beside the heading.
+
 | Edit | Result |
 |---|---|
 | Change task text | Rename |

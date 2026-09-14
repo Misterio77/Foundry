@@ -33,6 +33,13 @@ pub struct SourceFile {
     pub sha256: [u8; 32],
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ListColor {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SourceSnapshot {
     pub list_dirs: BTreeMap<String, PathBuf>,
@@ -129,6 +136,36 @@ pub fn list_names(config: &Config) -> Result<Vec<String>> {
     Ok(discovered.into_keys().collect())
 }
 
+pub fn list_colors(
+    config: &Config,
+    requested_lists: &[String],
+) -> Result<BTreeMap<String, ListColor>> {
+    let discovered = discover_lists(config)?;
+    let mut colors = BTreeMap::new();
+
+    for requested in requested_lists {
+        let list_dir = resolve_list_dir(&discovered, requested)?;
+        let color_path = list_dir.join("color");
+        let contents = match fs::read_to_string(&color_path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to read {}", color_path.display()));
+            }
+        };
+        let color = parse_list_color(contents.trim()).with_context(|| {
+            format!(
+                "invalid color metadata for list {requested:?} at {}",
+                color_path.display()
+            )
+        })?;
+        colors.insert(requested.clone(), color);
+    }
+
+    Ok(colors)
+}
+
 pub fn load_lists(
     config: &Config,
     requested_lists: &[String],
@@ -141,23 +178,11 @@ pub fn load_lists(
     let mut seen_task_ids = BTreeSet::new();
 
     for requested in requested_lists {
-        let matches = discovered.get(requested).cloned().unwrap_or_default();
-        let list_dir = match matches.as_slice() {
-            [] => bail!("VTODO list {requested:?} was not found"),
-            [path] => path,
-            paths => {
-                let locations = paths
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                bail!("VTODO list {requested:?} is ambiguous: {locations}");
-            }
-        };
+        let list_dir = resolve_list_dir(&discovered, requested)?;
 
         snapshot
             .list_dirs
-            .insert(requested.clone(), list_dir.clone());
+            .insert(requested.clone(), list_dir.to_path_buf());
         let mut loaded = BTreeMap::new();
 
         for path in ics_files(list_dir)? {
@@ -247,6 +272,43 @@ fn discover_lists(config: &Config) -> Result<BTreeMap<String, Vec<PathBuf>>> {
     }
 
     Ok(discovered)
+}
+
+fn resolve_list_dir<'a>(
+    discovered: &'a BTreeMap<String, Vec<PathBuf>>,
+    requested: &str,
+) -> Result<&'a Path> {
+    let matches = discovered
+        .get(requested)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    match matches {
+        [] => bail!("VTODO list {requested:?} was not found"),
+        [path] => Ok(path),
+        paths => {
+            let locations = paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!("VTODO list {requested:?} is ambiguous: {locations}");
+        }
+    }
+}
+
+fn parse_list_color(value: &str) -> Result<ListColor> {
+    let hex = value
+        .strip_prefix('#')
+        .with_context(|| "expected #RRGGBB")?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("expected #RRGGBB");
+    }
+    let component = |start| u8::from_str_radix(&hex[start..start + 2], 16);
+    Ok(ListColor {
+        red: component(0)?,
+        green: component(2)?,
+        blue: component(4)?,
+    })
 }
 
 fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
@@ -639,6 +701,21 @@ mod tests {
             Utc.with_ymd_and_hms(2026, 9, 7, 12, 0, 0).unwrap(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn parses_vdir_list_colors() {
+        assert_eq!(
+            parse_list_color("#3366aA").unwrap(),
+            ListColor {
+                red: 0x33,
+                green: 0x66,
+                blue: 0xaa,
+            }
+        );
+        assert!(parse_list_color("3366aa").is_err());
+        assert!(parse_list_color("#3366").is_err());
+        assert!(parse_list_color("#3366xx").is_err());
     }
 
     fn write_todo(
