@@ -30,7 +30,7 @@ use crate::{
     edit::{
         hooks::Lifecycle,
         markdown::{self, IdentityManifest},
-        planner::{self, Operation, Reconciliation},
+        planner::{self, Reconciliation, TaskChange},
         session::{self, LoadedLiveSession},
         transaction,
     },
@@ -497,8 +497,11 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
         Reconciliation::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
         Reconciliation::Outgoing(plan) => {
             let mut completed_in_session = document.completed_in_session.clone();
-            for operation in &plan.operations {
-                if let Operation::Complete { id, .. } = operation {
+            for change in &plan.changes {
+                if let TaskChange::Update { id, before, after } = change
+                    && !before.completed
+                    && after.completed
+                {
                     completed_in_session.insert(id.clone());
                 }
             }
@@ -511,19 +514,14 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             )?;
             let recovery = load_recovery_baseline(document)
                 .context("source changes were applied, but the recovery state could not be read")?;
-            let mut manifest = document.manifest.clone();
-            let text = markdown::render(&accepted, &mut manifest).context(
+            let (text, range) = accept_state(
+                document,
+                accepted,
+                recovery,
                 "source changes were applied, but the accepted state could not be rendered",
+                "source changes were applied, but the live session was not refreshed",
             )?;
-            session::accept_live(&document.root, &text, &manifest, &accepted, &recovery)
-                .context("source changes were applied, but the live session was not refreshed")?;
-            let range = full_range(&document.text);
-            document.baseline = accepted;
-            document.recovery_baseline = recovery;
             document.completed_in_session = completed_in_session;
-            document.manifest = manifest;
-            document.accepted_text = text.clone();
-            document.state_diagnostic = None;
             let hook = document.lifecycle.after_apply();
             let (kind, message) = match hook {
                 Ok(()) => (MessageType::INFO, "todomd: changes applied".to_owned()),
@@ -570,17 +568,13 @@ fn load_current(
 
 fn accept_inbound(document: &mut LiveDocument, current: TaskState) -> Result<Outcome> {
     let recovery = load_recovery_baseline(document)?;
-    let mut manifest = document.manifest.clone();
-    let text = markdown::render(&current, &mut manifest)
-        .context("failed to render an inbound source change")?;
-    session::accept_live(&document.root, &text, &manifest, &current, &recovery)
-        .context("failed to accept an inbound source change")?;
-    let range = full_range(&document.text);
-    document.baseline = current;
-    document.recovery_baseline = recovery;
-    document.manifest = manifest;
-    document.accepted_text = text.clone();
-    document.state_diagnostic = None;
+    let (text, range) = accept_state(
+        document,
+        current,
+        recovery,
+        "failed to render an inbound source change",
+        "failed to accept an inbound source change",
+    )?;
     Ok(Outcome::Edit {
         text,
         version: document.version,
@@ -590,10 +584,27 @@ fn accept_inbound(document: &mut LiveDocument, current: TaskState) -> Result<Out
     })
 }
 
+fn accept_state(
+    document: &mut LiveDocument,
+    state: TaskState,
+    recovery: TaskState,
+    render_error: &'static str,
+    persist_error: &'static str,
+) -> Result<(String, Range)> {
+    let mut manifest = document.manifest.clone();
+    let text = markdown::render(&state, &mut manifest).context(render_error)?;
+    session::accept_live(&document.root, &text, &manifest, &state, &recovery)
+        .context(persist_error)?;
+    let range = full_range(&document.text);
+    document.baseline = state;
+    document.recovery_baseline = recovery;
+    document.manifest = manifest;
+    document.accepted_text = text.clone();
+    document.state_diagnostic = None;
+    Ok((text, range))
+}
+
 fn load_recovery_baseline(document: &LiveDocument) -> Result<TaskState> {
-    if document.scope == Scope::All {
-        return Ok(repository::load_lists(&document.config, &document.lists, Scope::All)?.0);
-    }
     Ok(repository::load_lists(&document.config, &document.lists, Scope::All)?.0)
 }
 

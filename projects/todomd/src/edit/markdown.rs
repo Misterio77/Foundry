@@ -199,7 +199,7 @@ pub fn parse(
 
 fn split_indentation(line: &str, line_number: usize) -> Result<(usize, &str)> {
     let spaces = line.bytes().take_while(|byte| *byte == b' ').count();
-    if line[..spaces].contains('\t') || line.as_bytes().get(spaces) == Some(&b'\t') {
+    if line.as_bytes().get(spaces) == Some(&b'\t') {
         bail!("line {line_number}: task indentation must use spaces, not tabs");
     }
     if spaces % 2 != 0 {

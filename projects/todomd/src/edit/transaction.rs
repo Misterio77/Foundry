@@ -19,7 +19,7 @@ use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
-use super::planner::{ChangePlan, Operation};
+use super::planner::{ChangePlan, TaskChange};
 use crate::{
     dates::DateValue,
     model::{Priority, TaskId, TaskReference},
@@ -50,19 +50,6 @@ pub struct StagedTransaction {
     changes: Vec<StagedFileChange>,
     created_tasks: BTreeMap<usize, TaskId>,
     root: PathBuf,
-}
-
-#[derive(Default)]
-struct ExistingEdit {
-    summary: Option<String>,
-    completion: CompletionChange,
-    priority: Option<Priority>,
-    categories: Option<Vec<String>>,
-    parent: Option<Option<TaskReference>>,
-    start: Option<Option<DateValue>>,
-    due: Option<Option<DateValue>>,
-    move_to: Option<String>,
-    delete: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -96,83 +83,25 @@ pub fn stage(
     fs::create_dir(&backup_dir)
         .with_context(|| format!("failed to create {}", backup_dir.display()))?;
 
-    let mut existing: BTreeMap<TaskId, ExistingEdit> = BTreeMap::new();
-    let mut creates = Vec::new();
-    for operation in &plan.operations {
-        match operation {
-            Operation::Rename { id, to, .. } => {
-                existing.entry(id.clone()).or_default().summary = Some(to.clone());
-            }
-            Operation::Complete { id, .. } => {
-                existing.entry(id.clone()).or_default().completion = CompletionChange::Complete;
-            }
-            Operation::Reopen { id, .. } => {
-                existing.entry(id.clone()).or_default().completion = CompletionChange::Reopen;
-            }
-            Operation::Reprioritize { id, to, .. } => {
-                existing.entry(id.clone()).or_default().priority = Some(*to);
-            }
-            Operation::Recategorize { id, to, .. } => {
-                existing.entry(id.clone()).or_default().categories = Some(to.clone());
-            }
-            Operation::Reschedule {
-                id,
-                from_start,
-                to_start,
-                from_due,
-                to_due,
-                ..
-            } => {
-                let edit = existing.entry(id.clone()).or_default();
-                if from_start != to_start {
-                    edit.start = Some(to_start.clone());
-                }
-                if from_due != to_due {
-                    edit.due = Some(to_due.clone());
-                }
-            }
-            Operation::Reparent { id, to, .. } => {
-                existing.entry(id.clone()).or_default().parent = Some(to.clone());
-            }
-            Operation::Move { id, to, .. } => {
-                existing.entry(id.clone()).or_default().move_to = Some(to.clone());
-            }
-            Operation::Delete { id, .. } => {
-                existing.entry(id.clone()).or_default().delete = true;
-            }
-            Operation::Create {
-                draft_id,
-                list,
-                summary,
-                priority,
-                categories,
-                start,
-                due,
-                parent,
-                ..
-            } => creates.push((
-                *draft_id,
-                list.clone(),
-                summary.clone(),
-                *priority,
-                categories.clone(),
-                start.clone(),
-                due.clone(),
-                parent.clone(),
-            )),
-        }
-    }
-
-    // Allocate every UID first: an existing or new child may name a new parent
-    // whose create operation sorts later in the plan.
-    let created_tasks = creates
+    // Allocate every UID first: an existing or new child may name a new parent.
+    let created_tasks = plan
+        .changes
         .iter()
-        .map(|(draft_id, ..)| (*draft_id, TaskId::new(Uuid::new_v4().to_string())))
+        .filter_map(|change| match change {
+            TaskChange::Create { draft_id, .. } => {
+                Some((*draft_id, TaskId::new(Uuid::new_v4().to_string())))
+            }
+            _ => None,
+        })
         .collect::<BTreeMap<_, _>>();
 
     let mut changes = Vec::new();
-    for (task_id, edit) in existing {
-        let source = sources.file_for_task(&task_id).with_context(|| {
+    for change in &plan.changes {
+        let task_id = match change {
+            TaskChange::Update { id, .. } | TaskChange::Delete { id, .. } => id,
+            TaskChange::Create { .. } => continue,
+        };
+        let source = sources.file_for_task(task_id).with_context(|| {
             format!(
                 "source snapshot has no file for VTODO {:?}",
                 task_id.as_str()
@@ -181,7 +110,7 @@ pub fn stage(
         let index = changes.len() + 1;
         let backup = backup_dir.join(format!("{index:04}.ics"));
 
-        if edit.delete {
+        let TaskChange::Update { before, after, .. } = change else {
             changes.push(StagedFileChange {
                 action: FileAction::Delete,
                 source: Some(source.path.clone()),
@@ -192,13 +121,12 @@ pub fn stage(
                 backup: Some(backup),
             });
             continue;
-        }
+        };
 
-        let destination_list = edit.move_to.as_deref().unwrap_or(&source.list_name);
         let destination_dir = sources
             .list_dirs
-            .get(destination_list)
-            .with_context(|| format!("unknown destination list {destination_list:?}"))?;
+            .get(&after.list)
+            .with_context(|| format!("unknown destination list {:?}", after.list))?;
         let filename = source
             .path
             .file_name()
@@ -208,35 +136,42 @@ pub fn stage(
             bail!("move destination {} already exists", destination.display());
         }
 
-        let contents = if edit.summary.is_some()
-            || edit.completion != CompletionChange::Unchanged
-            || edit.priority.is_some()
-            || edit.categories.is_some()
-            || edit.parent.is_some()
-            || edit.start.is_some()
-            || edit.due.is_some()
-        {
-            let parent = edit
-                .parent
-                .as_ref()
-                .map(|parent| {
-                    parent
-                        .as_ref()
-                        .map(|reference| resolve_reference(reference, &created_tasks))
-                        .transpose()
-                })
-                .transpose()?;
+        let completion = match (before.completed, after.completed) {
+            (false, true) => CompletionChange::Complete,
+            (true, false) => CompletionChange::Reopen,
+            _ => CompletionChange::Unchanged,
+        };
+        let parent = if before.parent != after.parent {
+            Some(
+                after
+                    .parent
+                    .as_ref()
+                    .map(|reference| resolve_reference(reference, &created_tasks))
+                    .transpose()?,
+            )
+        } else {
+            None
+        };
+        let has_patch = before.summary != after.summary
+            || completion != CompletionChange::Unchanged
+            || before.priority != after.priority
+            || before.categories != after.categories
+            || parent.is_some()
+            || before.start != after.start
+            || before.due != after.due;
+        let contents = if has_patch {
             patch_existing(
                 &source.contents,
-                &task_id,
+                task_id,
                 TodoPatch {
-                    summary: edit.summary.as_deref(),
-                    completion: edit.completion,
-                    priority: edit.priority,
-                    categories: edit.categories.as_deref(),
-                    parent: parent.as_ref().map(|parent| parent.as_ref()),
-                    start: edit.start.as_ref().map(|value| value.as_ref()),
-                    due: edit.due.as_ref().map(|value| value.as_ref()),
+                    summary: (before.summary != after.summary).then_some(after.summary.as_str()),
+                    completion,
+                    priority: (before.priority != after.priority).then_some(after.priority),
+                    categories: (before.categories != after.categories)
+                        .then_some(after.categories.as_slice()),
+                    parent: parent.as_ref().map(Option::as_ref),
+                    start: (before.start != after.start).then_some(after.start.as_ref()),
+                    due: (before.due != after.due).then_some(after.due.as_ref()),
                 },
                 now,
             )?
@@ -247,13 +182,12 @@ pub fn stage(
         let staged_sha256 = hash_bytes(contents.as_bytes());
         fs::write(&staged, contents)
             .with_context(|| format!("failed to write staged file {}", staged.display()))?;
-        let action = if destination == source.path {
-            FileAction::Modify
-        } else {
-            FileAction::Move
-        };
         changes.push(StagedFileChange {
-            action,
+            action: if destination == source.path {
+                FileAction::Modify
+            } else {
+                FileAction::Move
+            },
             source: Some(source.path.clone()),
             source_sha256: Some(source.sha256),
             destination: Some(destination),
@@ -263,16 +197,20 @@ pub fn stage(
         });
     }
 
-    for (draft_id, list, summary, priority, categories, start, due, parent) in creates {
-        let task_id = &created_tasks[&draft_id];
-        let parent = parent
+    for change in &plan.changes {
+        let TaskChange::Create { draft_id, task } = change else {
+            continue;
+        };
+        let task_id = &created_tasks[draft_id];
+        let parent = task
+            .parent
             .as_ref()
             .map(|reference| resolve_reference(reference, &created_tasks))
             .transpose()?;
         let destination_dir = sources
             .list_dirs
-            .get(&list)
-            .with_context(|| format!("unknown destination list {list:?}"))?;
+            .get(&task.list)
+            .with_context(|| format!("unknown destination list {:?}", task.list))?;
         let destination = destination_dir.join(format!("{}.ics", task_id.as_str()));
         if destination.exists() {
             bail!(
@@ -286,12 +224,12 @@ pub fn stage(
         let contents = new_todo(
             task_id,
             NewTodo {
-                summary: &summary,
-                priority,
-                categories: &categories,
+                summary: &task.summary,
+                priority: task.priority,
+                categories: &task.categories,
                 parent: parent.as_ref(),
-                start: start.as_ref(),
-                due: due.as_ref(),
+                start: task.start.as_ref(),
+                due: task.due.as_ref(),
             },
             now,
         );
@@ -449,9 +387,10 @@ fn patch_existing(
 ) -> Result<String> {
     let unfolded = unfold(contents);
     let original_relationships = related_to_lines(&unfolded, task_id);
-    let original_categories =
-        direct_component_property_lines_preserving_folds(contents, task_id, "CATEGORIES");
-    let preserve_categories = patch.categories.is_none();
+    let original_categories = patch
+        .categories
+        .is_none()
+        .then(|| direct_component_property_lines_preserving_folds(contents, task_id, "CATEGORIES"));
     let relationships = match patch.parent {
         None => original_relationships,
         Some(parent) => {
@@ -506,9 +445,9 @@ fn patch_existing(
         set_categories(todo, categories);
     }
     if let Some(parent) = patch.parent {
-        remove_parent_properties(todo);
-        if let Some(parent) = parent {
-            set_parent_property(todo, parent.as_str());
+        match parent {
+            Some(parent) => set_parent_property(todo, parent.as_str()),
+            None => remove_parent_properties(todo),
         }
     }
     if let Some(start) = patch.start {
@@ -546,10 +485,11 @@ fn patch_existing(
     let serialized = Calendar::from(calendar).to_string();
     let serialized =
         restore_direct_property_lines(&serialized, task_id, "RELATED-TO", &relationships);
-    Ok(if preserve_categories {
-        restore_direct_property_lines(&serialized, task_id, "CATEGORIES", &original_categories)
-    } else {
-        serialized
+    Ok(match original_categories {
+        Some(categories) => {
+            restore_direct_property_lines(&serialized, task_id, "CATEGORIES", &categories)
+        }
+        None => serialized,
     })
 }
 
@@ -834,6 +774,13 @@ fn set_categories(component: &mut ParsedComponent<'_>, categories: &[String]) {
         }));
 }
 
+fn temporal_parameter(value: &DateValue) -> (&'static str, &str) {
+    match value {
+        DateValue::Date(_) => ("VALUE", "DATE"),
+        DateValue::DateTime(value) => ("TZID", value.timezone().name()),
+    }
+}
+
 fn set_temporal_property(
     component: &mut ParsedComponent<'_>,
     name: &str,
@@ -843,20 +790,14 @@ fn set_temporal_property(
     let Some(value) = value else {
         return;
     };
-    let params = match value {
-        DateValue::Date(_) => vec![ParsedParameter {
-            key: "VALUE".to_owned().into(),
-            val: Some("DATE".to_owned().into()),
-        }],
-        DateValue::DateTime(value) => vec![ParsedParameter {
-            key: "TZID".to_owned().into(),
-            val: Some(value.timezone().name().to_owned().into()),
-        }],
-    };
+    let (parameter, parameter_value) = temporal_parameter(value);
     component.properties.push(ParsedProperty {
         name: name.to_owned().into(),
         val: value.ics_value().into(),
-        params,
+        params: vec![ParsedParameter {
+            key: parameter.to_owned().into(),
+            val: Some(parameter_value.to_owned().into()),
+        }],
     });
 }
 
@@ -961,14 +902,8 @@ fn add_temporal_property(todo: &mut Todo, name: &str, value: Option<&DateValue>)
         return;
     };
     let mut property = IcalProperty::new(name, value.ics_value());
-    match value {
-        DateValue::Date(_) => {
-            property.add_parameter("VALUE", "DATE");
-        }
-        DateValue::DateTime(value) => {
-            property.add_parameter("TZID", value.timezone().name());
-        }
-    }
+    let (parameter, parameter_value) = temporal_parameter(value);
+    property.add_parameter(parameter, parameter_value);
     todo.append_property(property);
 }
 

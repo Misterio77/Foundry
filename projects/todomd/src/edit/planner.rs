@@ -1,92 +1,15 @@
-use std::{collections::BTreeMap, fmt};
+use std::collections::BTreeMap;
 
-use anyhow::{Context, Result, bail};
-use serde::Serialize;
-
-use super::markdown::render_category_marker;
 use crate::{
     dates::{self, DateValue},
     model::{EditedTaskState, Priority, TaskId, TaskReference, TaskState},
 };
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub enum Operation {
-    Rename {
-        id: TaskId,
-        list: String,
-        from: String,
-        to: String,
-    },
-    Complete {
-        id: TaskId,
-        list: String,
-        summary: String,
-    },
-    Reopen {
-        id: TaskId,
-        list: String,
-        summary: String,
-    },
-    Reprioritize {
-        id: TaskId,
-        list: String,
-        summary: String,
-        from: Priority,
-        to: Priority,
-    },
-    Recategorize {
-        id: TaskId,
-        list: String,
-        summary: String,
-        from: Vec<String>,
-        to: Vec<String>,
-    },
-    Reschedule {
-        id: TaskId,
-        list: String,
-        summary: String,
-        from_start: Option<DateValue>,
-        to_start: Option<DateValue>,
-        from_due: Option<DateValue>,
-        to_due: Option<DateValue>,
-    },
-    Reparent {
-        id: TaskId,
-        list: String,
-        summary: String,
-        from: Option<TaskReference>,
-        to: Option<TaskReference>,
-        from_summary: Option<String>,
-        to_summary: Option<String>,
-    },
-    Create {
-        draft_id: usize,
-        list: String,
-        summary: String,
-        priority: Priority,
-        categories: Vec<String>,
-        start: Option<DateValue>,
-        due: Option<DateValue>,
-        parent: Option<TaskReference>,
-        parent_summary: Option<String>,
-    },
-    Move {
-        id: TaskId,
-        summary: String,
-        from: String,
-        to: String,
-    },
-    Delete {
-        id: TaskId,
-        list: String,
-        summary: String,
-    },
-}
+use anyhow::{Context, Result, bail};
+use serde::Serialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ChangePlan {
-    pub operations: Vec<Operation>,
-    list_order: Vec<String>,
+    pub changes: Vec<TaskChange>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -97,20 +20,37 @@ pub enum Reconciliation {
     Conflict,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ComparableTask {
-    list: String,
-    summary: String,
-    completed: bool,
-    priority: Priority,
-    categories: Vec<String>,
-    parent: Option<TaskReference>,
-    start: Option<DateValue>,
-    due: Option<DateValue>,
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct PlannedTask {
+    pub list: String,
+    pub summary: String,
+    pub completed: bool,
+    pub priority: Priority,
+    pub categories: Vec<String>,
+    pub parent: Option<TaskReference>,
+    pub start: Option<DateValue>,
+    pub due: Option<DateValue>,
 }
 
-type IdentifiedTasks = BTreeMap<TaskId, ComparableTask>;
-type DraftTasks = Vec<(usize, ComparableTask)>;
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub enum TaskChange {
+    Create {
+        draft_id: usize,
+        task: PlannedTask,
+    },
+    Update {
+        id: TaskId,
+        before: PlannedTask,
+        after: PlannedTask,
+    },
+    Delete {
+        id: TaskId,
+        task: PlannedTask,
+    },
+}
+
+type IdentifiedTasks = BTreeMap<TaskId, PlannedTask>;
+type DraftTasks = BTreeMap<usize, PlannedTask>;
 
 pub fn reconcile(
     baseline: &TaskState,
@@ -130,7 +70,7 @@ pub fn reconcile(
             );
         }
     }
-    for (_, task) in &new_tasks {
+    for task in new_tasks.values() {
         if task.completed {
             bail!("new task {:?} cannot already be completed", task.summary);
         }
@@ -144,7 +84,6 @@ pub fn reconcile(
         (false, true) => Ok(Reconciliation::Inbound),
         (true, true) => Ok(Reconciliation::Conflict),
         (true, false) => Ok(Reconciliation::Outgoing(build_plan(
-            baseline,
             &baseline_tasks,
             &markdown_tasks,
             &new_tasks,
@@ -153,125 +92,31 @@ pub fn reconcile(
 }
 
 fn build_plan(
-    baseline: &TaskState,
     baseline_tasks: &IdentifiedTasks,
     markdown_tasks: &IdentifiedTasks,
     new_tasks: &DraftTasks,
 ) -> ChangePlan {
-    let mut operations = Vec::new();
-    for (id, original) in baseline_tasks {
-        let Some(edited) = markdown_tasks.get(id) else {
-            operations.push(Operation::Delete {
+    let mut changes = Vec::new();
+    for (id, before) in baseline_tasks {
+        match markdown_tasks.get(id) {
+            Some(after) if before != after => changes.push(TaskChange::Update {
                 id: id.clone(),
-                list: original.list.clone(),
-                summary: original.summary.clone(),
-            });
-            continue;
-        };
-
-        if original.list != edited.list {
-            operations.push(Operation::Move {
-                id: id.clone(),
-                summary: edited.summary.clone(),
-                from: original.list.clone(),
-                to: edited.list.clone(),
-            });
-        }
-        if original.summary != edited.summary {
-            operations.push(Operation::Rename {
-                id: id.clone(),
-                list: edited.list.clone(),
-                from: original.summary.clone(),
-                to: edited.summary.clone(),
-            });
-        }
-        if original.priority != edited.priority {
-            operations.push(Operation::Reprioritize {
-                id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
-                from: original.priority,
-                to: edited.priority,
-            });
-        }
-        if original.categories != edited.categories {
-            operations.push(Operation::Recategorize {
-                id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
-                from: original.categories.clone(),
-                to: edited.categories.clone(),
-            });
-        }
-        if original.start != edited.start || original.due != edited.due {
-            operations.push(Operation::Reschedule {
-                id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
-                from_start: original.start.clone(),
-                to_start: edited.start.clone(),
-                from_due: original.due.clone(),
-                to_due: edited.due.clone(),
-            });
-        }
-        if original.parent != edited.parent {
-            operations.push(Operation::Reparent {
-                id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
-                from: original.parent.clone(),
-                to: edited.parent.clone(),
-                from_summary: parent_summary(original.parent.as_ref(), baseline_tasks, new_tasks),
-                to_summary: parent_summary(edited.parent.as_ref(), markdown_tasks, new_tasks),
-            });
-        }
-        match (original.completed, edited.completed) {
-            (false, true) => operations.push(Operation::Complete {
-                id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
+                before: before.clone(),
+                after: after.clone(),
             }),
-            (true, false) => operations.push(Operation::Reopen {
+            None => changes.push(TaskChange::Delete {
                 id: id.clone(),
-                list: edited.list.clone(),
-                summary: edited.summary.clone(),
+                task: before.clone(),
             }),
-            _ => {}
+            Some(_) => {}
         }
     }
+    changes.extend(new_tasks.iter().map(|(draft_id, task)| TaskChange::Create {
+        draft_id: *draft_id,
+        task: task.clone(),
+    }));
 
-    for (draft_id, task) in new_tasks {
-        operations.push(Operation::Create {
-            draft_id: *draft_id,
-            list: task.list.clone(),
-            summary: task.summary.clone(),
-            priority: task.priority,
-            categories: task.categories.clone(),
-            start: task.start.clone(),
-            due: task.due.clone(),
-            parent: task.parent.clone(),
-            parent_summary: parent_summary(task.parent.as_ref(), markdown_tasks, new_tasks),
-        });
-    }
-
-    let list_positions = baseline
-        .lists
-        .iter()
-        .enumerate()
-        .map(|(index, list)| (list.name.as_str(), index))
-        .collect::<BTreeMap<_, _>>();
-    operations.sort_by(|left, right| {
-        operation_sort_key(left, &list_positions).cmp(&operation_sort_key(right, &list_positions))
-    });
-
-    ChangePlan {
-        operations,
-        list_order: baseline
-            .lists
-            .iter()
-            .map(|list| list.name.clone())
-            .collect(),
-    }
+    ChangePlan { changes }
 }
 
 fn task_map(state: &TaskState) -> IdentifiedTasks {
@@ -282,7 +127,7 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
             list.tasks.iter().map(|task| {
                 (
                     task.id.clone(),
-                    ComparableTask {
+                    PlannedTask {
                         list: list.name.clone(),
                         summary: task.summary.clone(),
                         completed: task.completed,
@@ -300,12 +145,12 @@ fn task_map(state: &TaskState) -> IdentifiedTasks {
 
 fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTasks)> {
     let mut identified = BTreeMap::new();
-    let mut new = Vec::new();
+    let mut new = BTreeMap::new();
     let mut next_draft_id = 1;
 
     for list in &state.lists {
         for task in &list.tasks {
-            let comparable = ComparableTask {
+            let comparable = PlannedTask {
                 list: list.name.clone(),
                 summary: task.summary.clone(),
                 completed: task.completed,
@@ -325,7 +170,7 @@ fn edited_task_map(state: &EditedTaskState) -> Result<(IdentifiedTasks, DraftTas
                     }
                 }
                 None => {
-                    new.push((next_draft_id, comparable));
+                    new.insert(next_draft_id, comparable);
                     next_draft_id += 1;
                 }
             }
@@ -350,25 +195,11 @@ fn prepare_dates(
                 .with_context(|| format!("invalid dates for task {:?}", task.summary))?;
         }
     }
-    for (_, task) in new_tasks {
+    for task in new_tasks.values_mut() {
         dates::normalize_and_validate(&mut task.start, &mut task.due)
             .with_context(|| format!("invalid dates for new task {:?}", task.summary))?;
     }
     Ok(())
-}
-
-fn parent_summary(
-    parent: Option<&TaskReference>,
-    identified: &IdentifiedTasks,
-    new_tasks: &DraftTasks,
-) -> Option<String> {
-    match parent? {
-        TaskReference::Existing(id) => identified.get(id).map(|task| task.summary.clone()),
-        TaskReference::Draft(draft_id) => new_tasks
-            .iter()
-            .find(|(candidate, _)| candidate == draft_id)
-            .map(|(_, task)| task.summary.clone()),
-    }
 }
 
 fn validate_edited_hierarchy(identified: &IdentifiedTasks, new_tasks: &DraftTasks) -> Result<()> {
@@ -411,195 +242,6 @@ fn validate_edited_hierarchy(identified: &IdentifiedTasks, new_tasks: &DraftTask
         }
     }
     Ok(())
-}
-
-fn display_date(value: &Option<DateValue>) -> String {
-    value
-        .as_ref()
-        .map_or_else(|| "none".to_owned(), DateValue::canonical)
-}
-
-fn operation_sort_key<'a>(
-    operation: &'a Operation,
-    list_positions: &BTreeMap<&str, usize>,
-) -> (usize, u8, &'a str) {
-    let (list, kind, summary) = match operation {
-        Operation::Rename { list, to, .. } => (list.as_str(), 0, to.as_str()),
-        Operation::Complete { list, summary, .. } => (list.as_str(), 1, summary.as_str()),
-        Operation::Reopen { list, summary, .. } => (list.as_str(), 2, summary.as_str()),
-        Operation::Reprioritize { list, summary, .. } => (list.as_str(), 3, summary.as_str()),
-        Operation::Recategorize { list, summary, .. } => (list.as_str(), 4, summary.as_str()),
-        Operation::Reschedule { list, summary, .. } => (list.as_str(), 5, summary.as_str()),
-        Operation::Reparent { list, summary, .. } => (list.as_str(), 6, summary.as_str()),
-        Operation::Create { list, summary, .. } => (list.as_str(), 7, summary.as_str()),
-        Operation::Move { to, summary, .. } => (to.as_str(), 8, summary.as_str()),
-        Operation::Delete { list, summary, .. } => (list.as_str(), 9, summary.as_str()),
-    };
-    (
-        *list_positions.get(list).unwrap_or(&usize::MAX),
-        kind,
-        summary,
-    )
-}
-
-impl Operation {
-    fn list(&self) -> &str {
-        match self {
-            Self::Rename { list, .. }
-            | Self::Complete { list, .. }
-            | Self::Reopen { list, .. }
-            | Self::Reprioritize { list, .. }
-            | Self::Recategorize { list, .. }
-            | Self::Reschedule { list, .. }
-            | Self::Reparent { list, .. }
-            | Self::Create { list, .. }
-            | Self::Delete { list, .. } => list,
-            Self::Move { to, .. } => to,
-        }
-    }
-}
-
-impl fmt::Display for ChangePlan {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (index, list) in self
-            .list_order
-            .iter()
-            .filter(|list| {
-                self.operations
-                    .iter()
-                    .any(|operation| operation.list() == *list)
-            })
-            .enumerate()
-        {
-            if index > 0 {
-                writeln!(formatter)?;
-            }
-            writeln!(formatter, "{list}:")?;
-            for operation in self
-                .operations
-                .iter()
-                .filter(|operation| operation.list() == list)
-            {
-                match operation {
-                    Operation::Rename { from, to, .. } => {
-                        writeln!(formatter, "  renamed   {from:?} -> {to:?}")?;
-                    }
-                    Operation::Complete { summary, .. } => {
-                        writeln!(formatter, "  completed {summary}")?;
-                    }
-                    Operation::Reopen { summary, .. } => {
-                        writeln!(formatter, "  reopened  {summary}")?;
-                    }
-                    Operation::Reprioritize {
-                        summary, from, to, ..
-                    } => {
-                        writeln!(
-                            formatter,
-                            "  priority  {summary} ({} -> {})",
-                            from.label(),
-                            to.label()
-                        )?;
-                    }
-                    Operation::Recategorize {
-                        summary, from, to, ..
-                    } => {
-                        let display = |categories: &[String]| {
-                            if categories.is_empty() {
-                                "none".to_owned()
-                            } else {
-                                categories
-                                    .iter()
-                                    .map(|category| render_category_marker(category))
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
-                            }
-                        };
-                        writeln!(
-                            formatter,
-                            "  categories {summary} ({} -> {})",
-                            display(from),
-                            display(to)
-                        )?;
-                    }
-                    Operation::Reschedule {
-                        summary,
-                        from_start,
-                        to_start,
-                        from_due,
-                        to_due,
-                        ..
-                    } => {
-                        writeln!(
-                            formatter,
-                            "  dates     {summary} (start: {} -> {}; due: {} -> {})",
-                            display_date(from_start),
-                            display_date(to_start),
-                            display_date(from_due),
-                            display_date(to_due)
-                        )?;
-                    }
-                    Operation::Reparent {
-                        summary,
-                        from_summary,
-                        to_summary,
-                        ..
-                    } => match (from_summary, to_summary) {
-                        (None, Some(parent)) => {
-                            writeln!(formatter, "  nested    {summary} under {parent}")?;
-                        }
-                        (Some(parent), None) => {
-                            writeln!(formatter, "  detached  {summary} from {parent}")?;
-                        }
-                        (Some(from), Some(to)) => {
-                            writeln!(formatter, "  reparented {summary} ({from} -> {to})")?;
-                        }
-                        (None, None) => writeln!(formatter, "  reparented {summary}")?,
-                    },
-                    Operation::Create {
-                        summary,
-                        priority,
-                        categories,
-                        start,
-                        due,
-                        parent_summary,
-                        ..
-                    } => {
-                        let mut fields = Vec::new();
-                        if let Some(due) = due {
-                            fields.push(format!("-{}", due.canonical()));
-                        }
-                        if let Some(start) = start {
-                            fields.push(format!("+{}", start.canonical()));
-                        }
-                        if priority != &Priority::None {
-                            fields.push(priority.label().to_owned());
-                        }
-                        fields.extend(
-                            categories
-                                .iter()
-                                .map(|category| render_category_marker(category)),
-                        );
-                        let fields = if fields.is_empty() {
-                            String::new()
-                        } else {
-                            format!(" ({})", fields.join(" "))
-                        };
-                        let parent = parent_summary
-                            .as_ref()
-                            .map_or_else(String::new, |parent| format!(" under {parent}"));
-                        writeln!(formatter, "  created   {summary}{fields}{parent}")?;
-                    }
-                    Operation::Move { summary, from, .. } => {
-                        writeln!(formatter, "  moved     {summary} <- {from}")?;
-                    }
-                    Operation::Delete { summary, .. } => {
-                        writeln!(formatter, "  deleted   {summary}")?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -678,21 +320,13 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(
-            plan.operations,
-            vec![Operation::Create {
-                draft_id: 1,
-                list: "Postgrad".into(),
-                summary: "Foo".into(),
-                priority: Priority::High,
-                categories: vec![],
-                start: None,
-                due: None,
-                parent: None,
-                parent_summary: None,
-            }]
-        );
-        assert!(format!("{plan}").contains("created   Foo (!!!)"));
+        assert!(matches!(
+            &plan.changes[..],
+            [TaskChange::Create { draft_id: 1, task }]
+                if task.list == "Postgrad"
+                    && task.summary == "Foo"
+                    && task.priority == Priority::High
+        ));
     }
 
     #[test]
@@ -721,17 +355,13 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(
-            plan.operations,
-            vec![Operation::Reprioritize {
-                id: TaskId::new("paper"),
-                list: "Postgrad".into(),
-                summary: "Write paper".into(),
-                from: Priority::High,
-                to: Priority::Low,
-            }]
-        );
-        assert!(format!("{plan}").contains("priority  Write paper (!!! -> !)"));
+        assert!(matches!(
+            &plan.changes[..],
+            [TaskChange::Update { id, before, after }]
+                if id.as_str() == "paper"
+                    && before.priority == Priority::High
+                    && after.priority == Priority::Low
+        ));
     }
 
     #[test]
@@ -760,17 +390,13 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(
-            plan.operations,
-            vec![Operation::Recategorize {
-                id: TaskId::new("paper"),
-                list: "Postgrad".into(),
-                summary: "Write paper".into(),
-                from: vec!["Old".into()],
-                to: vec!["New".into(), "Quick Win".into()],
-            }]
-        );
-        assert!(format!("{plan}").contains("categories Write paper (@Old -> @New @\"Quick Win\")"));
+        assert!(matches!(
+            &plan.changes[..],
+            [TaskChange::Update { id, before, after }]
+                if id.as_str() == "paper"
+                    && before.categories == ["Old"]
+                    && after.categories == ["New", "Quick Win"]
+        ));
     }
 
     #[test]
@@ -856,20 +482,12 @@ mod tests {
         else {
             panic!("expected outgoing plan");
         };
-        let operation = plan
-            .operations
-            .iter()
-            .find(|operation| matches!(operation, Operation::Reschedule { .. }))
-            .unwrap();
         assert!(matches!(
-            operation,
-            Operation::Reschedule {
-                to_start: Some(DateValue::DateTime(_)),
-                to_due: Some(DateValue::DateTime(_)),
-                ..
-            }
+            &plan.changes[..],
+            [TaskChange::Update { after, .. }]
+                if matches!(after.start, Some(DateValue::DateTime(_)))
+                    && matches!(after.due, Some(DateValue::DateTime(_)))
         ));
-        assert!(format!("{plan}").contains("dates     Write paper"));
     }
 
     #[test]
@@ -899,8 +517,14 @@ mod tests {
         else {
             panic!("expected outgoing plan");
         };
-        assert_eq!(plan.operations.len(), 1);
-        assert!(matches!(plan.operations[0], Operation::Rename { .. }));
+        assert!(matches!(
+            &plan.changes[..],
+            [TaskChange::Update { before, after, .. }]
+                if before.summary == "Write paper"
+                    && after.summary == "Rename only"
+                    && before.start == after.start
+                    && before.due == after.due
+        ));
     }
 
     #[test]
@@ -947,15 +571,11 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(
-            plan.operations,
-            vec![Operation::Reopen {
-                id: TaskId::new("read"),
-                list: "Postgrad".into(),
-                summary: "Read chapter four".into(),
-            }]
-        );
-        assert!(format!("{plan}").contains("reopened  Read chapter four"));
+        assert!(matches!(
+            &plan.changes[..],
+            [TaskChange::Update { id, before, after }]
+                if id.as_str() == "read" && before.completed && !after.completed
+        ));
     }
 
     #[test]
@@ -1001,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn plans_all_mvp_operations() {
+    fn combines_field_edits_into_task_changes() {
         let baseline = TaskState {
             lists: vec![
                 TaskList {
@@ -1032,18 +652,24 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(plan.operations.len(), 5);
-        assert!(plan.operations.iter().any(
-            |operation| matches!(operation, Operation::Move { id, .. } if id.as_str() == "paper")
-        ));
-        assert!(plan.operations.iter().any(
-            |operation| matches!(operation, Operation::Rename { id, .. } if id.as_str() == "paper")
-        ));
-        assert!(plan.operations.iter().any(|operation| matches!(operation, Operation::Complete { id, .. } if id.as_str() == "paper")));
-        assert!(plan.operations.iter().any(
-            |operation| matches!(operation, Operation::Delete { id, .. } if id.as_str() == "old")
-        ));
-        assert!(plan.operations.iter().any(|operation| matches!(operation, Operation::Create { summary, .. } if summary == "Buy coffee")));
+        assert_eq!(plan.changes.len(), 3);
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Update { id, before, after }
+                if id.as_str() == "paper"
+                    && before.list == "Postgrad"
+                    && after.list == "Personal"
+                    && after.summary == "Submit paper"
+                    && after.completed
+        )));
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Delete { id, .. } if id.as_str() == "old"
+        )));
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Create { task, .. } if task.summary == "Buy coffee"
+        )));
     }
 
     #[test]
@@ -1106,10 +732,10 @@ mod tests {
             panic!("expected outgoing plan");
         };
         let draft_ids = plan
-            .operations
+            .changes
             .iter()
-            .filter_map(|operation| match operation {
-                Operation::Create { draft_id, .. } => Some(*draft_id),
+            .filter_map(|change| match change {
+                TaskChange::Create { draft_id, .. } => Some(*draft_id),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -1143,16 +769,12 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert!(plan.operations.iter().any(|operation| matches!(
-            operation,
-            Operation::Create {
-                draft_id: 2,
-                parent: Some(TaskReference::Draft(1)),
-                parent_summary: Some(parent),
-                ..
-            } if parent == "Parent"
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Create { draft_id: 2, task }
+                if task.parent == Some(TaskReference::Draft(1))
+                    && task.summary == "Child"
         )));
-        assert!(format!("{plan}").contains("created   Child under Parent"));
     }
 
     #[test]
@@ -1180,15 +802,15 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert!(plan.operations.iter().any(|operation| matches!(
-            operation,
-            Operation::Delete { id, .. } if id.as_str() == "parent"
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Delete { id, .. } if id.as_str() == "parent"
         )));
-        assert!(plan.operations.iter().any(|operation| matches!(
-            operation,
-            Operation::Reparent { id, to: None, .. } if id.as_str() == "child"
+        assert!(plan.changes.iter().any(|change| matches!(
+            change,
+            TaskChange::Update { id, before, after }
+                if id.as_str() == "child" && before.parent.is_some() && after.parent.is_none()
         )));
-        assert!(format!("{plan}").contains("detached  Child from Parent"));
     }
 
     #[test]
@@ -1211,16 +833,16 @@ mod tests {
             panic!("expected outgoing plan");
         };
 
-        assert_eq!(plan.operations.len(), 2);
+        assert_eq!(plan.changes.len(), 2);
         assert!(
-            plan.operations
+            plan.changes
                 .iter()
-                .any(|operation| matches!(operation, Operation::Delete { .. }))
+                .any(|change| matches!(change, TaskChange::Delete { .. }))
         );
         assert!(
-            plan.operations
+            plan.changes
                 .iter()
-                .any(|operation| matches!(operation, Operation::Create { .. }))
+                .any(|change| matches!(change, TaskChange::Create { .. }))
         );
     }
 }

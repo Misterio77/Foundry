@@ -40,8 +40,8 @@ editing lifecycle.
 
 ## Principles
 
-1. **Model tasks, not files.** Plans describe task operations independently of
-   their source paths.
+1. **Model tasks, not files.** Plans describe each task's before and after state
+   independently of source paths.
 2. **Preserve what is not exposed.** Editing a summary must not discard an
    alarm, recurrence rule, relationship, or vendor property.
 3. **Plan before mutation.** Parsing, validation, reconciliation, and staging
