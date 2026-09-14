@@ -460,7 +460,7 @@ fn patch_existing(
                 .filter(|line| !is_parent_related_to_line(line))
                 .collect::<Vec<_>>();
             if let Some(parent) = parent {
-                relationships.push(format!("RELATED-TO:{}", parent.as_str()));
+                relationships.push(format!("{PARENT_RELATIONSHIP}:{}", parent.as_str()));
             }
             relationships
         }
@@ -700,6 +700,10 @@ fn direct_property_lines(component: &[&str], name: &str) -> Vec<String> {
     properties
 }
 
+/// Written explicitly because clients such as todoman do not read a bare
+/// `RELATED-TO` as naming a parent.
+const PARENT_RELATIONSHIP: &str = "RELATED-TO;RELTYPE=PARENT";
+
 fn is_parent_related_to_line(line: &str) -> bool {
     let Some(header) = line.split_once(':').map(|(header, _)| header) else {
         return false;
@@ -808,20 +812,15 @@ fn remove_parent_properties(component: &mut ParsedComponent<'_>) {
 }
 
 fn set_parent_property(component: &mut ParsedComponent<'_>, value: &str) {
-    let mut found = false;
-    for property in &mut component.properties {
-        if is_parent_property(property) {
-            property.val = value.to_owned().into();
-            found = true;
-        }
-    }
-    if !found {
-        component.properties.push(ParsedProperty {
-            name: "RELATED-TO".to_owned().into(),
-            val: value.to_owned().into(),
-            params: Vec::new(),
-        });
-    }
+    remove_parent_properties(component);
+    component.properties.push(ParsedProperty {
+        name: "RELATED-TO".to_owned().into(),
+        val: value.to_owned().into(),
+        params: vec![ParsedParameter {
+            key: "RELTYPE".to_owned().into(),
+            val: Some("PARENT".to_owned().into()),
+        }],
+    });
 }
 
 fn set_categories(component: &mut ParsedComponent<'_>, categories: &[String]) {
@@ -945,7 +944,9 @@ fn new_todo(task_id: &TaskId, fields: NewTodo<'_>, now: DateTime<Utc>) -> String
         builder.add_multi_property("CATEGORIES", category);
     }
     if let Some(parent) = parent {
-        builder.add_property("RELATED-TO", parent.as_str());
+        let mut property = IcalProperty::new("RELATED-TO", parent.as_str());
+        property.add_parameter("RELTYPE", "PARENT");
+        builder.append_property(property);
     }
     add_temporal_property(builder, "DTSTART", start);
     add_temporal_property(builder, "DUE", due);
@@ -1323,6 +1324,56 @@ mod tests {
     }
 
     #[test]
+    fn created_subtasks_name_their_parent_explicitly() {
+        let calendars = copy_fixtures();
+        let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
+        let markdown = "# Postgrad\n\n\
+            - [ ] Outer\n  \
+              - [ ] Inner\n\
+            \n# Personal\n\n\
+            - [ ] Buy milk, bread <!-- todomd:id=t1 -->\n";
+        let (plan, sources) = plan_for(&config, markdown);
+        let session = tempfile::tempdir().unwrap();
+        fs::create_dir(session.path().join("transactions")).unwrap();
+        let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let transaction = stage(&plan, &sources, session.path(), now).unwrap();
+
+        apply(&transaction, &sources).unwrap();
+
+        let child = transaction
+            .created_tasks
+            .values()
+            .map(|id| {
+                fs::read_to_string(
+                    calendars
+                        .path()
+                        .join(format!("Postgrad/{}.ics", id.as_str())),
+                )
+                .unwrap()
+            })
+            .find(|contents| contents.contains("SUMMARY:Inner"))
+            .expect("the nested task was written");
+        assert!(child.contains("RELATED-TO;RELTYPE=PARENT:"), "{child}");
+        assert!(!child.contains("\r\nRELATED-TO:"), "{child}");
+
+        let requested = vec!["Postgrad".to_owned()];
+        let (state, _) = load_lists(&config, &requested, Scope::Active).unwrap();
+        let inner = state.lists[0]
+            .tasks
+            .iter()
+            .find(|task| task.summary == "Inner")
+            .expect("the nested task was read back");
+        let outer = state.lists[0]
+            .tasks
+            .iter()
+            .find(|task| task.summary == "Outer")
+            .expect("the parent task was read back");
+        assert_eq!(inner.parent.as_ref(), Some(&outer.id));
+    }
+
+    #[test]
     fn reopening_clears_completion_and_keeps_hidden_properties() {
         let source = include_str!("../../tests/fixtures/calendars/Postgrad/read.ics");
         let now = DateTime::parse_from_rfc3339("2026-09-05T20:00:00Z")
@@ -1534,7 +1585,10 @@ mod tests {
             },
             now,
         );
-        assert!(created.contains("RELATED-TO:parent"), "{created}");
+        assert!(
+            created.contains("RELATED-TO;RELTYPE=PARENT:parent"),
+            "{created}"
+        );
 
         let source = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nRELATED-TO:event-peer\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=PARENT:old\r\nRELATED-TO:old\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
         let changed = patch_existing(
@@ -1547,8 +1601,12 @@ mod tests {
             now,
         )
         .unwrap();
-        assert!(changed.contains("RELATED-TO:parent"), "{changed}");
-        assert!(!changed.contains("RELATED-TO;RELTYPE=PARENT"), "{changed}");
+        assert!(
+            changed.contains("RELATED-TO;RELTYPE=PARENT:parent"),
+            "{changed}"
+        );
+        assert!(!changed.contains("RELATED-TO:parent"), "{changed}");
+        assert!(!changed.contains(":old"), "{changed}");
         assert!(
             changed.contains("RELATED-TO;RELTYPE=SIBLING:peer"),
             "{changed}"

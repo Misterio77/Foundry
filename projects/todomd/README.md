@@ -105,11 +105,15 @@ The `<!-- todomd:id=... -->` markers are session-local identities, not VTODO
 UIDs, and track a task across renames and moves. Removing one is treated as
 intentional: the old task is deleted and a new one created on the next save.
 
-Indentation edits the child's `RELATED-TO` parent. Removing a parent line
-deletes only that VTODO. Retained children must be unindented or nested under
-another parent. Moving a nested block moves every line in it. Empty and
-dangling source relationships render as roots and remain untouched; cyclic
-relationships abort the read because they cannot form a tree.
+Indentation edits the child's `RELATED-TO` parent, written as
+`RELATED-TO;RELTYPE=PARENT` so clients that do not infer the default
+relationship type, such as todoman, still see the hierarchy. A bare
+`RELATED-TO` is read as a parent but rewritten only when that task is
+reparented. Removing a parent line deletes only that VTODO. Retained children
+must be unindented or nested under another parent. Moving a nested block moves
+every line in it. Empty and dangling source relationships render as roots and
+remain untouched; cyclic relationships abort the read because they cannot form a
+tree.
 
 Leading fields may be entered in any order. Rerendering puts due, start,
 priority, then alphabetically sorted categories before the summary. `-` means

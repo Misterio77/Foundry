@@ -408,11 +408,19 @@ rejects due before start but permits equality and preserves an untouched invalid
 source pair.
 
 `RELATED-TO` without `RELTYPE`, and `RELATED-TO;RELTYPE=PARENT`, both name a
-parent. Other relationship types are preserved but do not affect indentation.
-Empty and dangling values render as roots and stay untouched unless the item is
-reindented. Identical duplicate parent properties are accepted and
+parent when read. Writing always emits the explicit
+`RELATED-TO;RELTYPE=PARENT` form, because the default relationship type is only
+implied by RFC 5545 and clients such as todoman do not read a bare `RELATED-TO`
+as a parent. Other relationship types are preserved but do not affect
+indentation. Empty and dangling values render as roots and stay untouched unless
+the item is reindented. Identical duplicate parent properties are accepted and
 preserved through unrelated edits; conflicting values and relationship cycles
-abort the read. An explicit relationship change updates or removes the property.
+abort the read. An explicit relationship change replaces every parent property
+with the canonical one, or removes them.
+
+A task whose parent is unchanged keeps its stored representation, so bare
+parent properties written by todomd or another client are normalized only when
+that task is reparented.
 
 `CATEGORIES` properties and comma-separated category lists read as one sorted,
 deduplicated set. A category is written only when that set changes, so untouched
