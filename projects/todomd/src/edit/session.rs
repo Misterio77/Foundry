@@ -5,11 +5,29 @@ use std::{
 };
 
 use anyhow::{Context, Error, Result, anyhow};
-use serde::Serialize;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile, TempDir};
 
 use super::{RenderedSession, markdown::IdentityManifest};
-use crate::model::TaskState;
+use crate::{config::Config, model::TaskState, repository::Scope};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct LiveMetadata {
+    pub config: Config,
+    pub lists: Vec<String>,
+    pub scope: Scope,
+    pub hooks_enabled: bool,
+}
+
+#[derive(Debug)]
+pub struct LoadedLiveSession {
+    pub root: PathBuf,
+    pub metadata: LiveMetadata,
+    pub manifest: IdentityManifest,
+    pub baseline: TaskState,
+    pub recovery_baseline: TaskState,
+    pub accepted_text: String,
+}
 
 #[derive(Debug)]
 pub struct Session {
@@ -24,6 +42,22 @@ impl Session {
             create_private_directory(&parent)?;
         }
         Self::create_in(&parent, rendered)
+    }
+
+    pub fn create_live(
+        rendered: &RenderedSession,
+        metadata: &LiveMetadata,
+        recovery_baseline: &TaskState,
+    ) -> Result<Self> {
+        let session = Self::create(rendered)?;
+        write_json(&session.path().join("live.json"), metadata)?;
+        write_json(
+            &session.path().join("recovery-baseline.json"),
+            recovery_baseline,
+        )?;
+        fs::write(session.path().join("accepted.md"), &rendered.markdown)
+            .context("failed to write accepted live document")?;
+        Ok(session)
     }
 
     pub fn path(&self) -> &Path {
@@ -76,6 +110,10 @@ impl Session {
         Ok(())
     }
 
+    pub fn is_attached(&self) -> bool {
+        self.path().join("attached").is_file()
+    }
+
     pub fn retain(self) -> PathBuf {
         self.directory.keep()
     }
@@ -117,9 +155,111 @@ fn session_parent() -> (PathBuf, bool) {
     }
 }
 
+pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
+    if tasks_path.file_name().and_then(|name| name.to_str()) != Some("tasks.md") {
+        return Ok(None);
+    }
+    let Some(root) = tasks_path.parent() else {
+        return Ok(None);
+    };
+    let metadata_path = root.join("live.json");
+    if !metadata_path.is_file() {
+        return Ok(None);
+    }
+
+    let loaded = LoadedLiveSession {
+        root: root.to_path_buf(),
+        metadata: read_json(&metadata_path)?,
+        manifest: read_json(&root.join("manifest.json"))?,
+        baseline: read_json(&root.join("baseline.json"))?,
+        recovery_baseline: read_json(&root.join("recovery-baseline.json"))?,
+        accepted_text: fs::read_to_string(root.join("accepted.md")).with_context(|| {
+            format!(
+                "failed to read accepted live document in {}",
+                root.display()
+            )
+        })?,
+    };
+    Ok(Some(loaded))
+}
+
+pub fn mark_attached(root: &Path) -> Result<()> {
+    fs::write(root.join("attached"), b"")
+        .with_context(|| format!("failed to attach live session {}", root.display()))
+}
+
+pub fn close_live(root: &Path, accepted_text: &str, current_text: &str) -> Result<bool> {
+    let unaccepted = current_text != accepted_text;
+    if unaccepted {
+        write_atomic(&root.join("unaccepted.md"), current_text.as_bytes())?;
+    }
+    write_atomic(&root.join("tasks.md"), accepted_text.as_bytes())?;
+    Ok(unaccepted)
+}
+
+pub fn accept_live(
+    root: &Path,
+    markdown: &str,
+    manifest: &IdentityManifest,
+    baseline: &TaskState,
+    recovery_baseline: &TaskState,
+) -> Result<()> {
+    let baseline_path = root.join("baseline.json");
+    let manifest_path = root.join("manifest.json");
+    let recovery_path = root.join("recovery-baseline.json");
+    let accepted_path = root.join("accepted.md");
+    let baseline_rollback = prepare_atomic(&baseline_path, &fs::read(&baseline_path)?)?;
+    let manifest_rollback = prepare_atomic(&manifest_path, &fs::read(&manifest_path)?)?;
+    let recovery_rollback = prepare_atomic(&recovery_path, &fs::read(&recovery_path)?)?;
+    let baseline = prepare_atomic(&baseline_path, &json_bytes(&baseline_path, baseline)?)?;
+    let manifest = prepare_atomic(&manifest_path, &json_bytes(&manifest_path, manifest)?)?;
+    let recovery = prepare_atomic(
+        &recovery_path,
+        &json_bytes(&recovery_path, recovery_baseline)?,
+    )?;
+    let accepted = prepare_atomic(&accepted_path, markdown.as_bytes())?;
+
+    persist_atomic(baseline, &baseline_path)?;
+    if let Err(error) = persist_atomic(manifest, &manifest_path) {
+        return Err(rollback_replacements(
+            error,
+            [(baseline_rollback, baseline_path.as_path())],
+        ));
+    }
+    if let Err(error) = persist_atomic(recovery, &recovery_path) {
+        return Err(rollback_replacements(
+            error,
+            [
+                (manifest_rollback, manifest_path.as_path()),
+                (baseline_rollback, baseline_path.as_path()),
+            ],
+        ));
+    }
+    if let Err(error) = persist_atomic(accepted, &accepted_path) {
+        return Err(rollback_replacements(
+            error,
+            [
+                (recovery_rollback, recovery_path.as_path()),
+                (manifest_rollback, manifest_path.as_path()),
+                (baseline_rollback, baseline_path.as_path()),
+            ],
+        ));
+    }
+    Ok(())
+}
+
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let contents = json_bytes(path, value)?;
     fs::write(path, contents).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
+    let contents = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    serde_json::from_slice(&contents).with_context(|| format!("failed to parse {}", path.display()))
+}
+
+fn write_atomic(path: &Path, contents: &[u8]) -> Result<()> {
+    persist_atomic(prepare_atomic(path, contents)?, path)
 }
 
 fn json_bytes(path: &Path, value: &impl Serialize) -> Result<Vec<u8>> {

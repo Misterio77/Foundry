@@ -89,7 +89,7 @@ pub fn stage(
     session_root: &Path,
     now: DateTime<Utc>,
 ) -> Result<StagedTransaction> {
-    let root = session_root.join("transactions/0001");
+    let root = next_transaction_root(session_root)?;
     let staged_dir = root.join("staged");
     let backup_dir = root.join("backup");
     fs::create_dir(&root)
@@ -319,6 +319,49 @@ pub fn stage(
     };
     transaction.write_plan(plan)?;
     Ok(transaction)
+}
+
+fn next_transaction_root(session_root: &Path) -> Result<PathBuf> {
+    let transactions = session_root.join("transactions");
+    for number in 1_u32.. {
+        let candidate = transactions.join(format!("{number:04}"));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    unreachable!("the transaction number space is inexhaustible in practice")
+}
+
+pub fn verify_applied(
+    transaction: &StagedTransaction,
+    before: &SourceSnapshot,
+    after: &SourceSnapshot,
+) -> Result<()> {
+    if before.list_dirs != after.list_dirs {
+        bail!("selected list directories changed while applying the transaction");
+    }
+    let mut expected = before
+        .files
+        .iter()
+        .map(|source| (source.path.clone(), source.sha256))
+        .collect::<BTreeMap<_, _>>();
+    for change in &transaction.changes {
+        if let Some(source) = &change.source {
+            expected.remove(source);
+        }
+        if let (Some(destination), Some(sha256)) = (&change.destination, change.staged_sha256) {
+            expected.insert(destination.clone(), sha256);
+        }
+    }
+    let actual = after
+        .files
+        .iter()
+        .map(|source| (source.path.clone(), source.sha256))
+        .collect::<BTreeMap<_, _>>();
+    if actual != expected {
+        bail!("source lists changed concurrently while applying the transaction");
+    }
+    Ok(())
 }
 
 pub fn apply(transaction: &StagedTransaction, sources: &SourceSnapshot) -> Result<()> {
@@ -1306,6 +1349,18 @@ mod tests {
                 .is_file()
         );
         assert!(session.path().join("transactions/0001/plan.json").is_file());
+
+        let requested = vec!["Postgrad".to_owned(), "Personal".to_owned()];
+        let (_, applied_sources) = load_lists(&config, &requested, Scope::Active).unwrap();
+        verify_applied(&transaction, &sources, &applied_sources).unwrap();
+        let moved_path = calendars.path().join("Personal/write.ics");
+        fs::write(
+            &moved_path,
+            moved.replace("X-TODOMD-TEST;ANSWER=42", "X-TODOMD-TEST;ANSWER=43"),
+        )
+        .unwrap();
+        let (_, raced_sources) = load_lists(&config, &requested, Scope::Active).unwrap();
+        assert!(verify_applied(&transaction, &sources, &raced_sources).is_err());
     }
 
     #[test]

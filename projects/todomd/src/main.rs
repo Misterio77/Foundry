@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
-use todomd::{config::Config, edit, repository::Scope, show};
+use todomd::{config::Config, edit, lsp, repository::Scope, show};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -26,6 +26,8 @@ enum Command {
     Edit(EditArgs),
     /// Print tasks and their source files as JSON.
     Show(ShowArgs),
+    /// Run the language server over standard input/output.
+    Lsp,
 }
 
 #[derive(Args, Debug)]
@@ -35,8 +37,12 @@ struct EditArgs {
     no_hooks: bool,
 
     /// Retain the session after an unchanged or successful run.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "watch")]
     keep: bool,
+
+    /// Apply valid saves and synchronize source changes through LSP.
+    #[arg(long)]
+    watch: bool,
 
     /// Include completed and cancelled tasks.
     #[arg(long)]
@@ -61,6 +67,7 @@ impl EditArgs {
         edit::Options {
             no_hooks: self.no_hooks,
             keep: self.keep,
+            watch: self.watch,
             scope: scope(self.completed),
         }
     }
@@ -76,11 +83,15 @@ fn main() -> Result<()> {
         generate(shell, &mut Cli::command(), "todomd", &mut std::io::stdout());
         return Ok(());
     }
+    if matches!(cli.command, Some(Command::Lsp)) {
+        return lsp::run();
+    }
     let config = Config::load(cli.config.as_deref())?;
 
     match cli.command {
         Some(Command::Edit(args)) => edit::run(&config, &args.lists, args.options()),
         Some(Command::Show(args)) => show::run(&config, &args.lists, scope(args.completed)),
+        Some(Command::Lsp) => unreachable!("LSP command handled before loading configuration"),
         None => edit::run(&config, &[], edit::Options::default()),
     }
 }

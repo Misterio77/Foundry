@@ -3,8 +3,24 @@ use std::{env, path::Path, process::Command, thread, time::Duration};
 use anyhow::{Context, Result, bail};
 
 pub fn open(path: &Path, interrupted: impl Fn() -> bool) -> Result<()> {
+    open_with(path, interrupted, || Ok(()))
+}
+
+pub fn open_live(
+    path: &Path,
+    interrupted: impl Fn() -> bool,
+    on_wait: impl FnMut() -> Result<()>,
+) -> Result<()> {
+    open_with(path, interrupted, on_wait)
+}
+
+fn open_with(
+    path: &Path,
+    interrupted: impl Fn() -> bool,
+    on_wait: impl FnMut() -> Result<()>,
+) -> Result<()> {
     let command_line = editor_command()?;
-    run(&command_line, path, interrupted)
+    run(&command_line, path, interrupted, on_wait)
 }
 
 fn editor_command() -> Result<String> {
@@ -19,7 +35,12 @@ fn editor_command() -> Result<String> {
     bail!("neither VISUAL nor EDITOR names an editor")
 }
 
-fn run(command_line: &str, path: &Path, interrupted: impl Fn() -> bool) -> Result<()> {
+fn run(
+    command_line: &str,
+    path: &Path,
+    interrupted: impl Fn() -> bool,
+    mut on_wait: impl FnMut() -> Result<()>,
+) -> Result<()> {
     let arguments = parse_command(command_line)?;
     let (program, editor_arguments) = arguments
         .split_first()
@@ -46,6 +67,13 @@ fn run(command_line: &str, path: &Path, interrupted: impl Fn() -> bool) -> Resul
                 .with_context(|| format!("failed to stop editor {program:?}"))?;
             let _ = child.wait();
             bail!("termination requested");
+        }
+        if let Err(error) = on_wait() {
+            child
+                .kill()
+                .with_context(|| format!("failed to stop editor {program:?}"))?;
+            let _ = child.wait();
+            return Err(error);
         }
         thread::sleep(Duration::from_millis(50));
     }

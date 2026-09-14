@@ -356,6 +356,10 @@ session-XXXXXX/
 ├── tasks.md
 ├── manifest.json
 ├── baseline.json
+├── accepted.md                 # live sessions only
+├── recovery-baseline.json      # live sessions only
+├── live.json                   # live sessions only
+├── unaccepted.md               # only when closing with unapplied buffer edits
 └── transactions/
     └── 0001/
         ├── plan.json

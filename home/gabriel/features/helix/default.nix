@@ -36,6 +36,10 @@ in {
           language-servers = ["nixd" "nil"];
           formatter.command = "alejandra";
         }
+        {
+          name = "markdown";
+          language-servers = ["marksman" "todomd"];
+        }
       ];
       global-language-servers = ["llm-suggest" "colors"];
       language-server = {
@@ -50,6 +54,10 @@ in {
         };
 
         scls.command = lib.getExe pkgs.simple-completion-language-server;
+        todomd = {
+          command = lib.getExe pkgs.todomd;
+          args = ["lsp"];
+        };
         colors.command = lib.getExe pkgs.uwu-colors;
         llm-suggest.command = lib.getExe pkgs.llm-suggest-lsp;
       };

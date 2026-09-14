@@ -4,16 +4,16 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub calendar_roots: Vec<PathBuf>,
     #[serde(default)]
     pub hooks: Hooks,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hooks {
     pub before_session: Option<Vec<String>>,
     pub after_apply: Option<Vec<String>>,

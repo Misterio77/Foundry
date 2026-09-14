@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use icalendar::parser::{Component, read_calendar, unfold};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
 };
 
 /// Which tasks a command operates on.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Scope {
     /// Active-root trees, stopping below any completed descendant.
     #[default]

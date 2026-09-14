@@ -18,10 +18,7 @@ pub struct Lifecycle {
 impl Lifecycle {
     pub fn start(hooks: &Hooks, enabled: bool) -> Result<Self> {
         if !enabled {
-            return Ok(Self {
-                hooks: Hooks::default(),
-                active: false,
-            });
+            return Ok(Self::disabled());
         }
 
         run_hook("before_session", hooks.before_session.as_deref())?;
@@ -29,6 +26,25 @@ impl Lifecycle {
             hooks: hooks.clone(),
             active: true,
         })
+    }
+
+    /// Live sessions skip session-lifetime hooks and retain only `after_apply`.
+    pub fn live(hooks: &Hooks, enabled: bool) -> Self {
+        if enabled {
+            Self {
+                hooks: hooks.clone(),
+                active: false,
+            }
+        } else {
+            Self::disabled()
+        }
+    }
+
+    fn disabled() -> Self {
+        Self {
+            hooks: Hooks::default(),
+            active: false,
+        }
     }
 
     pub fn after_apply(&self) -> Result<()> {

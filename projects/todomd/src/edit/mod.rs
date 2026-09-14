@@ -1,5 +1,6 @@
 pub mod editor;
 pub mod hooks;
+pub mod live;
 pub mod markdown;
 pub mod planner;
 pub mod session;
@@ -24,6 +25,7 @@ use session::Session;
 pub struct Options {
     pub no_hooks: bool,
     pub keep: bool,
+    pub watch: bool,
     pub scope: Scope,
 }
 
@@ -57,6 +59,15 @@ pub fn render_lists(
 pub fn run(config: &Config, requested_lists: &[String], options: Options) -> Result<()> {
     let lists = resolve_lists(config, requested_lists)?;
     let termination = Termination::install()?;
+    if options.watch {
+        return live::run(
+            config,
+            &lists,
+            options.scope,
+            !options.no_hooks,
+            &termination,
+        );
+    }
     let lifecycle = Lifecycle::start(&config.hooks, !options.no_hooks)?;
     let result = session(config, &lists, options, &lifecycle, &termination);
     let result = lifecycle.finish(result);

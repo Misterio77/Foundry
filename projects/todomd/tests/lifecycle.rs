@@ -2,10 +2,10 @@
 
 use std::{
     fs::{self, File},
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     os::unix::{fs::PermissionsExt, process::CommandExt},
     path::{Path, PathBuf},
-    process::{Child, Command, Output, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Command, Output, Stdio},
     sync::mpsc,
     thread,
     time::{Duration, Instant},
@@ -17,7 +17,16 @@ use nix::{
     sys::signal::{Signal, kill},
     unistd::Pid,
 };
+use serde_json::{Value, json};
 use tempfile::TempDir;
+use todomd::{
+    config::Config,
+    edit::{
+        self,
+        session::{LiveMetadata, Session},
+    },
+    repository::{self, Scope},
+};
 
 struct Case {
     root: TempDir,
@@ -790,6 +799,195 @@ fn assert_complete_apply(calendars: &Path) {
             .count(),
         1
     );
+}
+
+#[test]
+fn lsp_applies_a_saved_live_document_and_returns_the_canonical_edit() {
+    let case = Case::new(0);
+    let config = Config::load(Some(&case.config)).unwrap();
+    let lists = vec!["Postgrad".to_owned(), "Personal".to_owned()];
+    let rendered = edit::render_lists(&config, &lists, Scope::Active).unwrap();
+    let recovery = repository::load_lists(&config, &lists, Scope::All)
+        .unwrap()
+        .0;
+    let metadata = LiveMetadata {
+        config,
+        lists,
+        scope: Scope::Active,
+        hooks_enabled: true,
+    };
+    let session = Session::create_live(&rendered, &metadata, &recovery).unwrap();
+    let uri = format!("file://{}", session.tasks_path().display());
+    let edited = rendered.markdown.replace("Write paper draft", "LSP paper");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_todomd"))
+        .arg("lsp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut peer = LspPeer {
+        stdin: child.stdin.take().unwrap(),
+        stdout: BufReader::new(child.stdout.take().unwrap()),
+    };
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"capabilities": {"workspace": {
+            "applyEdit": true,
+            "workspaceEdit": {"documentChanges": true}
+        }}}
+    }));
+    assert_eq!(peer.read()["id"], 1);
+    peer.send(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didOpen",
+        "params": {"textDocument": {
+            "uri": uri,
+            "languageId": "markdown",
+            "version": 1,
+            "text": rendered.markdown
+        }}
+    }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": [{"text": edited}]
+        }
+    }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didSave",
+        "params": {"textDocument": {"uri": uri}}
+    }));
+
+    let mut canonical = None;
+    for _ in 0..12 {
+        let message = peer.read();
+        if message["method"] == "workspace/applyEdit" {
+            let new_text = message["params"]["edit"]["documentChanges"][0]["edits"][0]["newText"]
+                .as_str()
+                .unwrap();
+            assert!(new_text.contains("LSP paper"));
+            assert!(new_text.contains("<!-- todomd:id="));
+            canonical = Some(new_text.to_owned());
+            peer.send(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {"applied": true}
+            }));
+        }
+        if message["method"] == "window/showMessage"
+            && message["params"]["message"] == "todomd: changes applied"
+        {
+            break;
+        }
+    }
+
+    assert!(session.is_attached());
+    let canonical = canonical.expect("server returned a canonical edit");
+    assert_eq!(case.hooks(), "apply\n");
+    let source_path = case.calendars.join("Postgrad/write.ics");
+    let source = fs::read_to_string(&source_path).unwrap();
+    assert!(source.contains("SUMMARY:LSP paper"));
+
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 3},
+            "contentChanges": [{"text": canonical}]
+        }
+    }));
+    fs::write(
+        &source_path,
+        source.replace("SUMMARY:LSP paper", "SUMMARY:Changed externally"),
+    )
+    .unwrap();
+    let mut received_inbound = false;
+    for _ in 0..12 {
+        let message = peer.read();
+        if message["method"] == "workspace/applyEdit" {
+            let new_text = message["params"]["edit"]["documentChanges"][0]["edits"][0]["newText"]
+                .as_str()
+                .unwrap();
+            assert!(new_text.contains("Changed externally"));
+            peer.send(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {"applied": true}
+            }));
+            received_inbound = true;
+        }
+        if received_inbound && message["method"] == "window/showMessage" {
+            break;
+        }
+    }
+    assert!(
+        received_inbound,
+        "source change did not produce a workspace edit"
+    );
+
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didClose",
+        "params": {"textDocument": {"uri": uri}}
+    }));
+    peer.send(json!({"jsonrpc": "2.0", "id": 99, "method": "shutdown"}));
+    while peer.read()["id"] != 99 {}
+    peer.send(json!({"jsonrpc": "2.0", "method": "exit"}));
+    drop(peer);
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", output_text(&output));
+}
+
+struct LspPeer {
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+impl LspPeer {
+    fn send(&mut self, message: Value) {
+        let body = serde_json::to_vec(&message).unwrap();
+        write!(self.stdin, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+        self.stdin.write_all(&body).unwrap();
+        self.stdin.flush().unwrap();
+    }
+
+    fn read(&mut self) -> Value {
+        let mut content_length = None;
+        loop {
+            let mut line = String::new();
+            self.stdout.read_line(&mut line).unwrap();
+            assert!(!line.is_empty(), "LSP server closed its output");
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(value) = line.strip_prefix("Content-Length: ") {
+                content_length = Some(value.trim().parse::<usize>().unwrap());
+            }
+        }
+        let mut body = vec![0; content_length.expect("LSP message has a content length")];
+        self.stdout.read_exact(&mut body).unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+}
+
+#[test]
+fn watch_requires_an_attached_language_server() {
+    let case = Case::new(0);
+    let output = case.edit_command("true").arg("--watch").output().unwrap();
+    let text = output_text(&output);
+
+    assert!(!output.status.success());
+    assert!(!case.hook_log.exists());
+    assert!(text.contains("editor closed before todomd lsp attached"));
+    assert!(text.contains("live session retained at"));
 }
 
 fn fixture_root() -> PathBuf {

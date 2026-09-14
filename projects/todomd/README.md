@@ -10,13 +10,14 @@ never runs a syncer itself; hooks pause and resume whatever does.
 ```console
 $ todomd                  # edit every list
 $ todomd edit Postgrad    # edit chosen lists
+$ todomd edit --watch     # apply saves and follow source changes through LSP
 $ todomd show             # print active-root task trees as JSON
 $ todomd show --completed # include every task
 ```
 
 Creating, renaming, nesting, scheduling, prioritizing, completing, reopening,
-moving, and deleting tasks is supported. Categories and descriptions are
-preserved but not editable. Watch mode is not implemented. See
+moving, and deleting tasks is supported. Categories are editable; descriptions
+are preserved. See
 [DESIGN.md](DESIGN.md) and [ROADMAP.md](ROADMAP.md).
 
 ## Install
@@ -64,6 +65,7 @@ shell.
 | `todomd` | Edit every discovered list. |
 | `todomd edit [LISTS]...` | Edit the named lists, or every list. |
 | `todomd show [LISTS]...` | Print tasks as JSON. |
+| `todomd lsp` | Run the language server for editor integration. |
 
 | Option | Effect |
 |---|---|
@@ -71,6 +73,7 @@ shell.
 | `--completed` | Include completed and cancelled tasks. |
 | `--no-hooks` | `edit` only. Skip configured hooks for this run. |
 | `--keep` | `edit` only. Retain the session after an unchanged or successful run. |
+| `--watch` | `edit` only. Apply valid saves and synchronize source changes through LSP. |
 
 Naming lists selects them and fixes their order; otherwise lists are ordered by
 display name. The top level takes no list names, so a list called `show` remains
@@ -203,6 +206,39 @@ Only `y` or `Y` applies the plan. Anything else, including empty input, cancels
 it and leaves every source file unchanged. Confirmation requires an interactive
 terminal.
 
+## Live editing
+
+`todomd edit --watch` keeps the editor open and treats each valid save as
+approval to apply its semantic transaction. The editor must start `todomd lsp`
+as a Markdown language server; watch mode fails rather than silently doing
+nothing if the server does not attach within ten seconds.
+
+For Helix, add the server alongside any existing Markdown server:
+
+```toml
+[language-server.todomd]
+command = "todomd"
+args = ["lsp"]
+
+[[language]]
+name = "markdown"
+language-servers = ["marksman", "todomd"]
+```
+
+The server ignores ordinary Markdown and attaches only to private todomd live
+sessions. It validates the current buffer while typing and reports errors on
+their lines. Saving valid Markdown applies it without confirmation, rerenders
+session identities, and sends the canonical document back as a versioned LSP
+workspace edit. This may leave the buffer marked modified, but does not require
+`:reload`.
+
+Selected list directories are watched for source changes. An ICS-only change is
+sent into the open buffer through the same mechanism. If both the buffer and
+sources changed from the accepted baseline, neither is modified and the editor
+shows a conflict diagnostic. `before_session` and `after_session` are skipped in
+live mode; `after_apply` runs after every successful outgoing transaction.
+Closing the editor retains the live session and numbered transaction artifacts.
+
 ## Scripting
 
 `todomd show` is read-only: no session, no editor, no hooks, no terminal.
@@ -269,6 +305,9 @@ directory.
 | `tasks.md` | The edited Markdown document. |
 | `baseline.json` | The task state that was rendered. |
 | `manifest.json` | Session ID to VTODO UID mapping. |
+| `accepted.md` | Last canonical live document, for recovery and reattachment. |
+| `live.json` | Resolved live-session configuration and selected lists. |
+| `unaccepted.md` | Buffer contents present when a live session closed with unapplied edits. |
 | `transactions/0001/` | Staged files, per-file backups, and `plan.json`. |
 
 Sessions are retained, with their path printed, on rejection, invalid Markdown,
@@ -288,6 +327,7 @@ parsing, conflict, staging, application, and post-apply failures.
   membership are the only editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
-- No CalDAV, no watch mode, no automatic crash recovery.
+- Live editing requires an LSP client with versioned workspace-edit support.
+- No CalDAV and no automatic crash recovery.
 - Concurrency is optimistic: a source change is detected and refused, but the
   vdir is not locked. Use `before_session` to pause the syncer.
