@@ -11,13 +11,7 @@ in {
 
   xdg.configFile."todomd/config.toml".source = toml.generate "todomd-config.toml" {
     calendar_roots = lib.mapAttrsToList (_: c: c.local.path) config.accounts.calendar.accounts;
-    hooks = {
-      # Keep vdirsyncer from writing to the vdirs mid-session, push whatever was
-      # applied right away, and re-arm the timer however the session ended
-      before_session = [systemctl "--user" "stop" "vdirsyncer.timer" "vdirsyncer.service"];
-      after_apply = [systemctl "--user" "start" "--no-block" "vdirsyncer.service"];
-      after_session = [systemctl "--user" "start" "vdirsyncer.timer"];
-    };
+    hooks.after_apply = [systemctl "--user" "start" "--no-block" "vdirsyncer.service"];
   };
 
   programs.fish.shellAbbrs.todo = "todomd";

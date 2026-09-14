@@ -36,20 +36,16 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn create(rendered: &RenderedSession) -> Result<Self> {
-        let (parent, is_private_parent) = session_parent();
-        if is_private_parent {
-            create_private_directory(&parent)?;
-        }
-        Self::create_in(&parent, rendered)
-    }
-
     pub fn create_live(
         rendered: &RenderedSession,
         metadata: &LiveMetadata,
         recovery_baseline: &TaskState,
     ) -> Result<Self> {
-        let session = Self::create(rendered)?;
+        let (parent, is_private_parent) = session_parent();
+        if is_private_parent {
+            create_private_directory(&parent)?;
+        }
+        let session = Self::create_in(&parent, rendered)?;
         write_json(&session.path().join("live.json"), metadata)?;
         write_json(
             &session.path().join("recovery-baseline.json"),
@@ -66,48 +62,6 @@ impl Session {
 
     pub fn tasks_path(&self) -> &Path {
         &self.tasks_path
-    }
-
-    pub fn read_tasks(&self) -> Result<String> {
-        fs::read_to_string(&self.tasks_path)
-            .with_context(|| format!("failed to read {}", self.tasks_path.display()))
-    }
-
-    pub fn accept(
-        &self,
-        markdown: &str,
-        manifest: &IdentityManifest,
-        baseline: &TaskState,
-    ) -> Result<()> {
-        let baseline_path = self.directory.path().join("baseline.json");
-        let manifest_path = self.directory.path().join("manifest.json");
-        let old_baseline = fs::read(&baseline_path)
-            .with_context(|| format!("failed to read {}", baseline_path.display()))?;
-        let old_manifest = fs::read(&manifest_path)
-            .with_context(|| format!("failed to read {}", manifest_path.display()))?;
-        let baseline_rollback = prepare_atomic(&baseline_path, &old_baseline)?;
-        let manifest_rollback = prepare_atomic(&manifest_path, &old_manifest)?;
-        let baseline = prepare_atomic(&baseline_path, &json_bytes(&baseline_path, baseline)?)?;
-        let manifest = prepare_atomic(&manifest_path, &json_bytes(&manifest_path, manifest)?)?;
-        let tasks = prepare_atomic(&self.tasks_path, markdown.as_bytes())?;
-
-        persist_atomic(baseline, &baseline_path)?;
-        if let Err(error) = persist_atomic(manifest, &manifest_path) {
-            return Err(rollback_replacements(
-                error,
-                [(baseline_rollback, baseline_path.as_path())],
-            ));
-        }
-        if let Err(error) = persist_atomic(tasks, &self.tasks_path) {
-            return Err(rollback_replacements(
-                error,
-                [
-                    (manifest_rollback, manifest_path.as_path()),
-                    (baseline_rollback, baseline_path.as_path()),
-                ],
-            ));
-        }
-        Ok(())
     }
 
     pub fn is_attached(&self) -> bool {
@@ -402,6 +356,8 @@ mod tests {
             sources: SourceSnapshot::default(),
         };
         let session = Session::create_in(parent.path(), &rendered).unwrap();
+        fs::write(session.path().join("recovery-baseline.json"), b"null").unwrap();
+        fs::write(session.path().join("accepted.md"), &rendered.markdown).unwrap();
         let accepted = TaskState {
             lists: vec![TaskList {
                 name: "Personal".into(),
@@ -420,9 +376,17 @@ mod tests {
         let mut manifest = IdentityManifest::default();
         let markdown = super::super::markdown::render(&accepted, &mut manifest).unwrap();
 
-        session.accept(&markdown, &manifest, &accepted).unwrap();
+        accept_live(session.path(), &markdown, &manifest, &accepted, &accepted).unwrap();
 
-        assert_eq!(session.read_tasks().unwrap(), markdown);
+        assert_eq!(
+            fs::read_to_string(session.path().join("accepted.md")).unwrap(),
+            markdown
+        );
+        let stored_recovery: TaskState = serde_json::from_slice(
+            &fs::read(session.path().join("recovery-baseline.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(stored_recovery, accepted);
         let stored_baseline: TaskState =
             serde_json::from_slice(&fs::read(session.path().join("baseline.json")).unwrap())
                 .unwrap();

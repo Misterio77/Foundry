@@ -13,11 +13,12 @@ pub struct Config {
     pub hooks: Hooks,
 }
 
+/// Unknown keys are rejected so a removed session-lifetime hook is reported
+/// rather than silently ignored.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Hooks {
-    pub before_session: Option<Vec<String>>,
     pub after_apply: Option<Vec<String>>,
-    pub after_session: Option<Vec<String>>,
 }
 
 impl Config {
@@ -40,12 +41,8 @@ impl Config {
             .iter()
             .map(|root| expand_home(root))
             .collect::<Result<_>>()?;
-        expand_hook(&mut config.hooks.before_session)?;
         expand_hook(&mut config.hooks.after_apply)?;
-        expand_hook(&mut config.hooks.after_session)?;
-        validate_hook("before_session", config.hooks.before_session.as_deref())?;
         validate_hook("after_apply", config.hooks.after_apply.as_deref())?;
-        validate_hook("after_session", config.hooks.after_session.as_deref())?;
 
         Ok(config)
     }
@@ -125,16 +122,32 @@ mod tests {
             &path,
             "calendar_roots = [\"/tmp/calendars\"]\n\
              [hooks]\n\
-             before_session = [\"program\", \"argument\"]\n",
+             after_apply = [\"program\", \"argument\"]\n",
         )
         .unwrap();
 
         let config = Config::load(Some(&path)).unwrap();
         assert_eq!(
-            config.hooks.before_session,
+            config.hooks.after_apply,
             Some(vec!["program".into(), "argument".into()])
         );
-        assert!(config.hooks.after_session.is_none());
+    }
+
+    #[test]
+    fn rejects_hooks_that_no_longer_exist() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            "calendar_roots = [\"/tmp/calendars\"]\n\
+             [hooks]\n\
+             before_session = [\"program\"]\n",
+        )
+        .unwrap();
+
+        let error = Config::load(Some(&path)).unwrap_err();
+
+        assert!(format!("{error:#}").contains("before_session"));
     }
 
     #[test]
@@ -143,7 +156,7 @@ mod tests {
         let path = directory.path().join("config.toml");
         fs::write(
             &path,
-            "calendar_roots = [\"/tmp/calendars\"]\n[hooks]\nafter_session = []\n",
+            "calendar_roots = [\"/tmp/calendars\"]\n[hooks]\nafter_apply = []\n",
         )
         .unwrap();
 

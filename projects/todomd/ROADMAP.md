@@ -3,18 +3,12 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
-## LSP-backed live editing
+## Richer LSP editing
 
-`edit --watch` creates a live session whose open buffer is managed by
-`todomd lsp`. Changes are validated while typing, valid saves apply automatically, and
-source-only changes return to the editor through versioned workspace edits.
-Diagnostics and LSP messages replace terminal output, while the current
-one-shot editing flow remains the default.
-
-The first implementation covers session attachment, parse diagnostics,
-save-triggered transactions, source-directory watching, canonical buffer
-refreshes, and conflict reporting. Completion, hover, document symbols, repair
-code actions, and richer conflict recovery can follow independently.
+Live editing already covers diagnostics, save-triggered transactions,
+source-directory watching, canonical buffer refreshes, and conflict reporting.
+Completion, hover, document symbols, repair code actions, and richer conflict
+recovery can build on that protocol.
 
 ## Configurable sorting
 

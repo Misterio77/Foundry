@@ -1,16 +1,15 @@
 # todomd
 
 Edit vdir-backed VTODO lists as Markdown. `todomd` renders whole lists into a
-temporary document, opens an editor, previews the resulting changes, and applies
-approved ones to the source `.ics` files.
+private document, opens an editor, and applies each valid save to the source
+`.ics` files through an LSP-backed live session.
 
-The `.ics` files stay the source of truth. `todomd` does not speak CalDAV and
-never runs a syncer itself; hooks pause and resume whatever does.
+The `.ics` files stay the source of truth. `todomd` does not speak CalDAV or run
+a syncer itself; an optional hook can start one after changes are applied.
 
 ```console
 $ todomd                  # edit every list
 $ todomd edit Postgrad    # edit chosen lists
-$ todomd edit --watch     # apply saves and follow source changes through LSP
 $ todomd show             # print active-root task trees as JSON
 $ todomd show --completed # include every task
 ```
@@ -38,25 +37,16 @@ The Nix package installs Bash, Fish, and Zsh completions.
 calendar_roots = ["~/Calendars/personal"]
 
 [hooks]
-before_session = [
-  "systemctl", "--user", "stop",
-  "vdirsyncer.timer", "vdirsyncer.service",
-]
 after_apply = ["systemctl", "--user", "start", "vdirsyncer.service"]
-after_session = ["systemctl", "--user", "start", "vdirsyncer.timer"]
 ```
 
 `calendar_roots` hold vdir collections: subdirectories of `.ics` files with a
 `displayname` file whose contents are the list name. Paths support `~`.
 
-Hooks are optional argument arrays, executed directly rather than through a
-shell.
-
-| Hook | Runs |
-|---|---|
-| `before_session` | Once, before any list is read. Failure aborts the command. |
-| `after_apply` | Only after source files changed. Failure does not roll back, and exits non-zero. |
-| `after_session` | On every exit once `before_session` succeeded: cancellation, editor failure, conflict, apply failure, and handled `SIGINT`, `SIGTERM`, `SIGHUP`. |
+`after_apply` is an optional argument array executed directly after source
+files change. A failure is reported through LSP but does not roll back the
+applied transaction. It is the only hook; an unknown key under `[hooks]`, such
+as the removed `before_session` and `after_session`, is a configuration error.
 
 ## Commands
 
@@ -71,9 +61,7 @@ shell.
 |---|---|
 | `--config <PATH>` | Use a specific configuration file. Accepted anywhere. |
 | `--completed` | Include completed and cancelled tasks. |
-| `--no-hooks` | `edit` only. Skip configured hooks for this run. |
-| `--keep` | `edit` only. Retain the session after an unchanged or successful run. |
-| `--watch` | `edit` only. Apply valid saves and synchronize source changes through LSP. |
+| `--no-hooks` | `edit` only. Skip `after_apply` for this run. |
 
 Naming lists selects them and fixes their order; otherwise lists are ordered by
 display name. The top level takes no list names, so a list called `show` remains
@@ -115,8 +103,7 @@ back to `$EDITOR`:
 
 The `<!-- todomd:id=... -->` markers are session-local identities, not VTODO
 UIDs, and track a task across renames and moves. Removing one is treated as
-intentional: the old task is deleted and a new one created, which the preview
-states.
+intentional: the old task is deleted and a new one created on the next save.
 
 Indentation edits the child's `RELATED-TO` parent. Removing a parent line
 deletes only that VTODO. Retained children must be unindented or nested under
@@ -182,36 +169,12 @@ completed and cancelled tree.
 it and its descendant subtree are skipped in every scope and the task is
 reported on stderr; edit its `.ics` directly.
 
-After the editor exits, `todomd` rereads the sources, reconciles, and previews
-both the semantic and filesystem changes:
-
-```console
-Postgrad:
-  renamed   "Buy milk, bread" -> "Read related work"
-  created   New task
-  moved     Read related work <- Personal
-
-Personal:
-  completed Submit paper
-  moved     Submit paper <- Postgrad
-
-Files:
-  move   .../Personal/groceries.ics -> .../Postgrad/groceries.ics
-  create ~/Calendars/personal/Postgrad/fa62b7c0-ac46-47dd-899c-0aa6dd3f58b6.ics
-
-Apply these changes? [y/N]
-```
-
-Only `y` or `Y` applies the plan. Anything else, including empty input, cancels
-it and leaves every source file unchanged. Confirmation requires an interactive
-terminal.
-
 ## Live editing
 
-`todomd edit --watch` keeps the editor open and treats each valid save as
-approval to apply its semantic transaction. The editor must start `todomd lsp`
-as a Markdown language server; watch mode fails rather than silently doing
-nothing if the server does not attach within ten seconds.
+`todomd edit` keeps the editor open and treats each valid save as approval to
+apply its semantic transaction. The editor must start `todomd lsp` as a Markdown
+language server; editing fails rather than silently doing nothing if the server
+does not attach within ten seconds.
 
 For Helix, add the server alongside any existing Markdown server:
 
@@ -235,9 +198,9 @@ workspace edit. This may leave the buffer marked modified, but does not require
 Selected list directories are watched for source changes. An ICS-only change is
 sent into the open buffer through the same mechanism. If both the buffer and
 sources changed from the accepted baseline, neither is modified and the editor
-shows a conflict diagnostic. `before_session` and `after_session` are skipped in
-live mode; `after_apply` runs after every successful outgoing transaction.
-Closing the editor retains the live session and numbered transaction artifacts.
+shows a conflict diagnostic. `after_apply` runs after every successful outgoing
+transaction. Closing the editor retains the session and numbered transaction
+artifacts.
 
 ## Scripting
 
@@ -310,14 +273,14 @@ directory.
 | `unaccepted.md` | Buffer contents present when a live session closed with unapplied edits. |
 | `transactions/0001/` | Staged files, per-file backups, and `plan.json`. |
 
-Sessions are retained, with their path printed, on rejection, invalid Markdown,
-conflict, and failure. They are removed after an unchanged or successful run
-unless `--keep` is given.
+Sessions are retained when the editor closes. Invalid or unaccepted buffer
+contents are additionally preserved as `unaccepted.md`.
 
 ## Exit codes
 
-`0` on success, including a cancelled plan. Non-zero on discovery, hook, editor,
-parsing, conflict, staging, application, and post-apply failures.
+`0` after a normally closed, attached editor session. Setup, attachment, editor,
+and termination failures exit non-zero; transaction errors are reported through
+LSP while the session remains open.
 
 ## Limitations
 
@@ -329,5 +292,5 @@ parsing, conflict, staging, application, and post-apply failures.
 - One primary VTODO per `.ics` file.
 - Live editing requires an LSP client with versioned workspace-edit support.
 - No CalDAV and no automatic crash recovery.
-- Concurrency is optimistic: a source change is detected and refused, but the
-  vdir is not locked. Use `before_session` to pause the syncer.
+- Concurrency is optimistic: source changes are reconciled or reported as
+  conflicts, but the vdir is not locked.

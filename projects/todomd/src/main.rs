@@ -32,17 +32,9 @@ enum Command {
 
 #[derive(Args, Debug)]
 struct EditArgs {
-    /// Disable configured lifecycle hooks for this run.
+    /// Disable the configured after_apply hook for this run.
     #[arg(long)]
     no_hooks: bool,
-
-    /// Retain the session after an unchanged or successful run.
-    #[arg(long, conflicts_with = "watch")]
-    keep: bool,
-
-    /// Apply valid saves and synchronize source changes through LSP.
-    #[arg(long)]
-    watch: bool,
 
     /// Include completed and cancelled tasks.
     #[arg(long)]
@@ -66,8 +58,6 @@ impl EditArgs {
     fn options(&self) -> edit::Options {
         edit::Options {
             no_hooks: self.no_hooks,
-            keep: self.keep,
-            watch: self.watch,
             scope: scope(self.completed),
         }
     }

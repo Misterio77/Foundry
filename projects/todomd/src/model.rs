@@ -68,7 +68,7 @@ impl Priority {
         }
     }
 
-    /// How the change preview names the level.
+    /// How a semantic change plan names the level.
     pub fn label(self) -> &'static str {
         match self {
             Self::None => "none",

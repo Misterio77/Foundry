@@ -29,7 +29,7 @@ pub fn run(
     let session = Session::create_live(&rendered, &metadata, &recovery_baseline)?;
     let started = Instant::now();
 
-    let result = editor::open_live(
+    let result = editor::open(
         session.tasks_path(),
         || termination.is_requested(),
         || {

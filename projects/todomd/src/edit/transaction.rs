@@ -1,11 +1,8 @@
 use std::{
     collections::BTreeMap,
     fmt, fs,
-    io::{self, IsTerminal, Write},
+    io::{self, Write},
     path::{Path, PathBuf},
-    sync::mpsc,
-    thread,
-    time::Duration,
 };
 
 use anyhow::{Context, Result, bail};
@@ -388,40 +385,6 @@ pub fn apply(transaction: &StagedTransaction, sources: &SourceSnapshot) -> Resul
     }
 
     Ok(())
-}
-
-pub fn confirm(interrupted: impl Fn() -> bool) -> Result<bool> {
-    if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
-        bail!("confirmation requires an interactive terminal");
-    }
-
-    eprint!("\nApply these changes? [y/N] ");
-    io::stderr()
-        .flush()
-        .context("failed to flush confirmation prompt")?;
-
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let mut answer = String::new();
-        let result = io::stdin().read_line(&mut answer).map(|_| answer);
-        let _ = sender.send(result);
-    });
-    loop {
-        match receiver.recv_timeout(Duration::from_millis(50)) {
-            Ok(answer) => {
-                return Ok(is_confirmed(
-                    &answer.context("failed to read confirmation")?,
-                ));
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) if interrupted() => {
-                bail!("termination requested");
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                bail!("confirmation reader stopped unexpectedly");
-            }
-        }
-    }
 }
 
 impl StagedTransaction {
@@ -1010,10 +973,6 @@ fn add_temporal_property(todo: &mut Todo, name: &str, value: Option<&DateValue>)
 
 fn format_timestamp(timestamp: DateTime<Utc>) -> String {
     timestamp.format("%Y%m%dT%H%M%SZ").to_string()
-}
-
-fn is_confirmed(answer: &str) -> bool {
-    matches!(answer.trim(), "y" | "Y")
 }
 
 fn backup_source(change: &StagedFileChange) -> Result<()> {
@@ -1883,13 +1842,5 @@ mod tests {
 
         assert!(apply(&transaction, &SourceSnapshot::default()).is_err());
         assert_eq!(fs::read_to_string(destination).unwrap(), "external");
-    }
-
-    #[test]
-    fn confirmation_accepts_only_explicit_yes() {
-        assert!(is_confirmed("y"));
-        assert!(is_confirmed(" Y\n"));
-        assert!(!is_confirmed(""));
-        assert!(!is_confirmed("yes"));
     }
 }

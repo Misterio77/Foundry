@@ -2,19 +2,8 @@ use std::{env, path::Path, process::Command, thread, time::Duration};
 
 use anyhow::{Context, Result, bail};
 
-pub fn open(path: &Path, interrupted: impl Fn() -> bool) -> Result<()> {
-    open_with(path, interrupted, || Ok(()))
-}
-
-pub fn open_live(
-    path: &Path,
-    interrupted: impl Fn() -> bool,
-    on_wait: impl FnMut() -> Result<()>,
-) -> Result<()> {
-    open_with(path, interrupted, on_wait)
-}
-
-fn open_with(
+/// Opens the session document, polling `on_wait` while the editor runs.
+pub fn open(
     path: &Path,
     interrupted: impl Fn() -> bool,
     on_wait: impl FnMut() -> Result<()>,
