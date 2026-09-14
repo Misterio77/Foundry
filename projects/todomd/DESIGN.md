@@ -10,8 +10,9 @@ The `.ics` files are the source of truth. Markdown is a session-scoped editing
 surface, not a second task store. `todomd` does not speak CalDAV; synchronizing
 the vdirs is an independent concern reached through hooks.
 
-The current driver is one-shot. The core supports repeated transactions so a
-later `edit --watch` can synchronize both directions without replacing it.
+The one-shot driver remains the conservative default. An LSP-backed live driver
+uses the same transaction core to validate while typing, apply valid saves, and
+synchronize source changes into the editor buffer.
 
 ## Scope
 
@@ -24,8 +25,9 @@ Supported:
 - preserving iCalendar data the Markdown does not expose;
 - detecting source changes made during a session;
 - staging, backup, and best-effort rollback;
-- hooks around the session and after an apply; and
-- a read-only JSON view.
+- hooks around the session and after an apply;
+- a read-only JSON view; and
+- live diagnostics and bidirectional editor synchronization through LSP.
 
 Not supported:
 
@@ -35,7 +37,8 @@ Not supported:
 - silently merging concurrent semantic edits; or
 - general-purpose iCalendar editing.
 
-Deferred: watch mode and automatic crash recovery.
+Deferred: automatic crash recovery and richer language features beyond the
+editing lifecycle.
 
 ## Principles
 
@@ -51,7 +54,10 @@ Deferred: watch mode and automatic crash recovery.
    transactions; they contain no synchronization logic.
 6. **Assume repeated transactions.** The core never assumes one parse or apply
    cycle per session.
-7. **Reject ambiguity.** Invalid Markdown, unknown identities, duplicate lists,
+7. **Keep the open buffer authoritative.** Live mode never replaces the session
+   document behind the editor; canonical and inbound changes use versioned LSP
+   workspace edits.
+8. **Reject ambiguity.** Invalid Markdown, unknown identities, duplicate lists,
    and concurrent edits stop the transaction.
 
 ## Architecture
@@ -77,7 +83,7 @@ Markdown codec ─▶│                      │
 
 one-shot driver ─┐
                  ├─ trigger the same transaction engine
-watch driver ────┘
+LSP live driver ─┘
 ```
 
 | Component | Responsibility |
@@ -89,9 +95,11 @@ watch driver ────┘
 | Reconciliation planner | Classifies divergence and produces a change set |
 | Transaction engine | Validates, stages, applies, and advances the baseline |
 | Drivers | Own interaction and event policy |
+| LSP adapter | Tracks open-buffer versions, publishes diagnostics, and requests canonical workspace edits |
 
 The canonical model holds no paths, raw files, parsed iCalendar objects, editor
-state, or watcher state, which keeps baselines and planning format-independent.
+state, or language-server state, which keeps baselines and planning
+format-independent.
 The source snapshot carries that material separately, so raw hashes can guard
 application against changes the model and Markdown do not represent.
 
@@ -101,14 +109,15 @@ shared; each subcommand is a directory, with the editing machinery under
 
 ## Commands
 
-Modes are subcommands, so each carries only the options that apply to it and a
-later `--watch` flag on `edit` needs no mode exclusions.
+Modes are subcommands, so each carries only the options that apply to it.
+`--watch` selects the LSP-backed live policy without changing one-shot defaults.
 
 | Command | Effect |
 |---|---|
 | `todomd` | Edit every discovered list |
-| `todomd edit [LISTS]...` | Edit the named lists, with `--no-hooks` and `--keep` |
+| `todomd edit [LISTS]...` | Edit the named lists, with `--no-hooks`, `--keep`, and `--watch` |
 | `todomd show [LISTS]...` | Print tasks as JSON |
+| `todomd lsp` | Run the language server over standard input/output for editor integration |
 
 Both subcommands take `--completed`, which widens the task set from active-root
 trees to every task.
@@ -262,8 +271,10 @@ New tasks receive draft identities in document order during parsing. Parent
 references may name either an existing task or an earlier draft at the preceding
 indentation level. Planning allocates every new VTODO UID before staging any
 file, so arbitrarily nested new trees can be written in any plan order. After a
-successful apply, `tasks.md` is rerendered atomically with session IDs, so a
-later transaction cannot mistake a task for another creation.
+successful one-shot apply, `tasks.md` is rerendered atomically with session IDs,
+so a later transaction cannot mistake a task for another creation.
+Live mode instead sends that canonical rendering as a versioned workspace edit;
+the editor reports the resulting document change back to the server.
 
 ## Reconciliation
 
@@ -306,7 +317,10 @@ A transaction is callable without an editor process. It:
 10. runs any post-apply hook.
 
 A failure before application leaves the previous baseline valid. A post-apply
-hook failure does not undo valid local changes or their new baseline.
+hook failure does not undo valid local changes or their new baseline. In live
+mode, source application and accepted-state persistence precede the canonical
+workspace edit. If the client rejects that edit, the server reports the failure
+and waits for a refresh rather than guessing at buffer state.
 
 ### Application safety
 
@@ -329,8 +343,8 @@ interrupt rollback; the retained stage and backups support manual recovery, but
 automatic crash recovery is not claimed.
 
 Hash checks reduce but cannot eliminate a race with an uncooperative concurrent
-writer. A `before_session` hook can pause one. Watch mode instead relies on
-short transactions, fresh reads, and explicit conflict handling.
+writer. A `before_session` hook can pause one. Live mode instead relies on short
+transactions, fresh reads, and explicit conflict handling.
 
 ### Session storage
 
@@ -349,10 +363,13 @@ session-XXXXXX/
         └── backup/
 ```
 
-Numbering supports multiple transactions even though the one-shot driver
-triggers one. Rejected, conflicted, and failed sessions are retained and their
-paths printed; others are removed unless `--keep` is given. Backups contain task
-data and inherit the private permissions.
+Numbering supports repeated live transactions even though the one-shot driver
+triggers one. Live-session metadata also records the resolved configuration,
+selected lists, scope, and hook policy so an independently spawned language
+server can attach safely. Rejected, conflicted, and failed sessions are retained
+and their paths printed; others are removed unless `--keep` is given. Live
+sessions are retained on close. Backups contain task data and inherit the
+private permissions.
 
 ## Approval
 
@@ -376,8 +393,8 @@ Apply these changes? [y/N]
 ```
 
 Confirmation requires an interactive terminal and an explicit `y`. Empty input
-rejects the plan. There is no unattended one-shot apply. Watch mode would use a
-different policy, where opting in makes a valid save its own approval.
+rejects the plan. There is no unattended one-shot apply. Live mode uses a
+different policy: opting into `--watch` makes each valid save its own approval.
 
 Discovery, hook, editor, parsing, conflict, staging, and application failures
 exit non-zero. Rejecting a plan is a successful cancellation. The post-session
@@ -449,45 +466,50 @@ are argument arrays executed directly, never shell strings.
 | `after_apply` | Runs only after source files changed; failure does not roll back |
 | `after_session` | Runs on every exit once `before_session` succeeded, including cancellation, failure, and handled termination signals |
 
-Session-lifetime pause hooks do not suit a long-running watch process. Watch
-mode would run neither `before_session` nor `after_session`, only `after_apply`
-after each successful transaction.
+Session-lifetime pause hooks do not suit a long-running live process. Live mode
+runs neither `before_session` nor `after_session`, only `after_apply` after each
+successful transaction.
 
-## Deferred watch mode
+## LSP-backed live mode
 
-`edit --watch` would apply valid Markdown saves automatically, rerender when the
-selected vdirs change, keep the editor open across transactions, and retain
-transaction artifacts for recovery. Saving becomes approval, so it stays opt-in
-and one-shot remains the default.
+`edit --watch` creates a live session and opens its Markdown document. The
+editor starts `todomd lsp` as a secondary Markdown language server; the server
+recognizes todomd session documents from their private sidecar metadata and
+ignores ordinary Markdown. A short attachment handshake prevents `--watch`
+from silently running without LSP support.
 
-The watcher observes parent directories rather than existing inodes, because
-editors and synchronization tools commonly save by temporary-file rename. Events
-are debounced and reduced to content and semantic hashes; self-generated events
-matching the accepted transaction are ignored.
+The server keeps the editor's current text and version in memory. `didOpen` and
+`didChange` parse without touching source files and publish line-scoped
+diagnostics. `didSave` rereads the selected vdirs, reconciles against the last
+accepted baseline, and treats a valid Markdown-to-ICS plan as approved. It
+stages and applies the transaction, persists the new baseline and manifest,
+runs `after_apply`, and requests a versioned whole-document edit containing the
+canonical rendering. The workspace edit may leave the buffer modified, but it
+does not require a reload and cannot silently replace newer editor contents.
 
-On a Markdown save it parses the document, reads fresh ICS state, reconciles,
-applies a valid outgoing plan, rerenders generated identities, advances the
-baseline, and runs `after_apply`. An invalid intermediate save changes nothing
-and a later valid save retries.
+The server watches selected list directories rather than existing files,
+because synchronization tools commonly save by temporary-file rename. Relevant
+events are debounced and reconciled against the in-memory buffer. An ICS-only
+change becomes a versioned workspace edit. If the buffer also changed, neither
+side is modified and a conflict diagnostic remains until one side returns to
+the accepted state.
 
-On an ICS change it validates the new state, reconciles against saved Markdown,
-and atomically replaces `tasks.md` for an ICS-only change. Unsaved editor buffer
-contents are invisible to `todomd`; the replacement makes editors report a
-diverged buffer.
+Diagnostics carry precise line ranges when the Markdown parser can identify a
+line. Save, apply, inbound-refresh, hook, and conflict state use standard LSP
+messages rather than terminal output. Routine success is informational; errors
+and conflicts remain visible as diagnostics until resolved.
 
-If both sides changed since the baseline, neither is rewritten or applied and
-the conflict awaits explicit resolution.
-
-The architecture already satisfies what this requires: rendering, parsing, and
-the repository have no editor or watcher dependencies, transactions can run
-repeatedly against an updated baseline, approval is driver policy, inbound and
-outbound divergence share one classification, and session storage is numbered.
+The language server may serve multiple documents, but each live session has one
+owning document and source watcher. Closing it stops that watcher and leaves the
+private session and numbered transaction artifacts available for recovery.
+One-shot editing remains independent of LSP configuration.
 
 ## Deferred decisions
 
 - compatibility rules for recurring VTODOs and unusual multi-component files;
 - session manifest migration policy;
-- event-watching abstraction;
 - durable crash-recovery protocol;
-- watch-mode conflict and recovery commands; and
+- live-mode conflict and recovery code actions;
+- completion, hover, and document-symbol support;
+- whether clients should be offered optional automatic saving after canonical edits; and
 - whether per-task merging is worthwhile.

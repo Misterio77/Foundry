@@ -3,6 +3,19 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
+## LSP-backed live editing
+
+`edit --watch` creates a live session whose open buffer is managed by
+`todomd lsp`. Changes are validated while typing, valid saves apply automatically, and
+source-only changes return to the editor through versioned workspace edits.
+Diagnostics and LSP messages replace terminal output, while the current
+one-shot editing flow remains the default.
+
+The first implementation covers session attachment, parse diagnostics,
+save-triggered transactions, source-directory watching, canonical buffer
+refreshes, and conflict reporting. Completion, hover, document symbols, repair
+code actions, and richer conflict recovery can follow independently.
+
 ## Configurable sorting
 
 Tasks render unfinished first, then by priority, then alphabetically, with the
@@ -17,18 +30,8 @@ The fixed default does not suit everything:
 - grouping by priority rather than sorting by it suits some lists better.
 
 Likely shape: a configured list of sort keys, overridable per list. Whatever the
-keys, rendering the same state must stay deterministic, since the accepted-state
-refresh and any future watch mode compare rendered documents.
-
-## Watch mode
-
-`edit --watch` applies valid Markdown saves automatically and rerenders when the
-selected vdirs change. The design is settled and the architecture already
-satisfies its requirements.
-
-Remaining decisions: the event-watching abstraction, debounce and self-write
-suppression, conflict and recovery commands, and a durable crash-recovery
-protocol.
+keys, rendering the same state must stay deterministic, since accepted-state
+refreshes and live synchronization compare rendered documents.
 
 ## List inventory
 
