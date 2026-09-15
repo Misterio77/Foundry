@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
-use icalendar::parser::{Component, read_calendar, unfold};
+use icalendar::parser::{Component, Property, read_calendar, unfold};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -603,39 +603,13 @@ fn temporal_property(
     path: &Path,
     date_context: &DateContext,
 ) -> Result<Option<DateValue>> {
-    let properties = component
-        .properties
-        .iter()
-        .filter(|property| property.name.as_str().eq_ignore_ascii_case(name))
-        .collect::<Vec<_>>();
-    let property = match properties.as_slice() {
-        [] => return Ok(None),
-        [property] => *property,
-        _ => bail!(
-            "VTODO in {} contains more than one {name} property",
-            path.display()
-        ),
-    };
-    let parameter = |parameter_name: &str| -> Result<Option<&str>> {
-        let values = property
-            .params
-            .iter()
-            .filter(|parameter| parameter.key.as_str().eq_ignore_ascii_case(parameter_name))
-            .filter_map(|parameter| parameter.val.as_ref().map(|value| value.as_str()))
-            .collect::<Vec<_>>();
-        match values.as_slice() {
-            [] => Ok(None),
-            [value] => Ok(Some(*value)),
-            _ => bail!(
-                "VTODO in {} contains more than one {parameter_name} parameter on {name}",
-                path.display()
-            ),
-        }
+    let Some(property) = component_property(component, name, path)? else {
+        return Ok(None);
     };
     dates::parse_ics(
         property.val.as_str(),
-        parameter("VALUE")?,
-        parameter("TZID")?,
+        property_parameter(property, "VALUE", name, path)?,
+        property_parameter(property, "TZID", name, path)?,
         date_context,
     )
     .with_context(|| format!("invalid {name} in {}", path.display()))
@@ -680,21 +654,47 @@ fn required_property(component: &Component<'_>, name: &str, path: &Path) -> Resu
 }
 
 fn optional_property(component: &Component<'_>, name: &str, path: &Path) -> Result<Option<String>> {
-    let values = component
+    Ok(component_property(component, name, path)?.map(|property| property.val.as_str().to_owned()))
+}
+
+fn component_property<'a>(
+    component: &'a Component<'_>,
+    name: &str,
+    path: &Path,
+) -> Result<Option<&'a Property<'a>>> {
+    let mut properties = component
         .properties
         .iter()
-        .filter(|property| property.name.as_str().eq_ignore_ascii_case(name))
-        .map(|property| property.val.as_str())
-        .collect::<Vec<_>>();
-
-    match values.as_slice() {
-        [] => Ok(None),
-        [value] => Ok(Some((*value).to_owned())),
-        _ => bail!(
+        .filter(|property| property.name.as_str().eq_ignore_ascii_case(name));
+    let property = properties.next();
+    if properties.next().is_some() {
+        bail!(
             "VTODO in {} contains more than one {name} property",
             path.display()
-        ),
+        );
     }
+    Ok(property)
+}
+
+fn property_parameter<'a>(
+    property: &'a Property<'_>,
+    parameter_name: &str,
+    property_name: &str,
+    path: &Path,
+) -> Result<Option<&'a str>> {
+    let mut values = property
+        .params
+        .iter()
+        .filter(|parameter| parameter.key.as_str().eq_ignore_ascii_case(parameter_name))
+        .filter_map(|parameter| parameter.val.as_ref().map(|value| value.as_str()));
+    let value = values.next();
+    if values.next().is_some() {
+        bail!(
+            "VTODO in {} contains more than one {parameter_name} parameter on {property_name}",
+            path.display()
+        );
+    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -1129,6 +1129,15 @@ mod tests {
         let error = parse_task(calendar, Path::new("dated.ics"), &date_context()).unwrap_err();
 
         assert!(error.to_string().contains("more than one DUE"));
+    }
+
+    #[test]
+    fn rejects_duplicate_date_parameters() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:dated\r\nSUMMARY:Dated\r\nDUE;VALUE=DATE;VALUE=DATE:20260908\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        let error = parse_task(calendar, Path::new("dated.ics"), &date_context()).unwrap_err();
+
+        assert!(error.to_string().contains("more than one VALUE parameter"));
     }
 
     #[test]
