@@ -231,9 +231,10 @@ display-progress-messages = true
 ```
 
 todomd reports when it is updating Markdown from source-side ICS changes and
-while an `after_apply` hook is running.
-Clients without work-done progress support retain the final informational or
-error message only.
+while an `after_apply` hook is running. An outgoing transaction reports
+`changes applied` before hook progress begins, so a slow synchronization hook
+does not delay confirmation that the ICS write succeeded. Clients without
+work-done progress support retain informational and error messages.
 
 The server ignores ordinary Markdown and attaches only to private todomd live
 sessions. It validates the current buffer while typing and reports errors on

@@ -279,9 +279,14 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "params": {"textDocument": {"uri": uri}}
     }));
 
-    let (canonical, progress) = receive_workspace_edit(&mut peer, "LSP paper");
+    let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
+    assert_message_before_progress(
+        &events,
+        "todomd: changes applied",
+        "Running after_apply hook",
+    );
     assert_progress(
-        &progress,
+        &events,
         "Running after_apply hook",
         "after_apply hook finished",
     );
@@ -306,9 +311,14 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "method": "textDocument/didSave",
         "params": {"textDocument": {"uri": uri}}
     }));
-    let (canonical, progress) = receive_workspace_edit(&mut peer, "LSP paper");
+    let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
+    assert_message_before_progress(
+        &events,
+        "todomd: changes applied",
+        "Running after_apply hook",
+    );
     assert_progress(
-        &progress,
+        &events,
         "Running after_apply hook",
         "after_apply hook finished",
     );
@@ -366,15 +376,18 @@ fn read_response(peer: &mut LspPeer, id: u64) -> Value {
 }
 
 fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Value>) {
-    let mut progress = Vec::new();
+    let mut events = Vec::new();
     for _ in 0..32 {
         let message = peer.read();
         if message["method"] == "window/workDoneProgress/create" {
             peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
             continue;
         }
-        if message["method"] == "$/progress" {
-            progress.push(message);
+        if matches!(
+            message["method"].as_str(),
+            Some("$/progress" | "window/showMessage")
+        ) {
+            events.push(message);
             continue;
         }
         if message["method"] != "workspace/applyEdit" {
@@ -390,9 +403,30 @@ fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Va
             "id": message["id"],
             "result": {"applied": true}
         }));
-        return (new_text, progress);
+        return (new_text, events);
     }
     panic!("server did not send a workspace edit");
+}
+
+fn assert_message_before_progress(events: &[Value], message: &str, progress: &str) {
+    let message_index = events
+        .iter()
+        .position(|event| {
+            event["method"] == "window/showMessage"
+                && event["params"]["message"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with(message))
+        })
+        .expect("server did not show the expected message");
+    let progress_index = events
+        .iter()
+        .position(|event| {
+            event["method"] == "$/progress"
+                && event["params"]["value"]["kind"] == "begin"
+                && event["params"]["value"]["message"] == progress
+        })
+        .expect("server did not begin the expected progress");
+    assert!(message_index < progress_index);
 }
 
 fn assert_progress(messages: &[Value], begin: &str, end: &str) {

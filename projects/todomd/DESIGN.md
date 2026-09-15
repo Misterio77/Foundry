@@ -481,9 +481,10 @@ The server keeps the editor's current text and version in memory. `didOpen` and
 diagnostics. `didSave` rereads the selected vdirs, reconciles against the last
 accepted baseline, and treats a valid Markdown-to-ICS plan as approved. It
 stages and applies the transaction, persists the new baseline and manifest,
-runs `after_apply`, and requests a versioned whole-document edit containing the
-canonical rendering. The workspace edit may leave the buffer modified, but it
-does not require a reload and cannot silently replace newer editor contents.
+reports that the changes were applied, runs `after_apply`, and requests a
+versioned whole-document edit containing the canonical rendering. The workspace
+edit may leave the buffer modified, but it does not require a reload and cannot
+silently replace newer editor contents.
 
 The server watches selected list directories rather than existing files,
 because synchronization tools commonly save by temporary-file rename. Relevant

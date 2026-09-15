@@ -183,18 +183,26 @@ impl Backend {
                 message: mut text_message,
                 run_after_apply,
             }) => {
-                if run_after_apply
-                    && let Err(error) = self.run_after_apply(state.lifecycle.clone()).await
-                {
-                    kind = MessageType::ERROR;
-                    text_message = format!("{text_message}; {error:#}");
+                let mut report_after_edit = !run_after_apply;
+                if run_after_apply {
+                    // The source transaction is already accepted at this point.
+                    // Report that immediately instead of hiding it behind a slow
+                    // synchronization hook.
+                    self.client.show_message(kind, &text_message).await;
+                    if let Err(error) = self.run_after_apply(state.lifecycle.clone()).await {
+                        kind = MessageType::ERROR;
+                        text_message = format!("todomd: {error:#}");
+                        report_after_edit = true;
+                    }
                 }
                 match self.apply_edit(uri, version, range, &text).await {
                     Ok(()) => {
                         state.text = text;
                         state.synchronized = true;
                         source_loaded = matches!(trigger, Trigger::Source);
-                        message = Some((kind, text_message));
+                        if report_after_edit {
+                            message = Some((kind, text_message));
+                        }
                     }
                     Err(error) => {
                         state.synchronized = false;
