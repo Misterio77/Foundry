@@ -377,11 +377,13 @@ fn patch_existing(
     now: DateTime<Utc>,
 ) -> Result<String> {
     let unfolded = unfold(contents);
-    let original_relationships = related_to_lines(&unfolded, task_id);
+    let original_lines = logical_lines(contents);
+    let original_relationships =
+        direct_component_property_lines(&original_lines, task_id, "RELATED-TO");
     let original_categories = patch
         .categories
         .is_none()
-        .then(|| direct_component_property_lines_preserving_folds(contents, task_id, "CATEGORIES"));
+        .then(|| direct_component_property_lines(&original_lines, task_id, "CATEGORIES"));
     let relationships = match patch.parent {
         None => original_relationships,
         Some(parent) => {
@@ -474,161 +476,133 @@ fn patch_existing(
     set_property(todo, "LAST-MODIFIED", &format_timestamp(now))?;
 
     let serialized = Calendar::from(calendar).to_string();
-    let serialized =
-        restore_direct_property_lines(&serialized, task_id, "RELATED-TO", &relationships);
-    Ok(match original_categories {
-        Some(categories) => {
-            restore_direct_property_lines(&serialized, task_id, "CATEGORIES", &categories)
+    let mut replacements = vec![("RELATED-TO", relationships.as_slice())];
+    if let Some(categories) = &original_categories {
+        replacements.push(("CATEGORIES", categories.as_slice()));
+    }
+    Ok(restore_direct_property_lines(
+        &serialized,
+        task_id,
+        &replacements,
+    ))
+}
+
+#[derive(Clone, Debug)]
+struct LogicalLine {
+    unfolded: String,
+    physical: String,
+}
+
+fn logical_lines(contents: &str) -> Vec<LogicalLine> {
+    let mut lines: Vec<LogicalLine> = Vec::new();
+    for physical in contents.lines() {
+        if let Some(continuation) = physical.strip_prefix([' ', '\t'])
+            && let Some(line) = lines.last_mut()
+        {
+            line.unfolded.push_str(continuation);
+            line.physical.push_str("\r\n");
+            line.physical.push_str(physical);
+        } else {
+            lines.push(LogicalLine {
+                unfolded: physical.to_owned(),
+                physical: physical.to_owned(),
+            });
         }
-        None => serialized,
-    })
+    }
+    lines
 }
 
-fn related_to_lines(contents: &str, task_id: &TaskId) -> Vec<String> {
-    direct_component_property_lines(contents, task_id, "RELATED-TO")
+fn component_boundary(line: &str) -> Option<bool> {
+    let (kind, _) = line.split_once(':')?;
+    if kind.eq_ignore_ascii_case("BEGIN") {
+        Some(true)
+    } else if kind.eq_ignore_ascii_case("END") {
+        Some(false)
+    } else {
+        None
+    }
 }
 
-fn direct_component_property_lines_preserving_folds(
-    contents: &str,
+fn todo_ranges(lines: &[LogicalLine]) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut start = None;
+    let mut depth = 0;
+    for (index, line) in lines.iter().enumerate() {
+        if start.is_none() {
+            if line.unfolded.eq_ignore_ascii_case("BEGIN:VTODO") {
+                start = Some(index);
+                depth = 1;
+            }
+            continue;
+        }
+        match component_boundary(&line.unfolded) {
+            Some(true) => depth += 1,
+            Some(false) => {
+                depth -= 1;
+                if depth == 0 {
+                    ranges.push(start.take().expect("a VTODO range has a start")..index + 1);
+                }
+            }
+            None => {}
+        }
+    }
+    ranges
+}
+
+fn direct_line_indices(component: &[LogicalLine]) -> Vec<usize> {
+    let mut indices = Vec::new();
+    let mut depth = 0;
+    for (index, line) in component.iter().enumerate() {
+        match component_boundary(&line.unfolded) {
+            Some(true) => depth += 1,
+            Some(false) => depth -= 1,
+            None if depth == 1 => indices.push(index),
+            None => {}
+        }
+    }
+    indices
+}
+
+fn property_name(line: &str) -> &str {
+    line.split([';', ':']).next().unwrap_or(line)
+}
+
+fn direct_property_value<'a>(component: &'a [LogicalLine], name: &str) -> Option<&'a str> {
+    direct_line_indices(component)
+        .into_iter()
+        .find_map(|index| {
+            let line = &component[index].unfolded;
+            property_name(line)
+                .eq_ignore_ascii_case(name)
+                .then(|| line.split_once(':').map(|(_, value)| value))
+                .flatten()
+        })
+}
+
+fn matching_todo_range(lines: &[LogicalLine], task_id: &TaskId) -> Option<std::ops::Range<usize>> {
+    todo_ranges(lines)
+        .into_iter()
+        .find(|range| direct_property_value(&lines[range.clone()], "UID") == Some(task_id.as_str()))
+}
+
+fn direct_component_property_lines(
+    lines: &[LogicalLine],
     task_id: &TaskId,
     name: &str,
 ) -> Vec<String> {
-    let mut lines: Vec<(String, String)> = Vec::new();
-    for physical in contents.lines() {
-        if let Some(continuation) = physical.strip_prefix([' ', '\t'])
-            && let Some((logical, raw)) = lines.last_mut()
-        {
-            logical.push_str(continuation);
-            raw.push_str("\r\n");
-            raw.push_str(physical);
-        } else {
-            lines.push((physical.to_owned(), physical.to_owned()));
-        }
-    }
-
-    let logical = lines
-        .iter()
-        .map(|(logical, _)| logical.as_str())
-        .collect::<Vec<_>>();
-    let mut todo = Vec::new();
-    let mut todo_start = 0;
-    let mut depth = 0;
-    for (index, line) in logical.iter().enumerate() {
-        if depth == 0 {
-            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
-                todo_start = index;
-                todo.push(*line);
-                depth = 1;
-            }
-            continue;
-        }
-
-        todo.push(*line);
-        if line
-            .split_once(':')
-            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("BEGIN"))
-        {
-            depth += 1;
-        } else if line
-            .split_once(':')
-            .is_some_and(|(kind, _)| kind.eq_ignore_ascii_case("END"))
-        {
-            depth -= 1;
-            if depth == 0 {
-                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
-                if matches {
-                    return lines[todo_start..=index]
-                        .iter()
-                        .filter(|(logical, _)| {
-                            logical
-                                .split([';', ':'])
-                                .next()
-                                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
-                        })
-                        .map(|(_, raw)| raw.clone())
-                        .collect();
-                }
-                todo.clear();
-            }
-        }
-    }
-    Vec::new()
-}
-
-fn direct_component_property_lines(contents: &str, task_id: &TaskId, name: &str) -> Vec<String> {
-    let mut todo = Vec::new();
-    let mut depth = 0;
-    for line in contents.lines() {
-        if depth == 0 {
-            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
-                todo.push(line);
-                depth = 1;
-            }
-            continue;
-        }
-
-        todo.push(line);
-        if line.starts_with("BEGIN:") {
-            depth += 1;
-        } else if line.starts_with("END:") {
-            depth -= 1;
-            if depth == 0 {
-                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
-                if matches {
-                    return direct_property_lines(&todo, name);
-                }
-                todo.clear();
-            }
-        }
-    }
-    Vec::new()
-}
-
-fn direct_property_value<'a>(component: &'a [&str], name: &str) -> Option<&'a str> {
-    let mut depth = 0;
-    for line in component {
-        if line.starts_with("BEGIN:") {
-            depth += 1;
-            continue;
-        }
-        if line.starts_with("END:") {
-            depth -= 1;
-            continue;
-        }
-        if depth == 1
-            && line
-                .split([';', ':'])
-                .next()
-                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
-        {
-            return line.split_once(':').map(|(_, value)| value);
-        }
-    }
-    None
-}
-
-fn direct_property_lines(component: &[&str], name: &str) -> Vec<String> {
-    let mut depth = 0;
-    let mut properties = Vec::new();
-    for line in component {
-        if line.starts_with("BEGIN:") {
-            depth += 1;
-            continue;
-        }
-        if line.starts_with("END:") {
-            depth -= 1;
-            continue;
-        }
-        if depth == 1
-            && line
-                .split([';', ':'])
-                .next()
-                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
-        {
-            properties.push((*line).to_owned());
-        }
-    }
-    properties
+    let Some(range) = matching_todo_range(lines, task_id) else {
+        return Vec::new();
+    };
+    let component = &lines[range];
+    direct_line_indices(component)
+        .into_iter()
+        .filter_map(|index| {
+            let line = &component[index];
+            property_name(&line.unfolded)
+                .eq_ignore_ascii_case(name)
+                .then(|| line.physical.clone())
+        })
+        .collect()
 }
 
 /// Written explicitly because clients such as todoman do not read a bare
@@ -636,7 +610,8 @@ fn direct_property_lines(component: &[&str], name: &str) -> Vec<String> {
 const PARENT_RELATIONSHIP: &str = "RELATED-TO;RELTYPE=PARENT";
 
 fn is_parent_related_to_line(line: &str) -> bool {
-    let Some(header) = line.split_once(':').map(|(header, _)| header) else {
+    let unfolded = unfold(line);
+    let Some(header) = unfolded.split_once(':').map(|(header, _)| header) else {
         return false;
     };
     let mut fields = header.split(';');
@@ -657,66 +632,46 @@ fn is_parent_related_to_line(line: &str) -> bool {
 fn restore_direct_property_lines(
     serialized: &str,
     task_id: &TaskId,
-    name: &str,
-    properties: &[String],
+    replacements: &[(&str, &[String])],
 ) -> String {
+    let lines = logical_lines(serialized);
+    let Some(range) = matching_todo_range(&lines, task_id) else {
+        return serialized.to_owned();
+    };
+    let component = &lines[range.clone()];
+    let direct = direct_line_indices(component);
     let mut output = String::with_capacity(serialized.len());
-    let mut todo = Vec::new();
-    let mut depth = 0;
 
-    for line in serialized.lines() {
-        if depth == 0 {
-            if line.eq_ignore_ascii_case("BEGIN:VTODO") {
-                todo.push(line);
-                depth = 1;
-            } else {
-                output.push_str(line);
-                output.push_str("\r\n");
-            }
+    for line in &lines[..range.start] {
+        write_logical_line(&mut output, line);
+    }
+    for (index, line) in component.iter().enumerate() {
+        let replaced = direct.binary_search(&index).is_ok()
+            && replacements
+                .iter()
+                .any(|(name, _)| property_name(&line.unfolded).eq_ignore_ascii_case(name));
+        if replaced {
             continue;
         }
-
-        todo.push(line);
-        if line.starts_with("BEGIN:") {
-            depth += 1;
-        } else if line.starts_with("END:") {
-            depth -= 1;
-            if depth == 0 {
-                let matches = direct_property_value(&todo, "UID") == Some(task_id.as_str());
-                write_todo_lines(&mut output, &todo, name, matches.then_some(properties));
-                todo.clear();
+        if index + 1 == component.len() {
+            for (_, properties) in replacements {
+                for property in *properties {
+                    output.push_str(property);
+                    output.push_str("\r\n");
+                }
             }
         }
+        write_logical_line(&mut output, line);
+    }
+    for line in &lines[range.end..] {
+        write_logical_line(&mut output, line);
     }
     output
 }
 
-fn write_todo_lines(output: &mut String, todo: &[&str], name: &str, properties: Option<&[String]>) {
-    let mut depth = 0;
-    for line in todo {
-        if line.starts_with("BEGIN:") {
-            depth += 1;
-        }
-        let is_target = depth == 1
-            && line
-                .split([';', ':'])
-                .next()
-                .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name));
-        if properties.is_some() && is_target {
-            continue;
-        }
-        if depth == 1 && line.eq_ignore_ascii_case("END:VTODO") {
-            for property in properties.unwrap_or_default() {
-                output.push_str(property);
-                output.push_str("\r\n");
-            }
-        }
-        output.push_str(line);
-        output.push_str("\r\n");
-        if line.starts_with("END:") {
-            depth -= 1;
-        }
-    }
+fn write_logical_line(output: &mut String, line: &LogicalLine) {
+    output.push_str(&line.physical);
+    output.push_str("\r\n");
 }
 
 fn remove_property(component: &mut ParsedComponent<'_>, name: &str) {
@@ -1516,7 +1471,7 @@ mod tests {
             "{created}"
         );
 
-        let source = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nRELATED-TO:event-peer\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=PARENT:old\r\nRELATED-TO:old\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        let source = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:event\r\nRELATED-TO:event-peer\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:child\r\nSUMMARY:Child\r\nRELATED-TO;RELTYPE=\r\n PARENT:old\r\nRELATED-TO:old\r\nRELATED-TO;RELTYPE=SIBLING:peer\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
         let changed = patch_existing(
             source,
             &TaskId::new("child"),
@@ -1568,7 +1523,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            renamed.contains("RELATED-TO;RELTYPE=PARENT:old"),
+            renamed.contains("RELATED-TO;RELTYPE=\r\n PARENT:old"),
             "{renamed}"
         );
         assert!(renamed.contains("RELATED-TO:old"), "{renamed}");
