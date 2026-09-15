@@ -161,45 +161,15 @@ pub fn accept_live(
     let baseline_path = root.join("baseline.json");
     let manifest_path = root.join("manifest.json");
     let recovery_path = root.join("recovery-baseline.json");
-    let accepted_path = root.join("accepted.md");
-    let baseline_rollback = prepare_atomic(&baseline_path, &fs::read(&baseline_path)?)?;
-    let manifest_rollback = prepare_atomic(&manifest_path, &fs::read(&manifest_path)?)?;
-    let recovery_rollback = prepare_atomic(&recovery_path, &fs::read(&recovery_path)?)?;
-    let baseline = prepare_atomic(&baseline_path, &json_bytes(&baseline_path, baseline)?)?;
-    let manifest = prepare_atomic(&manifest_path, &json_bytes(&manifest_path, manifest)?)?;
-    let recovery = prepare_atomic(
-        &recovery_path,
-        &json_bytes(&recovery_path, recovery_baseline)?,
-    )?;
-    let accepted = prepare_atomic(&accepted_path, markdown.as_bytes())?;
-
-    persist_atomic(baseline, &baseline_path)?;
-    if let Err(error) = persist_atomic(manifest, &manifest_path) {
-        return Err(rollback_replacements(
-            error,
-            [(baseline_rollback, baseline_path.as_path())],
-        ));
-    }
-    if let Err(error) = persist_atomic(recovery, &recovery_path) {
-        return Err(rollback_replacements(
-            error,
-            [
-                (manifest_rollback, manifest_path.as_path()),
-                (baseline_rollback, baseline_path.as_path()),
-            ],
-        ));
-    }
-    if let Err(error) = persist_atomic(accepted, &accepted_path) {
-        return Err(rollback_replacements(
-            error,
-            [
-                (recovery_rollback, recovery_path.as_path()),
-                (manifest_rollback, manifest_path.as_path()),
-                (baseline_rollback, baseline_path.as_path()),
-            ],
-        ));
-    }
-    Ok(())
+    replace_artifacts([
+        (baseline_path.clone(), json_bytes(&baseline_path, baseline)?),
+        (manifest_path.clone(), json_bytes(&manifest_path, manifest)?),
+        (
+            recovery_path.clone(),
+            json_bytes(&recovery_path, recovery_baseline)?,
+        ),
+        (root.join("accepted.md"), markdown.as_bytes().to_vec()),
+    ])
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
@@ -247,13 +217,46 @@ fn persist_atomic(temporary: NamedTempFile, path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn rollback_replacements<const N: usize>(
-    original: Error,
-    replacements: [(NamedTempFile, &Path); N],
-) -> Error {
+struct PreparedReplacement {
+    path: PathBuf,
+    replacement: NamedTempFile,
+    rollback: NamedTempFile,
+}
+
+fn replace_artifacts<const N: usize>(artifacts: [(PathBuf, Vec<u8>); N]) -> Result<()> {
+    let replacements = artifacts
+        .into_iter()
+        .map(|(path, contents)| {
+            Ok(PreparedReplacement {
+                rollback: prepare_atomic(&path, &fs::read(&path)?)?,
+                replacement: prepare_atomic(&path, &contents)?,
+                path,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    persist_replacements(replacements)
+}
+
+fn persist_replacements(replacements: Vec<PreparedReplacement>) -> Result<()> {
+    let mut rollbacks = Vec::new();
+    for replacement in replacements {
+        if let Err(error) = persist_atomic(replacement.replacement, &replacement.path) {
+            return if rollbacks.is_empty() {
+                Err(error)
+            } else {
+                Err(rollback_replacements(error, rollbacks))
+            };
+        }
+        rollbacks.push((replacement.rollback, replacement.path));
+    }
+    Ok(())
+}
+
+fn rollback_replacements(original: Error, replacements: Vec<(NamedTempFile, PathBuf)>) -> Error {
     let errors = replacements
         .into_iter()
-        .filter_map(|(temporary, path)| persist_atomic(temporary, path).err())
+        .rev()
+        .filter_map(|(temporary, path)| persist_atomic(temporary, &path).err())
         .map(|error| format!("{error:#}"))
         .collect::<Vec<_>>();
     if errors.is_empty() {
@@ -328,20 +331,37 @@ mod tests {
     }
 
     #[test]
-    fn restores_replaced_artifacts_after_a_refresh_failure() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("baseline.json");
-        fs::write(&path, "old").unwrap();
-        let rollback = prepare_atomic(&path, b"old").unwrap();
-        fs::write(&path, "new").unwrap();
+    fn restores_prior_artifacts_after_each_replacement_failure() {
+        for failure_index in 0..4 {
+            let directory = tempfile::tempdir().unwrap();
+            let paths = (0..4)
+                .map(|index| directory.path().join(format!("artifact-{index}")))
+                .collect::<Vec<_>>();
+            let replacements = paths
+                .iter()
+                .map(|path| {
+                    fs::write(path, "old").unwrap();
+                    PreparedReplacement {
+                        path: path.clone(),
+                        replacement: prepare_atomic(path, b"new").unwrap(),
+                        rollback: prepare_atomic(path, b"old").unwrap(),
+                    }
+                })
+                .collect();
+            fs::remove_file(&paths[failure_index]).unwrap();
+            fs::create_dir(&paths[failure_index]).unwrap();
 
-        let error = rollback_replacements(
-            anyhow!("later replacement failed"),
-            [(rollback, path.as_path())],
-        );
+            let error = persist_replacements(replacements).unwrap_err();
+            let message = format!("{error:#}");
 
-        assert!(format!("{error:#}").contains("were rolled back"));
-        assert_eq!(fs::read_to_string(path).unwrap(), "old");
+            assert!(message.contains("failed to replace"));
+            assert_eq!(message.contains("were rolled back"), failure_index > 0);
+            for (index, path) in paths.iter().enumerate() {
+                if index != failure_index {
+                    assert_eq!(fs::read_to_string(path).unwrap(), "old");
+                }
+            }
+        }
     }
 
     #[test]
