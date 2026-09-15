@@ -209,7 +209,8 @@ apply its semantic transaction. The editor must start `todomd lsp` as a Markdown
 language server; editing fails rather than silently doing nothing if the server
 does not attach within ten seconds.
 
-For Helix, add the server alongside any existing Markdown server:
+For Helix, add the server alongside any existing Markdown server in
+`languages.toml`:
 
 ```toml
 [language-server.todomd]
@@ -220,6 +221,19 @@ args = ["lsp"]
 name = "markdown"
 language-servers = ["marksman", "todomd"]
 ```
+
+Helix shows its LSP progress spinner by default. To also print the accompanying
+text below the statusline, add this to `config.toml`:
+
+```toml
+[editor.lsp]
+display-progress-messages = true
+```
+
+todomd reports when it is updating Markdown from source-side ICS changes and
+while an `after_apply` hook is running.
+Clients without work-done progress support retain the final informational or
+error message only.
 
 The server ignores ordinary Markdown and attaches only to private todomd live
 sessions. It validates the current buffer while typing and reports errors on

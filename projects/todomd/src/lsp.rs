@@ -20,9 +20,12 @@ use tower_lsp::{
         DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
         DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentChangeOperation,
         DocumentChanges, DocumentColorParams, InitializeParams, InitializeResult,
-        InitializedParams, MessageType, OneOf, OptionalVersionedTextDocumentIdentifier, Position,
-        Range, ServerCapabilities, ServerInfo, TextDocumentEdit, TextDocumentSyncCapability,
-        TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, Url, WorkspaceEdit,
+        InitializedParams, MessageType, NumberOrString, OneOf,
+        OptionalVersionedTextDocumentIdentifier, Position, ProgressParams, ProgressParamsValue,
+        ProgressToken, Range, ServerCapabilities, ServerInfo, TextDocumentEdit,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, Url,
+        WorkDoneProgress, WorkDoneProgressBegin, WorkDoneProgressCreateParams, WorkDoneProgressEnd,
+        WorkspaceEdit, notification::Progress, request::WorkDoneProgressCreate,
     },
 };
 
@@ -60,6 +63,7 @@ struct Backend {
     client: Client,
     documents: Documents,
     workspace_edits: Arc<AtomicBool>,
+    work_done_progress: Arc<AtomicBool>,
 }
 
 impl Backend {
@@ -68,6 +72,7 @@ impl Backend {
             client,
             documents: Arc::new(Mutex::new(HashMap::new())),
             workspace_edits: Arc::new(AtomicBool::new(false)),
+            work_done_progress: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -89,6 +94,7 @@ impl Backend {
             Arc::downgrade(&self.documents),
             self.client.clone(),
             Arc::clone(&self.workspace_edits),
+            Arc::clone(&self.work_done_progress),
         )?;
         let document = Arc::new(Mutex::new(LiveDocument::new(
             text, version, loaded, watcher,
@@ -150,30 +156,54 @@ impl Backend {
             return;
         };
         let mut state = document.lock().await;
+        let outcome = reconcile(&mut state, trigger);
+        let source_progress = if matches!(trigger, Trigger::Source)
+            && matches!(
+                &outcome,
+                Ok(Outcome::Edit {
+                    run_after_apply: false,
+                    ..
+                })
+            ) {
+            self.begin_progress("Updating Markdown from ICS").await
+        } else {
+            None
+        };
+        let mut source_loaded = false;
         let mut message = None;
 
-        match reconcile(&mut state, trigger) {
+        match outcome {
             Ok(Outcome::Quiet) => {}
             Ok(Outcome::Message(kind, text)) => message = Some((kind, text)),
             Ok(Outcome::Edit {
                 text,
                 version,
                 range,
-                kind,
-                message: text_message,
-            }) => match self.apply_edit(uri, version, range, &text).await {
-                Ok(()) => {
-                    state.text = text;
-                    state.synchronized = true;
-                    message = Some((kind, text_message));
+                mut kind,
+                message: mut text_message,
+                run_after_apply,
+            }) => {
+                if run_after_apply
+                    && let Err(error) = self.run_after_apply(state.lifecycle.clone()).await
+                {
+                    kind = MessageType::ERROR;
+                    text_message = format!("{text_message}; {error:#}");
                 }
-                Err(error) => {
-                    state.synchronized = false;
-                    state.state_diagnostic =
-                        Some(diagnostic(&error, &state.text, DiagnosticSeverity::ERROR));
-                    message = Some((MessageType::ERROR, format!("todomd: {error:#}")));
+                match self.apply_edit(uri, version, range, &text).await {
+                    Ok(()) => {
+                        state.text = text;
+                        state.synchronized = true;
+                        source_loaded = matches!(trigger, Trigger::Source);
+                        message = Some((kind, text_message));
+                    }
+                    Err(error) => {
+                        state.synchronized = false;
+                        state.state_diagnostic =
+                            Some(diagnostic(&error, &state.text, DiagnosticSeverity::ERROR));
+                        message = Some((MessageType::ERROR, format!("todomd: {error:#}")));
+                    }
                 }
-            },
+            }
             Err(error) => {
                 state.state_diagnostic =
                     Some(diagnostic(&error, &state.text, DiagnosticSeverity::ERROR));
@@ -187,9 +217,65 @@ impl Backend {
         self.client
             .publish_diagnostics(uri.clone(), diagnostics, version)
             .await;
+        if let Some(progress) = source_progress {
+            progress
+                .finish(source_loaded.then_some("ICS changes loaded"))
+                .await;
+        }
         if let Some((kind, message)) = message {
             self.client.show_message(kind, message).await;
         }
+    }
+
+    async fn run_after_apply(&self, lifecycle: Lifecycle) -> Result<()> {
+        if !lifecycle.has_after_apply() {
+            return lifecycle.after_apply();
+        }
+        let progress = self.begin_progress("Running after_apply hook").await;
+        let result = match tokio::task::spawn_blocking(move || lifecycle.after_apply()).await {
+            Ok(result) => result,
+            Err(error) => Err(anyhow!("after_apply hook task failed: {error}")),
+        };
+        if let Some(progress) = progress {
+            progress
+                .finish(Some(if result.is_ok() {
+                    "after_apply hook finished"
+                } else {
+                    "after_apply hook failed"
+                }))
+                .await;
+        }
+        result
+    }
+
+    async fn begin_progress(&self, message: &str) -> Option<ActiveProgress> {
+        if !self.work_done_progress.load(Ordering::Relaxed) {
+            return None;
+        }
+        let token = NumberOrString::String(format!("todomd-{}", uuid::Uuid::new_v4()));
+        self.client
+            .send_request::<WorkDoneProgressCreate>(WorkDoneProgressCreateParams {
+                token: token.clone(),
+            })
+            .await
+            .ok()?;
+        self.client
+            .send_notification::<Progress>(ProgressParams {
+                token: token.clone(),
+                value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(
+                    WorkDoneProgressBegin {
+                        title: "todomd".into(),
+                        cancellable: Some(false),
+                        message: Some(message.into()),
+                        percentage: None,
+                    },
+                )),
+            })
+            .await;
+        Some(ActiveProgress {
+            client: self.client.clone(),
+            token,
+        })
     }
 
     async fn apply_edit(&self, uri: &Url, version: i32, range: Range, text: &str) -> Result<()> {
@@ -227,18 +313,44 @@ impl Backend {
     }
 }
 
+struct ActiveProgress {
+    client: Client,
+    token: ProgressToken,
+}
+
+impl ActiveProgress {
+    async fn finish(self, message: Option<&str>) {
+        self.client
+            .send_notification::<Progress>(ProgressParams {
+                token: self.token,
+                value: ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd {
+                    message: message.map(str::to_owned),
+                })),
+            })
+            .await;
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
         let workspace_edits = params
             .capabilities
             .workspace
+            .as_ref()
             .and_then(|workspace| {
-                Some(workspace.apply_edit? && workspace.workspace_edit?.document_changes?)
+                Some(workspace.apply_edit? && workspace.workspace_edit.as_ref()?.document_changes?)
             })
+            .unwrap_or(false);
+        let work_done_progress = params
+            .capabilities
+            .window
+            .and_then(|window| window.work_done_progress)
             .unwrap_or(false);
         self.workspace_edits
             .store(workspace_edits, Ordering::Relaxed);
+        self.work_done_progress
+            .store(work_done_progress, Ordering::Relaxed);
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -452,6 +564,7 @@ enum Outcome {
         range: Range,
         kind: MessageType,
         message: String,
+        run_after_apply: bool,
     },
 }
 
@@ -509,18 +622,13 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
                 "source changes were applied, but the live session was not refreshed",
             )?;
             document.completed_in_session = completed_in_session;
-            let applied_message = applied_changes_message(&plan.changes);
-            let hook = document.lifecycle.after_apply();
-            let (kind, message) = match hook {
-                Ok(()) => (MessageType::INFO, applied_message),
-                Err(error) => (MessageType::ERROR, format!("{applied_message}; {error:#}")),
-            };
             Ok(Outcome::Edit {
                 text,
                 version: document.version,
                 range,
-                kind,
-                message,
+                kind: MessageType::INFO,
+                message: applied_changes_message(&plan.changes),
+                run_after_apply: true,
             })
         }
         Reconciliation::Conflict => {
@@ -599,6 +707,7 @@ fn accept_inbound(document: &mut LiveDocument, current: TaskState) -> Result<Out
         range,
         kind: MessageType::INFO,
         message: "todomd: source changes loaded".into(),
+        run_after_apply: false,
     })
 }
 
@@ -632,6 +741,7 @@ fn source_watcher(
     documents: Weak<Mutex<HashMap<Url, Arc<Mutex<LiveDocument>>>>>,
     client: Client,
     workspace_edits: Arc<AtomicBool>,
+    work_done_progress: Arc<AtomicBool>,
 ) -> Result<RecommendedWatcher> {
     let uri = uri.clone();
     let runtime = tokio::runtime::Handle::current();
@@ -644,6 +754,7 @@ fn source_watcher(
                 let client = client.clone();
                 let uri = callback_uri.clone();
                 let workspace_edits = Arc::clone(&workspace_edits);
+                let work_done_progress = Arc::clone(&work_done_progress);
                 let generation = Arc::clone(&generation);
                 let event_generation = generation.fetch_add(1, Ordering::Relaxed) + 1;
                 runtime.spawn(async move {
@@ -658,6 +769,7 @@ fn source_watcher(
                         client,
                         documents,
                         workspace_edits,
+                        work_done_progress,
                     };
                     backend.reconcile(&uri, Trigger::Source).await;
                 });

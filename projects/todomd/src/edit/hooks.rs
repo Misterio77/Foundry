@@ -10,6 +10,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::config::Hooks;
 
+#[derive(Clone)]
 pub struct Lifecycle {
     hooks: Hooks,
 }
@@ -23,6 +24,10 @@ impl Lifecycle {
                 Hooks::default()
             },
         }
+    }
+
+    pub fn has_after_apply(&self) -> bool {
+        self.hooks.after_apply.is_some()
     }
 
     pub fn after_apply(&self) -> Result<()> {

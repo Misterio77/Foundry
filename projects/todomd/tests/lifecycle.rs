@@ -221,10 +221,13 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
-        "params": {"capabilities": {"workspace": {
-            "applyEdit": true,
-            "workspaceEdit": {"documentChanges": true}
-        }}}
+        "params": {"capabilities": {
+            "workspace": {
+                "applyEdit": true,
+                "workspaceEdit": {"documentChanges": true}
+            },
+            "window": {"workDoneProgress": true}
+        }}
     }));
     let initialize = peer.read();
     assert_eq!(initialize["id"], 1);
@@ -276,7 +279,12 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "params": {"textDocument": {"uri": uri}}
     }));
 
-    let canonical = receive_workspace_edit(&mut peer, "LSP paper");
+    let (canonical, progress) = receive_workspace_edit(&mut peer, "LSP paper");
+    assert_progress(
+        &progress,
+        "Running after_apply hook",
+        "after_apply hook finished",
+    );
     assert!(canonical.contains("<!--t"));
     assert!(session.is_attached());
     assert_eq!(case.hooks(), "apply\n");
@@ -298,7 +306,12 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "method": "textDocument/didSave",
         "params": {"textDocument": {"uri": uri}}
     }));
-    let canonical = receive_workspace_edit(&mut peer, "LSP paper");
+    let (canonical, progress) = receive_workspace_edit(&mut peer, "LSP paper");
+    assert_progress(
+        &progress,
+        "Running after_apply hook",
+        "after_apply hook finished",
+    );
     assert!(canonical.contains("- [x] -2026-09-10 LSP paper"));
     assert!(
         fs::read_to_string(&source_path)
@@ -320,7 +333,14 @@ fn lsp_applies_saves_and_loads_source_changes() {
         source.replace("SUMMARY:LSP paper", "SUMMARY:Changed externally"),
     )
     .unwrap();
-    let canonical = receive_workspace_edit(&mut peer, "Changed externally");
+    let (canonical, progress) = receive_workspace_edit(&mut peer, "Changed externally");
+    let (token, message) = receive_progress_end(&mut peer);
+    assert_eq!(message.as_deref(), Some("ICS changes loaded"));
+    assert!(progress.iter().any(|progress| {
+        progress["params"]["token"] == token
+            && progress["params"]["value"]["kind"] == "begin"
+            && progress["params"]["value"]["message"] == "Updating Markdown from ICS"
+    }));
     assert!(canonical.contains("- [x] -2026-09-10 Changed externally"));
 
     peer.send(json!({
@@ -345,9 +365,18 @@ fn read_response(peer: &mut LspPeer, id: u64) -> Value {
     }
 }
 
-fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> String {
-    for _ in 0..12 {
+fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Value>) {
+    let mut progress = Vec::new();
+    for _ in 0..32 {
         let message = peer.read();
+        if message["method"] == "window/workDoneProgress/create" {
+            peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
+            continue;
+        }
+        if message["method"] == "$/progress" {
+            progress.push(message);
+            continue;
+        }
         if message["method"] != "workspace/applyEdit" {
             continue;
         }
@@ -361,9 +390,49 @@ fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> String {
             "id": message["id"],
             "result": {"applied": true}
         }));
-        return new_text;
+        return (new_text, progress);
     }
     panic!("server did not send a workspace edit");
+}
+
+fn assert_progress(messages: &[Value], begin: &str, end: &str) {
+    let (begin_index, begin_message) = messages
+        .iter()
+        .enumerate()
+        .find(|(_, message)| {
+            message["params"]["value"]["kind"] == "begin"
+                && message["params"]["value"]["message"] == begin
+        })
+        .expect("server did not begin expected progress");
+    let (end_index, _) = messages
+        .iter()
+        .enumerate()
+        .find(|(_, message)| {
+            message["params"]["token"] == begin_message["params"]["token"]
+                && message["params"]["value"]["kind"] == "end"
+                && message["params"]["value"]["message"] == end
+        })
+        .expect("server did not end expected progress");
+    assert!(begin_index < end_index);
+}
+
+fn receive_progress_end(peer: &mut LspPeer) -> (Value, Option<String>) {
+    for _ in 0..16 {
+        let message = peer.read();
+        if message["method"] == "window/workDoneProgress/create" {
+            peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
+            continue;
+        }
+        if message["method"] == "$/progress" && message["params"]["value"]["kind"] == "end" {
+            return (
+                message["params"]["token"].clone(),
+                message["params"]["value"]["message"]
+                    .as_str()
+                    .map(str::to_owned),
+            );
+        }
+    }
+    panic!("server did not end work-done progress");
 }
 
 struct LspPeer {

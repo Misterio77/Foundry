@@ -327,8 +327,10 @@ A transaction is callable without an editor process. It:
 A failure before application leaves the previous baseline valid. A post-apply
 hook failure does not undo valid local changes or their new baseline. In live
 mode, source application and accepted-state persistence precede the canonical
-workspace edit. If the client rejects that edit, the server reports the failure
-and waits for a refresh rather than guessing at buffer state.
+workspace edit. Source-side reconciliation and configured `after_apply` hooks
+are exposed through LSP work-done progress when the client supports it. If the
+client rejects the canonical edit, the server reports the failure and waits for
+a refresh rather than guessing at buffer state.
 
 ### Application safety
 
@@ -492,8 +494,10 @@ the accepted state.
 
 Diagnostics carry precise line ranges when the Markdown parser can identify a
 line. Save, apply, inbound-refresh, hook, and conflict state use standard LSP
-messages rather than terminal output. Routine success is informational; errors
-and conflicts remain visible as diagnostics until resolved.
+messages rather than terminal output. Routine success is informational;
+loading source-side ICS changes and running an `after_apply` hook additionally
+use work-done progress. Errors and conflicts remain visible as diagnostics until
+resolved.
 
 The language server may serve multiple documents, but each live session has one
 owning document and source watcher. Closing it stops that watcher and leaves the
