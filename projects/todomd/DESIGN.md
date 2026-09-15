@@ -195,16 +195,20 @@ leading fields, so an `@` inside a summary is literal. Empty `CATEGORIES`
 properties emitted by other clients represent an empty set and are ignored;
 multiline category values cannot be represented and abort the read.
 
-Within each sibling set, tasks render unfinished first, then by descending
-priority, then alphabetically by summary, with the task identity breaking ties.
-A parent precedes its recursively sorted descendants, so the same state always
-renders identically. Sorting finished siblings last keeps the wider scope
-usable when a list holds one open task among hundreds.
+Within each sibling set, tasks follow the configured sort keys. The default is
+unfinished first, then descending priority, then case-insensitive summary.
+Available keys are completion, manual `X-APPLE-SORT-ORDER`, due date, start date,
+priority, and summary; individual lists may replace the default key sequence.
+Missing manual and date values sort last, and task identity always breaks final
+ties. A parent precedes its recursively sorted descendants, so the same state
+always renders identically. Sorting finished siblings last by default keeps the
+wider scope usable when a list holds one open task among hundreds.
 
-Sibling ordering carries no meaning: it is presentational, and reordering lines
-is not a change. Indentation alone carries hierarchy. Because Markdown flattens
-nine iCalendar priorities into three levels, sibling tasks stored as
-`PRIORITY:1` and `PRIORITY:4` interleave alphabetically.
+Sibling ordering carries no editable meaning yet: reordering lines is not a
+change, and the manual key only reads values written by other clients.
+Indentation alone carries hierarchy. Because Markdown flattens nine iCalendar
+priorities into three levels, sibling tasks stored as `PRIORITY:1` and
+`PRIORITY:4` interleave according to later keys.
 
 Each selected list appears exactly once as a level-one heading. Existing tasks
 carry opaque, session-local IDs mapped to source identities by the manifest.
@@ -450,6 +454,12 @@ removes the property; setting one writes the canonical 1, 5, or 9.
 
 Configuration lives at `$XDG_CONFIG_HOME/todomd/config.toml`, falling back to
 `~/.config/todomd/config.toml`. Paths support home-directory expansion.
+`sorting.default` configures sibling sorting, while `sorting.lists` contains
+per-display-name replacements. Omitting it preserves the completion, priority,
+summary default. `manual` reads an integer `X-APPLE-SORT-ORDER`; malformed
+values fail only lists configured to use that key, while missing values sort
+last.
+
 `after_apply` is an optional argument array executed directly after each
 successful outgoing transaction. Its failure is reported but does not roll back
 valid source changes. It is the only hook, and unknown `[hooks]` keys are

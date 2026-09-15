@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    config::Config,
+    config::{Config, SortKey},
     dates::{self, DateContext, DateValue},
     model::{Priority, Task, TaskId, TaskList, TaskState},
 };
@@ -189,6 +189,8 @@ pub fn load_lists(
         snapshot
             .list_dirs
             .insert(requested.clone(), list_dir.to_path_buf());
+        let sort_keys = config.sorting.for_list(requested);
+        let reads_manual_order = sort_keys.contains(&SortKey::Manual);
         let mut loaded = BTreeMap::new();
 
         for path in ics_files(list_dir)? {
@@ -198,6 +200,10 @@ pub fn load_lists(
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
             let task = parse_task(&contents, &path, &date_context)?;
+            let manual_order = reads_manual_order
+                .then(|| parse_manual_sort_order(&contents, &path))
+                .transpose()?
+                .flatten();
             snapshot.files.insert(
                 path.clone(),
                 SourceFile {
@@ -216,10 +222,17 @@ pub fn load_lists(
                     task.id.as_str()
                 );
             }
-            loaded.insert(task.id.clone(), (task, path));
+            loaded.insert(
+                task.id.clone(),
+                LoadedTask {
+                    task,
+                    path,
+                    manual_order,
+                },
+            );
         }
 
-        let tasks = project_tasks(loaded, scope, &mut snapshot)
+        let tasks = project_tasks(loaded, scope, sort_keys, &mut snapshot)
             .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
         state.lists.push(TaskList {
             name: requested.clone(),
@@ -347,48 +360,82 @@ fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-type LoadedTasks = BTreeMap<TaskId, (Task, PathBuf)>;
+struct LoadedTask {
+    task: Task,
+    path: PathBuf,
+    manual_order: Option<i64>,
+}
 
-fn task_order(left: &Task, right: &Task) -> std::cmp::Ordering {
-    left.completed
-        .cmp(&right.completed)
-        .then_with(|| right.priority.cmp(&left.priority))
-        .then_with(|| {
-            left.summary
+type LoadedTasks = BTreeMap<TaskId, LoadedTask>;
+
+fn task_order(left: &LoadedTask, right: &LoadedTask, sort_keys: &[SortKey]) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+
+    for key in sort_keys {
+        let ordering = match key {
+            SortKey::Completed => left.task.completed.cmp(&right.task.completed),
+            SortKey::Manual => compare_optional(left.manual_order, right.manual_order),
+            SortKey::Due => compare_optional(
+                left.task.due.as_ref().map(DateValue::canonical),
+                right.task.due.as_ref().map(DateValue::canonical),
+            ),
+            SortKey::Start => compare_optional(
+                left.task.start.as_ref().map(DateValue::canonical),
+                right.task.start.as_ref().map(DateValue::canonical),
+            ),
+            SortKey::Priority => right.task.priority.cmp(&left.task.priority),
+            SortKey::Summary => left
+                .task
+                .summary
                 .to_lowercase()
-                .cmp(&right.summary.to_lowercase())
-        })
-        .then_with(|| left.id.cmp(&right.id))
+                .cmp(&right.task.summary.to_lowercase()),
+        };
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+    }
+    left.task.id.cmp(&right.task.id)
+}
+
+fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> std::cmp::Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
 }
 
 fn project_tasks(
     mut loaded: LoadedTasks,
     scope: Scope,
+    sort_keys: &[SortKey],
     snapshot: &mut SourceSnapshot,
 ) -> Result<Vec<Task>> {
     let ids = loaded.keys().cloned().collect::<BTreeSet<_>>();
-    for (task, _) in loaded.values_mut() {
-        if task
+    for loaded_task in loaded.values_mut() {
+        if loaded_task
+            .task
             .parent
             .as_ref()
             .is_some_and(|parent| !ids.contains(parent))
         {
             // Empty and dangling relationships are top-level in Markdown. The
             // raw property remains in SourceSnapshot and is not rewritten.
-            task.parent = None;
+            loaded_task.task.parent = None;
         }
     }
     validate_acyclic(&loaded)?;
 
     let mut children: BTreeMap<Option<TaskId>, Vec<TaskId>> = BTreeMap::new();
-    for task in loaded.values().map(|(task, _)| task) {
+    for task in loaded.values().map(|loaded| &loaded.task) {
         children
             .entry(task.parent.clone())
             .or_default()
             .push(task.id.clone());
     }
     for siblings in children.values_mut() {
-        siblings.sort_by(|left, right| task_order(&loaded[left].0, &loaded[right].0));
+        siblings.sort_by(|left, right| task_order(&loaded[left], &loaded[right], sort_keys));
     }
 
     fn append_subtree(
@@ -399,7 +446,9 @@ fn project_tasks(
         snapshot: &mut SourceSnapshot,
         output: &mut Vec<Task>,
     ) {
-        let (task, path) = &loaded[id];
+        let loaded_task = &loaded[id];
+        let task = &loaded_task.task;
+        let path = &loaded_task.path;
         let hidden_completed_root =
             scope == Scope::Active && task.completed && task.parent.is_none();
         if task.summary.is_empty() {
@@ -448,7 +497,7 @@ fn validate_acyclic(loaded: &LoadedTasks) -> Result<()> {
                 bail!("RELATED-TO cycle: {}", cycle.join(" -> "));
             }
             path.push(id);
-            current = loaded[id].0.parent.as_ref();
+            current = loaded[id].task.parent.as_ref();
         }
     }
     Ok(())
@@ -510,6 +559,30 @@ fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result
         start,
         due,
     }))
+}
+
+fn parse_manual_sort_order(contents: &str, path: &Path) -> Result<Option<i64>> {
+    let unfolded = unfold(contents);
+    let calendar = read_calendar(&unfolded)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let Some(todo) = calendar
+        .components
+        .iter()
+        .find(|component| component.name.as_str().eq_ignore_ascii_case("VTODO"))
+    else {
+        return Ok(None);
+    };
+    optional_property(todo, "X-APPLE-SORT-ORDER", path)?
+        .map(|value| {
+            value.trim().parse::<i64>().with_context(|| {
+                format!(
+                    "invalid X-APPLE-SORT-ORDER in {}: expected an integer",
+                    path.display()
+                )
+            })
+        })
+        .transpose()
 }
 
 fn category_properties(contents: &str, path: &Path) -> Result<Vec<String>> {
@@ -905,6 +978,103 @@ mod tests {
                 (true, Priority::None, "yankee"),
             ]
         );
+    }
+
+    #[test]
+    fn applies_configured_sort_keys_with_missing_dates_last() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+
+        for (uid, summary, due) in [
+            ("a", "Undated", None),
+            ("b", "Later", Some("20260912")),
+            ("c", "Earlier", Some("20260910")),
+        ] {
+            let due = due.map_or(String::new(), |value| format!("DUE;VALUE=DATE:{value}\r\n"));
+            fs::write(
+                list.join(format!("{uid}.ics")),
+                format!(
+                    "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:{uid}\r\nSUMMARY:{summary}\r\n{due}END:VTODO\r\nEND:VCALENDAR\r\n"
+                ),
+            )
+            .unwrap();
+        }
+
+        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+        config.sorting.default = vec![SortKey::Due];
+        let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
+
+        assert_eq!(
+            state.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.summary.as_str())
+                .collect::<Vec<_>>(),
+            ["Earlier", "Later", "Undated"]
+        );
+    }
+
+    #[test]
+    fn honors_manual_sort_order_for_configured_lists() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+
+        for (uid, summary, order) in [
+            ("a", "Alpha", Some(200)),
+            ("b", "Zulu", Some(100)),
+            ("c", "Missing", None),
+        ] {
+            let order = order.map_or(String::new(), |value| {
+                format!("X-APPLE-SORT-ORDER:{value}\r\n")
+            });
+            fs::write(
+                list.join(format!("{uid}.ics")),
+                format!(
+                    "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:{uid}\r\nSUMMARY:{summary}\r\n{order}END:VTODO\r\nEND:VCALENDAR\r\n"
+                ),
+            )
+            .unwrap();
+        }
+
+        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+        config
+            .sorting
+            .lists
+            .insert("Work".into(), vec![SortKey::Manual]);
+        let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
+
+        assert_eq!(
+            state.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.summary.as_str())
+                .collect::<Vec<_>>(),
+            ["Zulu", "Alpha", "Missing"]
+        );
+    }
+
+    #[test]
+    fn ignores_invalid_manual_order_unless_that_key_is_configured() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+        fs::write(
+            list.join("task.ics"),
+            "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:A\r\nX-APPLE-SORT-ORDER:nope\r\nEND:VTODO\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+
+        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+        assert!(load_lists(&config, &["Work".to_owned()], Scope::All).is_ok());
+
+        config.sorting.default = vec![SortKey::Manual];
+        let error = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap_err();
+        assert!(format!("{error:#}").contains("expected an integer"));
     }
 
     #[test]

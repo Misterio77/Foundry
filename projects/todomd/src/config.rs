@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, BTreeSet},
     env, fs,
     path::{Path, PathBuf},
 };
@@ -10,7 +11,66 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     pub calendar_roots: Vec<PathBuf>,
     #[serde(default)]
+    pub sorting: Sorting,
+    #[serde(default)]
     pub hooks: Hooks,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortKey {
+    Completed,
+    Manual,
+    Due,
+    Start,
+    Priority,
+    Summary,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sorting {
+    #[serde(default = "default_sort_keys")]
+    pub default: Vec<SortKey>,
+    #[serde(default)]
+    pub lists: BTreeMap<String, Vec<SortKey>>,
+}
+
+impl Default for Sorting {
+    fn default() -> Self {
+        Self {
+            default: default_sort_keys(),
+            lists: BTreeMap::new(),
+        }
+    }
+}
+
+impl Sorting {
+    pub fn for_list(&self, name: &str) -> &[SortKey] {
+        self.lists.get(name).unwrap_or(&self.default)
+    }
+
+    fn validate(&self) -> Result<()> {
+        validate_sort_keys("sorting.default", &self.default)?;
+        for (name, keys) in &self.lists {
+            validate_sort_keys(&format!("sorting.lists.{name}"), keys)?;
+        }
+        Ok(())
+    }
+}
+
+fn default_sort_keys() -> Vec<SortKey> {
+    vec![SortKey::Completed, SortKey::Priority, SortKey::Summary]
+}
+
+fn validate_sort_keys(name: &str, keys: &[SortKey]) -> Result<()> {
+    if keys.is_empty() {
+        bail!("{name} must contain at least one sort key");
+    }
+    if keys.iter().collect::<BTreeSet<_>>().len() != keys.len() {
+        bail!("{name} must not contain duplicate sort keys");
+    }
+    Ok(())
 }
 
 /// Unknown keys are rejected so a removed session-lifetime hook is reported
@@ -41,6 +101,7 @@ impl Config {
             .iter()
             .map(|root| expand_home(root))
             .collect::<Result<_>>()?;
+        config.sorting.validate()?;
         expand_hook(&mut config.hooks.after_apply)?;
         validate_hook("after_apply", config.hooks.after_apply.as_deref())?;
 
@@ -53,6 +114,7 @@ impl Config {
         }
         Ok(Self {
             calendar_roots,
+            sorting: Sorting::default(),
             hooks: Hooks::default(),
         })
     }
@@ -112,6 +174,54 @@ mod tests {
     #[test]
     fn rejects_empty_roots() {
         assert!(Config::new(Vec::new()).is_err());
+    }
+
+    #[test]
+    fn loads_sorting_with_per_list_overrides() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            "calendar_roots = [\"/tmp/calendars\"]\n\
+             [sorting]\n\
+             default = [\"due\", \"priority\", \"summary\"]\n\
+             [sorting.lists]\n\
+             Postgrad = [\"manual\", \"completed\"]\n",
+        )
+        .unwrap();
+
+        let config = Config::load(Some(&path)).unwrap();
+        assert_eq!(
+            config.sorting.default,
+            [SortKey::Due, SortKey::Priority, SortKey::Summary]
+        );
+        assert_eq!(
+            config.sorting.for_list("Postgrad"),
+            [SortKey::Manual, SortKey::Completed]
+        );
+        assert_eq!(
+            config.sorting.for_list("Personal"),
+            [SortKey::Due, SortKey::Priority, SortKey::Summary]
+        );
+    }
+
+    #[test]
+    fn rejects_empty_or_duplicate_sorting() {
+        for sorting in [
+            "[sorting]\ndefault = []\n",
+            "[sorting]\ndefault = [\"summary\", \"summary\"]\n",
+            "[sorting.lists]\nWork = []\n",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("config.toml");
+            fs::write(
+                &path,
+                format!("calendar_roots = [\"/tmp/calendars\"]\n{sorting}"),
+            )
+            .unwrap();
+
+            assert!(Config::load(Some(&path)).is_err());
+        }
     }
 
     #[test]

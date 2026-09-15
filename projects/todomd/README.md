@@ -36,12 +36,27 @@ The Nix package installs Bash, Fish, and Zsh completions.
 ```toml
 calendar_roots = ["~/Calendars/personal"]
 
+[sorting]
+default = ["completed", "priority", "summary"]
+
+[sorting.lists]
+Postgrad = ["manual", "due", "summary"]
+
 [hooks]
 after_apply = ["systemctl", "--user", "start", "vdirsyncer.service"]
 ```
 
 `calendar_roots` hold vdir collections: subdirectories of `.ics` files with a
 `displayname` file whose contents are the list name. Paths support `~`.
+
+`sorting.default` sets the sibling sort keys, and entries under
+`sorting.lists` replace it for named lists. Available keys are `completed`
+(unfinished first), `manual` (ascending `X-APPLE-SORT-ORDER`), `due`, `start`,
+`priority` (high first), and `summary` (case-insensitive). Missing manual and
+date values sort last. The task identity is always the final deterministic
+tie-breaker. When `[sorting]` is omitted, the default remains `completed`,
+`priority`, then `summary`. Manual order is read-only for now: rearranging
+Markdown lines does not write `X-APPLE-SORT-ORDER`.
 
 `after_apply` is an optional argument array executed directly after source
 files change. A failure is reported through LSP but does not roll back the
@@ -151,9 +166,11 @@ written to ICS. Fractional seconds are rejected because RFC 5545 DATE-TIME
 cannot represent them. Existing `VTIMEZONE` components are preserved, but new
 ones are not generated.
 
-Each sibling set renders unfinished first, then by priority, then
-alphabetically. Parents precede their recursively sorted descendants. Ordering
-among siblings is presentational, so rearranging their lines changes nothing.
+Each sibling set follows its configured sort keys. By default it renders
+unfinished first, then by priority, then alphabetically. Parents precede their
+recursively sorted descendants. Ordering among siblings is presentational, so
+rearranging their lines changes nothing. The `manual` key honors existing
+`X-APPLE-SORT-ORDER` values but does not make rearrangement persistent yet.
 
 A summary is quoted only when its start would otherwise be read as syntax, so
 ordinary text is never quoted:
@@ -242,8 +259,8 @@ $ todomd show Personal
 ]
 ```
 
-Tasks are ordered by list and tree. Each sibling set is ordered unfinished
-before finished, then by priority and summary. `completed` may be `true` in the
+Tasks are ordered by list and tree using the configured sibling sort keys.
+`completed` may be `true` in the
 default scope for a subtask below active ancestors. `priority` is `none`, `low`,
 `medium`, or `high`; `categories` is a sorted array of category names. `start`
 and `due` use canonical local strings or `null`;

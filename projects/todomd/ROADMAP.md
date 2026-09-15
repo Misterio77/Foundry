@@ -10,22 +10,17 @@ source-directory watching, canonical buffer refreshes, and conflict reporting.
 Completion, hover, document symbols, repair code actions, and richer conflict
 recovery can build on that protocol.
 
-## Configurable sorting
+## Persistent manual ordering
 
-Tasks render unfinished first, then by priority, then alphabetically, with the
-task identity breaking ties. Ordering is presentational, so changing it is safe:
-the planner ignores line order.
+Sorting is configurable globally and per list, and the `manual` key reads
+`X-APPLE-SORT-ORDER` values written by Apple Reminders, Nextcloud Tasks, and
+Tasks.org. Markdown line order remains presentational, however, so rearranging
+siblings does not write those values yet.
 
-The fixed default does not suit everything:
-
-- 323 tasks already carry `X-APPLE-SORT-ORDER` from other clients, so a manual
-  order exists in the data and is currently discarded;
-- due date is now available as a sort key; and
-- grouping by priority rather than sorting by it suits some lists better.
-
-Likely shape: a configured list of sort keys, overridable per list. Whatever the
-keys, rendering the same state must stay deterministic, since accepted-state
-refreshes and live synchronization compare rendered documents.
+Persistent ordering should use sparse integer ranks so ordinary moves touch one
+task rather than incrementing `SEQUENCE` across a whole list. Rebalancing must
+account for completed roots and descendants hidden from the active scope; it
+cannot safely renumber only the visible document.
 
 ## List inventory
 

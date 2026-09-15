@@ -77,7 +77,12 @@ pub fn reconcile(
     }
 
     let markdown_changed = markdown_tasks != baseline_tasks || !new_tasks.is_empty();
-    let ics_changed = current_tasks != baseline_tasks;
+    // Markdown line order remains presentational, but a source-side change can
+    // alter the configured canonical order (notably X-APPLE-SORT-ORDER). That
+    // must trigger an inbound refresh even when every exposed task field is
+    // unchanged.
+    let ics_changed =
+        current_tasks != baseline_tasks || task_sequence(current_ics) != task_sequence(baseline);
 
     match (markdown_changed, ics_changed) {
         (false, false) => Ok(Reconciliation::NoChange),
@@ -117,6 +122,18 @@ fn build_plan(
     }));
 
     ChangePlan { changes }
+}
+
+fn task_sequence(state: &TaskState) -> Vec<(&str, &TaskId)> {
+    state
+        .lists
+        .iter()
+        .flat_map(|list| {
+            list.tasks
+                .iter()
+                .map(move |task| (list.name.as_str(), &task.id))
+        })
+        .collect()
 }
 
 fn task_map(state: &TaskState) -> IdentifiedTasks {
@@ -670,6 +687,33 @@ mod tests {
             change,
             TaskChange::Create { task, .. } if task.summary == "Buy coffee"
         )));
+    }
+
+    #[test]
+    fn configured_source_reordering_is_inbound() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![task("a", "A"), task("b", "B")],
+            }],
+        };
+        let markdown = EditedTaskState {
+            lists: vec![EditedTaskList {
+                name: "Personal".into(),
+                tasks: vec![edited(Some("a"), "A", false), edited(Some("b"), "B", false)],
+            }],
+        };
+        let current_ics = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![task("b", "B"), task("a", "A")],
+            }],
+        };
+
+        assert_eq!(
+            reconcile(&baseline, &markdown, &current_ics).unwrap(),
+            Reconciliation::Inbound
+        );
     }
 
     #[test]
