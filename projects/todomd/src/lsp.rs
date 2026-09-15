@@ -457,9 +457,7 @@ enum Outcome {
 
 fn validate_document(document: &LiveDocument) -> Result<()> {
     let edited = markdown::parse(&document.text, &document.baseline, &document.manifest)?;
-    let missing = identities_outside(&edited, &document.baseline);
-    let mut baseline = document.baseline.clone();
-    add_tasks(&mut baseline, &document.recovery_baseline, &missing);
+    let (baseline, _) = reconciliation_baseline(document, &edited);
     planner::reconcile(&baseline, &edited, &baseline)?;
     Ok(())
 }
@@ -471,21 +469,10 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
         ));
     }
     let edited = markdown::parse(&document.text, &document.baseline, &document.manifest)?;
-    let (current, sources) = load_current(document, &document.completed_in_session)?;
-    let missing = identities_outside(&edited, &document.baseline);
-    let (reconciliation_baseline, reconciliation_current, sources) = if missing.is_empty() {
-        (document.baseline.clone(), current.clone(), sources)
-    } else {
-        let (current_all, sources) =
-            repository::load_lists(&document.config, &document.lists, Scope::All)?;
-        let mut baseline = document.baseline.clone();
-        let mut current = current.clone();
-        add_tasks(&mut baseline, &document.recovery_baseline, &missing);
-        add_tasks(&mut current, &current_all, &missing);
-        (baseline, current, sources)
-    };
-    let reconciliation =
-        planner::reconcile(&reconciliation_baseline, &edited, &reconciliation_current)?;
+    let (baseline, mut required_tasks) = reconciliation_baseline(document, &edited);
+    required_tasks.extend(document.completed_in_session.iter().cloned());
+    let (current, sources) = load_current(document, &required_tasks)?;
+    let reconciliation = planner::reconcile(&baseline, &edited, &current)?;
 
     document.parse_diagnostic = None;
     match reconciliation {
@@ -550,19 +537,29 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
     }
 }
 
+fn reconciliation_baseline(
+    document: &LiveDocument,
+    edited: &EditedTaskState,
+) -> (TaskState, BTreeSet<TaskId>) {
+    let required_tasks = identities_outside(edited, &document.baseline);
+    let mut baseline = document.baseline.clone();
+    add_tasks(&mut baseline, &document.recovery_baseline, &required_tasks);
+    (baseline, required_tasks)
+}
+
 fn load_current(
     document: &LiveDocument,
-    completed_in_session: &BTreeSet<TaskId>,
+    required_tasks: &BTreeSet<TaskId>,
 ) -> Result<(TaskState, repository::SourceSnapshot)> {
     let (mut current, sources) =
         repository::load_lists(&document.config, &document.lists, document.scope)?;
-    if document.scope == Scope::All || completed_in_session.is_empty() {
+    if document.scope == Scope::All || required_tasks.is_empty() {
         return Ok((current, sources));
     }
 
     let (current_all, sources) =
         repository::load_lists(&document.config, &document.lists, Scope::All)?;
-    add_tasks(&mut current, &current_all, completed_in_session);
+    add_tasks(&mut current, &current_all, required_tasks);
     Ok((current, sources))
 }
 
