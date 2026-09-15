@@ -509,13 +509,11 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
                 "source changes were applied, but the live session was not refreshed",
             )?;
             document.completed_in_session = completed_in_session;
+            let applied_message = applied_changes_message(&plan.changes);
             let hook = document.lifecycle.after_apply();
             let (kind, message) = match hook {
-                Ok(()) => (MessageType::INFO, "todomd: changes applied".to_owned()),
-                Err(error) => (
-                    MessageType::ERROR,
-                    format!("todomd: changes applied; {error:#}"),
-                ),
+                Ok(()) => (MessageType::INFO, applied_message),
+                Err(error) => (MessageType::ERROR, format!("{applied_message}; {error:#}")),
             };
             Ok(Outcome::Edit {
                 text,
@@ -535,6 +533,29 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             Ok(Outcome::Message(MessageType::WARNING, message))
         }
     }
+}
+
+fn applied_changes_message(changes: &[TaskChange]) -> String {
+    let (mut created, mut updated, mut deleted) = (0, 0, 0);
+    for change in changes {
+        match change {
+            TaskChange::Create { .. } => created += 1,
+            TaskChange::Update { .. } => updated += 1,
+            TaskChange::Delete { .. } => deleted += 1,
+        }
+    }
+
+    let counts = [
+        (created, "created"),
+        (updated, "updated"),
+        (deleted, "deleted"),
+    ]
+    .into_iter()
+    .filter(|(count, _)| *count > 0)
+    .map(|(count, operation)| format!("{count} {operation}"))
+    .collect::<Vec<_>>()
+    .join(", ");
+    format!("todomd: changes applied ({counts})")
 }
 
 fn reconciliation_baseline(
@@ -784,6 +805,64 @@ fn utf16_len(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn applied_changes_message_counts_operations() {
+        let task = planner::PlannedTask {
+            list: "Personal".into(),
+            summary: "Task".into(),
+            completed: false,
+            priority: crate::model::Priority::default(),
+            categories: Vec::new(),
+            parent: None,
+            start: None,
+            due: None,
+        };
+        let changes = vec![
+            TaskChange::Create {
+                draft_id: 1,
+                task: task.clone(),
+            },
+            TaskChange::Update {
+                id: TaskId::new("updated"),
+                before: task.clone(),
+                after: task.clone(),
+            },
+            TaskChange::Update {
+                id: TaskId::new("also-updated"),
+                before: task.clone(),
+                after: task.clone(),
+            },
+            TaskChange::Delete {
+                id: TaskId::new("deleted"),
+                task,
+            },
+        ];
+
+        assert_eq!(
+            applied_changes_message(&changes),
+            "todomd: changes applied (1 created, 2 updated, 1 deleted)"
+        );
+    }
+
+    #[test]
+    fn applied_changes_message_omits_zero_counts() {
+        let task = planner::PlannedTask {
+            list: "Personal".into(),
+            summary: "Task".into(),
+            completed: false,
+            priority: crate::model::Priority::default(),
+            categories: Vec::new(),
+            parent: None,
+            start: None,
+            due: None,
+        };
+
+        assert_eq!(
+            applied_changes_message(&[TaskChange::Create { draft_id: 1, task }]),
+            "todomd: changes applied (1 created)"
+        );
+    }
 
     #[test]
     fn diagnostics_use_reported_line_and_utf16_columns() {
