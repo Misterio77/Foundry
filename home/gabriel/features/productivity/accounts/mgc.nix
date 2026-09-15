@@ -1,4 +1,8 @@
-{config, lib, ...}: let
+{
+  config,
+  lib,
+  ...
+}: let
   realName = "Gabriel Fontes";
   address = "${lib.toLower (lib.replaceString " " "." realName)}@magalu.cloud";
 
@@ -94,7 +98,7 @@ in {
         enable = true;
         metadata = ["color" "displayname"];
         collections = ["from a" "from b"];
-        accessTokenCommand = [oama "access" address];
+        tokenCommand = [oama "access" address];
       };
     };
   };

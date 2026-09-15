@@ -135,7 +135,15 @@ in {
 
     pass = addPatches prev.pass [./pass-wlclipboard-secret.diff];
 
-    vdirsyncer = addPatches prev.vdirsyncer [./vdirsyncer-fixed-oauth-token.patch];
+    # https://github.com/pimutils/vdirsyncer/pull/1221
+    vdirsyncer = addPatches prev.vdirsyncer [
+      (final.fetchpatch {
+        url = "https://github.com/pimutils/vdirsyncer/pull/1221.patch";
+        hash = "sha256-ECauSuayYBKslVdb0K4nGfK0Aqt9bgqnjKpdnV7nJfc=";
+      })
+      # token_command doesn't provide a client ID to use as the user agent.
+      ./vdirsyncer-token-command-useragent.patch
+    ];
 
     todoman = addPatches prev.todoman [
       # https://github.com/pimutils/todoman/pull/594

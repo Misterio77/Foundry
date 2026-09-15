@@ -5,7 +5,7 @@ in {
   options = {
     accounts.calendar.accounts = mkOption {
       type = attrsOf (submodule {
-        options.vdirsyncer.accessTokenCommand = mkOption {
+        options.vdirsyncer.tokenCommand = mkOption {
           type = nullOr (listOf str);
           default = null;
           example = [
@@ -14,7 +14,7 @@ in {
             "example@example.com"
           ];
           description = ''
-            A command that prints the processed OAuth access token.
+            A command that prints an OAuth access token.
           '';
         };
       });

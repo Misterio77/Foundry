@@ -1,4 +1,8 @@
-{config, lib, ...}: let
+{
+  config,
+  lib,
+  ...
+}: let
   realName = "Gabriel Fontes";
   address = "g.fontes@usp.br";
 
@@ -105,7 +109,7 @@ in {
         enable = true;
         metadata = ["color" "displayname"];
         collections = ["from a" "from b"];
-        accessTokenCommand = [oama "access" address];
+        tokenCommand = [oama "access" address];
       };
     };
   };

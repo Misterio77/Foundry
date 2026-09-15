@@ -1,0 +1,29 @@
+diff --git a/vdirsyncer/storage/google.py b/vdirsyncer/storage/google.py
+index 219ccdf..0cd2bcf 100644
+--- a/vdirsyncer/storage/google.py
++++ b/vdirsyncer/storage/google.py
+@@ -13,6 +13,7 @@ import aiohttp
+ import click
+ 
+ from .. import exceptions
++from ..http import USERAGENT
+ from ..utils import atomic_write
+ from ..utils import checkdir
+ from ..utils import expand_path
+@@ -44,6 +45,7 @@ class GoogleSession(dav.DAVSession):
+         client_secret=None,
+         token_command=None,
+         url=None,
++        useragent=USERAGENT,
+         *,
+         connector: aiohttp.BaseConnector,
+     ):
+@@ -59,7 +61,7 @@ class GoogleSession(dav.DAVSession):
+         if url is not None:
+             self.url = url
+ 
+-        self.useragent = client_id
++        self.useragent = client_id or useragent
+         self._settings = {}
+         self.connector = connector
+ 
