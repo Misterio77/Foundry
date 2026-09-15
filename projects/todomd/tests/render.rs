@@ -24,10 +24,16 @@ fn renders_requested_lists_in_order() {
         rendered
             .sources
             .files
-            .iter()
+            .values()
             .all(|source| source.sha256 != [0; 32])
     );
-    assert_eq!(rendered.sources.files[0].list_name, "Postgrad");
+    assert!(
+        rendered
+            .sources
+            .files
+            .values()
+            .any(|source| source.list_name == "Postgrad")
+    );
 }
 
 #[test]

@@ -28,7 +28,6 @@ pub enum Scope {
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     pub list_name: String,
-    pub path: PathBuf,
     pub contents: String,
     pub sha256: [u8; 32],
 }
@@ -43,7 +42,7 @@ pub struct ListColor {
 #[derive(Clone, Debug, Default)]
 pub struct SourceSnapshot {
     pub list_dirs: BTreeMap<String, PathBuf>,
-    pub files: Vec<SourceFile>,
+    pub files: BTreeMap<PathBuf, SourceFile>,
     pub task_files: BTreeMap<TaskId, PathBuf>,
     /// In-scope VTODOs with no summary to render. `SUMMARY` is optional in
     /// RFC 5545, so these are valid but cannot appear in the document.
@@ -51,9 +50,16 @@ pub struct SourceSnapshot {
 }
 
 impl SourceSnapshot {
-    pub fn file_for_task(&self, task_id: &TaskId) -> Option<&SourceFile> {
+    pub(crate) fn file_for_task(&self, task_id: &TaskId) -> Option<(&Path, &SourceFile)> {
         let path = self.task_files.get(task_id)?;
-        self.files.iter().find(|source| &source.path == path)
+        Some((path, self.files.get(path)?))
+    }
+
+    pub(crate) fn file_hashes(&self) -> BTreeMap<PathBuf, [u8; 32]> {
+        self.files
+            .iter()
+            .map(|(path, source)| (path.clone(), source.sha256))
+            .collect()
     }
 
     /// Describes in-scope tasks left out of the document, so that they are
@@ -90,8 +96,8 @@ pub fn verify_snapshot(snapshot: &SourceSnapshot) -> Result<()> {
         let expected = snapshot
             .files
             .iter()
-            .filter(|source| &source.list_name == list_name)
-            .map(|source| (source.path.clone(), source.sha256))
+            .filter(|(_, source)| &source.list_name == list_name)
+            .map(|(path, source)| (path.clone(), source.sha256))
             .collect::<BTreeMap<_, _>>();
         let current_paths = ics_files(list_dir)?;
         let current_set = current_paths.iter().cloned().collect::<BTreeSet<_>>();
@@ -192,12 +198,14 @@ pub fn load_lists(
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
             let task = parse_task(&contents, &path, &date_context)?;
-            snapshot.files.push(SourceFile {
-                list_name: requested.clone(),
-                path: path.clone(),
-                contents,
-                sha256,
-            });
+            snapshot.files.insert(
+                path.clone(),
+                SourceFile {
+                    list_name: requested.clone(),
+                    contents,
+                    sha256,
+                },
+            );
 
             let Some(task) = task else {
                 continue;

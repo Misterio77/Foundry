@@ -101,7 +101,7 @@ pub fn stage(
             TaskChange::Update { id, .. } | TaskChange::Delete { id, .. } => id,
             TaskChange::Create { .. } => continue,
         };
-        let source = sources.file_for_task(task_id).with_context(|| {
+        let (source_path, source) = sources.file_for_task(task_id).with_context(|| {
             format!(
                 "source snapshot has no file for VTODO {:?}",
                 task_id.as_str()
@@ -113,7 +113,7 @@ pub fn stage(
         let TaskChange::Update { before, after, .. } = change else {
             changes.push(StagedFileChange {
                 action: FileAction::Delete,
-                source: Some(source.path.clone()),
+                source: Some(source_path.to_path_buf()),
                 source_sha256: Some(source.sha256),
                 destination: None,
                 staged: None,
@@ -127,12 +127,11 @@ pub fn stage(
             .list_dirs
             .get(&after.list)
             .with_context(|| format!("unknown destination list {:?}", after.list))?;
-        let filename = source
-            .path
+        let filename = source_path
             .file_name()
             .context("source VTODO path has no filename")?;
         let destination = destination_dir.join(filename);
-        if destination != source.path && destination.exists() {
+        if destination != source_path && destination.exists() {
             bail!("move destination {} already exists", destination.display());
         }
 
@@ -183,12 +182,12 @@ pub fn stage(
         fs::write(&staged, contents)
             .with_context(|| format!("failed to write staged file {}", staged.display()))?;
         changes.push(StagedFileChange {
-            action: if destination == source.path {
+            action: if destination == source_path {
                 FileAction::Modify
             } else {
                 FileAction::Move
             },
-            source: Some(source.path.clone()),
+            source: Some(source_path.to_path_buf()),
             source_sha256: Some(source.sha256),
             destination: Some(destination),
             staged: Some(staged),
@@ -275,11 +274,7 @@ pub fn verify_applied(
     if before.list_dirs != after.list_dirs {
         bail!("selected list directories changed while applying the transaction");
     }
-    let mut expected = before
-        .files
-        .iter()
-        .map(|source| (source.path.clone(), source.sha256))
-        .collect::<BTreeMap<_, _>>();
+    let mut expected = before.file_hashes();
     for change in &transaction.changes {
         if let Some(source) = &change.source {
             expected.remove(source);
@@ -288,11 +283,7 @@ pub fn verify_applied(
             expected.insert(destination.clone(), sha256);
         }
     }
-    let actual = after
-        .files
-        .iter()
-        .map(|source| (source.path.clone(), source.sha256))
-        .collect::<BTreeMap<_, _>>();
+    let actual = after.file_hashes();
     if actual != expected {
         bail!("source lists changed concurrently while applying the transaction");
     }
