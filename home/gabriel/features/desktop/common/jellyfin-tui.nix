@@ -23,6 +23,8 @@ in {
       # Preserve the colorscheme rather than deriving accents from album art.
       auto_color = false;
 
+      keymap.shift-enter = "QueueAppend";
+
       themes = [
         {
           name = "Colorscheme";
