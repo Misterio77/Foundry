@@ -243,8 +243,8 @@ This study was financed by São Paulo Research Foundation (FAPESP) (2023/00488-5
 | grafana | 15 | visualization, alerting |
 | nagios | 10 | collection, alerting |
 | elasticsearch | 7 | storage |
-| kafka | 6 | processing |
 | zabbix | 6 | collection, alerting, visualization |
+| kafka | 5 | processing |
 | ceilometer | 4 | collection |
 | ganglia | 4 | collection, processing, visualization |
 | kepler | 4 | instrumentation |
@@ -252,8 +252,8 @@ This study was financed by São Paulo Research Foundation (FAPESP) (2023/00488-5
 | snort | 4 | collection |
 | thingsboard | 4 | collection, processing, visualization, analysis |
 | influxdb | 3 | storage, processing |
-| wazuh | 3 | instrumentation, alerting, visualization, collection, analysis |
-| xdmod | 3 | instrumentation, collection, analysis |
+| wazuh | 2 | instrumentation, alerting, visualization, collection, analysis |
+| xdmod | 2 | instrumentation, collection, analysis |
 | fluentd | 2 | collection |
 | opentelemetry | 2 | instrumentation, collection |
 | scaphandre | 2 | instrumentation, collection |
@@ -288,7 +288,7 @@ Selected Tools
 
 ## Web edition notes
 
-This self-archived author version updates Figure [5](#fig-relations) after publication for readability. The Version of Record was published by ACM and is available at <https://doi.org/10.1145/3786163.3788453>.
+This self-archived author version corrects duplicate tool-study associations in Table [1](#table-selected-tools) and Figure [2](#fig-tool-occurrence), as well as a study-year indexing error in Figure [4](#fig-yearly-distribution). The totals of 45 tools and 111 studies are unchanged. It also updates Figure [5](#fig-relations) after publication for readability. The Version of Record was published by ACM and is available at <https://doi.org/10.1145/3786163.3788453>.
 
 ## References
 
