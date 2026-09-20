@@ -6,8 +6,8 @@
     inherit (pkgs.stdenv.hostPlatform) system;
     config.permittedInsecurePackages = ["openssl-1.1.1w"];
   };
-in rec {
-  # Packages with an actual source
+in {
+  # Packages with an actual (external) source
   lyrics = pkgs.python3Packages.callPackage ./lyrics {};
   prefetcharr = pkgs.callPackage ./prefetcharr {};
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
@@ -16,13 +16,15 @@ in rec {
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
   golive = pkgs.callPackage ./golive {};
+  runescape = pkgs.callPackage ./runescape {
+    inherit (runescapePkgs) openssl_1_1;
+  };
+
+  # Foundry projects
   website = pkgs.callPackage ../projects/website {};
   runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
   todomd = pkgs.callPackage ../projects/todomd {};
-  runescape = pkgs.callPackage ./runescape {
-    inherit (runescapePkgs) openssl_1_1;
-  };
 
   # Personal scripts
   pass-wofi = pkgs.callPackage ./pass-wofi {};
