@@ -4,6 +4,7 @@
   ...
 }: {
   imports = [
+    ./deepfilternet.nix
     ./deluge.nix
     ./discord.nix
     ./dragon.nix
