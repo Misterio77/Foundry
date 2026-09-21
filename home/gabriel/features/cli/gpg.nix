@@ -38,7 +38,7 @@ in {
       else pkgs.pinentry-tty;
   };
 
-  home.packages = [gpgAgentProxy] ++ lib.optional config.gtk.enable pkgs.gcr;
+  home.packages = [gpgAgentProxy] ++ lib.optional config.gtk.enable pkgs.gcr_3;
 
   systemd.user.sockets = {
     gpg-agent.Socket.ListenStream = lib.mkForce agentSocketReal;
@@ -94,9 +94,13 @@ in {
   };
 
   programs = let
-    fixGpg = /* bash */ ''
-      systemctl --user start gpg-agent-proxy.service gpg-agent-ssh-proxy.service gpg-agent.socket gpg-agent-ssh.socket 2>/dev/null || true
-    '';
+    fixGpg =
+      /*
+      bash
+      */
+      ''
+        systemctl --user start gpg-agent-proxy.service gpg-agent-ssh-proxy.service gpg-agent.socket gpg-agent-ssh.socket 2>/dev/null || true
+      '';
   in {
     # Start gpg-agent if it's not running or tunneled in
     # SSH does not start it automatically, so this is needed to avoid having to use a gpg command at startup

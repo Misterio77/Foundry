@@ -1,11 +1,11 @@
 {pkgs, ...}: let
-  version = "0.3.7";
+  version = "0.3.12";
   piInvisibleContinue = pkgs.buildPiPackage {
     pname = "pi-invisible-continue";
     inherit version;
     src = pkgs.fetchzip {
       url = "https://registry.npmjs.org/pi-invisible-continue/-/pi-invisible-continue-${version}.tgz";
-      hash = "sha256-456PA1NhOgy3SC74nEipc9sBaK5L+uUaFgfZiBTCPDk=";
+      hash = "sha256-PuxeZYnysgwv/PckGeSLia5RC2fwQV10tkoEfr2Uehs=";
     };
     dontNpmInstall = true;
   };
