@@ -1,0 +1,28 @@
+{
+  "name": "pi-codex-image-gen",
+  "version": "0.1.13",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "pi-codex-image-gen",
+      "version": "0.1.13",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@mocito/install-telemetry": "0.1.1"
+      },
+      "engines": {
+        "node": ">=20.6.0"
+      }
+    },
+    "node_modules/@mocito/install-telemetry": {
+      "version": "0.1.1",
+      "resolved": "https://registry.npmjs.org/@mocito/install-telemetry/-/install-telemetry-0.1.1.tgz",
+      "integrity": "sha512-ZbEqPmePZaudXZLMeoSfn0ifms5HB4PbTAoDIWU3ReqpaEIJlEDbosObg7ctBUBcm0KsSAe8pYIqT6LTCLKpww==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=20.6.0"
+      }
+    }
+  }
+}

@@ -184,46 +184,23 @@ in {
       });
     });
 
-    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
-      version = "0.84.3";
+    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: _: {
+      version = "0.87.0";
       src = final.fetchFromGitHub {
         owner = "earendil-works";
         repo = "pi";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-fC9pKgP2qD61ae5d7iOqP8anl88J1N1Bq8X8+aAjA2A=";
+        hash = "sha256-7YkIA5IEs4U0qnoaO3IzlY+p/M7j30fSVelLeyoV+F8=";
       };
       npmDeps = final.fetchNpmDeps {
         name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
         inherit (finalAttrs) src;
-        hash = "sha256-cDx28+c4bwtQpiy5+BCvZhZezoZb4WRqfZj2eoEeMbw=";
+        hash = "sha256-fbxwpQHnrUihO9MU72m331Uwt9dv0fQtEjdJ9hU8UxA=";
       };
       modelData = final.fetchurl {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-        hash = "sha256-nECvL0OVD46U57vNDBs1SPAAly2gDE+5wNBSnU19VDE=";
+        hash = "sha256-8q353oCdA192+NrfPRSHIOvu9GBqhIqzbug02JWugS8=";
       };
-      preBuild = ''
-        mkdir -p packages/ai/src/providers/data
-        tar -xzf "$modelData" \
-          --strip-components=4 \
-          -C packages/ai/src/providers/data \
-          package/dist/providers/data
-
-        npx tsgo -p packages/telemetry/tsconfig.build.json
-        npx tsgo -p packages/protocol/tsconfig.build.json
-        npx tsgo -p packages/client/tsconfig.build.json
-      '';
-      postInstall =
-        oldAttrs.postInstall
-        + ''
-          local nm="$out/lib/node_modules/pi-monorepo/node_modules"
-
-          for ws in @earendil-works/pi-telemetry:packages/telemetry \
-                    @earendil-works/pi-protocol:packages/protocol \
-                    @earendil-works/pi-client:packages/client; do
-            IFS=: read -r pkg src <<< "$ws"
-            cp -r "$src" "$nm/$pkg"
-          done
-        '';
     });
 
     buildPiPackage = let

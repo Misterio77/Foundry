@@ -5,14 +5,14 @@
 }: let
   piClaudeBridge = pkgs.buildPiPackage {
     pname = "pi-claude-bridge";
-    version = "0.6.3";
+    version = "0.8.0";
     src = pkgs.fetchFromGitHub {
       owner = "elidickinson";
       repo = "pi-claude-bridge";
-      rev = "066767393a0efe4be09632f63dc046c2190231b7";
-      hash = "sha256-vn2geva8IVwR+sloFp+wUt1f16iGVs10vIn2PAtCSWk=";
+      rev = "d3cb25e96742c47e77675ba7ff50e181ebb476ef";
+      hash = "sha256-/7Ofo9nt74RXaV+01TIzguFxm0FpeNKRXV5Uk67qSGI=";
     };
-    npmDepsHash = "sha256-dRg+b3wOWwYiro+E6hzRc+uefHfNPu2xMiavu+yQKyk=";
+    npmDepsHash = "sha256-tDUis202Q9TEP1XqBr3p77cLYMKuTvf/ev2bBh26TCI=";
   };
 in {
   programs.pi-coding-agent.settings = {
