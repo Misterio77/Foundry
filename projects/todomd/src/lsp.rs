@@ -179,28 +179,24 @@ impl Backend {
                 text,
                 version,
                 range,
-                mut kind,
-                message: mut text_message,
+                kind,
+                message: text_message,
                 run_after_apply,
             }) => {
-                let mut report_after_edit = !run_after_apply;
-                if run_after_apply {
-                    // The source transaction is already accepted at this point.
-                    // Report that immediately instead of hiding it behind a slow
-                    // synchronization hook.
-                    self.client.show_message(kind, &text_message).await;
-                    if let Err(error) = self.run_after_apply(state.lifecycle.clone()).await {
-                        kind = MessageType::ERROR;
-                        text_message = format!("todomd: {error:#}");
-                        report_after_edit = true;
-                    }
-                }
                 match self.apply_edit(uri, version, range, &text).await {
                     Ok(()) => {
                         state.text = text;
                         state.synchronized = true;
                         source_loaded = matches!(trigger, Trigger::Source);
-                        if report_after_edit {
+                        if run_after_apply {
+                            // Refresh the editor before a potentially slow
+                            // synchronization hook starts.
+                            self.client.show_message(kind, &text_message).await;
+                            if let Err(error) = self.run_after_apply(state.lifecycle.clone()).await
+                            {
+                                message = Some((MessageType::ERROR, format!("todomd: {error:#}")));
+                            }
+                        } else {
                             message = Some((kind, text_message));
                         }
                     }

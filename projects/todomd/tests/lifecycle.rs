@@ -280,16 +280,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
     }));
 
     let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
-    assert_message_before_progress(
-        &events,
-        "todomd: changes applied",
-        "Running after_apply hook",
-    );
-    assert_progress(
-        &events,
-        "Running after_apply hook",
-        "after_apply hook finished",
-    );
+    assert_hook_follows_workspace_edit(&mut peer, &events);
     assert!(canonical.contains("<!--t"));
     assert!(session.is_attached());
     assert_eq!(case.hooks(), "apply\n");
@@ -312,16 +303,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "params": {"textDocument": {"uri": uri}}
     }));
     let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
-    assert_message_before_progress(
-        &events,
-        "todomd: changes applied",
-        "Running after_apply hook",
-    );
-    assert_progress(
-        &events,
-        "Running after_apply hook",
-        "after_apply hook finished",
-    );
+    assert_hook_follows_workspace_edit(&mut peer, &events);
     assert!(canonical.contains("- [x] -2026-09-10 LSP paper"));
     assert!(
         fs::read_to_string(&source_path)
@@ -408,46 +390,39 @@ fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Va
     panic!("server did not send a workspace edit");
 }
 
-fn assert_message_before_progress(events: &[Value], message: &str, progress: &str) {
-    let message_index = events
-        .iter()
-        .position(|event| {
-            event["method"] == "window/showMessage"
-                && event["params"]["message"]
-                    .as_str()
-                    .is_some_and(|text| text.starts_with(message))
-        })
-        .expect("server did not show the expected message");
-    let progress_index = events
-        .iter()
-        .position(|event| {
-            event["method"] == "$/progress"
-                && event["params"]["value"]["kind"] == "begin"
-                && event["params"]["value"]["message"] == progress
-        })
-        .expect("server did not begin the expected progress");
-    assert!(message_index < progress_index);
-}
+fn assert_hook_follows_workspace_edit(peer: &mut LspPeer, earlier_events: &[Value]) {
+    assert!(!earlier_events.iter().any(|event| {
+        event["method"] == "$/progress"
+            && event["params"]["value"]["message"] == "Running after_apply hook"
+    }));
 
-fn assert_progress(messages: &[Value], begin: &str, end: &str) {
-    let (begin_index, begin_message) = messages
-        .iter()
-        .enumerate()
-        .find(|(_, message)| {
-            message["params"]["value"]["kind"] == "begin"
-                && message["params"]["value"]["message"] == begin
-        })
-        .expect("server did not begin expected progress");
-    let (end_index, _) = messages
-        .iter()
-        .enumerate()
-        .find(|(_, message)| {
-            message["params"]["token"] == begin_message["params"]["token"]
-                && message["params"]["value"]["kind"] == "end"
-                && message["params"]["value"]["message"] == end
-        })
-        .expect("server did not end expected progress");
-    assert!(begin_index < end_index);
+    let mut applied_message = false;
+    let mut progress_started = false;
+    for _ in 0..16 {
+        let message = peer.read();
+        if message["method"] == "window/workDoneProgress/create" {
+            peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
+        } else if message["method"] == "window/showMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|text| text.starts_with("todomd: changes applied"))
+        {
+            applied_message = true;
+        } else if message["method"] == "$/progress"
+            && message["params"]["value"]["kind"] == "begin"
+            && message["params"]["value"]["message"] == "Running after_apply hook"
+        {
+            assert!(applied_message);
+            progress_started = true;
+        } else if message["method"] == "$/progress"
+            && message["params"]["value"]["kind"] == "end"
+            && message["params"]["value"]["message"] == "after_apply hook finished"
+        {
+            assert!(progress_started);
+            return;
+        }
+    }
+    panic!("server did not finish after_apply progress");
 }
 
 fn receive_progress_end(peer: &mut LspPeer) -> (Value, Option<String>) {

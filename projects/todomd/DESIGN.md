@@ -327,9 +327,10 @@ A transaction is callable without an editor process. It:
 A failure before application leaves the previous baseline valid. A post-apply
 hook failure does not undo valid local changes or their new baseline. In live
 mode, source application and accepted-state persistence precede the canonical
-workspace edit. Source-side reconciliation and configured `after_apply` hooks
-are exposed through LSP work-done progress when the client supports it. If the
-client rejects the canonical edit, the server reports the failure and waits for
+workspace edit, which is applied before the configured `after_apply` hook runs.
+Source-side reconciliation and hooks are exposed through LSP work-done progress
+when the client supports it. If the client rejects the canonical edit, the
+server reports the failure and waits for
 a refresh rather than guessing at buffer state.
 
 ### Application safety
