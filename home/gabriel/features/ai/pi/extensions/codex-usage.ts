@@ -1,4 +1,7 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -106,6 +109,8 @@ const browserUserAgent =
 export default function codexUsage(pi: ExtensionAPI) {
   let seen = new Set<string>();
   let quota: QuotaProbeResult | undefined;
+  let quotaRefresh: Promise<void> | undefined;
+  let quotaRefreshController: AbortController | undefined;
 
   async function initialize() {
     await mkdir(stateDir, { recursive: true });
@@ -113,34 +118,63 @@ export default function codexUsage(pi: ExtensionAPI) {
     quota = await readJson<QuotaProbeResult>(quotaPath);
   }
 
+  function refreshQuotaInBackground(ctx: ExtensionContext) {
+    if (quotaRefresh) return;
+
+    const controller = new AbortController();
+    quotaRefreshController = controller;
+    const refresh = (async () => {
+      await initialize();
+      if (controller.signal.aborted) return;
+      updateQuotaStatus(ctx, quota);
+
+      const refreshedQuota = await probeQuota(ctx, controller.signal).catch(
+        (error: unknown): QuotaProbeResult => ({
+          timestamp: new Date().toISOString(),
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      if (controller.signal.aborted) return;
+
+      quota = refreshedQuota;
+      await writeJson(quotaPath, quota);
+      if (controller.signal.aborted) return;
+      updateQuotaStatus(ctx, quota);
+    })()
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          console.error("Failed to refresh Codex quota:", error);
+        }
+      })
+      .finally(() => {
+        if (quotaRefresh === refresh) quotaRefresh = undefined;
+        if (quotaRefreshController === controller) {
+          quotaRefreshController = undefined;
+        }
+      });
+
+    quotaRefresh = refresh;
+  }
+
   void initialize();
 
-  pi.on("session_start", async (_event, ctx) => {
-    await initialize();
-    quota = await probeQuota(ctx).catch((error: unknown) => ({
-      timestamp: new Date().toISOString(),
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    await writeJson(quotaPath, quota);
-    updateQuotaStatus(ctx, quota);
+  pi.on("session_start", (_event, ctx) => {
+    refreshQuotaInBackground(ctx);
   });
 
-  pi.on("model_select", async (event, ctx) => {
+  pi.on("model_select", (event, ctx) => {
     if (event.model.provider !== "openai-codex") {
       updateQuotaStatus(ctx, undefined);
       return;
     }
 
-    await initialize();
     updateQuotaStatus(ctx, quota);
-    quota = await probeQuota(ctx).catch((error: unknown) => ({
-      timestamp: new Date().toISOString(),
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    await writeJson(quotaPath, quota);
-    updateQuotaStatus(ctx, quota);
+    refreshQuotaInBackground(ctx);
+  });
+
+  pi.on("session_shutdown", () => {
+    quotaRefreshController?.abort();
   });
 
   pi.on("message_end", async (event, ctx) => {
@@ -434,12 +468,16 @@ function estimateWindowCapacity(
   };
 }
 
-async function probeQuota(ctx: {
-  modelRegistry: {
-    getApiKeyForProvider: (provider: string) => Promise<string | undefined>;
-  };
-}): Promise<QuotaProbeResult> {
+async function probeQuota(
+  ctx: {
+    modelRegistry: {
+      getApiKeyForProvider: (provider: string) => Promise<string | undefined>;
+    };
+  },
+  signal?: AbortSignal,
+): Promise<QuotaProbeResult> {
   const token = await ctx.modelRegistry.getApiKeyForProvider("openai-codex");
+  signal?.throwIfAborted();
   if (!token) {
     return {
       timestamp: new Date().toISOString(),
@@ -457,7 +495,7 @@ async function probeQuota(ctx: {
 
   for (const endpoint of endpoints) {
     try {
-      const response = await curlJson(endpoint, token, accountId);
+      const response = await curlJson(endpoint, token, accountId, signal);
       attempts.push({ endpoint, status: response.status });
       const body = response.body;
       if (response.status < 200 || response.status >= 300) continue;
@@ -473,6 +511,7 @@ async function probeQuota(ctx: {
         attempts,
       };
     } catch (error) {
+      signal?.throwIfAborted();
       attempts.push({
         endpoint,
         error: error instanceof Error ? error.message : String(error),
@@ -492,6 +531,7 @@ async function curlJson(
   endpoint: string,
   token: string,
   accountId: string | undefined,
+  signal?: AbortSignal,
 ) {
   const headers = [
     `Authorization: Bearer ${token}`,
@@ -513,6 +553,7 @@ async function curlJson(
   const { stdout } = await execFileAsync("curl", args, {
     encoding: "utf8",
     maxBuffer: 2 * 1024 * 1024,
+    signal,
   });
   const marker = stdout.lastIndexOf("\n");
   const rawBody = marker === -1 ? stdout : stdout.slice(0, marker);
