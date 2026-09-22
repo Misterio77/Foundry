@@ -15,7 +15,6 @@
 
     ../common/optional/peripherals.nix
     ../common/optional/regreet.nix
-    ../common/optional/nginx.nix
     ../common/optional/pipewire.nix
     ../common/optional/quietboot.nix
     ../common/optional/wireless.nix
