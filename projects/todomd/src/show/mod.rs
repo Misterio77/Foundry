@@ -10,6 +10,7 @@ use crate::{
     config::Config,
     model::Priority,
     repository::{Scope, load_lists, resolve_lists},
+    view::{self, View},
 };
 
 /// One task, with the source file an external tool would edit.
@@ -28,9 +29,14 @@ pub struct ShownTask {
 }
 
 /// Prints the tasks of the selected lists as JSON.
-pub fn run(config: &Config, requested_lists: &[String], scope: Scope) -> Result<()> {
+pub fn run(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+    active_view: &View,
+) -> Result<()> {
     let lists = resolve_lists(config, requested_lists)?;
-    let json = to_json(&collect(config, &lists, scope)?)?;
+    let json = to_json(&collect_with_view(config, &lists, scope, active_view)?)?;
     let mut stdout = io::stdout().lock();
     stdout
         .write_all(json.as_bytes())
@@ -39,20 +45,31 @@ pub fn run(config: &Config, requested_lists: &[String], scope: Scope) -> Result<
 }
 
 pub fn collect(config: &Config, lists: &[String], scope: Scope) -> Result<Vec<ShownTask>> {
+    let active_view = config.view(None)?;
+    collect_with_view(config, lists, scope, &active_view)
+}
+
+pub fn collect_with_view(
+    config: &Config,
+    lists: &[String],
+    scope: Scope,
+    active_view: &View,
+) -> Result<Vec<ShownTask>> {
     let (state, sources) = load_lists(config, lists, scope)?;
     if let Some(warning) = sources.unrepresentable_warning() {
         eprintln!("todomd: {warning}");
     }
     let mut shown = Vec::new();
 
-    for list in &state.lists {
-        for task in &list.tasks {
+    for tree in view::project(&state, active_view) {
+        for projected in tree.tasks {
+            let task = projected.task;
             let file = sources
                 .task_files
                 .get(&task.id)
                 .with_context(|| format!("VTODO {:?} has no source file", task.id.as_str()))?;
             shown.push(ShownTask {
-                list: list.name.clone(),
+                list: tree.list_name.to_owned(),
                 uid: task.id.as_str().to_owned(),
                 summary: task.summary.clone(),
                 completed: task.completed,

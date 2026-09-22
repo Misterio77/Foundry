@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -7,74 +7,26 @@ use std::{
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
+use crate::view::View;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub calendar_roots: Vec<PathBuf>,
+    #[serde(default = "default_view_name")]
+    pub default_view: String,
     #[serde(default)]
-    pub sorting: Sorting,
+    pub views: BTreeMap<String, View>,
     #[serde(default)]
     pub hooks: Hooks,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SortKey {
-    Completed,
-    Manual,
-    Due,
-    Start,
-    Priority,
-    Summary,
+fn default_view_name() -> String {
+    "default".into()
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Sorting {
-    #[serde(default = "default_sort_keys")]
-    pub default: Vec<SortKey>,
-    #[serde(default)]
-    pub lists: BTreeMap<String, Vec<SortKey>>,
-}
-
-impl Default for Sorting {
-    fn default() -> Self {
-        Self {
-            default: default_sort_keys(),
-            lists: BTreeMap::new(),
-        }
-    }
-}
-
-impl Sorting {
-    pub fn for_list(&self, name: &str) -> &[SortKey] {
-        self.lists.get(name).unwrap_or(&self.default)
-    }
-
-    fn validate(&self) -> Result<()> {
-        validate_sort_keys("sorting.default", &self.default)?;
-        for (name, keys) in &self.lists {
-            validate_sort_keys(&format!("sorting.lists.{name}"), keys)?;
-        }
-        Ok(())
-    }
-}
-
-fn default_sort_keys() -> Vec<SortKey> {
-    vec![SortKey::Completed, SortKey::Priority, SortKey::Summary]
-}
-
-fn validate_sort_keys(name: &str, keys: &[SortKey]) -> Result<()> {
-    if keys.is_empty() {
-        bail!("{name} must contain at least one sort key");
-    }
-    if keys.iter().collect::<BTreeSet<_>>().len() != keys.len() {
-        bail!("{name} must not contain duplicate sort keys");
-    }
-    Ok(())
-}
-
-/// Unknown keys are rejected so a removed session-lifetime hook is reported
-/// rather than silently ignored.
+/// Unknown keys are rejected so removed configuration is reported rather than
+/// silently ignored.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Hooks {
@@ -89,8 +41,20 @@ impl Config {
         };
         let contents = fs::read_to_string(&path)
             .with_context(|| format!("failed to read configuration {}", path.display()))?;
-        let mut config: Self = toml::from_str(&contents)
-            .with_context(|| format!("failed to parse configuration {}", path.display()))?;
+        let mut config: Self = toml::from_str(&contents).map_err(|error| {
+            let error = anyhow::Error::new(error)
+                .context(format!("failed to parse configuration {}", path.display()));
+            if contents
+                .lines()
+                .any(|line| line.trim().starts_with("[sorting"))
+            {
+                error.context(
+                    "[sorting] was replaced by named [views.NAME] with group_by and sort_by",
+                )
+            } else {
+                error
+            }
+        })?;
 
         if config.calendar_roots.is_empty() {
             bail!("configuration must define at least one calendar root");
@@ -101,7 +65,7 @@ impl Config {
             .iter()
             .map(|root| expand_home(root))
             .collect::<Result<_>>()?;
-        config.sorting.validate()?;
+        config.validate_views()?;
         expand_hook(&mut config.hooks.after_apply)?;
         validate_hook("after_apply", config.hooks.after_apply.as_deref())?;
 
@@ -114,9 +78,35 @@ impl Config {
         }
         Ok(Self {
             calendar_roots,
-            sorting: Sorting::default(),
+            default_view: default_view_name(),
+            views: BTreeMap::new(),
             hooks: Hooks::default(),
         })
+    }
+
+    pub fn view(&self, name: Option<&str>) -> Result<View> {
+        let name = name.unwrap_or(&self.default_view);
+        match self.views.get(name) {
+            Some(view) => Ok(view.clone()),
+            None if name == "default" => Ok(View::default()),
+            None => bail!("unknown view {name:?}"),
+        }
+    }
+
+    pub fn view_names(&self) -> Vec<String> {
+        let mut names = self.views.keys().cloned().collect::<Vec<_>>();
+        if !self.views.contains_key("default") {
+            names.insert(0, "default".into());
+        }
+        names
+    }
+
+    fn validate_views(&self) -> Result<()> {
+        for (name, view) in &self.views {
+            view.validate(&format!("views.{name}"))?;
+        }
+        self.view(None)?;
+        Ok(())
     }
 }
 
@@ -170,6 +160,7 @@ fn home_dir() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::view::{GroupKey, SortKey};
 
     #[test]
     fn rejects_empty_roots() {
@@ -177,51 +168,66 @@ mod tests {
     }
 
     #[test]
-    fn loads_sorting_with_per_list_overrides() {
+    fn loads_named_views() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("config.toml");
         fs::write(
             &path,
             "calendar_roots = [\"/tmp/calendars\"]\n\
-             [sorting]\n\
-             default = [\"due\", \"priority\", \"summary\"]\n\
-             [sorting.lists]\n\
-             Postgrad = [\"manual\", \"completed\"]\n",
+             default_view = \"agenda\"\n\
+             [views.agenda]\n\
+             group_by = [\"due\"]\n\
+             sort_by = [\"due\", \"priority\", \"summary\"]\n",
         )
         .unwrap();
 
         let config = Config::load(Some(&path)).unwrap();
+        let view = config.view(None).unwrap();
+        assert_eq!(view.group_by, [GroupKey::Due]);
         assert_eq!(
-            config.sorting.default,
-            [SortKey::Due, SortKey::Priority, SortKey::Summary]
-        );
-        assert_eq!(
-            config.sorting.for_list("Postgrad"),
-            [SortKey::Manual, SortKey::Completed]
-        );
-        assert_eq!(
-            config.sorting.for_list("Personal"),
+            view.sort_by,
             [SortKey::Due, SortKey::Priority, SortKey::Summary]
         );
     }
 
     #[test]
-    fn rejects_empty_or_duplicate_sorting() {
-        for sorting in [
-            "[sorting]\ndefault = []\n",
-            "[sorting]\ndefault = [\"summary\", \"summary\"]\n",
-            "[sorting.lists]\nWork = []\n",
+    fn supplies_the_builtin_default() {
+        let config = Config::new(vec!["/tmp/calendars".into()]).unwrap();
+        assert_eq!(config.view(None).unwrap(), View::default());
+        assert_eq!(config.view_names(), ["default"]);
+    }
+
+    #[test]
+    fn rejects_invalid_views() {
+        for contents in [
+            "default_view = \"missing\"\n",
+            "[views.bad]\ngroup_by = []\nsort_by = []\n",
+            "[views.bad]\ngroup_by = [\"list\", \"list\"]\nsort_by = [\"summary\"]\n",
         ] {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("config.toml");
             fs::write(
                 &path,
-                format!("calendar_roots = [\"/tmp/calendars\"]\n{sorting}"),
+                format!("calendar_roots = [\"/tmp/calendars\"]\n{contents}"),
             )
             .unwrap();
 
             assert!(Config::load(Some(&path)).is_err());
         }
+    }
+
+    #[test]
+    fn explains_the_old_sorting_migration() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs::write(
+            &path,
+            "calendar_roots = [\"/tmp/calendars\"]\n[sorting]\ndefault = [\"summary\"]\n",
+        )
+        .unwrap();
+
+        let error = Config::load(Some(&path)).unwrap_err();
+        assert!(format!("{error:#}").contains("replaced by named [views.NAME]"));
     }
 
     #[test]

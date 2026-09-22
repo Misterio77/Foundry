@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    config::{Config, SortKey},
+    config::Config,
     dates::{self, DateContext, DateValue},
     model::{Priority, Task, TaskId, TaskList, TaskState},
 };
@@ -189,8 +189,6 @@ pub fn load_lists(
         snapshot
             .list_dirs
             .insert(requested.clone(), list_dir.to_path_buf());
-        let sort_keys = config.sorting.for_list(requested);
-        let reads_manual_order = sort_keys.contains(&SortKey::Manual);
         let mut loaded = BTreeMap::new();
 
         for path in ics_files(list_dir)? {
@@ -200,10 +198,7 @@ pub fn load_lists(
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
             let task = parse_task(&contents, &path, &date_context)?;
-            let manual_order = reads_manual_order
-                .then(|| parse_manual_sort_order(&contents, &path))
-                .transpose()?
-                .flatten();
+            let manual_order = parse_manual_sort_order(&contents, &path)?;
             snapshot.files.insert(
                 path.clone(),
                 SourceFile {
@@ -232,7 +227,7 @@ pub fn load_lists(
             );
         }
 
-        let tasks = project_tasks(loaded, scope, sort_keys, &mut snapshot)
+        let tasks = project_tasks(loaded, scope, &mut snapshot)
             .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
         state.lists.push(TaskList {
             name: requested.clone(),
@@ -368,35 +363,6 @@ struct LoadedTask {
 
 type LoadedTasks = BTreeMap<TaskId, LoadedTask>;
 
-fn task_order(left: &LoadedTask, right: &LoadedTask, sort_keys: &[SortKey]) -> std::cmp::Ordering {
-    use std::cmp::Ordering;
-
-    for key in sort_keys {
-        let ordering = match key {
-            SortKey::Completed => left.task.completed.cmp(&right.task.completed),
-            SortKey::Manual => compare_optional(left.manual_order, right.manual_order),
-            SortKey::Due => compare_optional(
-                left.task.due.as_ref().map(DateValue::canonical),
-                right.task.due.as_ref().map(DateValue::canonical),
-            ),
-            SortKey::Start => compare_optional(
-                left.task.start.as_ref().map(DateValue::canonical),
-                right.task.start.as_ref().map(DateValue::canonical),
-            ),
-            SortKey::Priority => right.task.priority.cmp(&left.task.priority),
-            SortKey::Summary => left
-                .task
-                .summary
-                .to_lowercase()
-                .cmp(&right.task.summary.to_lowercase()),
-        };
-        if ordering != Ordering::Equal {
-            return ordering;
-        }
-    }
-    left.task.id.cmp(&right.task.id)
-}
-
 fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> std::cmp::Ordering {
     match (left, right) {
         (Some(left), Some(right)) => left.cmp(&right),
@@ -409,7 +375,6 @@ fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> std::cmp::Orde
 fn project_tasks(
     mut loaded: LoadedTasks,
     scope: Scope,
-    sort_keys: &[SortKey],
     snapshot: &mut SourceSnapshot,
 ) -> Result<Vec<Task>> {
     let ids = loaded.keys().cloned().collect::<BTreeSet<_>>();
@@ -435,7 +400,10 @@ fn project_tasks(
             .push(task.id.clone());
     }
     for siblings in children.values_mut() {
-        siblings.sort_by(|left, right| task_order(&loaded[left], &loaded[right], sort_keys));
+        siblings.sort_by(|left, right| {
+            compare_optional(loaded[left].manual_order, loaded[right].manual_order)
+                .then_with(|| left.cmp(right))
+        });
     }
 
     fn append_subtree(
@@ -924,7 +892,7 @@ mod tests {
     }
 
     #[test]
-    fn sorts_by_status_then_priority_then_name() {
+    fn repository_order_is_deterministic_without_a_view() {
         let directory = tempfile::tempdir().unwrap();
         let list = directory.path().join("list");
         fs::create_dir(&list).unwrap();
@@ -966,14 +934,12 @@ mod tests {
         assert_eq!(
             order,
             [
-                // 1 and 4 both read as high, so they interleave alphabetically.
-                (false, Priority::High, "alpha"),
-                (false, Priority::High, "delta"),
                 (false, Priority::High, "zulu"),
-                (false, Priority::Medium, "mike"),
-                (false, Priority::Low, "Bravo"),
                 (false, Priority::None, "alpha"),
-                // Finished tasks sink below every unfinished one.
+                (false, Priority::Low, "Bravo"),
+                (false, Priority::High, "alpha"),
+                (false, Priority::Medium, "mike"),
+                (false, Priority::High, "delta"),
                 (true, Priority::High, "aardvark"),
                 (true, Priority::None, "yankee"),
             ]
@@ -981,7 +947,7 @@ mod tests {
     }
 
     #[test]
-    fn applies_configured_sort_keys_with_missing_dates_last() {
+    fn repository_does_not_apply_view_sorting() {
         let directory = tempfile::tempdir().unwrap();
         let list = directory.path().join("list");
         fs::create_dir(&list).unwrap();
@@ -1002,8 +968,7 @@ mod tests {
             .unwrap();
         }
 
-        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
-        config.sorting.default = vec![SortKey::Due];
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
         let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
 
         assert_eq!(
@@ -1012,12 +977,12 @@ mod tests {
                 .iter()
                 .map(|task| task.summary.as_str())
                 .collect::<Vec<_>>(),
-            ["Earlier", "Later", "Undated"]
+            ["Undated", "Later", "Earlier"]
         );
     }
 
     #[test]
-    fn honors_manual_sort_order_for_configured_lists() {
+    fn records_manual_sort_order_in_repository_sequence() {
         let directory = tempfile::tempdir().unwrap();
         let list = directory.path().join("list");
         fs::create_dir(&list).unwrap();
@@ -1040,11 +1005,7 @@ mod tests {
             .unwrap();
         }
 
-        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
-        config
-            .sorting
-            .lists
-            .insert("Work".into(), vec![SortKey::Manual]);
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
         let (state, _) = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap();
 
         assert_eq!(
@@ -1058,7 +1019,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_invalid_manual_order_unless_that_key_is_configured() {
+    fn rejects_invalid_manual_order_while_loading() {
         let directory = tempfile::tempdir().unwrap();
         let list = directory.path().join("list");
         fs::create_dir(&list).unwrap();
@@ -1069,10 +1030,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
-        assert!(load_lists(&config, &["Work".to_owned()], Scope::All).is_ok());
-
-        config.sorting.default = vec![SortKey::Manual];
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
         let error = load_lists(&config, &["Work".to_owned()], Scope::All).unwrap_err();
         assert!(format!("{error:#}").contains("expected an integer"));
     }

@@ -77,10 +77,9 @@ pub fn reconcile(
     }
 
     let markdown_changed = markdown_tasks != baseline_tasks || !new_tasks.is_empty();
-    // Markdown line order remains presentational, but a source-side change can
-    // alter the configured canonical order (notably X-APPLE-SORT-ORDER). That
-    // must trigger an inbound refresh even when every exposed task field is
-    // unchanged.
+    // Repository sequence carries read-only manual-rank changes. Markdown
+    // order remains presentational, but a source-side sequence change must
+    // still refresh the active view.
     let ics_changed =
         current_tasks != baseline_tasks || task_sequence(current_ics) != task_sequence(baseline);
 

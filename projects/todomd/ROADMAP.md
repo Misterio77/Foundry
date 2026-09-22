@@ -12,7 +12,7 @@ recovery can build on that protocol.
 
 ## Persistent manual ordering
 
-Sorting is configurable globally and per list, and the `manual` key reads
+Views configure grouping and sorting, and the `manual` key reads
 `X-APPLE-SORT-ORDER` values written by Apple Reminders, Nextcloud Tasks, and
 Tasks.org. Markdown line order remains presentational, however, so rearranging
 siblings does not write those values yet.

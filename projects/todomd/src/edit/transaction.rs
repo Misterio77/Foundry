@@ -1160,7 +1160,7 @@ mod tests {
     fn applies_all_file_operations_and_preserves_hidden_properties() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] New task\n\n# Personal\n\n- [x] -2026-09-10 Submit paper <!--t1-->\n";
+        let markdown = "# Postgrad\n\n- [ ] @Postgrad New task\n\n# Personal\n\n- [x] @Personal -2026-09-10 Submit paper <!--t1-->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1209,10 +1209,10 @@ mod tests {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
         let markdown = "# Postgrad\n\n\
-            - [ ] Outer\n  \
+            - [ ] @Postgrad Outer\n  \
               - [ ] Inner\n\
             \n# Personal\n\n\
-            - [ ] Buy milk, bread <!--t1-->\n";
+            - [ ] @Personal Buy milk, bread <!--t1-->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1284,11 +1284,11 @@ mod tests {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
         let markdown = "# Postgrad\n\n\
-            - [ ] Read chapter four <!--t1-->\n\
-            - [ ] -2026-09-10 Write paper draft <!--t2-->\n\
+            - [ ] @Postgrad Read chapter four <!--t1-->\n\
+            - [ ] @Postgrad -2026-09-10 Write paper draft <!--t2-->\n\
             \n\
             # Personal\n\n\
-            - [ ] Buy milk, bread <!--t3-->\n";
+            - [ ] @Personal Buy milk, bread <!--t3-->\n";
         let (plan, sources) = plan_in_scope(&config, markdown, Scope::All);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1681,7 +1681,7 @@ mod tests {
     fn refuses_to_apply_when_any_selected_source_changed() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] -2026-09-10 Renamed <!--t1-->\n\n# Personal\n\n- [ ] Buy milk, bread <!--t2-->\n";
+        let markdown = "# Postgrad\n\n- [ ] @Postgrad -2026-09-10 Renamed <!--t1-->\n\n# Personal\n\n- [ ] @Personal Buy milk, bread <!--t2-->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();
@@ -1701,7 +1701,7 @@ mod tests {
     fn refuses_to_apply_when_a_selected_list_changes_identity() {
         let calendars = copy_fixtures();
         let config = Config::new(vec![calendars.path().to_path_buf()]).unwrap();
-        let markdown = "# Postgrad\n\n- [ ] -2026-09-10 Renamed <!--t1-->\n\n# Personal\n\n- [ ] Buy milk, bread <!--t2-->\n";
+        let markdown = "# Postgrad\n\n- [ ] @Postgrad -2026-09-10 Renamed <!--t1-->\n\n# Personal\n\n- [ ] @Personal Buy milk, bread <!--t2-->\n";
         let (plan, sources) = plan_for(&config, markdown);
         let session = tempfile::tempdir().unwrap();
         fs::create_dir(session.path().join("transactions")).unwrap();

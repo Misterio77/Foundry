@@ -8,18 +8,20 @@ pub mod transaction;
 
 use anyhow::Result;
 
+use crate::view::View;
 use crate::{
     config::Config,
     model::TaskState,
     repository::{self, Scope, SourceSnapshot, resolve_lists},
 };
 use hooks::Termination;
-use markdown::{IdentityManifest, render};
+use markdown::{IdentityManifest, render_with_view};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Options {
     pub no_hooks: bool,
     pub scope: Scope,
+    pub view: View,
 }
 
 #[derive(Debug)]
@@ -35,9 +37,19 @@ pub fn render_lists(
     requested_lists: &[String],
     scope: Scope,
 ) -> Result<RenderedSession> {
+    let view = config.view(None)?;
+    render_lists_with_view(config, requested_lists, scope, &view)
+}
+
+pub fn render_lists_with_view(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+    view: &View,
+) -> Result<RenderedSession> {
     let (state, sources) = repository::load_lists(config, requested_lists, scope)?;
     let mut manifest = IdentityManifest::default();
-    let markdown = render(&state, &mut manifest)?;
+    let markdown = render_with_view(&state, view, &mut manifest)?;
 
     Ok(RenderedSession {
         markdown,
@@ -56,6 +68,7 @@ pub fn run(config: &Config, requested_lists: &[String], options: Options) -> Res
         &lists,
         options.scope,
         !options.no_hooks,
+        options.view,
         &termination,
     )
 }

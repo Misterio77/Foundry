@@ -11,7 +11,21 @@ in {
 
   xdg.configFile."todomd/config.toml".source = toml.generate "todomd-config.toml" {
     calendar_roots = lib.mapAttrsToList (_: c: c.local.path) config.accounts.calendar.accounts;
-    sorting.default = ["completed" "priority" "due" "summary"];
+    default_view = "default";
+    views = {
+      default = {
+        group_by = ["list"];
+        sort_by = ["completed" "priority" "due" "summary"];
+      };
+      priority = {
+        group_by = ["priority"];
+        sort_by = ["due" "list" "summary"];
+      };
+      agenda = {
+        group_by = ["due"];
+        sort_by = ["priority" "list" "summary"];
+      };
+    };
     hooks.after_apply = [systemctl "--user" "start" "vdirsyncer.service"];
   };
 }

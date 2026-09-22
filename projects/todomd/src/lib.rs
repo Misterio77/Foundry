@@ -5,3 +5,4 @@ pub mod lsp;
 pub mod model;
 pub mod repository;
 pub mod show;
+pub mod view;

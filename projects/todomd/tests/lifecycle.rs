@@ -14,7 +14,7 @@ use todomd::{
     config::Config,
     edit::{
         self,
-        session::{LiveMetadata, Session},
+        session::{LIVE_FORMAT_VERSION, LiveMetadata, Session},
     },
     repository::{self, Scope},
 };
@@ -45,6 +45,9 @@ impl Case {
             &config,
             format!(
                 "calendar_roots = [{calendars:?}]\n\
+                 [views.flat]\n\
+                 group_by = []\n\
+                 sort_by = [\"due\", \"summary\"]\n\
                  [hooks]\n\
                  after_apply = [\"sh\", {hook:?}, {log:?}, \"{after_apply_status}\"]\n",
                 calendars = calendars.to_string_lossy(),
@@ -101,6 +104,9 @@ fn generates_completions_without_loading_configuration() {
     assert!(completion.contains("complete -c todomd"));
     assert!(completion.contains("-a \"edit\""));
     assert!(completion.contains("-l completed"));
+    assert!(completion.contains("-l view"));
+    assert!(completion.contains("-l group-by"));
+    assert!(completion.contains("-l sort-by"));
     assert!(!completion.contains("-l watch"));
 }
 
@@ -142,6 +148,29 @@ fn show_reports_unrepresentable_tasks_without_breaking_json() {
     assert!(stderr.contains("nosummary.ics"));
     let tasks: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(tasks.as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn show_view_selection_and_overrides_work() {
+    let case = Case::new(0);
+    let output = case
+        .base("false")
+        .args(["show", "--view", "flat"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", output_text(&output));
+    let tasks: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(tasks[0]["uid"], "write@example.test");
+    assert_eq!(tasks[1]["uid"], "groceries@example.test");
+
+    let duplicate = case
+        .base("false")
+        .args(["show", "--group-by", "list,list"])
+        .output()
+        .unwrap();
+    assert!(!duplicate.status.success());
+    assert!(output_text(&duplicate).contains("must not contain duplicate keys"));
 }
 
 #[test]
@@ -197,6 +226,8 @@ fn lsp_applies_saves_and_loads_source_changes() {
         .unwrap()
         .0;
     let metadata = LiveMetadata {
+        format_version: LIVE_FORMAT_VERSION,
+        view: config.view(None).unwrap(),
         config,
         lists,
         scope: Scope::Active,
@@ -232,6 +263,10 @@ fn lsp_applies_saves_and_loads_source_changes() {
     let initialize = peer.read();
     assert_eq!(initialize["id"], 1);
     assert_eq!(initialize["result"]["capabilities"]["colorProvider"], true);
+    assert_eq!(
+        initialize["result"]["capabilities"]["executeCommandProvider"]["commands"],
+        json!(["todomd.changeView"])
+    );
     peer.send(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
     peer.send(json!({
         "jsonrpc": "2.0",
@@ -288,7 +323,10 @@ fn lsp_applies_saves_and_loads_source_changes() {
     let source = fs::read_to_string(&source_path).unwrap();
     assert!(source.contains("SUMMARY:LSP paper"));
 
-    let completed = canonical.replace("- [ ] -2026-09-10 LSP paper", "- [x] -2026-09-10 LSP paper");
+    let completed = canonical.replace(
+        "- [ ] @Postgrad -2026-09-10 LSP paper",
+        "- [x] @Postgrad -2026-09-10 LSP paper",
+    );
     peer.send(json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
@@ -304,7 +342,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
     }));
     let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
     assert_hook_follows_workspace_edit(&mut peer, &events);
-    assert!(canonical.contains("- [x] -2026-09-10 LSP paper"));
+    assert!(canonical.contains("- [x] @Postgrad -2026-09-10 LSP paper"));
     assert!(
         fs::read_to_string(&source_path)
             .unwrap()
@@ -333,8 +371,54 @@ fn lsp_applies_saves_and_loads_source_changes() {
             && progress["params"]["value"]["kind"] == "begin"
             && progress["params"]["value"]["message"] == "Updating Markdown from ICS"
     }));
-    assert!(canonical.contains("- [x] -2026-09-10 Changed externally"));
+    assert!(canonical.contains("- [x] @Postgrad -2026-09-10 Changed externally"));
 
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 5},
+            "contentChanges": [{"text": canonical}]
+        }
+    }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "id": 50,
+        "method": "workspace/executeCommand",
+        "params": {"command": "todomd.changeView", "arguments": []}
+    }));
+    loop {
+        let message = peer.read();
+        if message["method"] == "window/showMessageRequest" {
+            assert!(
+                message["params"]["actions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|action| action["title"] == "flat")
+            );
+            peer.send(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {"title": "flat"}
+            }));
+            break;
+        }
+    }
+    let (flat, _) = receive_workspace_edit(&mut peer, "@Postgrad");
+    assert!(!flat.contains("# Postgrad"));
+    let response = read_response(&mut peer, 50);
+    assert_eq!(response["result"], Value::Null);
+    assert_eq!(case.hooks(), "apply\napply\n");
+
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 6},
+            "contentChanges": [{"text": flat}]
+        }
+    }));
     peer.send(json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didClose",

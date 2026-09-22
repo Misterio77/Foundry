@@ -8,6 +8,7 @@ use crate::{
     model::{
         EditedTask, EditedTaskList, EditedTaskState, Priority, TaskId, TaskReference, TaskState,
     },
+    view::{self, View},
 };
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -45,36 +46,49 @@ impl IdentityManifest {
 }
 
 pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<String> {
+    render_with_view(state, &View::default(), manifest)
+}
+
+pub fn render_with_view(
+    state: &TaskState,
+    active_view: &View,
+    manifest: &mut IdentityManifest,
+) -> Result<String> {
     let mut output = String::new();
+    let mut previous_headings = Vec::<String>::new();
 
-    for (list_index, list) in state.lists.iter().enumerate() {
-        validate_heading(&list.name)?;
-        if list_index > 0 {
-            output.push('\n');
+    for tree in view::project(state, active_view) {
+        let common = previous_headings
+            .iter()
+            .zip(&tree.headings)
+            .take_while(|(left, right)| left == right)
+            .count();
+        if common < tree.headings.len() {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            for (depth, heading) in tree.headings.iter().enumerate().skip(common) {
+                validate_heading(heading)?;
+                output.push_str(&"#".repeat(depth + 1));
+                output.push(' ');
+                output.push_str(heading);
+                output.push_str("\n\n");
+            }
         }
-        output.push_str("# ");
-        output.push_str(&list.name);
-        output.push_str("\n\n");
+        previous_headings = tree.headings;
 
-        let mut depths = BTreeMap::new();
-        for task in &list.tasks {
+        for projected in tree.tasks {
+            let task = projected.task;
             validate_summary(&task.summary)?;
             for category in &task.categories {
                 validate_category(category)?;
             }
-            let depth = match &task.parent {
-                Some(parent) => {
-                    depths.get(parent).copied().with_context(|| {
-                        format!(
-                            "task {:?} appears before its parent {:?}",
-                            task.id.as_str(),
-                            parent.as_str()
-                        )
-                    })? + 1
-                }
-                None => 0,
-            };
             let checked = if task.completed { 'x' } else { ' ' };
+            let list = if projected.depth == 0 {
+                format!("{} ", render_list_marker(tree.list_name))
+            } else {
+                String::new()
+            };
             let due = task
                 .due
                 .as_ref()
@@ -87,18 +101,15 @@ pub fn render(state: &TaskState, manifest: &mut IdentityManifest) -> Result<Stri
                 "" => String::new(),
                 marker => format!("{marker} "),
             };
-            let categories = task
-                .categories
-                .iter()
-                .map(|category| format!("{} ", render_category_marker(category)))
-                .collect::<String>();
+            let categories = render_categories(&task.categories)
+                .map(|field| format!("{field} "))
+                .unwrap_or_default();
             let summary = render_summary(&task.summary);
             let session_id = manifest.get_or_insert(&task.id);
-            output.push_str(&"  ".repeat(depth));
+            output.push_str(&"  ".repeat(projected.depth));
             output.push_str(&format!(
-                "- [{checked}] {due}{start}{priority}{categories}{summary}{MARKER_START}{session_id}{MARKER_END}\n"
+                "- [{checked}] {list}{due}{start}{priority}{categories}{summary}{MARKER_START}{session_id}{MARKER_END}\n"
             ));
-            depths.insert(task.id.clone(), depth);
         }
     }
 
@@ -115,10 +126,13 @@ pub fn parse(
         .iter()
         .map(|list| list.name.as_str())
         .collect::<BTreeSet<_>>();
-    let mut parsed_lists: BTreeMap<String, Vec<EditedTask>> = BTreeMap::new();
-    let mut current_list: Option<String> = None;
+    let mut parsed_lists = baseline
+        .lists
+        .iter()
+        .map(|list| (list.name.clone(), Vec::new()))
+        .collect::<BTreeMap<String, Vec<EditedTask>>>();
     let mut seen_ids = BTreeSet::new();
-    let mut ancestors: Vec<TaskReference> = Vec::new();
+    let mut ancestors: Vec<(TaskReference, String)> = Vec::new();
     let mut next_draft_id = 1;
     let date_context = DateContext::local_now()?;
 
@@ -128,30 +142,33 @@ pub fn parse(
             continue;
         }
 
-        if let Some(name) = line.strip_prefix("# ") {
-            if !expected_lists.contains(name) {
-                bail!("line {line_number}: unknown list heading {name:?}");
+        if line.starts_with('#') {
+            let hashes = line.bytes().take_while(|byte| *byte == b'#').count();
+            if hashes == 0 || line.as_bytes().get(hashes) != Some(&b' ') || hashes > 6 {
+                bail!("line {line_number}: malformed presentation heading");
             }
-            if parsed_lists.insert(name.to_owned(), Vec::new()).is_some() {
-                bail!("line {line_number}: duplicate list heading {name:?}");
-            }
-            current_list = Some(name.to_owned());
-            ancestors.clear();
             continue;
         }
 
-        if line.starts_with('#') {
-            bail!("line {line_number}: only level-one selected-list headings are allowed");
-        }
-
-        let list_name = current_list
-            .as_ref()
-            .with_context(|| format!("line {line_number}: task appears before a list heading"))?;
         let (depth, task_line) = split_indentation(line, line_number)?;
         if depth > ancestors.len() {
             bail!("line {line_number}: task nesting jumps more than one level");
         }
-        let mut task = parse_task_line(task_line, line_number, manifest, &date_context)?;
+        let (mut task, explicit_list) =
+            parse_task_line(task_line, line_number, manifest, &date_context)?;
+        let list_name = if depth == 0 {
+            explicit_list.with_context(|| {
+                format!("line {line_number}: a root task must contain an @list marker")
+            })?
+        } else {
+            if explicit_list.is_some() {
+                bail!("line {line_number}: a child task must inherit its parent's list");
+            }
+            ancestors[depth - 1].1.clone()
+        };
+        if !expected_lists.contains(list_name.as_str()) {
+            bail!("line {line_number}: unknown list {list_name:?}");
+        }
         if let Some(task_id) = &task.id
             && !seen_ids.insert(task_id.clone())
         {
@@ -165,22 +182,13 @@ pub fn parse(
                 reference
             }
         };
-        task.parent = depth.checked_sub(1).map(|index| ancestors[index].clone());
+        task.parent = depth.checked_sub(1).map(|index| ancestors[index].0.clone());
         ancestors.truncate(depth);
-        ancestors.push(task_reference);
+        ancestors.push((task_reference, list_name.clone()));
         parsed_lists
-            .get_mut(list_name)
-            .expect("current list heading was inserted")
+            .get_mut(&list_name)
+            .expect("selected list was prepopulated")
             .push(task);
-    }
-
-    let missing = expected_lists
-        .iter()
-        .filter(|name| !parsed_lists.contains_key(**name))
-        .copied()
-        .collect::<Vec<_>>();
-    if !missing.is_empty() {
-        bail!("missing list heading(s): {}", missing.join(", "));
     }
 
     let lists = baseline
@@ -190,7 +198,7 @@ pub fn parse(
             name: list.name.clone(),
             tasks: parsed_lists
                 .remove(&list.name)
-                .expect("all baseline headings were checked"),
+                .expect("selected list was prepopulated"),
         })
         .collect();
 
@@ -231,7 +239,7 @@ fn parse_task_line(
     line_number: usize,
     manifest: &IdentityManifest,
     date_context: &DateContext,
-) -> Result<EditedTask> {
+) -> Result<(EditedTask, Option<String>)> {
     let (completed, remainder) = if let Some(remainder) = line.strip_prefix("- [ ] ") {
         (false, remainder)
     } else if let Some(remainder) = line.strip_prefix("- [x] ") {
@@ -258,16 +266,19 @@ fn parse_task_line(
     let summary = parse_summary(fields.summary).with_context(|| format!("line {line_number}"))?;
     validate_summary(&summary).with_context(|| format!("line {line_number}"))?;
 
-    Ok(EditedTask {
-        id,
-        summary,
-        completed,
-        priority: fields.priority,
-        categories: fields.categories,
-        parent: None,
-        start: fields.start,
-        due: fields.due,
-    })
+    Ok((
+        EditedTask {
+            id,
+            summary,
+            completed,
+            priority: fields.priority,
+            categories: fields.categories,
+            parent: None,
+            start: fields.start,
+            due: fields.due,
+        },
+        fields.list,
+    ))
 }
 
 fn validate_heading(heading: &str) -> Result<()> {
@@ -287,7 +298,7 @@ fn render_summary(summary: &str) -> String {
 }
 
 fn needs_quoting(summary: &str) -> bool {
-    summary.starts_with(['!', '+', '-', '@', '"'])
+    summary.starts_with(['!', '+', '-', '@', '[', '"'])
         || summary.trim() != summary
         // A trailing identity-shaped comment would otherwise be read back as
         // this task's marker.
@@ -301,15 +312,35 @@ pub(super) fn validate_category(category: &str) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn render_category_marker(category: &str) -> String {
-    if category.contains(char::is_whitespace) || category.contains('"') {
-        format!("@\"{}\"", category.replace('"', "\"\""))
+fn render_list_marker(list: &str) -> String {
+    if list.contains(char::is_whitespace) || list.contains('"') {
+        format!("@\"{}\"", list.replace('"', "\"\""))
     } else {
-        format!("@{category}")
+        format!("@{list}")
     }
 }
 
+fn render_categories(categories: &[String]) -> Option<String> {
+    (!categories.is_empty()).then(|| {
+        let categories = categories.iter().collect::<BTreeSet<_>>();
+        let values = categories
+            .into_iter()
+            .map(|category| {
+                if category.contains(char::is_whitespace) || category.contains([',', '[', ']', '"'])
+                {
+                    format!("\"{}\"", category.replace('"', "\"\""))
+                } else {
+                    category.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("[{values}]")
+    })
+}
+
 struct ParsedFields<'a> {
+    list: Option<String>,
     priority: Priority,
     categories: Vec<String>,
     start: Option<DateValue>,
@@ -321,8 +352,9 @@ fn split_fields<'a>(
     mut remainder: &'a str,
     date_context: &DateContext,
 ) -> Result<ParsedFields<'a>> {
+    let mut list = None;
     let mut priority = None;
-    let mut categories = BTreeSet::new();
+    let mut categories = None;
     let mut start = None;
     let mut due = None;
 
@@ -345,11 +377,22 @@ fn split_fields<'a>(
         }
 
         if let Some(rest) = remainder.strip_prefix('@') {
-            let (category, rest) = take_marker_value(rest, "category")?;
-            if !categories.insert(category.clone()) {
-                bail!("duplicate category marker {category:?}");
+            if list.is_some() {
+                bail!("task contains more than one list marker");
             }
-            remainder = marker_remainder(rest, "category marker")?;
+            let (value, rest) = take_marker_value(rest, "list")?;
+            list = Some(value);
+            remainder = marker_remainder(rest, "list marker")?;
+            continue;
+        }
+
+        if remainder.starts_with('[') {
+            if categories.is_some() {
+                bail!("task contains more than one category field");
+            }
+            let (values, rest) = take_categories(remainder)?;
+            categories = Some(values);
+            remainder = marker_remainder(rest, "category field")?;
             continue;
         }
 
@@ -372,12 +415,58 @@ fn split_fields<'a>(
     }
 
     Ok(ParsedFields {
+        list,
         priority: priority.unwrap_or_default(),
-        categories: categories.into_iter().collect(),
+        categories: categories.unwrap_or_default(),
         start,
         due,
         summary: remainder,
     })
+}
+
+fn take_categories(input: &str) -> Result<(Vec<String>, &str)> {
+    let mut remainder = input
+        .strip_prefix('[')
+        .expect("category field starts with '['");
+    let mut categories = BTreeSet::new();
+
+    loop {
+        remainder = remainder.trim_start_matches(' ');
+        if remainder.starts_with(']') {
+            bail!("category field must contain at least one category");
+        }
+        let (category, rest) = if remainder.starts_with('"') {
+            take_marker_value(remainder, "category")?
+        } else {
+            let end = remainder
+                .find([',', ']'])
+                .context("category field must end with ']'")?;
+            let raw = &remainder[..end];
+            let value = raw.trim_end_matches(' ');
+            if raw != value {
+                bail!("an unquoted category must not have trailing whitespace");
+            }
+            if value.is_empty() {
+                bail!("category cannot be empty");
+            }
+            if value.contains(char::is_whitespace) || value.contains(['[', '"']) {
+                bail!("a category containing whitespace, brackets, or quotes must be quoted");
+            }
+            (value.to_owned(), &remainder[end..])
+        };
+        validate_category(&category)?;
+        if !categories.insert(category.clone()) {
+            bail!("duplicate category {category:?}");
+        }
+
+        remainder = rest.trim_start_matches(' ');
+        if let Some(rest) = remainder.strip_prefix(']') {
+            return Ok((categories.into_iter().collect(), rest));
+        }
+        remainder = remainder
+            .strip_prefix(',')
+            .context("categories must be separated by commas")?;
+    }
 }
 
 fn marker_remainder<'a>(remainder: &'a str, marker: &str) -> Result<&'a str> {
@@ -425,8 +514,8 @@ fn take_marker_value<'a>(input: &'a str, field: &str) -> Result<(String, &'a str
 /// Reads a summary field, honouring optional quoting.
 fn parse_summary(field: &str) -> Result<String> {
     let Some(inner) = field.strip_prefix('"') else {
-        if field.starts_with(['!', '+', '-', '@']) {
-            bail!("a summary starting with '!', '+', '-', or '@' must be quoted");
+        if field.starts_with(['!', '+', '-', '@', '[']) {
+            bail!("a summary starting with '!', '+', '-', '@', or '[' must be quoted");
         }
         if field.trim() != field {
             bail!("a summary with leading or trailing whitespace must be quoted");
@@ -537,8 +626,7 @@ mod tests {
         };
         let mut manifest = IdentityManifest::default();
         render(&baseline, &mut manifest).unwrap();
-        let input =
-            "# Postgrad\n\n- [ ] Buy coffee\n\n# Personal\n\n- [x] Submit paper <!--t1-->\n";
+        let input = "# Anything\n\n- [ ] @Postgrad Buy coffee\n\n# Decorative\n\n- [x] @Personal Submit paper <!--t1-->\n";
 
         let parsed = parse(input, &baseline, &manifest).unwrap();
 
@@ -590,15 +678,15 @@ mod tests {
         let mut manifest = IdentityManifest::default();
         let document = render(&baseline, &mut manifest).unwrap();
         assert!(
-            document.contains("- [ ] Submit paper <!--t1-->"),
+            document.contains("- [ ] @Personal Submit paper <!--t1-->"),
             "{document}"
         );
 
         let parsed = parse(
-            "# Personal\n\n\
-             - [ ] Submit paper <!--t1-->\n\
-             - [ ] Ship it <!--later-->\n\
-             - [ ] Note <!--t1--> in passing\n",
+            "# Decorative\n\n\
+             - [ ] @Personal Submit paper <!--t1-->\n\
+             - [ ] @Personal Ship it <!--later-->\n\
+             - [ ] @Personal Note <!--t1--> in passing\n",
             &baseline,
             &manifest,
         )
@@ -639,7 +727,7 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
 
         assert!(
-            document.contains("- [ ] \"Submit paper <!--t1-->\" <!--t1-->"),
+            document.contains("- [ ] @Personal \"Submit paper <!--t1-->\" <!--t1-->"),
             "{document}"
         );
 
@@ -673,7 +761,7 @@ mod tests {
         render(&baseline, &mut manifest).unwrap();
 
         let error = parse(
-            "# Personal\n\n- [ ] Submit paper <!--t1--> <!--t1-->\n",
+            "# Personal\n\n- [ ] @Personal Submit paper <!--t1--> <!--t1-->\n",
             &baseline,
             &manifest,
         )
@@ -738,10 +826,10 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
 
-        assert!(document.contains("- [ ] !!! Urgent <!--t1-->"));
-        assert!(document.contains("- [ ] !! Middling <!--t2-->"));
-        assert!(document.contains("- [ ] ! Whenever <!--t3-->"));
-        assert!(document.contains("- [ ] Unset <!--t4-->"));
+        assert!(document.contains("- [ ] @Postgrad !!! Urgent <!--t1-->"));
+        assert!(document.contains("- [ ] @Postgrad !! Middling <!--t2-->"));
+        assert!(document.contains("- [ ] @Postgrad ! Whenever <!--t3-->"));
+        assert!(document.contains("- [ ] @Postgrad Unset <!--t4-->"));
 
         let parsed = parse(&document, &state, &manifest).unwrap();
         let priorities = parsed.lists[0]
@@ -770,7 +858,12 @@ mod tests {
                     summary: "Email @Gabs".into(),
                     completed: false,
                     priority: Priority::Low,
-                    categories: vec!["Blocked".into(), "Quick Win".into(), "say \"hi\"".into()],
+                    categories: vec![
+                        "say \"hi\"".into(),
+                        "Blocked".into(),
+                        "Quick Win".into(),
+                        "Blocked".into(),
+                    ],
                     parent: None,
                     start: None,
                     due: None,
@@ -782,12 +875,12 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
         assert!(
             document.contains(
-                "- [ ] ! @Blocked @\"Quick Win\" @\"say \"\"hi\"\"\" Email @Gabs <!--t1-->"
+                "- [ ] @Personal ! [Blocked, \"Quick Win\", \"say \"\"hi\"\"\"] Email @Gabs <!--t1-->"
             ),
             "{document}"
         );
 
-        let reordered = "# Personal\n\n- [ ] @\"Quick Win\" ! @\"say \"\"hi\"\"\" @Blocked Email @Gabs <!--t1-->\n";
+        let reordered = "# Decorative\n\n- [ ] [\"Quick Win\", \"say \"\"hi\"\"\", Blocked] ! @Personal Email @Gabs <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(
             parsed.lists[0].tasks[0].categories,
@@ -853,9 +946,12 @@ mod tests {
                 tasks: Vec::new(),
             }],
         };
-        let document = "# Personal\n\n- [ ] @Work @Work Duplicate\n";
-
-        assert!(parse(document, &baseline, &IdentityManifest::default()).is_err());
+        for document in [
+            "# Personal\n\n- [ ] @Personal [Work, Work] Duplicate\n",
+            "# Personal\n\n- [ ] @Personal [Work ] Trailing whitespace\n",
+        ] {
+            assert!(parse(document, &baseline, &IdentityManifest::default()).is_err());
+        }
     }
 
     #[test]
@@ -886,12 +982,13 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
         assert!(
-            document.contains("- [ ] -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!--t1-->"),
+            document.contains(
+                "- [ ] @Postgrad -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!--t1-->"
+            ),
             "{document}"
         );
 
-        let reordered =
-            "# Postgrad\n\n- [ ] ! +\"2026-09-06 10:00\" -2026-09-07 Write grant <!--t1-->\n";
+        let reordered = "# Dates\n\n- [ ] ! +\"2026-09-06 10:00\" @Postgrad -2026-09-07 Write grant <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(parsed.lists[0].tasks[0].priority, Priority::Low);
         assert_eq!(
@@ -962,7 +1059,9 @@ mod tests {
             .iter()
             .map(|task| task.summary.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(summaries, awkward);
+        let mut expected = awkward.to_vec();
+        expected.sort_by_key(|summary| summary.to_lowercase());
+        assert_eq!(summaries, expected);
         assert!(
             parsed.lists[0]
                 .tasks
@@ -995,7 +1094,7 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
 
         assert!(
-            document.contains(r#"- [ ] He said "hi" to me <!--t1-->"#),
+            document.contains(r#"- [ ] @Postgrad He said "hi" to me <!--t1-->"#),
             "{document}"
         );
         let parsed = parse(&document, &state, &manifest).unwrap();
@@ -1023,10 +1122,10 @@ mod tests {
         render(&state, &mut manifest).unwrap();
 
         for line in [
-            "- [ ] !!!! Too many <!--t1-->",
-            "- [ ] !unquoted start <!--t1-->",
-            "- [ ] \"unterminated <!--t1-->",
-            "- [ ] \"bad \" quoting\" <!--t1-->",
+            "- [ ] @Postgrad !!!! Too many <!--t1-->",
+            "- [ ] @Postgrad !unquoted start <!--t1-->",
+            "- [ ] @Postgrad \"unterminated <!--t1-->",
+            "- [ ] @Postgrad \"bad \" quoting\" <!--t1-->",
         ] {
             let document = format!("# Postgrad\n\n{line}\n");
             assert!(
@@ -1037,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_headings() {
+    fn accepts_documents_without_headings() {
         let baseline = TaskState {
             lists: vec![TaskList {
                 name: "Personal".into(),
@@ -1045,7 +1144,7 @@ mod tests {
             }],
         };
 
-        assert!(parse("", &baseline, &IdentityManifest::default()).is_err());
+        assert!(parse("", &baseline, &IdentityManifest::default()).is_ok());
     }
 
     #[test]
@@ -1059,7 +1158,7 @@ mod tests {
 
         assert!(
             parse(
-                "# Personal\n\n- [ ]    \n",
+                "# Personal\n\n- [ ] @Personal    \n",
                 &baseline,
                 &IdentityManifest::default()
             )
@@ -1154,7 +1253,8 @@ mod tests {
                 tasks: Vec::new(),
             }],
         };
-        let document = "# Personal\n\n- [ ] Parent\n  - [ ] Child\n    - [ ] Grandchild\n";
+        let document =
+            "# Decorative\n\n- [ ] @Personal Parent\n  - [ ] Child\n    - [ ] Grandchild\n";
 
         let parsed = parse(document, &baseline, &IdentityManifest::default()).unwrap();
 

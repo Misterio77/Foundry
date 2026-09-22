@@ -36,11 +36,19 @@ The Nix package installs Bash, Fish, and Zsh completions.
 ```toml
 calendar_roots = ["~/Calendars/personal"]
 
-[sorting]
-default = ["completed", "priority", "summary"]
+default_view = "default"
 
-[sorting.lists]
-Postgrad = ["manual", "due", "summary"]
+[views.default]
+group_by = ["list"]
+sort_by = ["completed", "priority", "summary"]
+
+[views.agenda]
+group_by = ["due"]
+sort_by = ["due", "priority", "summary"]
+
+[views.flat]
+group_by = []
+sort_by = ["due", "priority", "summary"]
 
 [hooks]
 after_apply = ["systemctl", "--user", "start", "vdirsyncer.service"]
@@ -49,14 +57,16 @@ after_apply = ["systemctl", "--user", "start", "vdirsyncer.service"]
 `calendar_roots` hold vdir collections: subdirectories of `.ics` files with a
 `displayname` file whose contents are the list name. Paths support `~`.
 
-`sorting.default` sets the sibling sort keys, and entries under
-`sorting.lists` replace it for named lists. Available keys are `completed`
-(unfinished first), `manual` (ascending `X-APPLE-SORT-ORDER`), `due`, `start`,
-`priority` (high first), and `summary` (case-insensitive). Missing manual and
-date values sort last. The task identity is always the final deterministic
-tie-breaker. When `[sorting]` is omitted, the default remains `completed`,
-`priority`, then `summary`. Manual order is read-only for now: rearranging
-Markdown lines does not write `X-APPLE-SORT-ORDER`.
+A view combines `group_by` and `sort_by`. The built-in default groups by list
+and sorts unfinished tasks first, then by priority and summary. Named views can
+replace it, and `default_view` chooses the startup view.
+
+Grouping supports `list`, `completed`, `priority`, `due`, `start`, and
+`categories`. Sorting supports `completed`, `manual`, `due`, `start`,
+`priority`, and `summary`. Missing dates and manual ranks sort last; task
+identity is the final deterministic tie-breaker. `manual` reads
+`X-APPLE-SORT-ORDER` but remains read-only: rearranging Markdown does not write
+it.
 
 `after_apply` is an optional argument array executed directly after source
 files change. A failure is reported through LSP but does not roll back the
@@ -76,11 +86,16 @@ as the removed `before_session` and `after_session`, is a configuration error.
 |---|---|
 | `--config <PATH>` | Use a specific configuration file. Accepted anywhere. |
 | `--completed` | Include completed and cancelled tasks. |
+| `--view <NAME>` | Start with a configured named view. |
+| `--group-by <KEYS>` | Override grouping with comma-separated keys. |
+| `--no-group` | Render without group headings. |
+| `--sort-by <KEYS>` | Override sorting with comma-separated keys. |
 | `--no-hooks` | `edit` only. Skip `after_apply` for this run. |
 
-Naming lists selects them and fixes their order; otherwise lists are ordered by
-display name. The top level takes no list names, so a list called `show` remains
-reachable as `todomd edit show`.
+Naming lists selects them and fixes list-group order; otherwise lists are
+ordered by display name. The top level takes no list names, so a list called
+`show` remains reachable as `todomd edit show`. Explicit grouping and sorting
+overrides take precedence over `--view`, then the configured default.
 
 ## Editing
 
@@ -90,17 +105,18 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] -2026-09-12 +"2026-09-07 09:00" !!! @Postgrad Paper <!--t1-->
-  - [ ] -2026-09-11 ! @"Quick Win" Read related work <!--t3-->
+- [ ] @Postgrad -2026-09-12 +"2026-09-07 09:00" !!! [Research] Paper <!--t1-->
+  - [ ] -2026-09-11 ! ["Quick Win"] Read related work <!--t3-->
 
 # Personal
 
-- [ ] Buy milk, bread <!--t2-->
+- [ ] @Personal Buy milk, bread <!--t2-->
 ```
 
 When a selected vdir has a `color` metadata file containing `#RRGGBB`, todomd
-exposes that color for its list heading through LSP. Supporting editors such as
-Helix 25.07 and newer show an inline color swatch beside the heading.
+exposes that color for generated list-group headings through LSP. Supporting
+editors such as Helix 25.07 and newer show an inline color swatch beside the
+heading.
 
 | Edit | Result |
 |---|---|
@@ -110,13 +126,14 @@ Helix 25.07 and newer show an inline color swatch beside the heading.
 | Remove a date marker | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
 | Remove the priority marker | Clear priority |
-| Add or remove `@category` | Change categories |
+| Change `@list` on a root | Move its whole tree between lists |
+| Edit `[category, ...]` | Change categories |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
-| Add a `- [ ]` line without an identity | Create in that list |
+| Add a root `- [ ] @list` line without an identity | Create in that list |
 | Indent a line by two spaces | Make it a child of the preceding task |
 | Unindent or reindent a line | Detach or reparent it |
-| Move a line or nested block under another heading | Move between lists |
+| Move or rename a heading | Nothing; headings are presentation only |
 | Delete a line | Delete that VTODO |
 | Reorder lines | Nothing |
 
@@ -126,25 +143,30 @@ task is deleted and a new one created on the next save.
 
 Only a trailing comment whose body is a session identity, meaning `t` followed by
 digits, is read as a marker. Any other trailing HTML comment, such as
-`- [ ] Ship it <!--later-->`, is part of the summary, as is an identity-shaped
+`- [ ] @Personal Ship it <!--later-->`, is part of the summary, as is an identity-shaped
 one that is not at the end of the line. A summary that really does end with
 `<!--t1-->` is quoted, like any other summary the syntax would otherwise claim.
 
 Indentation edits the child's `RELATED-TO` parent, written as
 `RELATED-TO;RELTYPE=PARENT` so clients that do not infer the default
-relationship type, such as todoman, still see the hierarchy. A bare
-`RELATED-TO` is read as a parent but rewritten only when that task is
-reparented. Removing a parent line deletes only that VTODO. Retained children
-must be unindented or nested under another parent. Moving a nested block moves
-every line in it. Empty and dangling source relationships render as roots and
-remain untouched; cyclic relationships abort the read because they cannot form a
-tree.
+relationship type, such as todoman, still see the hierarchy. A root carries one
+`@list` marker; descendants inherit that list and reject redundant markers.
+Changing a root marker moves its whole tree. Unindenting a child into a root
+requires adding a list marker, while indenting a root requires removing it.
+Headings are regenerated from the active view and never determine task state.
 
-Leading fields may be entered in any order. Rerendering puts due, start,
-priority, then alphabetically sorted categories before the summary. `-` means
-due, `+` means start, `!!!`, `!!`, or `!` means high, medium, or low priority,
-and `@name` adds a category. Quote multiword categories, as in `@"Quick Win"`.
-An `@` elsewhere in the summary is ordinary text.
+A bare `RELATED-TO` is read as a parent but rewritten only when that task is
+reparented. Removing a parent line deletes only that VTODO. Retained children
+must be unindented or nested under another parent. Empty and dangling source
+relationships render as roots and remain untouched; cyclic relationships abort
+the read because they cannot form a tree.
+
+Leading fields may be entered in any order. Rerendering puts root list, due,
+start, priority, then alphabetically sorted categories before the summary. `-`
+means due, `+` means start, and `!!!`, `!!`, or `!` means high, medium, or low
+priority. Categories form one optional field such as
+`[Errands, "Quick Win"]`; quote values containing whitespace, commas, brackets,
+or quotes, doubling quotes within a quoted value.
 
 Date-only values render as `YYYY-MM-DD`. Datetimes render in local time as
 `"YYYY-MM-DD HH:MM"`. Input additionally accepts RFC 3339 or ISO timestamps,
@@ -166,32 +188,37 @@ written to ICS. Fractional seconds are rejected because RFC 5545 DATE-TIME
 cannot represent them. Existing `VTIMEZONE` components are preserved, but new
 ones are not generated.
 
-Each sibling set follows its configured sort keys. By default it renders
-unfinished first, then by priority, then alphabetically. Parents precede their
-recursively sorted descendants. Ordering among siblings is presentational, so
-rearranging their lines changes nothing. The `manual` key honors existing
-`X-APPLE-SORT-ORDER` values but does not make rearrangement persistent yet.
+A view groups root trees and sorts siblings. Trees stay intact: descendants
+remain beside their root even when their own fields differ from its group.
+Within each tree, sibling sets are sorted recursively and parents precede their
+descendants. Grouping by categories treats the complete category set as one
+value rather than duplicating editable tasks. Ordering and headings are
+presentational, so rearranging lines or moving them beneath another heading
+changes nothing. The `manual` key honors existing `X-APPLE-SORT-ORDER` values
+but does not make rearrangement persistent yet.
 
 A summary is quoted only when its start would otherwise be read as syntax, so
 ordinary text is never quoted:
 
 | Summary | Rendered |
 |---|---|
-| `Write paper draft` | `- [ ] Write paper draft` |
-| `He said "hi" to me` | `- [ ] He said "hi" to me` |
-| `!urgent thing` | `- [ ] "!urgent thing"` |
-| `@home is literal` | `- [ ] "@home is literal"` |
-| `"quoted" start` | `- [ ] """quoted"" start"` |
-| `Ship it <!--t1-->` | `- [ ] "Ship it <!--t1-->"` |
+| `Write paper draft` | `- [ ] @Personal Write paper draft` |
+| `He said "hi" to me` | `- [ ] @Personal He said "hi" to me` |
+| `!urgent thing` | `- [ ] @Personal "!urgent thing"` |
+| `@home is literal` | `- [ ] @Personal "@home is literal"` |
+| `[not metadata]` | `- [ ] @Personal "[not metadata]"` |
+| `"quoted" start` | `- [ ] @Personal """quoted"" start"` |
+| `Ship it <!--t1-->` | `- [ ] @Personal "Ship it <!--t1-->"` |
 
-Quote a summary yourself if you start it with `!`, `+`, `-`, `@`, or `"`, if it
-ends with an identity-shaped comment such as `<!--t1-->`, or if it needs leading
-or trailing spaces. Inside quotes, write `""` for a literal `"`.
+Quote a summary yourself if it starts with `!`, `+`, `-`, `@`, `[`, or `"`, if
+it ends with an identity-shaped comment such as `<!--t1-->`, or if it needs
+leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
-The dialect is strict. It allows selected level-one headings and `- [ ]` or
+The dialect is strict. It allows generated presentation headings and `- [ ]` or
 `- [x]` items indented by exactly two spaces per nesting level. Nesting may be
-arbitrarily deep, but cannot skip a level. Every selected list must keep its
-heading, and summaries must be single-line and non-empty.
+arbitrarily deep but cannot skip a level. Heading text and placement are ignored
+semantically and canonicalized after a save. Summaries must be single-line and
+non-empty.
 
 Only active root tasks are rendered by default. Their completed subtasks remain
 visible as `[x]`, but descendants below a completed subtask are hidden. A hidden
@@ -221,6 +248,10 @@ args = ["lsp"]
 name = "markdown"
 language-servers = ["marksman", "todomd"]
 ```
+
+In an attached session, `:lsp-workspace-command todomd.changeView` opens a
+picker for configured views. View changes require a clean buffer, replace only
+the presentation, survive an LSP restart, and neither touch ICS nor run hooks.
 
 Helix shows its LSP progress spinner by default. To also print the accompanying
 text below the statusline, add this to `config.toml`:
@@ -275,8 +306,8 @@ $ todomd show Personal
 ]
 ```
 
-Tasks are ordered by list and tree using the configured sibling sort keys.
-`completed` may be `true` in the
+Tasks follow the active view's group and tree order; JSON emits no heading
+objects. `completed` may be `true` in the
 default scope for a subtask below active ancestors. `priority` is `none`, `low`,
 `medium`, or `high`; `categories` is a sorted array of category names. `start`
 and `due` use canonical local strings or `null`;
@@ -319,7 +350,7 @@ directory.
 | `baseline.json` | The task state that was rendered. |
 | `manifest.json` | Session ID to VTODO UID mapping. |
 | `accepted.md` | Last canonical live document, for recovery and reattachment. |
-| `live.json` | Resolved live-session configuration and selected lists. |
+| `live.json` | Resolved configuration, selected lists, and active view. |
 | `unaccepted.md` | Buffer contents present when a live session closed with unapplied edits. |
 | `transactions/0001/` | Staged files, per-file backups, and `plan.json`. |
 
@@ -336,8 +367,8 @@ LSP while the session remains open.
 
 - Active tasks only, unless `--completed` is given.
 - Tasks without a summary are never rendered, only reported.
-- Summaries, hierarchy, start and due dates, priority, completion, and list
-  membership are the only editable fields.
+- Summaries, hierarchy, start and due dates, priority, categories, completion,
+  and list membership are the only editable fields.
 - `show` reports tasks, not lists, so an empty list does not appear.
 - One primary VTODO per `.ics` file.
 - Live editing requires an LSP client with versioned workspace-edit support.

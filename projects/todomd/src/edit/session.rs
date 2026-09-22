@@ -9,14 +9,18 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile, TempDir};
 
 use super::{RenderedSession, markdown::IdentityManifest};
-use crate::{config::Config, model::TaskState, repository::Scope};
+use crate::{config::Config, model::TaskState, repository::Scope, view::View};
+
+pub const LIVE_FORMAT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LiveMetadata {
+    pub format_version: u32,
     pub config: Config,
     pub lists: Vec<String>,
     pub scope: Scope,
     pub hooks_enabled: bool,
+    pub view: View,
 }
 
 #[derive(Debug)]
@@ -121,9 +125,18 @@ pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
         return Ok(None);
     }
 
+    let metadata: LiveMetadata = read_json(&metadata_path).with_context(
+        || "live session format is incompatible; reopen the lists with this todomd version",
+    )?;
+    if metadata.format_version != LIVE_FORMAT_VERSION {
+        anyhow::bail!(
+            "live session format {} is incompatible; reopen the lists with this todomd version",
+            metadata.format_version
+        );
+    }
     let loaded = LoadedLiveSession {
         root: root.to_path_buf(),
-        metadata: read_json(&metadata_path)?,
+        metadata,
         manifest: read_json(&root.join("manifest.json"))?,
         baseline: read_json(&root.join("baseline.json"))?,
         recovery_baseline: read_json(&root.join("recovery-baseline.json"))?,
@@ -149,6 +162,14 @@ pub fn close_live(root: &Path, accepted_text: &str, current_text: &str) -> Resul
     }
     write_atomic(&root.join("tasks.md"), accepted_text.as_bytes())?;
     Ok(unaccepted)
+}
+
+pub fn change_live_view(root: &Path, metadata: &LiveMetadata, markdown: &str) -> Result<()> {
+    let metadata_path = root.join("live.json");
+    replace_artifacts([
+        (metadata_path.clone(), json_bytes(&metadata_path, metadata)?),
+        (root.join("accepted.md"), markdown.as_bytes().to_vec()),
+    ])
 }
 
 pub fn accept_live(

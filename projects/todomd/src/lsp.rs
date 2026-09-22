@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use chrono::Utc;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::Mutex;
@@ -19,13 +19,14 @@ use tower_lsp::{
         ApplyWorkspaceEditResponse, Color, ColorInformation, ColorProviderCapability, Diagnostic,
         DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
         DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentChangeOperation,
-        DocumentChanges, DocumentColorParams, InitializeParams, InitializeResult,
-        InitializedParams, MessageType, NumberOrString, OneOf,
-        OptionalVersionedTextDocumentIdentifier, Position, ProgressParams, ProgressParamsValue,
-        ProgressToken, Range, ServerCapabilities, ServerInfo, TextDocumentEdit,
-        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, Url,
-        WorkDoneProgress, WorkDoneProgressBegin, WorkDoneProgressCreateParams, WorkDoneProgressEnd,
-        WorkspaceEdit, notification::Progress, request::WorkDoneProgressCreate,
+        DocumentChanges, DocumentColorParams, ExecuteCommandOptions, ExecuteCommandParams,
+        InitializeParams, InitializeResult, InitializedParams, MessageActionItem, MessageType,
+        NumberOrString, OneOf, OptionalVersionedTextDocumentIdentifier, Position, ProgressParams,
+        ProgressParamsValue, ProgressToken, Range, ServerCapabilities, ServerInfo,
+        TextDocumentEdit, TextDocumentSyncCapability, TextDocumentSyncKind,
+        TextDocumentSyncOptions, TextEdit, Url, WorkDoneProgress, WorkDoneProgressBegin,
+        WorkDoneProgressCreateParams, WorkDoneProgressEnd, WorkspaceEdit, notification::Progress,
+        request::WorkDoneProgressCreate,
     },
 };
 
@@ -39,9 +40,11 @@ use crate::{
     },
     model::{EditedTaskState, TaskId, TaskState},
     repository::{self, Scope},
+    view::View,
 };
 
 const DEBOUNCE: Duration = Duration::from_millis(150);
+const CHANGE_VIEW_COMMAND: &str = "todomd.changeView";
 type Documents = Arc<Mutex<HashMap<Url, Arc<Mutex<LiveDocument>>>>>;
 
 pub fn run() -> Result<()> {
@@ -282,6 +285,108 @@ impl Backend {
         })
     }
 
+    async fn change_view_command(&self) -> Result<()> {
+        let uri = self.choose_document().await?;
+        let Some(document) = self.document(&uri).await else {
+            return Ok(());
+        };
+        let (names, current) = {
+            let state = document.lock().await;
+            (state.config.view_names(), state.view.clone())
+        };
+        let actions = names
+            .iter()
+            .map(|name| MessageActionItem {
+                title: name.clone(),
+                properties: Default::default(),
+            })
+            .collect();
+        let Some(choice) = self
+            .client
+            .show_message_request(MessageType::INFO, "Choose todomd view", Some(actions))
+            .await
+            .context("editor could not present todomd views")?
+        else {
+            return Ok(());
+        };
+        if !names.contains(&choice.title) {
+            bail!("editor selected unknown todomd view {:?}", choice.title);
+        }
+
+        let mut state = document.lock().await;
+        if state.text != state.accepted_text {
+            bail!("save or discard changes before switching views");
+        }
+        let selected = state.config.view(Some(&choice.title))?;
+        if selected == current {
+            return Ok(());
+        }
+        let mut manifest = state.manifest.clone();
+        let text = markdown::render_with_view(&state.baseline, &selected, &mut manifest)
+            .context("failed to render selected todomd view")?;
+        let old_metadata = state.metadata_with_view(state.view.clone());
+        let new_metadata = state.metadata_with_view(selected.clone());
+        session::change_live_view(&state.root, &new_metadata, &text)
+            .context("failed to persist selected todomd view")?;
+        if let Err(error) = self
+            .apply_edit(&uri, state.version, full_range(&state.text), &text)
+            .await
+        {
+            session::change_live_view(&state.root, &old_metadata, &state.accepted_text)
+                .context("editor rejected the view change and session rollback failed")?;
+            return Err(error);
+        }
+        state.view = selected;
+        state.manifest = manifest;
+        state.accepted_text = text.clone();
+        state.text = text;
+        state.synchronized = true;
+        Ok(())
+    }
+
+    async fn choose_document(&self) -> Result<Url> {
+        let mut uris = self
+            .documents
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        uris.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+        match uris.as_slice() {
+            [] => bail!("no todomd live session is attached"),
+            [uri] => Ok(uri.clone()),
+            _ => {
+                let actions = uris
+                    .iter()
+                    .map(|uri| MessageActionItem {
+                        title: uri
+                            .to_file_path()
+                            .map_or_else(|()| uri.to_string(), |path| path.display().to_string()),
+                        properties: Default::default(),
+                    })
+                    .collect::<Vec<_>>();
+                let Some(choice) = self
+                    .client
+                    .show_message_request(
+                        MessageType::INFO,
+                        "Choose todomd session",
+                        Some(actions.clone()),
+                    )
+                    .await
+                    .context("editor could not present todomd sessions")?
+                else {
+                    bail!("todomd session selection cancelled");
+                };
+                actions
+                    .iter()
+                    .position(|action| action.title == choice.title)
+                    .map(|index| uris[index].clone())
+                    .context("editor selected an unknown todomd session")
+            }
+        }
+    }
+
     async fn apply_edit(&self, uri: &Url, version: i32, range: Range, text: &str) -> Result<()> {
         let edit = WorkspaceEdit {
             document_changes: Some(DocumentChanges::Operations(vec![
@@ -368,6 +473,10 @@ impl LanguageServer for Backend {
                     },
                 )),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec![CHANGE_VIEW_COMMAND.into()],
+                    work_done_progress_options: Default::default(),
+                }),
                 ..ServerCapabilities::default()
             },
             server_info: Some(ServerInfo {
@@ -381,6 +490,27 @@ impl LanguageServer for Backend {
 
     async fn shutdown(&self) -> LspResult<()> {
         Ok(())
+    }
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
+        if params.command != CHANGE_VIEW_COMMAND {
+            self.client
+                .show_message(
+                    MessageType::ERROR,
+                    format!("todomd: unknown command {:?}", params.command),
+                )
+                .await;
+            return Ok(None);
+        }
+        if let Err(error) = self.change_view_command().await {
+            self.client
+                .show_message(MessageType::ERROR, format!("todomd: {error:#}"))
+                .await;
+        }
+        Ok(None)
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -490,7 +620,9 @@ struct LiveDocument {
     config: crate::config::Config,
     lists: Vec<String>,
     scope: Scope,
+    hooks_enabled: bool,
     lifecycle: Lifecycle,
+    view: View,
     baseline: TaskState,
     recovery_baseline: TaskState,
     completed_in_session: BTreeSet<TaskId>,
@@ -533,7 +665,9 @@ impl LiveDocument {
             config: loaded.metadata.config,
             lists: loaded.metadata.lists,
             scope: loaded.metadata.scope,
+            hooks_enabled: loaded.metadata.hooks_enabled,
             lifecycle,
+            view: loaded.metadata.view,
             baseline: loaded.baseline,
             recovery_baseline: loaded.recovery_baseline,
             completed_in_session,
@@ -541,6 +675,17 @@ impl LiveDocument {
             parse_diagnostic: None,
             state_diagnostic: None,
             _watcher: watcher,
+        }
+    }
+
+    fn metadata_with_view(&self, view: View) -> session::LiveMetadata {
+        session::LiveMetadata {
+            format_version: session::LIVE_FORMAT_VERSION,
+            config: self.config.clone(),
+            lists: self.lists.clone(),
+            scope: self.scope,
+            hooks_enabled: self.hooks_enabled,
+            view,
         }
     }
 
@@ -723,7 +868,8 @@ fn accept_state(
     persist_error: &'static str,
 ) -> Result<(String, Range)> {
     let mut manifest = document.manifest.clone();
-    let text = markdown::render(&state, &mut manifest).context(render_error)?;
+    let text =
+        markdown::render_with_view(&state, &document.view, &mut manifest).context(render_error)?;
     session::accept_live(&document.root, &text, &manifest, &state, &recovery)
         .context(persist_error)?;
     let range = full_range(&document.text);
