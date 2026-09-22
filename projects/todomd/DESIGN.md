@@ -1,476 +1,275 @@
-# todomd view redesign
+# todomd design
 
-## Status
+This document records the implemented model and its invariants. User-facing
+configuration and syntax belong in [README.md](README.md); future work belongs
+in [ROADMAP.md](ROADMAP.md).
 
-This document describes the intended view system, not the behavior of the
-current release. The current command line, configuration, and Markdown format
-remain documented in [README.md](README.md).
+## Model
 
-The redesign separates task meaning from presentation while letting grouping
-headings provide concise defaults for root tasks. Fields represented by the
-active grouping are omitted from roots and derived from their headings; an
-explicit task marker overrides a conflicting heading.
+`todomd` is a transactional Markdown editor over vdir VTODO files:
 
-## Goals
+```text
+ICS files ──▶ repository state ──▶ view projection ──▶ Markdown
+    ▲                                                    │
+    └──────────── validate, reconcile, plan, apply ◀─────┘
+```
 
-- Make grouping and sorting independent, configurable parts of a view.
-- Allow configuration and command-line options to select or override a view.
-- Switch views in a running LSP-backed editing session without touching ICS.
-- Keep list membership editable when tasks are not grouped by list.
-- Distinguish the singular list from the set of iCalendar categories.
-- Preserve hierarchy while sorting and grouping task trees.
-- Keep rendering deterministic and parsing unambiguous.
+The repository state is semantic and deterministic. A resolved view controls
+only grouping and ordering during projection. Parsed Markdown is compared with
+the rendered baseline and freshly loaded ICS state before any write.
+
+A **task tree** is a root followed by all descendants. A **view** contains an
+ordered sequence of grouping keys and an ordered sequence of sorting keys. A
+**group** is the tuple of root values selected by those grouping keys.
 
 ## Invariants
 
-1. ICS remains the source of truth; Markdown remains a session-scoped editing
+1. ICS is the source of truth; Markdown is a private, session-scoped editing
    surface.
-2. Explicit task fields and indentation are authoritative. Grouping headings
-   supply fields omitted from root tasks.
-3. A parent and all its descendants belong to one list.
-4. A root task and its descendants are an indivisible unit for top-level
-   grouping and ordering.
-5. View changes are presentation changes. They do not create a transaction,
-   run hooks, or modify source files.
-6. Task identity remains independent of position, heading text, and view.
-7. Equal inputs and an equal view produce byte-identical Markdown.
-
-## Terminology
-
-A **view** consists of:
-
-- an ordered list of grouping keys; and
-- an ordered list of sorting keys.
-
-A **group** is a presentation section generated from a root task's values for
-one or more grouping keys.
-
-A **task tree** is a root task followed by all of its descendants. Trees move
-between groups as units. Descendant siblings are still sorted recursively.
-
-The **active view** is the resolved view used by one command or live session.
-It may come from the configured default, a named view, command-line overrides,
-or an LSP session change.
-
-## Markdown format
-
-### Task fields
-
-The canonical form without grouping is:
-
-```markdown
-- [ ] @Postgrad -2026-09-12 +"2026-09-07 09:00" !!! [Research, "Quick Win"] Write paper <!--t1-->
-  - [ ] -2026-09-11 [Reading] Read related work <!--t2-->
-```
-
-Canonical leading-field order is:
-
-1. root list;
-2. due date;
-3. start date;
-4. priority;
-5. categories; and
-6. summary.
-
-Parsing may accept leading fields in any order, as it does today. Rendering
-always restores canonical order. On roots, rendering omits list, due, start,
-priority, or categories when that field is supplied by an active grouping
-heading. Descendant fields remain explicit.
-
-### Lists
-
-A root task carries exactly one list marker unless `list` is an active grouping
-key:
-
-```markdown
-@Postgrad
-@"Side Projects"
-```
-
-A list name is quoted when necessary using the existing doubled-quote syntax.
-When grouped by list, the root marker is omitted and the corresponding heading
-supplies list membership. Moving a root beneath another list heading therefore
-moves its whole tree. An explicit root marker remains accepted and takes
-precedence over a conflicting heading.
-
-Descendants always inherit their parent's list and never render a redundant
-list marker. A list marker on a descendant is rejected rather than ignored.
-When the active view is not grouped by list, unindenting a child into a root
-requires adding a list marker, and indenting a root requires removing it.
-
-### Categories
-
-Categories form one optional bracketed field:
-
-```markdown
-[Home]
-[Home, Errands]
-[Research, "Quick Win", "People, Places"]
-```
-
-Category values are separated by commas. A value is quoted when it contains
-whitespace, a comma, a bracket, a quote, or leading or trailing whitespace.
-Inside quotes, `""` represents a literal quote. Empty values and duplicate
-values are invalid. Rendering sorts and deduplicates the category set and
-omits the field when the set is empty; `[]` is not canonical input.
-
-This syntax reflects that iCalendar `CATEGORIES` is a set-valued property and
-keeps it visually distinct from the singular `@list` marker.
-
-### Summaries and quoting
-
-A summary whose beginning could be parsed as a leading field must be quoted.
-This includes summaries beginning with `@`, `[`, `!`, `+`, `-`, or `"`.
-Existing edge-whitespace and trailing-identity quoting rules continue to apply.
-
-```markdown
-- [ ] @Personal "[not metadata] literal summary"
-```
-
-### Headings
-
-Generated headings provide the grouped fields omitted from root tasks:
-
-```markdown
-# Postgrad
-
-## High priority
-
-- [ ] Write paper <!--t1-->
-```
-
-Heading levels correspond to grouping-key depth. A view with no grouping keys
-renders no headings and therefore keeps every root field explicit.
-
-A root inherits list, priority, due, start, and categories from the applicable
-grouping headings when their task markers are absent. Moving it beneath another
-heading edits that field. An explicit marker wins when it conflicts with a
-heading. Completion remains checkbox-authoritative because every task always
-contains `[ ]` or `[x]`.
-
-Only roots inherit heading fields; descendants retain their own markers because
-groups describe whole trees by their root values. Grouping labels are strict:
-unknown lists, malformed dates or category sets, and unknown fixed labels are
-errors rather than decorative headings. Headings deeper than the configured
-grouping keys remain presentation-only and do not reset task indentation.
-
-The dialect remains otherwise strict: non-heading prose, malformed task lines,
-invalid indentation, and unsupported Markdown are errors.
-
-## Grouping
-
-### Keys
-
-The initial groupable fields are:
-
-| Key | Group value | Order |
-|---|---|---|
-| `list` | root list | selected-list order |
-| `completed` | root completion state | unfinished before finished |
-| `priority` | root priority bucket | high, medium, low, none |
-| `due` | root canonical due value | ascending, missing last |
-| `start` | root canonical start value | ascending, missing last |
-| `categories` | root's complete canonical category set | lexicographic, missing last |
-
-Grouping by categories uses the complete set as one value. A task is never
-duplicated into several groups because duplicate editable identities would make
-Markdown ambiguous.
-
-Missing values receive an explicit generated heading such as `No due date` or
-`No categories`. These labels are parse tokens for their corresponding empty
-root fields.
-
-### Nested groups
-
-Grouping keys are applied left to right. For example:
-
-```toml
-group_by = ["priority", "list"]
-```
-
-produces priority headings containing list subheadings. The grouping tuple is
-an implicit prefix of ordering: groups follow each key's natural order, then
-trees within the final group follow `sort_by`.
-
-### Trees
-
-Only roots select top-level groups. Descendants stay adjacent to their root
-even when their own field values differ. Within a tree, every sibling set is
-sorted recursively using the active sorting keys, and every parent precedes its
-descendants.
-
-This rule preserves the Markdown hierarchy and avoids duplicating or detaching
-children merely to satisfy a presentation choice.
-
-## Sorting
-
-The sorting keys are:
-
-- `list` (selected-list order);
-- `completed`;
-- `manual` (`X-APPLE-SORT-ORDER`);
-- `due`;
-- `start`;
-- `priority`; and
-- `summary`.
-
-Their existing direction and missing-value behavior remain unchanged. Timed
-values sort before an all-day value on the same date, both for sorting and group
-order. Task identity is always the final deterministic tie-breaker.
-
-Sorting is view-wide. Per-list sorting overrides are removed because they do
-not define a coherent total order when tasks from several lists share a group.
-For example, comparing a Postgrad task by due date and a Personal task by
-priority would not be transitive.
-
-`manual` remains a sorting key, not a grouping key. It is meaningful primarily
-inside list groups but remains deterministic elsewhere.
-
-## Configuration
-
-Views are named records. One name is selected as the startup default:
-
-```toml
-default_view = "default"
-
-[views.default]
-group_by = ["list"]
-sort_by = ["completed", "priority", "summary"]
-
-[views.agenda]
-group_by = ["due"]
-sort_by = ["due", "priority", "summary"]
-
-[views.priority]
-group_by = ["priority", "list"]
-sort_by = ["due", "summary"]
-
-[views.flat]
-group_by = []
-sort_by = ["due", "priority", "summary"]
-```
-
-If view configuration is omitted, todomd supplies the current effective
-default: group by list and sort by completion, priority, then summary.
-
-Validation rejects:
-
-- an unknown `default_view`;
-- unknown grouping or sorting keys;
-- duplicate keys within either sequence;
-- an empty sorting sequence; and
-- unknown keys in a view record.
-
-The old `[sorting]` and `[sorting.lists]` shape is intentionally not part of the
-target format. Migration should fail with a focused error that points to the
-new view syntax rather than silently changing ordering.
-
-## Command line
-
-Both `edit` and `show` accept view selection and overrides:
-
-```console
-todomd edit --view agenda
-todomd edit --group-by priority,list --sort-by due,summary
-todomd edit --no-group --sort-by due,priority,summary
-todomd show --view priority
-```
+2. Identity markers, not position or summary text, identify existing tasks.
+3. Explicit task fields override grouping headings. Headings supply only fields
+   omitted from roots.
+4. Descendants inherit their root's list; parent and child can never cross list
+   boundaries.
+5. A tree is indivisible for top-level grouping and ordering. Descendant fields
+   do not select groups.
+6. Ordering alone is presentational. It never enters a change plan.
+7. View changes on a clean document do not write ICS or run hooks.
+8. Equal repository state and an equal view produce byte-identical Markdown.
+9. Writes preserve source data outside the planned semantic change.
+
+## Repository state
+
+Each selected list has a stable display name and an ordered set of parsed
+VTODOs. A semantic task contains its UID, summary, completion state, parent,
+priority bucket, sorted categories, and optional start and due values. A
+separate source snapshot maps lists and tasks to source files and hashes.
+Parsed task order retains the read-only manual ranking used for projection and
+source-side change detection.
+
+The reader discovers collections, validates list identity, parses one primary
+VTODO per file, resolves parent relationships, and builds a forest. Empty or
+dangling relationships render as roots. Cycles are rejected. Tasks without a
+summary, and their descendant subtrees, are unrepresentable and reported rather
+than exposed as destructive Markdown omissions.
+
+Repository loading does not apply a view. Its sequence remains useful for the
+read-only `manual` sorting key and for detecting source-side order changes.
+
+## Views
+
+### Resolution
 
 Resolution precedence is:
 
-1. an explicit field override (`--group-by`, `--no-group`, or `--sort-by`);
+1. explicit `--group-by`, `--no-group`, or `--sort-by` fields;
 2. `--view NAME`;
-3. the configured `default_view`; and
+3. configured `default_view`; and
 4. the built-in default.
 
-`--group-by` takes a comma-separated non-empty key sequence. `--no-group`
-selects an empty sequence and conflicts with `--group-by`. `--sort-by` takes a
-comma-separated non-empty key sequence. `--view` may be combined with field
-overrides so a named view can serve as a base.
+The resolved `View`, not merely its name, is stored in live metadata so an open
+session remains reproducible after configuration changes.
 
-For `show`, grouping affects task order but emits no heading objects. Every JSON
-task already carries its list and field values, so presentation sections do not
-belong in the scripting format.
+Validation rejects unknown keys, duplicate keys, unknown view names, and an
+empty sorting sequence. Grouping may be empty.
 
-The resolved active view, rather than only its name, is stored in live-session
-metadata. A session therefore remains reproducible if configuration changes
-while it is open.
+### Projection
 
-## Live view changes
+Grouping keys are `list`, `completed`, `priority`, `due`, `start`, and
+`categories`. They are evaluated on roots from left to right. The resulting
+tuple orders groups before `sort_by` is considered.
 
-The language server advertises a no-argument `todomd.changeView` workspace
-command. On invocation it uses `window/showMessageRequest` to present the
-configured views and the built-in default. If the client returns method-not-found
-for that request, the command cycles to the next configured view instead. This
-avoids depending on arbitrary workspace-command arguments, which Helix does not
-currently expose well.
+Natural group order is:
 
-If more than one todomd document is attached to the same language-server
-process, the server first asks which session to change. Cancelling either
-selection changes nothing.
+| Key | Order |
+|---|---|
+| `list` | selected-list order |
+| `completed` | incomplete, completed |
+| `priority` | high, medium, low, none |
+| `due`, `start` | ascending, missing last |
+| `categories` | complete sorted set, empty last |
 
-The first implementation requires the selected document to equal its last
-accepted canonical text. If it contains unsaved edits, the command reports
-`save or discard changes before switching views`. This prevents a presentation
-operation from losing drafts or accidentally approving an ICS transaction.
+Category sets form one group value; projection never duplicates a task into
+several groups. Missing fields receive explicit labels such as `No due date`.
 
-Changing the active view:
+Sorting keys are `list`, `completed`, `manual`, `due`, `start`, `priority`, and
+`summary`. Sorting is view-wide. Every sibling set is sorted recursively, every
+parent remains before its descendants, and task identity is the final stable
+tie-breaker.
 
-1. validates that the document is at its accepted text;
-2. renders the accepted semantic baseline with the selected view;
-3. atomically records the resolved active view and accepted document;
-4. requests a versioned whole-document workspace edit; and
-5. reports the new view without running hooks.
+Dates sort by local calendar date. On one date, specific times sort
+chronologically before the all-day value. Missing dates sort last. List sorting
+uses selected-list order; priority is high to none; summaries compare
+case-insensitively.
 
-Incoming ICS changes and successful outgoing transactions subsequently render
-with the session's active view. Restarting the language server recovers that
-view from session metadata.
+The default view groups by list and sorts by completion, priority, then summary.
 
-A failed or rejected workspace edit leaves the previous active view and
-accepted text recoverable. Persistence and editor replacement must follow the
-same rollback discipline as other live-session artifacts.
+### Nested groups
 
-## Architecture changes
+Heading depth matches grouping-key position. For:
 
-The repository reader currently produces presentation-ordered task lists. The
-redesign introduces an explicit view layer:
-
-```text
-ICS repository
-    │
-    ▼
-canonical task forest
-    │
-    ├── reconciliation and planning
-    │
-    ▼
-resolved view ──▶ grouping and ordering ──▶ Markdown rendering
+```toml
+group_by = ["due", "list", "priority"]
 ```
 
-Responsibilities become:
+```markdown
+# 2026-09-22
 
-- **Repository:** discover lists, read tasks and manual ranks, resolve scope,
-  validate relationships, and return a deterministic canonical forest without
-  applying a configured view.
-- **View resolver:** combine built-in defaults, configuration, named views, and
-  command-line overrides into one validated `View` value.
-- **View projector:** group root trees and recursively order siblings without
-  changing canonical task meaning.
-- **Markdown renderer:** render projected headings and omit redundant grouped
-  fields from roots.
-- **Markdown parser:** derive omitted root fields from grouping headings, prefer
-  explicit markers on conflicts, and reconstruct edited trees from indentation.
-- **Live session:** retain the resolved active view and use it for every
-  canonical refresh.
-- **LSP adapter:** select views and replace a clean open buffer without invoking
-  the transaction engine.
+## Magalu
 
-Reconciliation compares semantic states only. Heading and ordering differences
-never appear in a change plan.
+### High priority
 
-## Migration
+- [ ] Executar CR <!--t1-->
+```
 
-This is intentionally a format and configuration break while todomd is still
-pre-1.0:
+The root receives all three omitted fields from its heading path. Moving it to a
+different valid heading edits the corresponding field. Trees remain intact even
+when descendants carry different due dates, priorities, or categories.
 
-- `@category` becomes `@list` on roots;
-- categories move to `[category, ...]`;
-- list headings and explicit root markers can both define list membership;
-- per-list sorting becomes view-wide sorting; and
-- live-session metadata gains a format version and resolved active view.
+## Markdown
 
-Old retained sessions are not rewritten automatically. Loading incompatible
-session metadata should produce a clear error asking the user to reopen the
-lists with the new version. Open sessions should be closed before upgrading.
+### Grammar
 
-The implementation must update README examples and shell completions in the
-same release that changes parsing. It must not temporarily accept ambiguous
-`@name` tokens as either a category or a list based on whether the name happens
-to match a selected list.
+A task line has a checkbox, unordered leading fields, a summary, and an optional
+trailing session identity:
 
-## Implementation plan
+```markdown
+- [ ] @Postgrad -2026-09-12 +"2026-09-07 09:00" !!! [Research, "Quick Win"] Write paper <!--t1-->
+```
 
-### 1. Authoritative task syntax
+Canonical field order is list, due, start, priority, categories, summary, then
+identity. Parsing accepts fields in any order.
 
-- Add root list markers and bracketed category parsing/rendering.
-- Make grouping headings supply omitted root fields.
-- Validate root/descendant list invariants.
-- Update parser, renderer, planner, and lifecycle tests for moves, nesting,
-  quoting, and malformed input.
-- Version live-session metadata and reject old sessions clearly.
+- `@name` is singular list membership and is legal only on roots.
+- `-value` and `+value` are due and start.
+- `!`, `!!`, and `!!!` are priority buckets.
+- `[a, b]` is the complete category set.
+- Two spaces are one hierarchy level.
+- `<!--tN-->` at the end is a session identity.
 
-### 2. View model and projection
+Marker values use doubled-quote escaping. A summary is quoted only when its
+start could be parsed as syntax, edge whitespace must survive, or its end looks
+like an identity marker. Other HTML comments remain summary text.
 
-- Add validated `GroupKey`, `SortKey`, and `View` types.
-- Move ordering out of repository loading.
-- Project task forests into nested groups while keeping trees atomic.
-- Apply recursive sibling sorting and deterministic tie-breakers.
-- Test every key, missing-value bucket, nested grouping, and category-set
-  grouping.
+The parser rejects malformed tasks, duplicate fields or identities, skipped
+indentation levels, duplicate categories, unknown identities, cross-list
+parenting, and empty or multiline summaries.
 
-### 3. Configuration and CLI
+### Heading authority
 
-- Replace per-list sorting configuration with named views.
-- Add default-view resolution and command-line overrides.
-- Apply view ordering consistently to `edit` and `show`.
-- Generate updated Bash, Fish, and Zsh completions.
-- Update README and examples to describe the shipped behavior.
+For each root, authority is:
 
-### 4. Live switching
+1. explicit task marker;
+2. corresponding grouping heading; then
+3. the field's empty/default value where legal.
 
-- Store the resolved active view in session metadata.
-- Implement `todomd.changeView` and client selection prompts.
-- Reject dirty-buffer switches safely.
-- Persist and roll back view/document artifacts atomically.
-- Test LSP restart, inbound refresh, rejected workspace edits, multiple
-  attached documents, and no-hook/no-transaction behavior.
+Active list, due, start, priority, and category groupings omit that root marker
+from canonical Markdown. The parser restores it from the heading path. An
+explicit conflicting marker wins and causes the task to move to its canonical
+group after save.
 
-Each phase should leave tests passing and avoid a state where Markdown can be
-parsed with two different meanings. Phases may land separately only if the
-intermediate format is not exposed as a supported release.
+Completion is different: every task must contain `[ ]` or `[x]`, so the checkbox
+always wins over a completion heading. Descendants never inherit heading fields;
+they retain their own markers and inherit only list membership from the parent.
 
-## Future improvements
+Grouping labels are strict parse tokens:
 
-### Dirty-buffer view changes
+- lists must name selected lists;
+- priority and completion labels must match canonical labels;
+- dates must parse as date input or use their canonical missing label; and
+- categories must use canonical bracket syntax or `No categories`.
 
-Support switching views without saving by rendering `EditedTaskState`,
-including draft identities and unsaved hierarchy changes. This must preserve
-all edits without treating the switch as transaction approval.
+A root must have a complete heading path for the active grouping. Headings
+deeper than the configured grouping depth are decorative and ignored. Headings
+do not reset task indentation.
 
-### Derived date groups
+### Dates
 
-Add useful agenda buckets such as overdue, today, tomorrow, this week, later,
-and undated. These are derived, time-dependent values rather than raw task
-fields, so the session must define when they are recomputed and how an open
-buffer crosses a date boundary.
+Date-only and datetime values remain distinct. Datetimes are normalized to an
+instant and rendered in local time; source UTC or `TZID` values retain their raw
+representation when unchanged. Canonical Markdown omits seconds, but equality
+logic preserves hidden source precision.
 
-### Persistent manual ordering
+When one side of a start/due pair is a date and the other a datetime, the date is
+promoted to local midnight before writing. Changed pairs must satisfy start ≤
+due. Fractional seconds are rejected because RFC 5545 DATE-TIME cannot represent
+them.
 
-Make Markdown sibling order writable through sparse
-`X-APPLE-SORT-ORDER` ranks. Rebalancing must account for hidden completed roots
-and descendants, and presentation-only view changes must remain distinguishable
-from intentional manual reordering.
+## Reconciliation
 
-### Richer LSP view controls
+Three semantic states participate in every save:
 
-Possible additions include next/previous-view commands, a status notification,
-code actions scoped to one document, and completion for list and category
-fields. These should supplement named views rather than encode editor-specific
-protocols.
+- **baseline:** what the accepted Markdown was rendered from;
+- **Markdown:** the parsed editor buffer; and
+- **current ICS:** sources reread immediately before planning.
 
-### Group-label customization
+The result is:
 
-Allow localized or user-defined labels for missing values and derived groups.
-Labels remain output-only and must never become parse authority.
+| Markdown changed | ICS changed | Result |
+|---|---|---|
+| no | no | no change |
+| no | yes | inbound refresh |
+| yes | no | outgoing plan |
+| yes | yes | conflict |
 
-### Session preference persistence
+Comparison ignores view order and heading layout after headings have supplied
+their semantic root fields. It preserves untouched source details such as exact
+priority values, seconds, timezone representation, and unrelated properties.
 
-Optionally remember the last selected named view for later sessions. This must
-be explicit; merely switching one temporary session should not silently rewrite
-configuration.
+A plan contains creates, updates, and deletes over semantic tasks. New tasks use
+draft references so children can target parents created in the same
+transaction. Retained children must remain attached to another retained or new
+parent.
 
-### Additional language features
+## Applying changes
 
-Completion, hover, document symbols, repair code actions, and richer conflict
-recovery can build on the authoritative field grammar. A list inventory command
-remains useful for scripts and for discovering values accepted by `@list`.
+Before writing, todomd verifies selected-list identity, membership, and source
+hashes. Each operation is rechecked immediately before execution. Writes use
+private temporary files and atomic rename; originals and the serialized plan
+are retained in a numbered transaction directory.
+
+If an operation fails, already-applied operations receive a hash-guarded
+best-effort rollback. Multi-file updates cannot be truly atomic, so transaction
+artifacts remain available for manual recovery after interruption.
+
+Patching changes only exposed fields. It preserves descriptions, alarms,
+unrelated `RELATED-TO` forms, extension properties, nested components, and raw
+unchanged categories and dates. Parent edits write
+`RELATED-TO;RELTYPE=PARENT`. `SEQUENCE` advances for changed existing VTODOs.
+
+## Live sessions and LSP
+
+A live session stores:
+
+- selected lists, scope, resolved configuration, and active view;
+- semantic baseline and identity manifest;
+- accepted canonical Markdown;
+- recovery state for tasks outside the active rendering scope; and
+- numbered transaction artifacts.
+
+The language server attaches only to recognized private sessions. It validates
+while typing and reconciles on save. Successful outgoing changes and inbound ICS
+changes return a versioned whole-document workspace edit. Invalid input and
+conflicts leave both sources untouched and produce diagnostics.
+
+Selected list directories are watched. Completed tasks from an active-scope
+session remain visible after an outgoing completion so they can be reopened.
+Closing preserves the session; unapplied contents are copied to
+`unaccepted.md`.
+
+`todomd.changeView` requires a clean accepted buffer. It renders the same
+baseline with another resolved view, atomically updates session artifacts, and
+requests a workspace edit without entering reconciliation. Clients supporting
+`window/showMessageRequest` receive a picker; method-not-found falls back to the
+next configured view.
+
+The optional `after_apply` hook runs only after a successful outgoing
+transaction. Hook failure is reported but cannot roll back source changes that
+already succeeded.
+
+## Scripting boundary
+
+`todomd show` shares repository loading, scope, and projection with editing but
+creates no session and runs no hooks. It emits semantic task objects in projected
+order, never heading objects. There is intentionally no non-interactive write
+command.
