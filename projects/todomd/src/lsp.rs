@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::Utc;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::Mutex;
 use tower_lsp::{
@@ -34,11 +33,11 @@ use crate::{
     edit::{
         hooks::Lifecycle,
         markdown::{self, IdentityManifest},
-        planner::{self, Reconciliation, TaskChange},
+        planner::TaskChange,
         session::{self, LoadedLiveSession},
-        transaction,
+        session_reconcile::{self, Prepared},
     },
-    model::{EditedTaskState, TaskId, TaskState},
+    model::{TaskId, TaskState},
     repository::{self, Scope},
     view::View,
 };
@@ -741,15 +740,7 @@ enum Outcome {
 }
 
 fn validate_document(document: &LiveDocument) -> Result<()> {
-    let edited = markdown::parse_with_view(
-        &document.text,
-        &document.baseline,
-        &document.manifest,
-        &document.view,
-    )?;
-    let (baseline, _) = reconciliation_baseline(document, &edited);
-    planner::reconcile(&baseline, &edited, &baseline)?;
-    Ok(())
+    session_reconcile::validate(&reconciliation_context(document), &document.text)
 }
 
 fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
@@ -758,62 +749,44 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             "live document is out of sync; reload the accepted session document before saving"
         ));
     }
-    let edited = markdown::parse_with_view(
+    let prepared = session_reconcile::prepare(
+        &reconciliation_context(document),
         &document.text,
-        &document.baseline,
-        &document.manifest,
-        &document.view,
+        &document.completed_in_session,
     )?;
-    let (baseline, mut required_tasks) = reconciliation_baseline(document, &edited);
-    required_tasks.extend(document.completed_in_session.iter().cloned());
-    let (current, sources) = load_current(document, &required_tasks)?;
-    let reconciliation = planner::reconcile(&baseline, &edited, &current)?;
 
     document.parse_diagnostic = None;
-    match reconciliation {
-        Reconciliation::NoChange => {
+    match prepared {
+        Prepared::NoChange { .. } => {
             document.state_diagnostic = None;
             Ok(Outcome::Quiet)
         }
-        Reconciliation::Inbound => accept_inbound(document, current),
-        Reconciliation::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
-        Reconciliation::Outgoing(plan) => {
-            let mut completed_in_session = document.completed_in_session.clone();
-            for change in &plan.changes {
-                if let TaskChange::Update { id, before, after } = change
-                    && !before.completed
-                    && after.completed
-                {
-                    completed_in_session.insert(id.clone());
-                }
-            }
-            let staged = transaction::stage(&plan, &sources, &document.root, Utc::now())?;
-            transaction::apply(&staged, &sources)?;
-            let (accepted, accepted_sources) = load_current(document, &completed_in_session)
-                .context("source changes were applied, but the accepted state could not be read")?;
-            transaction::verify_applied(&staged, &sources, &accepted_sources).context(
-                "source changes were applied, but concurrent changes prevented acceptance",
-            )?;
-            let recovery = load_recovery_baseline(document)
-                .context("source changes were applied, but the recovery state could not be read")?;
+        Prepared::Inbound { current } => {
+            let recovery = session_reconcile::load_recovery(&reconciliation_context(document))?;
+            accept_inbound(document, current, recovery)
+        }
+        Prepared::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
+        Prepared::Outgoing(outgoing) => {
+            let message = applied_changes_message(&outgoing.plan.changes);
+            let applied = session_reconcile::apply(&reconciliation_context(document), outgoing)?;
             let (text, range) = accept_state(
                 document,
-                accepted,
-                recovery,
+                applied.state,
+                applied.recovery,
                 "source changes were applied, but the accepted state could not be rendered",
                 "source changes were applied, but the live session was not refreshed",
             )?;
-            document.completed_in_session = completed_in_session;
+            document.completed_in_session = applied.retained_tasks;
             Ok(Outcome::Edit {
                 text,
                 version: document.version,
                 range,
                 kind: MessageType::INFO,
-                message: applied_changes_message(&plan.changes),
+                message,
                 run_after_apply: true,
             })
         }
-        Reconciliation::Conflict => {
+        Prepared::Conflict => {
             let message = "todomd: Markdown and source lists both changed".to_owned();
             document.state_diagnostic = Some(diagnostic(
                 &anyhow!(message.clone()),
@@ -848,34 +821,24 @@ fn applied_changes_message(changes: &[TaskChange]) -> String {
     format!("todomd: changes applied ({counts})")
 }
 
-fn reconciliation_baseline(
-    document: &LiveDocument,
-    edited: &EditedTaskState,
-) -> (TaskState, BTreeSet<TaskId>) {
-    let required_tasks = identities_outside(edited, &document.baseline);
-    let mut baseline = document.baseline.clone();
-    add_tasks(&mut baseline, &document.recovery_baseline, &required_tasks);
-    (baseline, required_tasks)
-}
-
-fn load_current(
-    document: &LiveDocument,
-    required_tasks: &BTreeSet<TaskId>,
-) -> Result<(TaskState, repository::SourceSnapshot)> {
-    let (mut current, sources) =
-        repository::load_lists(&document.config, &document.lists, document.scope)?;
-    if document.scope == Scope::All || required_tasks.is_empty() {
-        return Ok((current, sources));
+fn reconciliation_context(document: &LiveDocument) -> session_reconcile::Context<'_> {
+    session_reconcile::Context {
+        root: &document.root,
+        config: &document.config,
+        lists: &document.lists,
+        scope: document.scope,
+        view: &document.view,
+        baseline: &document.baseline,
+        recovery_baseline: &document.recovery_baseline,
+        manifest: &document.manifest,
     }
-
-    let (current_all, sources) =
-        repository::load_lists(&document.config, &document.lists, Scope::All)?;
-    add_tasks(&mut current, &current_all, required_tasks);
-    Ok((current, sources))
 }
 
-fn accept_inbound(document: &mut LiveDocument, current: TaskState) -> Result<Outcome> {
-    let recovery = load_recovery_baseline(document)?;
+fn accept_inbound(
+    document: &mut LiveDocument,
+    current: TaskState,
+    recovery: TaskState,
+) -> Result<Outcome> {
     let (text, range) = accept_state(
         document,
         current,
@@ -912,10 +875,6 @@ fn accept_state(
     document.accepted_text = text.clone();
     document.state_diagnostic = None;
     Ok((text, range))
-}
-
-fn load_recovery_baseline(document: &LiveDocument) -> Result<TaskState> {
-    Ok(repository::load_lists(&document.config, &document.lists, Scope::All)?.0)
 }
 
 fn source_watcher(
@@ -992,40 +951,6 @@ fn is_content_event(kind: &EventKind) -> bool {
     )
 }
 
-fn identities_outside(edited: &EditedTaskState, baseline: &TaskState) -> BTreeSet<TaskId> {
-    let baseline_ids = baseline
-        .lists
-        .iter()
-        .flat_map(|list| &list.tasks)
-        .map(|task| &task.id)
-        .collect::<BTreeSet<_>>();
-    edited
-        .lists
-        .iter()
-        .flat_map(|list| &list.tasks)
-        .filter_map(|task| task.id.as_ref())
-        .filter(|id| !baseline_ids.contains(id))
-        .cloned()
-        .collect()
-}
-
-fn add_tasks(target: &mut TaskState, source: &TaskState, ids: &BTreeSet<TaskId>) {
-    for source_list in &source.lists {
-        let Some(target_list) = target
-            .lists
-            .iter_mut()
-            .find(|list| list.name == source_list.name)
-        else {
-            continue;
-        };
-        for task in &source_list.tasks {
-            if ids.contains(&task.id) && !target_list.tasks.iter().any(|item| item.id == task.id) {
-                target_list.tasks.push(task.clone());
-            }
-        }
-    }
-}
-
 fn document_colors(
     text: &str,
     colors: &std::collections::BTreeMap<String, repository::ListColor>,
@@ -1099,6 +1024,8 @@ fn utf16_len(value: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use crate::edit::planner;
+
     use super::*;
 
     #[test]

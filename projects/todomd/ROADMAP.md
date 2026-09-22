@@ -3,19 +3,6 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
-## Session ergonomics
-
-The explicit create/apply/close lifecycle can grow two convenience commands:
-
-- `session refresh` to accept inbound ICS state without treating the current
-  Markdown as an outgoing edit; and
-- `session edit --lsp/--no-lsp` to open an existing session in either live or
-  manual mode.
-
-Top-level `edit` can then become an orchestrator over the same session
-primitives. `show` should continue sharing repository loading and projection
-without creating runtime state.
-
 ## Richer LSP editing
 
 Live editing already covers diagnostics, save-triggered transactions,

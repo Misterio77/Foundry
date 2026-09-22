@@ -197,7 +197,8 @@ them.
 
 ## Reconciliation
 
-Three semantic states participate in every save:
+Manual `session apply` and LSP saves use the same reconciliation and transaction
+engine. Three semantic states participate in each operation:
 
 - **baseline:** what the accepted Markdown was rendered from;
 - **Markdown:** the parsed editor buffer; and
