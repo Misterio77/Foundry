@@ -15,6 +15,7 @@ in {
     package = pkgs.helix;
     settings = {
       theme = "nix-${hash}";
+      keys.normal.space.V = ":lsp-workspace-command todomd.changeView";
       editor = {
         soft-wrap.enable = true;
         color-modes = true;
