@@ -9,6 +9,7 @@
     ../common/global
     ../common/optional/wireless.nix
     ../common/users/gabriel
+    ../common/optional/persist-snapshots.nix
   ];
 
   boot.initrd.systemd.emergencyAccess = true;
