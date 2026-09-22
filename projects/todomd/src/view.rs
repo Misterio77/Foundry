@@ -93,7 +93,22 @@ impl GroupValue {
             Self::Start(Some(value)) => value.clone(),
             Self::Start(None) => "No start date".into(),
             Self::Categories(categories) if categories.is_empty() => "No categories".into(),
-            Self::Categories(categories) => format!("[{}]", categories.join(", ")),
+            Self::Categories(categories) => format!(
+                "[{}]",
+                categories
+                    .iter()
+                    .map(|category| {
+                        if category.contains(char::is_whitespace)
+                            || category.contains([',', '[', ']', '"'])
+                        {
+                            format!("\"{}\"", category.replace('"', "\"\""))
+                        } else {
+                            category.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }
@@ -408,7 +423,7 @@ mod tests {
     #[test]
     fn category_sets_are_single_group_values() {
         let mut categorized = task("a", "Alpha", None);
-        categorized.categories = vec!["Home".into(), "Urgent".into()];
+        categorized.categories = vec!["Home".into(), "Quick Win".into()];
         let state = TaskState {
             lists: vec![TaskList {
                 name: "Work".into(),
@@ -420,6 +435,9 @@ mod tests {
             sort_by: vec![SortKey::Summary],
         };
 
-        assert_eq!(project(&state, &view)[0].headings, ["[Home, Urgent]"]);
+        assert_eq!(
+            project(&state, &view)[0].headings,
+            ["[Home, \"Quick Win\"]"]
+        );
     }
 }

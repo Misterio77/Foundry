@@ -18,10 +18,10 @@ fn renders_requested_lists_in_order() {
     assert_eq!(
         rendered.markdown,
         "# Postgrad\n\n\
-- [ ] @Postgrad -2026-09-10 Write paper draft <!--t1-->\n\
+- [ ] -2026-09-10 Write paper draft <!--t1-->\n\
 \n\
 # Personal\n\n\
-- [ ] @Personal Buy milk, bread <!--t2-->\n"
+- [ ] Buy milk, bread <!--t2-->\n"
     );
     assert_eq!(rendered.sources.files.len(), 5);
     assert_eq!(rendered.sources.task_files.len(), 2);
@@ -62,6 +62,8 @@ fn renders_flat_and_nested_group_views() {
     let rendered = render_lists_with_view(&config, &requested, Scope::Active, &nested).unwrap();
     assert!(rendered.markdown.starts_with("# 2026-09-10\n\n## Postgrad"));
     assert!(rendered.markdown.contains("# No due date\n\n## Personal"));
+    assert!(!rendered.markdown.contains("@Postgrad"));
+    assert!(!rendered.markdown.contains("-2026-09-10 Write paper"));
 }
 
 #[test]

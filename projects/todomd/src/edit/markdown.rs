@@ -84,24 +84,32 @@ pub fn render_with_view(
                 validate_category(category)?;
             }
             let checked = if task.completed { 'x' } else { ' ' };
-            let list = if projected.depth == 0 {
+            let root = projected.depth == 0;
+            let grouped = |key| root && active_view.group_by.contains(&key);
+            let list = if root && !grouped(view::GroupKey::List) {
                 format!("{} ", render_list_marker(tree.list_name))
             } else {
                 String::new()
             };
-            let due = task
-                .due
-                .as_ref()
+            let due = (!grouped(view::GroupKey::Due))
+                .then_some(task.due.as_ref())
+                .flatten()
                 .map_or_else(String::new, |value| format!("-{} ", value.marker()));
-            let start = task
-                .start
-                .as_ref()
+            let start = (!grouped(view::GroupKey::Start))
+                .then_some(task.start.as_ref())
+                .flatten()
                 .map_or_else(String::new, |value| format!("+{} ", value.marker()));
-            let priority = match task.priority.marker() {
-                "" => String::new(),
-                marker => format!("{marker} "),
+            let priority = if grouped(view::GroupKey::Priority) {
+                String::new()
+            } else {
+                match task.priority.marker() {
+                    "" => String::new(),
+                    marker => format!("{marker} "),
+                }
             };
-            let categories = render_categories(&task.categories)
+            let categories = (!grouped(view::GroupKey::Categories))
+                .then(|| render_categories(&task.categories))
+                .flatten()
                 .map(|field| format!("{field} "))
                 .unwrap_or_default();
             let summary = render_summary(&task.summary);
@@ -121,6 +129,15 @@ pub fn parse(
     baseline: &TaskState,
     manifest: &IdentityManifest,
 ) -> Result<EditedTaskState> {
+    parse_with_view(input, baseline, manifest, &View::default())
+}
+
+pub fn parse_with_view(
+    input: &str,
+    baseline: &TaskState,
+    manifest: &IdentityManifest,
+    active_view: &View,
+) -> Result<EditedTaskState> {
     let expected_lists = baseline
         .lists
         .iter()
@@ -133,6 +150,7 @@ pub fn parse(
         .collect::<BTreeMap<String, Vec<EditedTask>>>();
     let mut seen_ids = BTreeSet::new();
     let mut ancestors: Vec<(TaskReference, String)> = Vec::new();
+    let mut headings = Vec::<HeadingValue>::new();
     let mut next_draft_id = 1;
     let date_context = DateContext::local_now()?;
 
@@ -147,6 +165,16 @@ pub fn parse(
             if hashes == 0 || line.as_bytes().get(hashes) != Some(&b' ') || hashes > 6 {
                 bail!("line {line_number}: malformed presentation heading");
             }
+            if let Some(key) = active_view.group_by.get(hashes - 1) {
+                if hashes > headings.len() + 1 {
+                    bail!("line {line_number}: grouping heading skips a level");
+                }
+                headings.truncate(hashes - 1);
+                headings.push(
+                    parse_heading_value(*key, &line[hashes + 1..], &expected_lists, &date_context)
+                        .with_context(|| format!("line {line_number}"))?,
+                );
+            }
             continue;
         }
 
@@ -154,14 +182,24 @@ pub fn parse(
         if depth > ancestors.len() {
             bail!("line {line_number}: task nesting jumps more than one level");
         }
-        let (mut task, explicit_list) =
+        let (mut task, explicit) =
             parse_task_line(task_line, line_number, manifest, &date_context)?;
         let list_name = if depth == 0 {
-            explicit_list.with_context(|| {
-                format!("line {line_number}: a root task must contain an @list marker")
-            })?
+            if headings.len() < active_view.group_by.len() {
+                bail!("line {line_number}: root task is missing its grouping heading");
+            }
+            apply_heading_values(&mut task, &explicit, &headings);
+            explicit
+                .list
+                .clone()
+                .or_else(|| heading_list(&headings).map(str::to_owned))
+                .with_context(|| {
+                    format!(
+                        "line {line_number}: a root task must contain an @list marker or appear beneath a list grouping"
+                    )
+                })?
         } else {
-            if explicit_list.is_some() {
+            if explicit.list.is_some() {
                 bail!("line {line_number}: a child task must inherit its parent's list");
             }
             ancestors[depth - 1].1.clone()
@@ -205,6 +243,103 @@ pub fn parse(
     Ok(EditedTaskState { lists })
 }
 
+#[derive(Clone, Debug)]
+enum HeadingValue {
+    List(String),
+    Completed,
+    Priority(Priority),
+    Due(Option<DateValue>),
+    Start(Option<DateValue>),
+    Categories(Vec<String>),
+}
+
+fn parse_heading_value(
+    key: view::GroupKey,
+    label: &str,
+    expected_lists: &BTreeSet<&str>,
+    date_context: &DateContext,
+) -> Result<HeadingValue> {
+    match key {
+        view::GroupKey::List => {
+            if !expected_lists.contains(label) {
+                bail!("unknown list grouping {label:?}");
+            }
+            Ok(HeadingValue::List(label.to_owned()))
+        }
+        view::GroupKey::Completed => match label {
+            "Incomplete" | "Completed" => Ok(HeadingValue::Completed),
+            _ => bail!("unknown completion grouping {label:?}"),
+        },
+        view::GroupKey::Priority => match label {
+            "High priority" => Ok(HeadingValue::Priority(Priority::High)),
+            "Medium priority" => Ok(HeadingValue::Priority(Priority::Medium)),
+            "Low priority" => Ok(HeadingValue::Priority(Priority::Low)),
+            "No priority" => Ok(HeadingValue::Priority(Priority::None)),
+            _ => bail!("unknown priority grouping {label:?}"),
+        },
+        view::GroupKey::Due => Ok(HeadingValue::Due(parse_heading_date(
+            label,
+            "No due date",
+            date_context,
+        )?)),
+        view::GroupKey::Start => Ok(HeadingValue::Start(parse_heading_date(
+            label,
+            "No start date",
+            date_context,
+        )?)),
+        view::GroupKey::Categories => {
+            if label == "No categories" {
+                return Ok(HeadingValue::Categories(Vec::new()));
+            }
+            let (categories, remainder) = take_categories(label)?;
+            if !remainder.is_empty() {
+                bail!("invalid categories grouping {label:?}");
+            }
+            Ok(HeadingValue::Categories(categories))
+        }
+    }
+}
+
+fn parse_heading_date(
+    label: &str,
+    missing_label: &str,
+    date_context: &DateContext,
+) -> Result<Option<DateValue>> {
+    if label == missing_label {
+        Ok(None)
+    } else {
+        dates::parse_markdown_at(label, date_context)
+            .map(Some)
+            .context("invalid date grouping")
+    }
+}
+
+fn heading_list(headings: &[HeadingValue]) -> Option<&str> {
+    headings.iter().find_map(|heading| match heading {
+        HeadingValue::List(list) => Some(list.as_str()),
+        _ => None,
+    })
+}
+
+fn apply_heading_values(
+    task: &mut EditedTask,
+    explicit: &ExplicitFields,
+    headings: &[HeadingValue],
+) {
+    for heading in headings {
+        match heading {
+            HeadingValue::List(_) | HeadingValue::Completed => {}
+            HeadingValue::Priority(value) if !explicit.priority => task.priority = *value,
+            HeadingValue::Due(value) if !explicit.due => task.due = value.clone(),
+            HeadingValue::Start(value) if !explicit.start => task.start = value.clone(),
+            HeadingValue::Categories(value) if !explicit.categories => {
+                task.categories = value.clone();
+            }
+            _ => {}
+        }
+    }
+}
+
 fn split_indentation(line: &str, line_number: usize) -> Result<(usize, &str)> {
     let spaces = line.bytes().take_while(|byte| *byte == b' ').count();
     if line.as_bytes().get(spaces) == Some(&b'\t') {
@@ -239,7 +374,7 @@ fn parse_task_line(
     line_number: usize,
     manifest: &IdentityManifest,
     date_context: &DateContext,
-) -> Result<(EditedTask, Option<String>)> {
+) -> Result<(EditedTask, ExplicitFields)> {
     let (completed, remainder) = if let Some(remainder) = line.strip_prefix("- [ ] ") {
         (false, remainder)
     } else if let Some(remainder) = line.strip_prefix("- [x] ") {
@@ -266,19 +401,34 @@ fn parse_task_line(
     let summary = parse_summary(fields.summary).with_context(|| format!("line {line_number}"))?;
     validate_summary(&summary).with_context(|| format!("line {line_number}"))?;
 
+    let explicit = ExplicitFields {
+        list: fields.list.clone(),
+        priority: fields.priority.is_some(),
+        categories: fields.categories.is_some(),
+        start: fields.start.is_some(),
+        due: fields.due.is_some(),
+    };
     Ok((
         EditedTask {
             id,
             summary,
             completed,
-            priority: fields.priority,
-            categories: fields.categories,
+            priority: fields.priority.unwrap_or_default(),
+            categories: fields.categories.unwrap_or_default(),
             parent: None,
             start: fields.start,
             due: fields.due,
         },
-        fields.list,
+        explicit,
     ))
+}
+
+struct ExplicitFields {
+    list: Option<String>,
+    priority: bool,
+    categories: bool,
+    start: bool,
+    due: bool,
 }
 
 fn validate_heading(heading: &str) -> Result<()> {
@@ -341,8 +491,8 @@ fn render_categories(categories: &[String]) -> Option<String> {
 
 struct ParsedFields<'a> {
     list: Option<String>,
-    priority: Priority,
-    categories: Vec<String>,
+    priority: Option<Priority>,
+    categories: Option<Vec<String>>,
     start: Option<DateValue>,
     due: Option<DateValue>,
     summary: &'a str,
@@ -416,8 +566,8 @@ fn split_fields<'a>(
 
     Ok(ParsedFields {
         list,
-        priority: priority.unwrap_or_default(),
-        categories: categories.unwrap_or_default(),
+        priority,
+        categories,
         start,
         due,
         summary: remainder,
@@ -562,6 +712,15 @@ mod tests {
 
     use super::*;
 
+    fn test_date(value: &str) -> DateValue {
+        let context = DateContext::in_timezone(
+            "Etc/UTC",
+            Utc.with_ymd_and_hms(2026, 9, 22, 12, 0, 0).unwrap(),
+        )
+        .unwrap();
+        dates::parse_markdown_at(value, &context).unwrap()
+    }
+
     #[test]
     fn rendering_is_stable_with_the_same_manifest() {
         let state = TaskState {
@@ -586,6 +745,173 @@ mod tests {
 
         assert_eq!(first, second);
         assert_eq!(manifest.session_id(&state.lists[0].tasks[0].id), Some("t1"));
+    }
+
+    #[test]
+    fn list_groupings_hide_markers_and_move_roots_between_lists() {
+        let state = TaskState {
+            lists: vec![
+                TaskList {
+                    name: "Postgrad".into(),
+                    tasks: vec![Task {
+                        id: TaskId::new("paper"),
+                        summary: "Write paper".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        categories: vec![],
+                        parent: None,
+                        start: None,
+                        due: None,
+                    }],
+                },
+                TaskList {
+                    name: "Personal".into(),
+                    tasks: Vec::new(),
+                },
+            ],
+        };
+        let mut manifest = IdentityManifest::default();
+        let document = render(&state, &mut manifest).unwrap();
+        assert!(document.contains("# Postgrad\n\n- [ ] Write paper <!--t1-->"));
+        assert!(!document.contains("@Postgrad"));
+
+        let moved = document.replace("# Postgrad", "# Personal");
+        let parsed = parse(&moved, &state, &manifest).unwrap();
+        assert!(parsed.lists[0].tasks.is_empty());
+        assert_eq!(parsed.lists[1].tasks[0].summary, "Write paper");
+
+        let explicit = moved.replace("- [ ] Write paper", "- [ ] @Postgrad Write paper");
+        let parsed = parse(&explicit, &state, &manifest).unwrap();
+        assert_eq!(parsed.lists[0].tasks[0].summary, "Write paper");
+        assert!(parsed.lists[1].tasks.is_empty());
+    }
+
+    #[test]
+    fn grouped_dates_hide_root_markers_but_keep_child_markers() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Work".into(),
+                tasks: vec![
+                    Task {
+                        id: TaskId::new("root"),
+                        summary: "Root".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        categories: vec![],
+                        parent: None,
+                        start: None,
+                        due: Some(test_date("2026-09-22")),
+                    },
+                    Task {
+                        id: TaskId::new("child"),
+                        summary: "Child".into(),
+                        completed: false,
+                        priority: Priority::None,
+                        categories: vec![],
+                        parent: Some(TaskId::new("root")),
+                        start: None,
+                        due: Some(test_date("2026-09-24")),
+                    },
+                ],
+            }],
+        };
+        let view = View {
+            group_by: vec![view::GroupKey::Due],
+            sort_by: vec![view::SortKey::Summary],
+        };
+        let mut manifest = IdentityManifest::default();
+        let document = render_with_view(&state, &view, &mut manifest).unwrap();
+        assert!(document.contains("# 2026-09-22\n\n- [ ] @Work Root <!--t1-->"));
+        assert!(document.contains("  - [ ] -2026-09-24 Child <!--t2-->"));
+
+        let moved = document.replace("# 2026-09-22", "# 2026-09-23");
+        let parsed = parse_with_view(&moved, &state, &manifest, &view).unwrap();
+        assert_eq!(parsed.lists[0].tasks[0].due, Some(test_date("2026-09-23")));
+        assert_eq!(parsed.lists[0].tasks[1].due, Some(test_date("2026-09-24")));
+
+        let explicit = moved.replace("@Work Root", "@Work -2026-09-25 Root");
+        let parsed = parse_with_view(&explicit, &state, &manifest, &view).unwrap();
+        assert_eq!(parsed.lists[0].tasks[0].due, Some(test_date("2026-09-25")));
+    }
+
+    #[test]
+    fn nested_groupings_round_trip_omitted_root_fields() {
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Work".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("root"),
+                    summary: "Root".into(),
+                    completed: false,
+                    priority: Priority::High,
+                    categories: vec!["Quick Win".into()],
+                    parent: None,
+                    start: Some(test_date("2026-09-22 09:00")),
+                    due: None,
+                }],
+            }],
+        };
+        let view = View {
+            group_by: vec![
+                view::GroupKey::List,
+                view::GroupKey::Start,
+                view::GroupKey::Priority,
+                view::GroupKey::Categories,
+            ],
+            sort_by: vec![view::SortKey::Summary],
+        };
+        let mut manifest = IdentityManifest::default();
+
+        let document = render_with_view(&state, &view, &mut manifest).unwrap();
+        assert!(document.contains("#### [\"Quick Win\"]\n\n- [ ] Root <!--t1-->"));
+        let parsed = parse_with_view(&document, &state, &manifest, &view).unwrap();
+        let task = &parsed.lists[0].tasks[0];
+        assert_eq!(task.start, Some(test_date("2026-09-22 09:00")));
+        assert_eq!(task.priority, Priority::High);
+        assert_eq!(task.categories, ["Quick Win"]);
+    }
+
+    #[test]
+    fn rejects_unknown_grouping_headings() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+
+        let error = parse(
+            "# Typo\n\n- [ ] @Personal Task\n",
+            &baseline,
+            &IdentityManifest::default(),
+        )
+        .unwrap_err();
+
+        assert!(format!("{error:#}").contains("unknown list grouping"));
+    }
+
+    #[test]
+    fn completion_checkbox_takes_precedence_over_its_heading() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: Vec::new(),
+            }],
+        };
+        let view = View {
+            group_by: vec![view::GroupKey::Completed],
+            sort_by: vec![view::SortKey::Summary],
+        };
+
+        let parsed = parse_with_view(
+            "# Completed\n\n- [ ] @Personal Task\n",
+            &baseline,
+            &IdentityManifest::default(),
+            &view,
+        )
+        .unwrap();
+
+        assert!(!parsed.lists[0].tasks[0].completed);
     }
 
     #[test]
@@ -626,7 +952,7 @@ mod tests {
         };
         let mut manifest = IdentityManifest::default();
         render(&baseline, &mut manifest).unwrap();
-        let input = "# Anything\n\n- [ ] @Postgrad Buy coffee\n\n# Decorative\n\n- [x] @Personal Submit paper <!--t1-->\n";
+        let input = "# Postgrad\n\n- [ ] @Postgrad Buy coffee\n\n# Personal\n\n- [x] @Personal Submit paper <!--t1-->\n";
 
         let parsed = parse(input, &baseline, &manifest).unwrap();
 
@@ -678,12 +1004,12 @@ mod tests {
         let mut manifest = IdentityManifest::default();
         let document = render(&baseline, &mut manifest).unwrap();
         assert!(
-            document.contains("- [ ] @Personal Submit paper <!--t1-->"),
+            document.contains("- [ ] Submit paper <!--t1-->"),
             "{document}"
         );
 
         let parsed = parse(
-            "# Decorative\n\n\
+            "# Personal\n\n\
              - [ ] @Personal Submit paper <!--t1-->\n\
              - [ ] @Personal Ship it <!--later-->\n\
              - [ ] @Personal Note <!--t1--> in passing\n",
@@ -727,7 +1053,7 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
 
         assert!(
-            document.contains("- [ ] @Personal \"Submit paper <!--t1-->\" <!--t1-->"),
+            document.contains("- [ ] \"Submit paper <!--t1-->\" <!--t1-->"),
             "{document}"
         );
 
@@ -826,10 +1152,10 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
 
-        assert!(document.contains("- [ ] @Postgrad !!! Urgent <!--t1-->"));
-        assert!(document.contains("- [ ] @Postgrad !! Middling <!--t2-->"));
-        assert!(document.contains("- [ ] @Postgrad ! Whenever <!--t3-->"));
-        assert!(document.contains("- [ ] @Postgrad Unset <!--t4-->"));
+        assert!(document.contains("- [ ] !!! Urgent <!--t1-->"));
+        assert!(document.contains("- [ ] !! Middling <!--t2-->"));
+        assert!(document.contains("- [ ] ! Whenever <!--t3-->"));
+        assert!(document.contains("- [ ] Unset <!--t4-->"));
 
         let parsed = parse(&document, &state, &manifest).unwrap();
         let priorities = parsed.lists[0]
@@ -875,12 +1201,12 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
         assert!(
             document.contains(
-                "- [ ] @Personal ! [Blocked, \"Quick Win\", \"say \"\"hi\"\"\"] Email @Gabs <!--t1-->"
+                "- [ ] ! [Blocked, \"Quick Win\", \"say \"\"hi\"\"\"] Email @Gabs <!--t1-->"
             ),
             "{document}"
         );
 
-        let reordered = "# Decorative\n\n- [ ] [\"Quick Win\", \"say \"\"hi\"\"\", Blocked] ! @Personal Email @Gabs <!--t1-->\n";
+        let reordered = "# Personal\n\n- [ ] [\"Quick Win\", \"say \"\"hi\"\"\", Blocked] ! @Personal Email @Gabs <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(
             parsed.lists[0].tasks[0].categories,
@@ -982,13 +1308,11 @@ mod tests {
 
         let document = render(&state, &mut manifest).unwrap();
         assert!(
-            document.contains(
-                "- [ ] @Postgrad -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!--t1-->"
-            ),
+            document.contains("- [ ] -2026-09-07 +\"2026-09-06 10:00\" ! Write grant <!--t1-->"),
             "{document}"
         );
 
-        let reordered = "# Dates\n\n- [ ] ! +\"2026-09-06 10:00\" @Postgrad -2026-09-07 Write grant <!--t1-->\n";
+        let reordered = "# Postgrad\n\n- [ ] ! +\"2026-09-06 10:00\" @Postgrad -2026-09-07 Write grant <!--t1-->\n";
         let parsed = parse(reordered, &state, &manifest).unwrap();
         assert_eq!(parsed.lists[0].tasks[0].priority, Priority::Low);
         assert_eq!(
@@ -1094,7 +1418,7 @@ mod tests {
         let document = render(&state, &mut manifest).unwrap();
 
         assert!(
-            document.contains(r#"- [ ] @Postgrad He said "hi" to me <!--t1-->"#),
+            document.contains(r#"- [ ] He said "hi" to me <!--t1-->"#),
             "{document}"
         );
         let parsed = parse(&document, &state, &manifest).unwrap();
@@ -1254,7 +1578,7 @@ mod tests {
             }],
         };
         let document =
-            "# Decorative\n\n- [ ] @Personal Parent\n  - [ ] Child\n    - [ ] Grandchild\n";
+            "# Personal\n\n- [ ] @Personal Parent\n  - [ ] Child\n    - [ ] Grandchild\n";
 
         let parsed = parse(document, &baseline, &IdentityManifest::default()).unwrap();
 

@@ -737,7 +737,12 @@ enum Outcome {
 }
 
 fn validate_document(document: &LiveDocument) -> Result<()> {
-    let edited = markdown::parse(&document.text, &document.baseline, &document.manifest)?;
+    let edited = markdown::parse_with_view(
+        &document.text,
+        &document.baseline,
+        &document.manifest,
+        &document.view,
+    )?;
     let (baseline, _) = reconciliation_baseline(document, &edited);
     planner::reconcile(&baseline, &edited, &baseline)?;
     Ok(())
@@ -749,7 +754,12 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             "live document is out of sync; reload the accepted session document before saving"
         ));
     }
-    let edited = markdown::parse(&document.text, &document.baseline, &document.manifest)?;
+    let edited = markdown::parse_with_view(
+        &document.text,
+        &document.baseline,
+        &document.manifest,
+        &document.view,
+    )?;
     let (baseline, mut required_tasks) = reconciliation_baseline(document, &edited);
     required_tasks.extend(document.completed_in_session.iter().cloned());
     let (current, sources) = load_current(document, &required_tasks)?;

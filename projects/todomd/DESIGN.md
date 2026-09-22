@@ -6,10 +6,10 @@ This document describes the intended view system, not the behavior of the
 current release. The current command line, configuration, and Markdown format
 remain documented in [README.md](README.md).
 
-The redesign separates task meaning from presentation. Every editable property
-must be represented by task syntax; headings only make the generated document
-easier to scan. The same task can therefore be rendered under different
-headings and in different orders without changing its meaning.
+The redesign separates task meaning from presentation while letting grouping
+headings provide concise defaults for root tasks. Fields represented by the
+active grouping are omitted from roots and derived from their headings; an
+explicit task marker overrides a conflicting heading.
 
 ## Goals
 
@@ -25,8 +25,8 @@ headings and in different orders without changing its meaning.
 
 1. ICS remains the source of truth; Markdown remains a session-scoped editing
    surface.
-2. Task fields and indentation are authoritative. Headings never change task
-   state.
+2. Explicit task fields and indentation are authoritative. Grouping headings
+   supply fields omitted from root tasks.
 3. A parent and all its descendants belong to one list.
 4. A root task and its descendants are an indivisible unit for top-level
    grouping and ordering.
@@ -56,7 +56,7 @@ or an LSP session change.
 
 ### Task fields
 
-The target canonical form is:
+The canonical form without grouping is:
 
 ```markdown
 - [ ] @Postgrad -2026-09-12 +"2026-09-07 09:00" !!! [Research, "Quick Win"] Write paper <!--t1-->
@@ -73,11 +73,14 @@ Canonical leading-field order is:
 6. summary.
 
 Parsing may accept leading fields in any order, as it does today. Rendering
-always restores canonical order.
+always restores canonical order. On roots, rendering omits list, due, start,
+priority, or categories when that field is supplied by an active grouping
+heading. Descendant fields remain explicit.
 
 ### Lists
 
-A root task carries exactly one list marker:
+A root task carries exactly one list marker unless `list` is an active grouping
+key:
 
 ```markdown
 @Postgrad
@@ -85,16 +88,15 @@ A root task carries exactly one list marker:
 ```
 
 A list name is quoted when necessary using the existing doubled-quote syntax.
-A root without a list marker is invalid.
+When grouped by list, the root marker is omitted and the corresponding heading
+supplies list membership. Moving a root beneath another list heading therefore
+moves its whole tree. An explicit root marker remains accepted and takes
+precedence over a conflicting heading.
 
-Descendants inherit their parent's list and do not render a redundant list
-marker. This keeps trees concise and makes changing one root marker move the
-whole tree. A list marker on a descendant is rejected rather than ignored.
-Unindenting a child into a root therefore requires adding a list marker, and
-indenting a root requires removing its marker.
-
-List membership comes only from the root marker. Moving text beneath a heading
-has no effect on it.
+Descendants always inherit their parent's list and never render a redundant
+list marker. A list marker on a descendant is rejected rather than ignored.
+When the active view is not grouped by list, unindenting a child into a root
+requires adding a list marker, and indenting a root requires removing it.
 
 ### Categories
 
@@ -127,23 +129,30 @@ Existing edge-whitespace and trailing-identity quoting rules continue to apply.
 
 ### Headings
 
-Generated headings describe groups but carry no editable meaning:
+Generated headings provide the grouped fields omitted from root tasks:
 
 ```markdown
 # Postgrad
 
 ## High priority
 
-- [ ] @Postgrad !!! Write paper <!--t1-->
+- [ ] Write paper <!--t1-->
 ```
 
 Heading levels correspond to grouping-key depth. A view with no grouping keys
-renders no headings.
+renders no headings and therefore keeps every root field explicit.
 
-The parser accepts headings as presentation separators and does not derive any
-task field from their level or text. Adding, deleting, renaming, or moving a
-heading therefore changes no task. Headings are discarded and regenerated on
-the next canonical render. They do not reset indentation or split a task tree.
+A root inherits list, priority, due, start, and categories from the applicable
+grouping headings when their task markers are absent. Moving it beneath another
+heading edits that field. An explicit marker wins when it conflicts with a
+heading. Completion remains checkbox-authoritative because every task always
+contains `[ ]` or `[x]`.
+
+Only roots inherit heading fields; descendants retain their own markers because
+groups describe whole trees by their root values. Grouping labels are strict:
+unknown lists, malformed dates or category sets, and unknown fixed labels are
+errors rather than decorative headings. Headings deeper than the configured
+grouping keys remain presentation-only and do not reset task indentation.
 
 The dialect remains otherwise strict: non-heading prose, malformed task lines,
 invalid indentation, and unsupported Markdown are errors.
@@ -168,7 +177,8 @@ duplicated into several groups because duplicate editable identities would make
 Markdown ambiguous.
 
 Missing values receive an explicit generated heading such as `No due date` or
-`No categories`. Heading labels are presentation strings, not parse tokens.
+`No categories`. These labels are parse tokens for their corresponding empty
+root fields.
 
 ### Nested groups
 
@@ -346,10 +356,10 @@ Responsibilities become:
   command-line overrides into one validated `View` value.
 - **View projector:** group root trees and recursively order siblings without
   changing canonical task meaning.
-- **Markdown renderer:** render projected headings and authoritative task
-  fields.
-- **Markdown parser:** ignore heading meaning, parse root list markers and
-  category sets, and reconstruct edited trees from indentation.
+- **Markdown renderer:** render projected headings and omit redundant grouped
+  fields from roots.
+- **Markdown parser:** derive omitted root fields from grouping headings, prefer
+  explicit markers on conflicts, and reconstruct edited trees from indentation.
 - **Live session:** retain the resolved active view and use it for every
   canonical refresh.
 - **LSP adapter:** select views and replace a clean open buffer without invoking
@@ -365,7 +375,7 @@ pre-1.0:
 
 - `@category` becomes `@list` on roots;
 - categories move to `[category, ...]`;
-- headings stop defining list membership;
+- list headings and explicit root markers can both define list membership;
 - per-list sorting becomes view-wide sorting; and
 - live-session metadata gains a format version and resolved active view.
 
@@ -383,7 +393,7 @@ to match a selected list.
 ### 1. Authoritative task syntax
 
 - Add root list markers and bracketed category parsing/rendering.
-- Make headings semantically inert.
+- Make grouping headings supply omitted root fields.
 - Validate root/descendant list invariants.
 - Update parser, renderer, planner, and lifecycle tests for moves, nesting,
   quoting, and malformed input.

@@ -107,12 +107,12 @@ back to `$EDITOR`:
 ```markdown
 # Postgrad
 
-- [ ] @Postgrad -2026-09-12 +"2026-09-07 09:00" !!! [Research] Paper <!--t1-->
+- [ ] -2026-09-12 +"2026-09-07 09:00" !!! [Research] Paper <!--t1-->
   - [ ] -2026-09-11 ! ["Quick Win"] Read related work <!--t3-->
 
 # Personal
 
-- [ ] @Personal Buy milk, bread <!--t2-->
+- [ ] Buy milk, bread <!--t2-->
 ```
 
 When a selected vdir has a `color` metadata file containing `#RRGGBB`, todomd
@@ -128,14 +128,15 @@ heading.
 | Remove a date marker | Clear that property |
 | Add or change `!`, `!!`, `!!!` | Set priority |
 | Remove the priority marker | Clear priority |
-| Change `@list` on a root | Move its whole tree between lists |
+| Move a root beneath another grouping heading | Change that grouped field |
+| Add or change `@list` on a root | Move its whole tree between lists; overrides the heading |
 | Edit `[category, ...]` | Change categories |
 | Change `[ ]` to `[x]` | Complete |
 | Change `[x]` to `[ ]` | Reopen, with `--completed` |
-| Add a root `- [ ] @list` line without an identity | Create in that list |
+| Add an identity-free root beneath a list heading, or with `@list` | Create in that list |
 | Indent a line by two spaces | Make it a child of the preceding task |
 | Unindent or reindent a line | Detach or reparent it |
-| Move or rename a heading | Nothing; headings are presentation only |
+| Rename a grouping heading | Change that field for roots beneath it |
 | Delete a line | Delete that VTODO |
 | Reorder lines | Nothing |
 
@@ -149,13 +150,20 @@ digits, is read as a marker. Any other trailing HTML comment, such as
 one that is not at the end of the line. A summary that really does end with
 `<!--t1-->` is quoted, like any other summary the syntax would otherwise claim.
 
+Grouping headings supply omitted fields for root tasks. Active list, due,
+start, priority, and category groupings hide the corresponding root marker;
+moving a root beneath another valid heading edits that field. An explicit
+marker takes precedence when it conflicts with the heading. Completion remains
+controlled by `[ ]` / `[x]`. Group headings accept only valid labels, and only
+roots inherit them; descendants keep their own field markers.
+
 Indentation edits the child's `RELATED-TO` parent, written as
 `RELATED-TO;RELTYPE=PARENT` so clients that do not infer the default
-relationship type, such as todoman, still see the hierarchy. A root carries one
-`@list` marker; descendants inherit that list and reject redundant markers.
-Changing a root marker moves its whole tree. Unindenting a child into a root
-requires adding a list marker, while indenting a root requires removing it.
-Headings are regenerated from the active view and never determine task state.
+relationship type, such as todoman, still see the hierarchy. When not grouped by list, a root carries one `@list` marker. Descendants inherit
+that list and reject redundant markers. Changing a root marker moves its whole
+tree. Unindenting a child into a root requires a list marker unless the active
+view supplies one through a list heading; indenting a root requires removing
+its marker.
 
 A bare `RELATED-TO` is read as a parent but rewritten only when that task is
 reparented. Removing a parent line deletes only that VTODO. Retained children
@@ -194,10 +202,11 @@ A view groups root trees and sorts siblings. Trees stay intact: descendants
 remain beside their root even when their own fields differ from its group.
 Within each tree, sibling sets are sorted recursively and parents precede their
 descendants. Grouping by categories treats the complete category set as one
-value rather than duplicating editable tasks. Ordering and headings are
-presentational, so rearranging lines or moving them beneath another heading
-changes nothing. The `manual` key honors existing `X-APPLE-SORT-ORDER` values
-but does not make rearrangement persistent yet.
+value rather than duplicating editable tasks. Ordering remains presentational,
+so rearranging lines within one group changes nothing. Moving roots between
+valid grouping headings edits the grouped field. The `manual` key honors
+existing `X-APPLE-SORT-ORDER` values but does not make rearrangement persistent
+yet.
 
 A summary is quoted only when its start would otherwise be read as syntax, so
 ordinary text is never quoted:
@@ -216,11 +225,10 @@ Quote a summary yourself if it starts with `!`, `+`, `-`, `@`, `[`, or `"`, if
 it ends with an identity-shaped comment such as `<!--t1-->`, or if it needs
 leading or trailing spaces. Inside quotes, write `""` for a literal `"`.
 
-The dialect is strict. It allows generated presentation headings and `- [ ]` or
-`- [x]` items indented by exactly two spaces per nesting level. Nesting may be
-arbitrarily deep but cannot skip a level. Heading text and placement are ignored
-semantically and canonicalized after a save. Summaries must be single-line and
-non-empty.
+The dialect is strict. It allows grouping headings and `- [ ]` or `- [x]` items
+indented by exactly two spaces per nesting level. Nesting may be arbitrarily
+deep but cannot skip a level. Grouping headings must use valid labels and are
+canonicalized after a save. Summaries must be single-line and non-empty.
 
 Only active root tasks are rendered by default. Their completed subtasks remain
 visible as `[x]`, but descendants below a completed subtask are hidden. A hidden

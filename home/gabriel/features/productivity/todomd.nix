@@ -22,8 +22,8 @@ in {
         sort_by = ["due" "list" "summary"];
       };
       agenda = {
-        group_by = ["due"];
-        sort_by = ["priority" "list" "summary"];
+        group_by = ["due" "list"];
+        sort_by = ["priority" "summary"];
       };
     };
     hooks.after_apply = [systemctl "--user" "start" "vdirsyncer.service"];

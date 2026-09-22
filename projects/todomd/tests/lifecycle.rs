@@ -323,10 +323,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
     let source = fs::read_to_string(&source_path).unwrap();
     assert!(source.contains("SUMMARY:LSP paper"));
 
-    let completed = canonical.replace(
-        "- [ ] @Postgrad -2026-09-10 LSP paper",
-        "- [x] @Postgrad -2026-09-10 LSP paper",
-    );
+    let completed = canonical.replace("- [ ] -2026-09-10 LSP paper", "- [x] -2026-09-10 LSP paper");
     peer.send(json!({
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
@@ -342,7 +339,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
     }));
     let (canonical, events) = receive_workspace_edit(&mut peer, "LSP paper");
     assert_hook_follows_workspace_edit(&mut peer, &events);
-    assert!(canonical.contains("- [x] @Postgrad -2026-09-10 LSP paper"));
+    assert!(canonical.contains("- [x] -2026-09-10 LSP paper"));
     assert!(
         fs::read_to_string(&source_path)
             .unwrap()
@@ -371,7 +368,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
             && progress["params"]["value"]["kind"] == "begin"
             && progress["params"]["value"]["message"] == "Updating Markdown from ICS"
     }));
-    assert!(canonical.contains("- [x] @Postgrad -2026-09-10 Changed externally"));
+    assert!(canonical.contains("- [x] -2026-09-10 Changed externally"));
 
     peer.send(json!({
         "jsonrpc": "2.0",
