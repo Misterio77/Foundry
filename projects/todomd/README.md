@@ -252,8 +252,10 @@ language-servers = ["marksman", "todomd"]
 ```
 
 In an attached session, `:lsp-workspace-command todomd.changeView` opens a
-picker for configured views. View changes require a clean buffer, replace only
-the presentation, survive an LSP restart, and neither touch ICS nor run hooks.
+picker for configured views. If the editor does not support the LSP picker,
+as with Helix, the command cycles to the next configured view instead. View
+changes require a clean buffer, replace only the presentation, survive an LSP
+restart, and neither touch ICS nor run hooks.
 
 Helix shows its LSP progress spinner by default. To also print the accompanying
 text below the statusline, add this to `config.toml`:

@@ -421,6 +421,36 @@ fn lsp_applies_saves_and_loads_source_changes() {
     }));
     peer.send(json!({
         "jsonrpc": "2.0",
+        "id": 51,
+        "method": "workspace/executeCommand",
+        "params": {"command": "todomd.changeView", "arguments": []}
+    }));
+    loop {
+        let message = peer.read();
+        if message["method"] == "window/showMessageRequest" {
+            peer.send(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "error": {"code": -32601, "message": "Method not found"}
+            }));
+            break;
+        }
+    }
+    let (default_view, _) = receive_workspace_edit(&mut peer, "# Postgrad");
+    let response = read_response(&mut peer, 51);
+    assert_eq!(response["result"], Value::Null);
+    assert_eq!(case.hooks(), "apply\napply\n");
+
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 7},
+            "contentChanges": [{"text": default_view}]
+        }
+    }));
+    peer.send(json!({
+        "jsonrpc": "2.0",
         "method": "textDocument/didClose",
         "params": {"textDocument": {"uri": uri}}
     }));

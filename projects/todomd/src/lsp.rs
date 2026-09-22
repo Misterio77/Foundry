@@ -14,7 +14,7 @@ use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::Mutex;
 use tower_lsp::{
     Client, LanguageServer, LspService, Server,
-    jsonrpc::Result as LspResult,
+    jsonrpc::{ErrorCode, Result as LspResult},
     lsp_types::{
         ApplyWorkspaceEditResponse, Color, ColorInformation, ColorProviderCapability, Diagnostic,
         DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
@@ -290,9 +290,19 @@ impl Backend {
         let Some(document) = self.document(&uri).await else {
             return Ok(());
         };
-        let (names, current) = {
+        let (names, current, next) = {
             let state = document.lock().await;
-            (state.config.view_names(), state.view.clone())
+            let names = state.config.view_names();
+            let current = state.view.clone();
+            let current_index = names.iter().position(|name| {
+                state
+                    .config
+                    .view(Some(name))
+                    .is_ok_and(|view| view == current)
+            });
+            let next_index = current_index.map_or(0, |index| (index + 1) % names.len());
+            let next = names[next_index].clone();
+            (names, current, next)
         };
         let actions = names
             .iter()
@@ -301,23 +311,25 @@ impl Backend {
                 properties: Default::default(),
             })
             .collect();
-        let Some(choice) = self
+        let choice = match self
             .client
             .show_message_request(MessageType::INFO, "Choose todomd view", Some(actions))
             .await
-            .context("editor could not present todomd views")?
-        else {
-            return Ok(());
+        {
+            Ok(Some(choice)) => choice.title,
+            Ok(None) => return Ok(()),
+            Err(error) if error.code == ErrorCode::MethodNotFound => next,
+            Err(error) => return Err(error).context("editor could not present todomd views"),
         };
-        if !names.contains(&choice.title) {
-            bail!("editor selected unknown todomd view {:?}", choice.title);
+        if !names.contains(&choice) {
+            bail!("editor selected unknown todomd view {choice:?}");
         }
 
         let mut state = document.lock().await;
         if state.text != state.accepted_text {
             bail!("save or discard changes before switching views");
         }
-        let selected = state.config.view(Some(&choice.title))?;
+        let selected = state.config.view(Some(&choice))?;
         if selected == current {
             return Ok(());
         }
@@ -341,6 +353,13 @@ impl Backend {
         state.accepted_text = text.clone();
         state.text = text;
         state.synchronized = true;
+        drop(state);
+        self.client
+            .show_message(
+                MessageType::INFO,
+                format!("todomd: switched to view {choice}"),
+            )
+            .await;
         Ok(())
     }
 

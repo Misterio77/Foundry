@@ -290,8 +290,10 @@ while it is open.
 
 The language server advertises a no-argument `todomd.changeView` workspace
 command. On invocation it uses `window/showMessageRequest` to present the
-configured views and the built-in default. This avoids depending on arbitrary
-workspace-command arguments, which Helix does not currently expose well.
+configured views and the built-in default. If the client returns method-not-found
+for that request, the command cycles to the next configured view instead. This
+avoids depending on arbitrary workspace-command arguments, which Helix does not
+currently expose well.
 
 If more than one todomd document is attached to the same language-server
 process, the server first asks which session to change. Cancelling either
