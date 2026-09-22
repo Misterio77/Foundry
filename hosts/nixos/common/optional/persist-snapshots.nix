@@ -20,7 +20,7 @@
     settings = {
       timestamp_format = "long";
       snapshot_preserve_min = "24h";
-      snapshot_preserve = "7d";
+      snapshot_preserve = "7d 4w 6m";
       volume."/mnt/btrfs" = {
         snapshot_dir = ".snapshots";
         subvolume.persist = {};
