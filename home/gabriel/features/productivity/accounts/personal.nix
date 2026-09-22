@@ -74,7 +74,6 @@ in {
         metadata = ["color" "displayname"];
         collections = [
           "Personal"
-          "projects"
           "ideas"
           "reading-list"
           "routine"
