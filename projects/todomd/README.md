@@ -64,7 +64,8 @@ replace it, and `default_view` chooses the startup view.
 Grouping supports `list`, `completed`, `priority`, `due`, `start`, and
 `categories`. Sorting supports `list`, `completed`, `manual`, `due`, `start`,
 `priority`, and `summary`. Lists follow the selected-list order. Missing dates
-and manual ranks sort last; task identity is the final deterministic
+and manual ranks sort last. Within the same date, values with a specific time
+sort before the all-day value. Task identity is the final deterministic
 tie-breaker. `manual` reads
 `X-APPLE-SORT-ORDER` but remains read-only: rearranging Markdown does not write
 it.

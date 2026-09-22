@@ -204,8 +204,9 @@ The sorting keys are:
 - `priority`; and
 - `summary`.
 
-Their existing direction and missing-value behavior remain unchanged. Task
-identity is always the final deterministic tie-breaker.
+Their existing direction and missing-value behavior remain unchanged. Timed
+values sort before an all-day value on the same date, both for sorting and group
+order. Task identity is always the final deterministic tie-breaker.
 
 Sorting is view-wide. Per-list sorting overrides are removed because they do
 not define a coherent total order when tasks from several lists share a group.

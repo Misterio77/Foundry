@@ -211,7 +211,7 @@ fn group_order(left: &[GroupValue], right: &[GroupValue], keys: &[GroupKey]) -> 
             }
             (GroupKey::Due, GroupValue::Due(left), GroupValue::Due(right))
             | (GroupKey::Start, GroupValue::Start(left), GroupValue::Start(right)) => {
-                compare_optional(left.as_ref(), right.as_ref())
+                compare_optional_canonical_dates(left.as_deref(), right.as_deref())
             }
             (GroupKey::Categories, GroupValue::Categories(left), GroupValue::Categories(right)) => {
                 compare_optional(
@@ -240,14 +240,8 @@ fn task_order(
             SortKey::List => task_list_order[&left.id].cmp(&task_list_order[&right.id]),
             SortKey::Completed => left.completed.cmp(&right.completed),
             SortKey::Manual => source_order[&left.id].cmp(&source_order[&right.id]),
-            SortKey::Due => compare_optional(
-                left.due.as_ref().map(|value| value.canonical()),
-                right.due.as_ref().map(|value| value.canonical()),
-            ),
-            SortKey::Start => compare_optional(
-                left.start.as_ref().map(|value| value.canonical()),
-                right.start.as_ref().map(|value| value.canonical()),
-            ),
+            SortKey::Due => compare_date_values(left.due.as_ref(), right.due.as_ref()),
+            SortKey::Start => compare_date_values(left.start.as_ref(), right.start.as_ref()),
             SortKey::Priority => right.priority.cmp(&left.priority),
             SortKey::Summary => left
                 .summary
@@ -261,6 +255,33 @@ fn task_order(
     left.id.cmp(&right.id)
 }
 
+fn compare_date_values(
+    left: Option<&crate::dates::DateValue>,
+    right: Option<&crate::dates::DateValue>,
+) -> Ordering {
+    let left = left.map(|value| value.canonical());
+    let right = right.map(|value| value.canonical());
+    compare_optional_canonical_dates(left.as_deref(), right.as_deref())
+}
+
+fn compare_optional_canonical_dates(left: Option<&str>, right: Option<&str>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => compare_canonical_dates(left, right),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+fn compare_canonical_dates(left: &str, right: &str) -> Ordering {
+    left[..10]
+        .cmp(&right[..10])
+        // Within one day, a specific time is more immediate than an all-day
+        // value and therefore sorts first.
+        .then_with(|| (left.len() == 10).cmp(&(right.len() == 10)))
+        .then_with(|| left.cmp(right))
+}
+
 fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> Ordering {
     match (left, right) {
         (Some(left), Some(right)) => left.cmp(&right),
@@ -272,8 +293,22 @@ fn compare_optional<T: Ord>(left: Option<T>, right: Option<T>) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
+
     use super::*;
-    use crate::model::{TaskList, TaskState};
+    use crate::{
+        dates::{DateContext, parse_markdown_at},
+        model::{TaskList, TaskState},
+    };
+
+    fn date(value: &str) -> crate::dates::DateValue {
+        let context = DateContext::in_timezone(
+            "Etc/UTC",
+            Utc.with_ymd_and_hms(2026, 9, 22, 12, 0, 0).unwrap(),
+        )
+        .unwrap();
+        parse_markdown_at(value, &context).unwrap()
+    }
 
     fn task(id: &str, summary: &str, parent: Option<&str>) -> Task {
         Task {
@@ -310,6 +345,39 @@ mod tests {
         assert_eq!(projected[1].tasks[1].task.id.as_str(), "child-a");
         assert_eq!(projected[1].tasks[2].task.id.as_str(), "child-b");
         assert_eq!(projected[1].tasks[1].depth, 1);
+    }
+
+    #[test]
+    fn sorts_and_groups_timed_values_before_all_day_values_on_the_same_date() {
+        let mut all_day = task("all-day", "All day", None);
+        all_day.due = Some(date("2026-09-22"));
+        let mut timed = task("timed", "Timed", None);
+        timed.due = Some(date("2026-09-22 14:00"));
+        let state = TaskState {
+            lists: vec![TaskList {
+                name: "Work".into(),
+                tasks: vec![all_day, timed],
+            }],
+        };
+        let grouped = View {
+            group_by: vec![GroupKey::Due],
+            sort_by: vec![SortKey::Due],
+        };
+
+        let projected = project(&state, &grouped);
+
+        assert_eq!(projected[0].headings, ["2026-09-22 14:00"]);
+        assert_eq!(projected[0].tasks[0].task.id.as_str(), "timed");
+        assert_eq!(projected[1].headings, ["2026-09-22"]);
+        assert_eq!(projected[1].tasks[0].task.id.as_str(), "all-day");
+
+        let flat = View {
+            group_by: Vec::new(),
+            sort_by: vec![SortKey::Due],
+        };
+        let projected = project(&state, &flat);
+        assert_eq!(projected[0].tasks[0].task.id.as_str(), "timed");
+        assert_eq!(projected[1].tasks[0].task.id.as_str(), "all-day");
     }
 
     #[test]
