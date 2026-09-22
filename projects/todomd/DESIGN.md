@@ -249,11 +249,14 @@ A session stores:
 - numbered transaction artifacts.
 
 The explicit `session create`, `session apply`, and `session close` commands
-expose this lifecycle without requiring an editor or LSP. Creation prints the
-session directory. Apply reconciles once, atomically advances the accepted
-artifacts and canonical `tasks.md`, and always keeps the session reusable. Close
-refuses byte-dirty Markdown unless `--force` is given. Apply, close, and an
-attached language server hold the same exclusive session lock.
+expose this lifecycle without requiring an editor or LSP. Manual and live modes
+use the same creation primitive and accepted-state renderer; their adapters only
+differ in whether canonical Markdown replaces `tasks.md` directly or is sent as
+an LSP workspace edit. Creation prints the session directory. Apply reconciles
+once, atomically advances the accepted artifacts and canonical `tasks.md`, and
+always keeps the session reusable. Close refuses byte-dirty Markdown unless
+`--force` is given. Apply, close, and an attached language server hold the same
+exclusive session lock.
 
 The language server attaches only to recognized private sessions. It validates
 while typing and reconciles on save. Successful outgoing changes and inbound ICS

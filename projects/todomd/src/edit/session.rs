@@ -10,14 +10,17 @@ use fs2::FileExt;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile, TempDir};
 
-use super::{RenderedSession, markdown::IdentityManifest};
+use super::{
+    RenderedSession,
+    markdown::{self, IdentityManifest},
+};
 use crate::{config::Config, model::TaskState, repository::Scope, view::View};
 
-pub const LIVE_FORMAT_VERSION: u32 = 3;
+pub const SESSION_FORMAT_VERSION: u32 = 3;
 const SESSION_MARKER: &[u8] = b"todomd session\n";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct LiveMetadata {
+pub struct SessionMetadata {
     pub format_version: u32,
     pub config: Config,
     pub lists: Vec<String>,
@@ -27,13 +30,26 @@ pub struct LiveMetadata {
 }
 
 #[derive(Debug)]
-pub struct LoadedLiveSession {
+pub struct LoadedSession {
     pub root: PathBuf,
-    pub metadata: LiveMetadata,
+    pub metadata: SessionMetadata,
     pub manifest: IdentityManifest,
     pub baseline: TaskState,
     pub recovery_baseline: TaskState,
     pub accepted_text: String,
+}
+
+pub struct AcceptedState {
+    pub text: String,
+    pub manifest: IdentityManifest,
+    pub baseline: TaskState,
+    pub recovery_baseline: TaskState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TasksUpdate {
+    EditorManaged,
+    ReplaceFile,
 }
 
 #[derive(Debug)]
@@ -43,9 +59,9 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn create_live(
+    pub fn create(
         rendered: &RenderedSession,
-        metadata: &LiveMetadata,
+        metadata: &SessionMetadata,
         recovery_baseline: &TaskState,
     ) -> Result<Self> {
         let (parent, is_private_parent) = session_parent();
@@ -119,7 +135,7 @@ fn session_parent() -> (PathBuf, bool) {
     }
 }
 
-pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
+pub fn load_from_tasks_path(tasks_path: &Path) -> Result<Option<LoadedSession>> {
     if tasks_path.file_name().and_then(|name| name.to_str()) != Some("tasks.md") {
         return Ok(None);
     }
@@ -132,18 +148,19 @@ pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
     load(root).map(Some)
 }
 
-pub fn load(root: &Path) -> Result<LoadedLiveSession> {
+pub fn load(root: &Path) -> Result<LoadedSession> {
     validate_root(root)?;
+    // Keep the historical filename compatible with version-3 sessions.
     let metadata_path = root.join("live.json");
-    let metadata: LiveMetadata = read_json(&metadata_path)
+    let metadata: SessionMetadata = read_json(&metadata_path)
         .with_context(|| "session format is incompatible; recreate it with this todomd version")?;
-    if metadata.format_version != LIVE_FORMAT_VERSION {
+    if metadata.format_version != SESSION_FORMAT_VERSION {
         anyhow::bail!(
             "session format {} is incompatible; recreate it with this todomd version",
             metadata.format_version
         );
     }
-    let loaded = LoadedLiveSession {
+    let loaded = LoadedSession {
         root: root.to_path_buf(),
         metadata,
         manifest: read_json(&root.join("manifest.json"))?,
@@ -211,7 +228,7 @@ pub fn close_live(root: &Path, accepted_text: &str, current_text: &str) -> Resul
     Ok(unaccepted)
 }
 
-pub fn change_live_view(root: &Path, metadata: &LiveMetadata, markdown: &str) -> Result<()> {
+pub fn change_live_view(root: &Path, metadata: &SessionMetadata, markdown: &str) -> Result<()> {
     let metadata_path = root.join("live.json");
     replace_artifacts([
         (metadata_path.clone(), json_bytes(&metadata_path, metadata)?),
@@ -219,34 +236,33 @@ pub fn change_live_view(root: &Path, metadata: &LiveMetadata, markdown: &str) ->
     ])
 }
 
-pub fn accept_live(
-    root: &Path,
-    markdown: &str,
+pub fn render_accepted(
+    view: &View,
     manifest: &IdentityManifest,
-    baseline: &TaskState,
-    recovery_baseline: &TaskState,
-) -> Result<()> {
-    replace_accepted_artifacts(root, markdown, manifest, baseline, recovery_baseline, false)
+    baseline: TaskState,
+    recovery_baseline: TaskState,
+) -> Result<AcceptedState> {
+    let mut manifest = manifest.clone();
+    let text = markdown::render_with_view(&baseline, view, &mut manifest)?;
+    Ok(AcceptedState {
+        text,
+        manifest,
+        baseline,
+        recovery_baseline,
+    })
 }
 
-pub fn accept_manual(
+pub fn persist_accepted(
     root: &Path,
-    markdown: &str,
-    manifest: &IdentityManifest,
-    baseline: &TaskState,
-    recovery_baseline: &TaskState,
+    accepted: &AcceptedState,
+    tasks_update: TasksUpdate,
 ) -> Result<()> {
-    replace_accepted_artifacts(root, markdown, manifest, baseline, recovery_baseline, true)
-}
-
-fn replace_accepted_artifacts(
-    root: &Path,
-    markdown: &str,
-    manifest: &IdentityManifest,
-    baseline: &TaskState,
-    recovery_baseline: &TaskState,
-    replace_tasks: bool,
-) -> Result<()> {
+    let AcceptedState {
+        text,
+        manifest,
+        baseline,
+        recovery_baseline,
+    } = accepted;
     let baseline_path = root.join("baseline.json");
     let manifest_path = root.join("manifest.json");
     let recovery_path = root.join("recovery-baseline.json");
@@ -257,10 +273,10 @@ fn replace_accepted_artifacts(
             recovery_path.clone(),
             json_bytes(&recovery_path, recovery_baseline)?,
         ),
-        (root.join("accepted.md"), markdown.as_bytes().to_vec()),
+        (root.join("accepted.md"), text.as_bytes().to_vec()),
     ];
-    if replace_tasks {
-        artifacts.push((root.join("tasks.md"), markdown.as_bytes().to_vec()));
+    if tasks_update == TasksUpdate::ReplaceFile {
+        artifacts.push((root.join("tasks.md"), text.as_bytes().to_vec()));
     }
     replace_artifacts(artifacts)
 }
@@ -458,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn atomically_records_an_accepted_state() {
+    fn atomically_records_an_accepted_state_in_each_tasks_mode() {
         use crate::model::{Priority, Task, TaskId, TaskList};
 
         let parent = tempfile::tempdir().unwrap();
@@ -471,7 +487,7 @@ mod tests {
         let session = Session::create_in(parent.path(), &rendered).unwrap();
         fs::write(session.path().join("recovery-baseline.json"), b"null").unwrap();
         fs::write(session.path().join("accepted.md"), &rendered.markdown).unwrap();
-        let accepted = TaskState {
+        let state = TaskState {
             lists: vec![TaskList {
                 name: "Personal".into(),
                 tasks: vec![Task {
@@ -486,28 +502,44 @@ mod tests {
                 }],
             }],
         };
-        let mut manifest = IdentityManifest::default();
-        let markdown = super::super::markdown::render(&accepted, &mut manifest).unwrap();
+        let accepted = render_accepted(
+            &View::default(),
+            &IdentityManifest::default(),
+            state.clone(),
+            state.clone(),
+        )
+        .unwrap();
 
-        accept_live(session.path(), &markdown, &manifest, &accepted, &accepted).unwrap();
+        persist_accepted(session.path(), &accepted, TasksUpdate::EditorManaged).unwrap();
 
         assert_eq!(
             fs::read_to_string(session.path().join("accepted.md")).unwrap(),
-            markdown
+            accepted.text
         );
+        assert_eq!(
+            fs::read_to_string(session.path().join("tasks.md")).unwrap(),
+            rendered.markdown
+        );
+
+        persist_accepted(session.path(), &accepted, TasksUpdate::ReplaceFile).unwrap();
+        assert_eq!(
+            fs::read_to_string(session.path().join("tasks.md")).unwrap(),
+            accepted.text
+        );
+
         let stored_recovery: TaskState = serde_json::from_slice(
             &fs::read(session.path().join("recovery-baseline.json")).unwrap(),
         )
         .unwrap();
-        assert_eq!(stored_recovery, accepted);
+        assert_eq!(stored_recovery, state);
         let stored_baseline: TaskState =
             serde_json::from_slice(&fs::read(session.path().join("baseline.json")).unwrap())
                 .unwrap();
         let stored_manifest: IdentityManifest =
             serde_json::from_slice(&fs::read(session.path().join("manifest.json")).unwrap())
                 .unwrap();
-        assert_eq!(stored_baseline, accepted);
-        assert_eq!(stored_manifest, manifest);
+        assert_eq!(stored_baseline, state);
+        assert_eq!(stored_manifest, accepted.manifest);
     }
 
     #[test]

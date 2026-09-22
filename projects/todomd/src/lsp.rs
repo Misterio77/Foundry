@@ -31,10 +31,10 @@ use tower_lsp::{
 
 use crate::{
     edit::{
+        applied_changes_message,
         hooks::Lifecycle,
         markdown::{self, IdentityManifest},
-        planner::TaskChange,
-        session::{self, LoadedLiveSession},
+        session::{self, LoadedSession, TasksUpdate},
         session_reconcile::{self, Prepared},
     },
     model::{TaskId, TaskState},
@@ -87,7 +87,7 @@ impl Backend {
         let path = uri
             .to_file_path()
             .map_err(|()| anyhow!("todomd live documents must use file URIs"))?;
-        let Some(loaded) = session::load_live(&path)? else {
+        let Some(loaded) = session::load_from_tasks_path(&path)? else {
             return Ok(());
         };
         let lock = session::lock(&loaded.root)?;
@@ -656,7 +656,7 @@ impl LiveDocument {
     fn new(
         text: String,
         version: i32,
-        loaded: LoadedLiveSession,
+        loaded: LoadedSession,
         watcher: RecommendedWatcher,
         lock: session::SessionLock,
     ) -> Self {
@@ -700,9 +700,9 @@ impl LiveDocument {
         }
     }
 
-    fn metadata_with_view(&self, view: View) -> session::LiveMetadata {
-        session::LiveMetadata {
-            format_version: session::LIVE_FORMAT_VERSION,
+    fn metadata_with_view(&self, view: View) -> session::SessionMetadata {
+        session::SessionMetadata {
+            format_version: session::SESSION_FORMAT_VERSION,
             config: self.config.clone(),
             lists: self.lists.clone(),
             scope: self.scope,
@@ -767,7 +767,7 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
         }
         Prepared::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
         Prepared::Outgoing(outgoing) => {
-            let message = applied_changes_message(&outgoing.plan.changes);
+            let message = applied_changes_message(outgoing.plan.counts());
             let applied = session_reconcile::apply(&reconciliation_context(document), outgoing)?;
             let (text, range) = accept_state(
                 document,
@@ -796,29 +796,6 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             Ok(Outcome::Message(MessageType::WARNING, message))
         }
     }
-}
-
-fn applied_changes_message(changes: &[TaskChange]) -> String {
-    let (mut created, mut updated, mut deleted) = (0, 0, 0);
-    for change in changes {
-        match change {
-            TaskChange::Create { .. } => created += 1,
-            TaskChange::Update { .. } => updated += 1,
-            TaskChange::Delete { .. } => deleted += 1,
-        }
-    }
-
-    let counts = [
-        (created, "created"),
-        (updated, "updated"),
-        (deleted, "deleted"),
-    ]
-    .into_iter()
-    .filter(|(count, _)| *count > 0)
-    .map(|(count, operation)| format!("{count} {operation}"))
-    .collect::<Vec<_>>()
-    .join(", ");
-    format!("todomd: changes applied ({counts})")
 }
 
 fn reconciliation_context(document: &LiveDocument) -> session_reconcile::Context<'_> {
@@ -863,23 +840,22 @@ fn accept_state(
     render_error: &'static str,
     persist_error: &'static str,
 ) -> Result<(String, Range)> {
-    let mut manifest = document.manifest.clone();
-    let text =
-        markdown::render_with_view(&state, &document.view, &mut manifest).context(render_error)?;
-    session::accept_live(&document.root, &text, &manifest, &state, &recovery)
+    let accepted = session::render_accepted(&document.view, &document.manifest, state, recovery)
+        .context(render_error)?;
+    session::persist_accepted(&document.root, &accepted, TasksUpdate::EditorManaged)
         .context(persist_error)?;
     let range = full_range(&document.text);
-    document.baseline = state;
-    document.recovery_baseline = recovery;
-    document.manifest = manifest;
-    document.accepted_text = text.clone();
+    document.baseline = accepted.baseline;
+    document.recovery_baseline = accepted.recovery_baseline;
+    document.manifest = accepted.manifest;
+    document.accepted_text = accepted.text.clone();
     document.state_diagnostic = None;
-    Ok((text, range))
+    Ok((accepted.text, range))
 }
 
 fn source_watcher(
     uri: &Url,
-    loaded: &LoadedLiveSession,
+    loaded: &LoadedSession,
     documents: Weak<Mutex<HashMap<Url, Arc<Mutex<LiveDocument>>>>>,
     client: Client,
     workspace_edits: Arc<AtomicBool>,
@@ -1024,67 +1000,7 @@ fn utf16_len(value: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::edit::planner;
-
     use super::*;
-
-    #[test]
-    fn applied_changes_message_counts_operations() {
-        let task = planner::PlannedTask {
-            list: "Personal".into(),
-            summary: "Task".into(),
-            completed: false,
-            priority: crate::model::Priority::default(),
-            categories: Vec::new(),
-            parent: None,
-            start: None,
-            due: None,
-        };
-        let changes = vec![
-            TaskChange::Create {
-                draft_id: 1,
-                task: task.clone(),
-            },
-            TaskChange::Update {
-                id: TaskId::new("updated"),
-                before: task.clone(),
-                after: task.clone(),
-            },
-            TaskChange::Update {
-                id: TaskId::new("also-updated"),
-                before: task.clone(),
-                after: task.clone(),
-            },
-            TaskChange::Delete {
-                id: TaskId::new("deleted"),
-                task,
-            },
-        ];
-
-        assert_eq!(
-            applied_changes_message(&changes),
-            "todomd: changes applied (1 created, 2 updated, 1 deleted)"
-        );
-    }
-
-    #[test]
-    fn applied_changes_message_omits_zero_counts() {
-        let task = planner::PlannedTask {
-            list: "Personal".into(),
-            summary: "Task".into(),
-            completed: false,
-            priority: crate::model::Priority::default(),
-            categories: Vec::new(),
-            parent: None,
-            start: None,
-            due: None,
-        };
-
-        assert_eq!(
-            applied_changes_message(&[TaskChange::Create { draft_id: 1, task }]),
-            "todomd: changes applied (1 created)"
-        );
-    }
 
     #[test]
     fn diagnostics_use_reported_line_and_utf16_columns() {

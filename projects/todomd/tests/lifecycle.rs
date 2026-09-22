@@ -14,7 +14,7 @@ use todomd::{
     config::Config,
     edit::{
         self,
-        session::{self, LIVE_FORMAT_VERSION, LiveMetadata, Session},
+        session::{self, SESSION_FORMAT_VERSION, Session, SessionMetadata},
     },
     repository::{self, Scope},
 };
@@ -540,15 +540,15 @@ fn lsp_applies_saves_and_loads_source_changes() {
     let recovery = repository::load_lists(&config, &lists, Scope::All)
         .unwrap()
         .0;
-    let metadata = LiveMetadata {
-        format_version: LIVE_FORMAT_VERSION,
+    let metadata = SessionMetadata {
+        format_version: SESSION_FORMAT_VERSION,
         view: config.view(None).unwrap(),
         config,
         lists,
         scope: Scope::Active,
         hooks_enabled: true,
     };
-    let session = Session::create_live(&rendered, &metadata, &recovery).unwrap();
+    let session = Session::create(&rendered, &metadata, &recovery).unwrap();
     let uri = format!("file://{}", session.tasks_path().display());
     let edited = rendered.markdown.replace("Write paper draft", "LSP paper");
 

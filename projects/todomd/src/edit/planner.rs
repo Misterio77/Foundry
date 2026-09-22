@@ -12,6 +12,27 @@ pub struct ChangePlan {
     pub changes: Vec<TaskChange>,
 }
 
+impl ChangePlan {
+    pub fn counts(&self) -> ChangeCounts {
+        let mut counts = ChangeCounts::default();
+        for change in &self.changes {
+            match change {
+                TaskChange::Create { .. } => counts.created += 1,
+                TaskChange::Update { .. } => counts.updated += 1,
+                TaskChange::Delete { .. } => counts.deleted += 1,
+            }
+        }
+        counts
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ChangeCounts {
+    pub created: usize,
+    pub updated: usize,
+    pub deleted: usize,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Reconciliation {
     NoChange,
@@ -669,6 +690,14 @@ mod tests {
         };
 
         assert_eq!(plan.changes.len(), 3);
+        assert_eq!(
+            plan.counts(),
+            ChangeCounts {
+                created: 1,
+                updated: 1,
+                deleted: 1,
+            }
+        );
         assert!(plan.changes.iter().any(|change| matches!(
             change,
             TaskChange::Update { id, before, after }

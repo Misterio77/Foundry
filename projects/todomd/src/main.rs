@@ -29,7 +29,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Edit whole VTODO lists as Markdown.
-    Edit(EditArgs),
+    Edit(SessionSelectionArgs),
     /// Print tasks and their source files as JSON.
     Show(ShowArgs),
     /// Create, apply, or close an editor-independent session.
@@ -77,23 +77,6 @@ impl ViewArgs {
 }
 
 #[derive(Args, Debug)]
-struct EditArgs {
-    /// Disable the configured after_apply hook for this run.
-    #[arg(long)]
-    no_hooks: bool,
-
-    /// Include completed and cancelled tasks.
-    #[arg(long)]
-    completed: bool,
-
-    #[command(flatten)]
-    view: ViewArgs,
-
-    /// Whole VTODO lists to edit, in document order [default: every list].
-    lists: Vec<String>,
-}
-
-#[derive(Args, Debug)]
 struct ShowArgs {
     /// Include completed and cancelled tasks.
     #[arg(long)]
@@ -109,7 +92,7 @@ struct ShowArgs {
 #[derive(Debug, Subcommand)]
 enum SessionCommand {
     /// Create a reusable session and print its directory.
-    Create(SessionCreateArgs),
+    Create(SessionSelectionArgs),
     /// Apply the current tasks.md and keep the session open.
     Apply(SessionPathArgs),
     /// Remove a clean session.
@@ -117,7 +100,7 @@ enum SessionCommand {
 }
 
 #[derive(Args, Debug)]
-struct SessionCreateArgs {
+struct SessionSelectionArgs {
     /// Disable the configured after_apply hook for this session.
     #[arg(long)]
     no_hooks: bool,
@@ -149,29 +132,14 @@ struct SessionCloseArgs {
     session: PathBuf,
 }
 
-impl EditArgs {
-    fn options(&self, config: &Config) -> Result<edit::Options> {
-        options(config, self.no_hooks, self.completed, &self.view)
+impl SessionSelectionArgs {
+    fn options(&self, config: &Config) -> Result<edit::SessionOptions> {
+        Ok(edit::SessionOptions {
+            hooks_enabled: !self.no_hooks,
+            scope: scope(self.completed),
+            view: self.view.resolve(config)?,
+        })
     }
-}
-
-impl SessionCreateArgs {
-    fn options(&self, config: &Config) -> Result<edit::Options> {
-        options(config, self.no_hooks, self.completed, &self.view)
-    }
-}
-
-fn options(
-    config: &Config,
-    no_hooks: bool,
-    completed: bool,
-    view: &ViewArgs,
-) -> Result<edit::Options> {
-    Ok(edit::Options {
-        no_hooks,
-        scope: scope(completed),
-        view: view.resolve(config)?,
-    })
 }
 
 fn scope(completed: bool) -> Scope {
@@ -225,9 +193,9 @@ fn run_with_config(config: Config, command: Option<Command>) -> Result<()> {
             unreachable!("command handled before loading configuration")
         }
         None => {
-            let options = edit::Options {
+            let options = edit::SessionOptions {
                 view: config.view(None)?,
-                ..edit::Options::default()
+                ..edit::SessionOptions::default()
             };
             edit::run(&config, &[], options)
         }
