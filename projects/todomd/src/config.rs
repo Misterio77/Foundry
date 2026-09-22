@@ -177,7 +177,7 @@ mod tests {
              default_view = \"agenda\"\n\
              [views.agenda]\n\
              group_by = [\"due\"]\n\
-             sort_by = [\"due\", \"priority\", \"summary\"]\n",
+             sort_by = [\"due\", \"priority\", \"list\", \"summary\"]\n",
         )
         .unwrap();
 
@@ -186,7 +186,12 @@ mod tests {
         assert_eq!(view.group_by, [GroupKey::Due]);
         assert_eq!(
             view.sort_by,
-            [SortKey::Due, SortKey::Priority, SortKey::Summary]
+            [
+                SortKey::Due,
+                SortKey::Priority,
+                SortKey::List,
+                SortKey::Summary
+            ]
         );
     }
 

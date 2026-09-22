@@ -194,8 +194,9 @@ children merely to satisfy a presentation choice.
 
 ## Sorting
 
-The initial sorting keys remain:
+The sorting keys are:
 
+- `list` (selected-list order);
 - `completed`;
 - `manual` (`X-APPLE-SORT-ORDER`);
 - `due`;

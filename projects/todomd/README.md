@@ -62,9 +62,10 @@ and sorts unfinished tasks first, then by priority and summary. Named views can
 replace it, and `default_view` chooses the startup view.
 
 Grouping supports `list`, `completed`, `priority`, `due`, `start`, and
-`categories`. Sorting supports `completed`, `manual`, `due`, `start`,
-`priority`, and `summary`. Missing dates and manual ranks sort last; task
-identity is the final deterministic tie-breaker. `manual` reads
+`categories`. Sorting supports `list`, `completed`, `manual`, `due`, `start`,
+`priority`, and `summary`. Lists follow the selected-list order. Missing dates
+and manual ranks sort last; task identity is the final deterministic
+tie-breaker. `manual` reads
 `X-APPLE-SORT-ORDER` but remains read-only: rearranging Markdown does not write
 it.
 

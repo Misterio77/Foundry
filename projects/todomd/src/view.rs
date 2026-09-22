@@ -22,6 +22,7 @@ pub enum GroupKey {
 #[serde(rename_all = "lowercase")]
 #[value(rename_all = "lower")]
 pub enum SortKey {
+    List,
     Completed,
     Manual,
     Due,
@@ -124,6 +125,12 @@ pub fn project<'a>(state: &'a TaskState, view: &View) -> Vec<ProjectedTree<'a>> 
         .enumerate()
         .map(|(index, task)| (task.id.clone(), index))
         .collect::<BTreeMap<_, _>>();
+    let task_list_order = state
+        .lists
+        .iter()
+        .enumerate()
+        .flat_map(|(index, list)| list.tasks.iter().map(move |task| (task.id.clone(), index)))
+        .collect::<BTreeMap<_, _>>();
     let mut trees = Vec::new();
 
     for list in &state.lists {
@@ -132,7 +139,9 @@ pub fn project<'a>(state: &'a TaskState, view: &View) -> Vec<ProjectedTree<'a>> 
             children.entry(task.parent.clone()).or_default().push(task);
         }
         for siblings in children.values_mut() {
-            siblings.sort_by(|left, right| task_order(left, right, &view.sort_by, &source_order));
+            siblings.sort_by(|left, right| {
+                task_order(left, right, &view.sort_by, &source_order, &task_list_order)
+            });
         }
         for &root in children.get(&None).into_iter().flatten() {
             let group = view
@@ -148,7 +157,7 @@ pub fn project<'a>(state: &'a TaskState, view: &View) -> Vec<ProjectedTree<'a>> 
 
     trees.sort_by(|(left_group, left, _, _), (right_group, right, _, _)| {
         group_order(left_group, right_group, &view.group_by)
-            .then_with(|| task_order(left, right, &view.sort_by, &source_order))
+            .then_with(|| task_order(left, right, &view.sort_by, &source_order, &task_list_order))
     });
     trees
         .into_iter()
@@ -224,9 +233,11 @@ fn task_order(
     right: &Task,
     sort_keys: &[SortKey],
     source_order: &BTreeMap<TaskId, usize>,
+    task_list_order: &BTreeMap<TaskId, usize>,
 ) -> Ordering {
     for key in sort_keys {
         let ordering = match key {
+            SortKey::List => task_list_order[&left.id].cmp(&task_list_order[&right.id]),
             SortKey::Completed => left.completed.cmp(&right.completed),
             SortKey::Manual => source_order[&left.id].cmp(&source_order[&right.id]),
             SortKey::Due => compare_optional(
@@ -299,6 +310,31 @@ mod tests {
         assert_eq!(projected[1].tasks[1].task.id.as_str(), "child-a");
         assert_eq!(projected[1].tasks[2].task.id.as_str(), "child-b");
         assert_eq!(projected[1].tasks[1].depth, 1);
+    }
+
+    #[test]
+    fn sorts_roots_by_selected_list_order() {
+        let state = TaskState {
+            lists: vec![
+                TaskList {
+                    name: "Personal".into(),
+                    tasks: vec![task("personal", "Zulu", None)],
+                },
+                TaskList {
+                    name: "Work".into(),
+                    tasks: vec![task("work", "Alpha", None)],
+                },
+            ],
+        };
+        let view = View {
+            group_by: Vec::new(),
+            sort_by: vec![SortKey::Priority, SortKey::List, SortKey::Summary],
+        };
+
+        let projected = project(&state, &view);
+
+        assert_eq!(projected[0].list_name, "Personal");
+        assert_eq!(projected[1].list_name, "Work");
     }
 
     #[test]
