@@ -14,6 +14,7 @@ chrono-english = "0.2"
 chrono-tz = { version = "0.10", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
+fs2 = "0.4"
 icalendar = "0.17.13"
 iana-time-zone = "0.1"
 notify = "8.2"

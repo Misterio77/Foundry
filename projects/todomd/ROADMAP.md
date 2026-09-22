@@ -3,37 +3,18 @@
 Planned work, most valuable first. [DESIGN.md](DESIGN.md) holds the design these
 build on.
 
-## Explicit session lifecycle
+## Session ergonomics
 
-Add editor-independent primitives for creating, applying, and closing sessions:
+The explicit create/apply/close lifecycle can grow two convenience commands:
 
-```console
-todomd session create [LISTS]...
-todomd session apply <SESSION>
-todomd session close [--force] <SESSION>
-```
+- `session refresh` to accept inbound ICS state without treating the current
+  Markdown as an outgoing edit; and
+- `session edit --lsp/--no-lsp` to open an existing session in either live or
+  manual mode.
 
-`create` should resolve configuration, scope, lists, and view; persist the same
-private artifacts used by live editing; and print only the session directory to
-stdout. It must not launch an editor or require LSP, so callers can compose it
-with any editor or script.
-
-`apply` should parse `tasks.md`, reread ICS, run the existing three-way
-reconciliation and transaction machinery, rewrite canonical Markdown, and
-advance `baseline.json` and `accepted.md`. It always keeps the session for
-another edit/apply cycle. Validation errors, source conflicts, and write
-failures likewise retain every artifact for recovery.
-
-`close` is the explicit terminal step. It should compare `tasks.md` with
-`accepted.md`, refuse to discard unapplied byte changes, and allow intentional
-discard through `--force`.
-
-Build these commands on shared internal operations for selection, repository
-loading, scope, view resolution, and projection. A future
-`session edit --lsp/--no-lsp` can let top-level `edit` become a convenience
-orchestrator over the same lifecycle. A future `session refresh` can accept inbound
-ICS state. `show` should share the load/project core while continuing to emit
-JSON without creating a runtime session.
+Top-level `edit` can then become an orchestrator over the same session
+primitives. `show` should continue sharing repository loading and projection
+without creating runtime state.
 
 ## Richer LSP editing
 

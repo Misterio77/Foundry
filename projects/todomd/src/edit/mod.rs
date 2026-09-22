@@ -4,6 +4,7 @@ pub mod live;
 pub mod markdown;
 pub mod planner;
 pub mod session;
+pub mod session_commands;
 pub mod transaction;
 
 use anyhow::Result;

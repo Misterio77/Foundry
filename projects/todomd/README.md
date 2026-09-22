@@ -78,6 +78,9 @@ reported through LSP without rolling back the already-applied transaction.
 | `todomd` | Edit every discovered list. |
 | `todomd edit [LISTS]...` | Edit selected lists, or every list. |
 | `todomd show [LISTS]...` | Print tasks as JSON. |
+| `todomd session create [LISTS]...` | Create a reusable manual session. |
+| `todomd session apply <SESSION>` | Apply and canonicalize a manual session. |
+| `todomd session close [--force] <SESSION>` | Remove a session. |
 | `todomd lsp` | Run the language server. |
 | `--config <PATH>` | Use another configuration file. |
 | `--completed` | Include completed and cancelled trees. |
@@ -199,6 +202,31 @@ Canonical Markdown hides seconds without rewriting unchanged source precision
 or timezone representation. Fractional seconds are unsupported by RFC 5545
 DATE-TIME and are rejected.
 
+## Editor-independent sessions
+
+The explicit session lifecycle works without an editor integration or LSP:
+
+```console
+$ session=$(todomd session create Postgrad Personal)
+$ hx "$session/tasks.md"
+$ todomd session apply "$session"
+$ todomd session close "$session"
+```
+
+`create` accepts the same list, scope, view, and `--no-hooks` options as `edit`.
+It persists the resolved configuration and prints only the session directory to
+stdout; warnings go to stderr.
+
+`apply` parses `tasks.md`, rereads ICS, and uses the same reconciliation,
+conflict detection, transaction, rollback, and hook machinery as live editing.
+It then rewrites `tasks.md` canonically, advances the session baseline, and
+keeps the session available for another edit/apply cycle. An ICS-only change is
+accepted as an inbound refresh. Errors and conflicts preserve the session.
+
+`close` removes a session only when `tasks.md` matches `accepted.md`, preventing
+accidental loss of unapplied edits. `--force` discards them intentionally.
+Apply, close, and live LSP access are protected by an exclusive session lock.
+
 ## Live editing
 
 `todomd edit` requires the editor to attach `todomd lsp` as a Markdown language
@@ -259,8 +287,9 @@ $ todomd show Personal
 ]
 ```
 
-Use `file` to locate a VTODO; vdir filenames are not derived from UIDs. There is
-no non-interactive write command. For unsupported fields, edit the `.ics`,
+Use `file` to locate a VTODO; vdir filenames are not derived from UIDs.
+`session apply` is the scriptable write boundary, but it consumes session
+Markdown rather than JSON patches. For unsupported fields, edit the `.ics`,
 increment `SEQUENCE`, and run the syncer.
 
 ## Safety and recovery
@@ -280,6 +309,7 @@ Sessions live under `$XDG_RUNTIME_DIR/todomd/`, or a private temporary directory
 
 | Artifact | Contents |
 |---|---|
+| `.todomd-session`, `.lock` | Session marker and exclusive lifecycle lock. |
 | `tasks.md` | Edited Markdown. |
 | `baseline.json` | Rendered task state. |
 | `manifest.json` | Session identity to VTODO UID mapping. |
@@ -297,7 +327,7 @@ Sessions live under `$XDG_RUNTIME_DIR/todomd/`, or a private temporary directory
 - One primary VTODO per `.ics` file.
 - Empty lists do not appear in `show`.
 - Live editing requires versioned LSP workspace edits.
-- No CalDAV, vdir lock, non-interactive writes, or automatic crash recovery.
+- No CalDAV, vdir lock, direct JSON writes, or automatic crash recovery.
 
 See [DESIGN.md](DESIGN.md) for invariants and internals, and
 [ROADMAP.md](ROADMAP.md) for planned work.

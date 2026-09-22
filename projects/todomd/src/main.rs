@@ -32,6 +32,11 @@ enum Command {
     Edit(EditArgs),
     /// Print tasks and their source files as JSON.
     Show(ShowArgs),
+    /// Create, apply, or close an editor-independent session.
+    Session {
+        #[command(subcommand)]
+        command: SessionCommand,
+    },
     /// Run the language server over standard input/output.
     Lsp,
 }
@@ -101,14 +106,72 @@ struct ShowArgs {
     lists: Vec<String>,
 }
 
+#[derive(Debug, Subcommand)]
+enum SessionCommand {
+    /// Create a reusable session and print its directory.
+    Create(SessionCreateArgs),
+    /// Apply the current tasks.md and keep the session open.
+    Apply(SessionPathArgs),
+    /// Remove a clean session.
+    Close(SessionCloseArgs),
+}
+
+#[derive(Args, Debug)]
+struct SessionCreateArgs {
+    /// Disable the configured after_apply hook for this session.
+    #[arg(long)]
+    no_hooks: bool,
+
+    /// Include completed and cancelled tasks.
+    #[arg(long)]
+    completed: bool,
+
+    #[command(flatten)]
+    view: ViewArgs,
+
+    /// Whole VTODO lists to include, in document order [default: every list].
+    lists: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+struct SessionPathArgs {
+    /// Session directory created by `todomd session create`.
+    session: PathBuf,
+}
+
+#[derive(Args, Debug)]
+struct SessionCloseArgs {
+    /// Discard unapplied changes.
+    #[arg(long)]
+    force: bool,
+
+    /// Session directory created by `todomd session create`.
+    session: PathBuf,
+}
+
 impl EditArgs {
     fn options(&self, config: &Config) -> Result<edit::Options> {
-        Ok(edit::Options {
-            no_hooks: self.no_hooks,
-            scope: scope(self.completed),
-            view: self.view.resolve(config)?,
-        })
+        options(config, self.no_hooks, self.completed, &self.view)
     }
+}
+
+impl SessionCreateArgs {
+    fn options(&self, config: &Config) -> Result<edit::Options> {
+        options(config, self.no_hooks, self.completed, &self.view)
+    }
+}
+
+fn options(
+    config: &Config,
+    no_hooks: bool,
+    completed: bool,
+    view: &ViewArgs,
+) -> Result<edit::Options> {
+    Ok(edit::Options {
+        no_hooks,
+        scope: scope(completed),
+        view: view.resolve(config)?,
+    })
 }
 
 fn scope(completed: bool) -> Scope {
@@ -121,12 +184,27 @@ fn main() -> Result<()> {
         generate(shell, &mut Cli::command(), "todomd", &mut std::io::stdout());
         return Ok(());
     }
-    if matches!(cli.command, Some(Command::Lsp)) {
-        return lsp::run();
-    }
-    let config = Config::load(cli.config.as_deref())?;
-
     match cli.command {
+        Some(Command::Lsp) => lsp::run(),
+        Some(Command::Session {
+            command: SessionCommand::Apply(args),
+        }) => {
+            let outcome = edit::session_commands::apply(&args.session)?;
+            eprintln!("{}", outcome.message());
+            Ok(())
+        }
+        Some(Command::Session {
+            command: SessionCommand::Close(args),
+        }) => edit::session_commands::close(&args.session, args.force),
+        command => {
+            let config = Config::load(cli.config.as_deref())?;
+            run_with_config(config, command)
+        }
+    }
+}
+
+fn run_with_config(config: Config, command: Option<Command>) -> Result<()> {
+    match command {
         Some(Command::Edit(args)) => {
             let options = args.options(&config)?;
             edit::run(&config, &args.lists, options)
@@ -135,7 +213,17 @@ fn main() -> Result<()> {
             let view = args.view.resolve(&config)?;
             show::run(&config, &args.lists, scope(args.completed), &view)
         }
-        Some(Command::Lsp) => unreachable!("LSP command handled before loading configuration"),
+        Some(Command::Session {
+            command: SessionCommand::Create(args),
+        }) => {
+            let options = args.options(&config)?;
+            let path = edit::session_commands::create(&config, &args.lists, options)?;
+            println!("{}", path.display());
+            Ok(())
+        }
+        Some(Command::Session { .. } | Command::Lsp) => {
+            unreachable!("command handled before loading configuration")
+        }
         None => {
             let options = edit::Options {
                 view: config.view(None)?,

@@ -237,15 +237,22 @@ unrelated `RELATED-TO` forms, extension properties, nested components, and raw
 unchanged categories and dates. Parent edits write
 `RELATED-TO;RELTYPE=PARENT`. `SEQUENCE` advances for changed existing VTODOs.
 
-## Live sessions and LSP
+## Sessions and LSP
 
-A live session stores:
+A session stores:
 
 - selected lists, scope, resolved configuration, and active view;
 - semantic baseline and identity manifest;
 - accepted canonical Markdown;
 - recovery state for tasks outside the active rendering scope; and
 - numbered transaction artifacts.
+
+The explicit `session create`, `session apply`, and `session close` commands
+expose this lifecycle without requiring an editor or LSP. Creation prints the
+session directory. Apply reconciles once, atomically advances the accepted
+artifacts and canonical `tasks.md`, and always keeps the session reusable. Close
+refuses byte-dirty Markdown unless `--force` is given. Apply, close, and an
+attached language server hold the same exclusive session lock.
 
 The language server attaches only to recognized private sessions. It validates
 while typing and reconciles on save. Successful outgoing changes and inbound ICS
@@ -271,5 +278,5 @@ already succeeded.
 
 `todomd show` shares repository loading, scope, and projection with editing but
 creates no session and runs no hooks. It emits semantic task objects in projected
-order, never heading objects. There is intentionally no non-interactive write
-command.
+order, never heading objects. `session apply` provides a scriptable Markdown
+write boundary; there is no direct JSON mutation API.

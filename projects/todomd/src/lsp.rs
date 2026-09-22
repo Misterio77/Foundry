@@ -91,6 +91,7 @@ impl Backend {
         let Some(loaded) = session::load_live(&path)? else {
             return Ok(());
         };
+        let lock = session::lock(&loaded.root)?;
         let watcher = source_watcher(
             &uri,
             &loaded,
@@ -100,7 +101,7 @@ impl Backend {
             Arc::clone(&self.work_done_progress),
         )?;
         let document = Arc::new(Mutex::new(LiveDocument::new(
-            text, version, loaded, watcher,
+            text, version, loaded, watcher, lock,
         )));
         self.documents
             .lock()
@@ -649,6 +650,7 @@ struct LiveDocument {
     parse_diagnostic: Option<Diagnostic>,
     state_diagnostic: Option<Diagnostic>,
     _watcher: RecommendedWatcher,
+    _lock: session::SessionLock,
 }
 
 impl LiveDocument {
@@ -657,6 +659,7 @@ impl LiveDocument {
         version: i32,
         loaded: LoadedLiveSession,
         watcher: RecommendedWatcher,
+        lock: session::SessionLock,
     ) -> Self {
         let lifecycle =
             Lifecycle::live(&loaded.metadata.config.hooks, loaded.metadata.hooks_enabled);
@@ -694,6 +697,7 @@ impl LiveDocument {
             parse_diagnostic: None,
             state_diagnostic: None,
             _watcher: watcher,
+            _lock: lock,
         }
     }
 

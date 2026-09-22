@@ -1,17 +1,20 @@
 use std::{
     env, fs,
+    fs::{File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Error, Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow, bail};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile, TempDir};
 
 use super::{RenderedSession, markdown::IdentityManifest};
 use crate::{config::Config, model::TaskState, repository::Scope, view::View};
 
-pub const LIVE_FORMAT_VERSION: u32 = 2;
+pub const LIVE_FORMAT_VERSION: u32 = 3;
+const SESSION_MARKER: &[u8] = b"todomd session\n";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LiveMetadata {
@@ -86,6 +89,9 @@ impl Session {
             .tempdir_in(parent)
             .with_context(|| format!("failed to create session below {}", parent.display()))?;
         restrict_directory(directory.path())?;
+        fs::write(directory.path().join(".todomd-session"), SESSION_MARKER)
+            .context("failed to write session marker")?;
+        File::create(directory.path().join(".lock")).context("failed to create session lock")?;
 
         let tasks_path = directory.path().join("tasks.md");
         fs::write(&tasks_path, &rendered.markdown)
@@ -120,17 +126,20 @@ pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
     let Some(root) = tasks_path.parent() else {
         return Ok(None);
     };
-    let metadata_path = root.join("live.json");
-    if !metadata_path.is_file() {
+    if !root.join("live.json").is_file() {
         return Ok(None);
     }
+    load(root).map(Some)
+}
 
-    let metadata: LiveMetadata = read_json(&metadata_path).with_context(
-        || "live session format is incompatible; reopen the lists with this todomd version",
-    )?;
+pub fn load(root: &Path) -> Result<LoadedLiveSession> {
+    validate_root(root)?;
+    let metadata_path = root.join("live.json");
+    let metadata: LiveMetadata = read_json(&metadata_path)
+        .with_context(|| "session format is incompatible; recreate it with this todomd version")?;
     if metadata.format_version != LIVE_FORMAT_VERSION {
         anyhow::bail!(
-            "live session format {} is incompatible; reopen the lists with this todomd version",
+            "session format {} is incompatible; recreate it with this todomd version",
             metadata.format_version
         );
     }
@@ -147,7 +156,45 @@ pub fn load_live(tasks_path: &Path) -> Result<Option<LoadedLiveSession>> {
             )
         })?,
     };
-    Ok(Some(loaded))
+    Ok(loaded)
+}
+
+pub struct SessionLock {
+    _file: File,
+}
+
+pub fn lock(root: &Path) -> Result<SessionLock> {
+    let path = root.join(".lock");
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("failed to open session lock {}", path.display()))?;
+    FileExt::try_lock_exclusive(&file)
+        .with_context(|| format!("session {} is already in use", root.display()))?;
+    Ok(SessionLock { _file: file })
+}
+
+pub fn validate_root(root: &Path) -> Result<()> {
+    let metadata = fs::symlink_metadata(root)
+        .with_context(|| format!("failed to inspect session {}", root.display()))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        bail!("session {} is not a directory", root.display());
+    }
+    let name = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("");
+    if !name.starts_with("session-") {
+        bail!("session directory name must start with 'session-'");
+    }
+    let marker_path = root.join(".todomd-session");
+    let marker = fs::read(&marker_path)
+        .with_context(|| format!("{} is not a todomd session", root.display()))?;
+    if marker != SESSION_MARKER {
+        bail!("{} is not a todomd session", root.display());
+    }
+    Ok(())
 }
 
 pub fn mark_attached(root: &Path) -> Result<()> {
@@ -179,10 +226,31 @@ pub fn accept_live(
     baseline: &TaskState,
     recovery_baseline: &TaskState,
 ) -> Result<()> {
+    replace_accepted_artifacts(root, markdown, manifest, baseline, recovery_baseline, false)
+}
+
+pub fn accept_manual(
+    root: &Path,
+    markdown: &str,
+    manifest: &IdentityManifest,
+    baseline: &TaskState,
+    recovery_baseline: &TaskState,
+) -> Result<()> {
+    replace_accepted_artifacts(root, markdown, manifest, baseline, recovery_baseline, true)
+}
+
+fn replace_accepted_artifacts(
+    root: &Path,
+    markdown: &str,
+    manifest: &IdentityManifest,
+    baseline: &TaskState,
+    recovery_baseline: &TaskState,
+    replace_tasks: bool,
+) -> Result<()> {
     let baseline_path = root.join("baseline.json");
     let manifest_path = root.join("manifest.json");
     let recovery_path = root.join("recovery-baseline.json");
-    replace_artifacts([
+    let mut artifacts = vec![
         (baseline_path.clone(), json_bytes(&baseline_path, baseline)?),
         (manifest_path.clone(), json_bytes(&manifest_path, manifest)?),
         (
@@ -190,7 +258,11 @@ pub fn accept_live(
             json_bytes(&recovery_path, recovery_baseline)?,
         ),
         (root.join("accepted.md"), markdown.as_bytes().to_vec()),
-    ])
+    ];
+    if replace_tasks {
+        artifacts.push((root.join("tasks.md"), markdown.as_bytes().to_vec()));
+    }
+    replace_artifacts(artifacts)
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
@@ -244,7 +316,7 @@ struct PreparedReplacement {
     rollback: NamedTempFile,
 }
 
-fn replace_artifacts<const N: usize>(artifacts: [(PathBuf, Vec<u8>); N]) -> Result<()> {
+fn replace_artifacts(artifacts: impl IntoIterator<Item = (PathBuf, Vec<u8>)>) -> Result<()> {
     let replacements = artifacts
         .into_iter()
         .map(|(path, contents)| {

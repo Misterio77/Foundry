@@ -14,7 +14,7 @@ use todomd::{
     config::Config,
     edit::{
         self,
-        session::{LIVE_FORMAT_VERSION, LiveMetadata, Session},
+        session::{self, LIVE_FORMAT_VERSION, LiveMetadata, Session},
     },
     repository::{self, Scope},
 };
@@ -103,6 +103,8 @@ fn generates_completions_without_loading_configuration() {
     let completion = String::from_utf8(output.stdout).unwrap();
     assert!(completion.contains("complete -c todomd"));
     assert!(completion.contains("-a \"edit\""));
+    assert!(completion.contains("-a \"session\""));
+    assert!(completion.contains("-a \"apply\""));
     assert!(completion.contains("-l completed"));
     assert!(completion.contains("-l view"));
     assert!(completion.contains("-l group-by"));
@@ -201,6 +203,319 @@ fn a_list_name_is_not_mistaken_for_a_subcommand() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("unrecognized subcommand"));
+}
+
+#[test]
+fn explicit_session_create_apply_and_close_work_without_an_editor() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "Postgrad", "Personal"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    assert!(session.join("tasks.md").is_file());
+    assert!(session.join("accepted.md").is_file());
+
+    let tasks = fs::read_to_string(session.join("tasks.md")).unwrap();
+    fs::write(
+        session.join("tasks.md"),
+        tasks.replace("Write paper draft", "Applied manually"),
+    )
+    .unwrap();
+    let applied = Command::new(env!("CARGO_BIN_EXE_todomd"))
+        .args([
+            "--config",
+            "/definitely/missing",
+            "session",
+            "apply",
+            session.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(applied.status.success(), "{}", output_text(&applied));
+    assert!(String::from_utf8_lossy(&applied.stderr).contains("1 updated"));
+    assert_eq!(case.hooks(), "apply\n");
+    assert!(
+        fs::read_to_string(case.calendars.join("Postgrad/write.ics"))
+            .unwrap()
+            .contains("SUMMARY:Applied manually")
+    );
+    assert_eq!(
+        fs::read(session.join("tasks.md")).unwrap(),
+        fs::read(session.join("accepted.md")).unwrap()
+    );
+
+    let closed = case
+        .base("false")
+        .args(["session", "close", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(closed.status.success(), "{}", output_text(&closed));
+    assert!(!session.exists());
+}
+
+#[test]
+fn explicit_session_close_protects_unapplied_changes() {
+    let case = Case::new(0);
+    let fake = case.runtime.join("session-unrelated");
+    fs::create_dir(&fake).unwrap();
+    let rejected = case
+        .base("false")
+        .args(["session", "close", "--force", fake.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
+    assert!(output_text(&rejected).contains("is not a todomd session"));
+    assert!(fake.is_dir());
+
+    let created = case
+        .base("false")
+        .args(["session", "create", "Personal"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    fs::write(session.join("tasks.md"), "unapplied\n").unwrap();
+
+    let lock = session::lock(&session).unwrap();
+    let in_use = case
+        .base("false")
+        .args(["session", "close", "--force", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!in_use.status.success());
+    assert!(output_text(&in_use).contains("already in use"));
+    assert!(session.is_dir());
+    drop(lock);
+
+    let refused = case
+        .base("false")
+        .args(["session", "close", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert!(output_text(&refused).contains("session has unapplied changes"));
+    assert!(session.is_dir());
+
+    let forced = case
+        .base("false")
+        .args(["session", "close", "--force", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(forced.status.success(), "{}", output_text(&forced));
+    assert!(!session.exists());
+}
+
+#[test]
+fn explicit_session_can_create_and_delete_a_task() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "Personal"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    let tasks_path = session.join("tasks.md");
+    let mut tasks = fs::read_to_string(&tasks_path).unwrap();
+    tasks.push_str("- [ ] Created manually\n");
+    fs::write(&tasks_path, tasks).unwrap();
+
+    let applied = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(applied.status.success(), "{}", output_text(&applied));
+    assert!(output_text(&applied).contains("1 created"));
+    let canonical = fs::read_to_string(&tasks_path).unwrap();
+    let created_line = canonical
+        .lines()
+        .find(|line| line.contains("Created manually"))
+        .unwrap();
+    assert!(created_line.contains("<!--t"));
+    let created_source = fs::read_dir(case.calendars.join("Personal"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.extension().is_some_and(|extension| extension == "ics")
+                && fs::read_to_string(path)
+                    .is_ok_and(|contents| contents.contains("SUMMARY:Created manually"))
+        })
+        .unwrap();
+
+    let retained = canonical
+        .lines()
+        .filter(|line| !line.contains("Created manually"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    fs::write(&tasks_path, retained).unwrap();
+    let deleted = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(deleted.status.success(), "{}", output_text(&deleted));
+    assert!(output_text(&deleted).contains("1 deleted"));
+    assert!(!created_source.exists());
+    assert_eq!(case.hooks(), "apply\napply\n");
+}
+
+#[test]
+fn explicit_session_can_reopen_a_task_completed_in_active_scope() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "Postgrad"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    let tasks_path = session.join("tasks.md");
+    let tasks = fs::read_to_string(&tasks_path).unwrap();
+    fs::write(
+        &tasks_path,
+        tasks.replace("- [ ] -2026-09-10", "- [x] -2026-09-10"),
+    )
+    .unwrap();
+
+    let completed = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(completed.status.success(), "{}", output_text(&completed));
+    let tasks = fs::read_to_string(&tasks_path).unwrap();
+    assert!(tasks.contains("- [x] -2026-09-10"));
+    fs::write(
+        &tasks_path,
+        tasks.replace("- [x] -2026-09-10", "- [ ] -2026-09-10"),
+    )
+    .unwrap();
+
+    let reopened = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(reopened.status.success(), "{}", output_text(&reopened));
+    assert!(
+        !fs::read_to_string(case.calendars.join("Postgrad/write.ics"))
+            .unwrap()
+            .contains("STATUS:COMPLETED")
+    );
+    assert_eq!(case.hooks(), "apply\napply\n");
+}
+
+#[test]
+fn explicit_session_apply_accepts_inbound_and_canonicalizes_noop_edits() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "Personal"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    let source_path = case.calendars.join("Personal/groceries.ics");
+    let source = fs::read_to_string(&source_path).unwrap();
+    fs::write(
+        &source_path,
+        source.replace("SUMMARY:Buy milk\\, bread", "SUMMARY:Changed externally"),
+    )
+    .unwrap();
+
+    let inbound = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(inbound.status.success(), "{}", output_text(&inbound));
+    assert!(output_text(&inbound).contains("source changes loaded"));
+    assert!(
+        fs::read_to_string(session.join("tasks.md"))
+            .unwrap()
+            .contains("Changed externally")
+    );
+    assert!(!case.hook_log.exists());
+
+    let tasks_path = session.join("tasks.md");
+    let tasks = fs::read_to_string(&tasks_path).unwrap();
+    fs::write(
+        &tasks_path,
+        tasks.replace(
+            "- [ ] Changed externally",
+            "- [ ] @Personal Changed externally",
+        ),
+    )
+    .unwrap();
+    let noop = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(noop.status.success(), "{}", output_text(&noop));
+    assert!(output_text(&noop).contains("no changes"));
+    assert!(
+        !fs::read_to_string(&tasks_path)
+            .unwrap()
+            .contains("@Personal")
+    );
+    assert_eq!(
+        fs::read(&tasks_path).unwrap(),
+        fs::read(session.join("accepted.md")).unwrap()
+    );
+    assert!(!case.hook_log.exists());
+}
+
+#[test]
+fn explicit_session_apply_preserves_conflicts() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "Postgrad"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    let tasks_path = session.join("tasks.md");
+    let tasks = fs::read_to_string(&tasks_path).unwrap();
+    fs::write(
+        &tasks_path,
+        tasks.replace("Write paper draft", "Changed in Markdown"),
+    )
+    .unwrap();
+    let source_path = case.calendars.join("Postgrad/write.ics");
+    let source = fs::read_to_string(&source_path).unwrap();
+    fs::write(
+        &source_path,
+        source.replace("SUMMARY:Write paper draft", "SUMMARY:Changed in ICS"),
+    )
+    .unwrap();
+
+    let applied = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!applied.status.success());
+    assert!(output_text(&applied).contains("both changed"));
+    assert!(session.is_dir());
+    assert!(
+        fs::read_to_string(tasks_path)
+            .unwrap()
+            .contains("Changed in Markdown")
+    );
+    assert!(
+        fs::read_to_string(source_path)
+            .unwrap()
+            .contains("SUMMARY:Changed in ICS")
+    );
+    assert!(!case.hook_log.exists());
 }
 
 #[test]
