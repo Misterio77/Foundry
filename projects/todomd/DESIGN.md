@@ -160,12 +160,15 @@ parenting, and empty or multiline summaries.
 For each root, authority is:
 
 1. explicit task marker;
-2. corresponding grouping heading; then
-3. the field's empty/default value where legal.
+2. corresponding grouping heading;
+3. the sole selected list, for list membership only; then
+4. the field's empty/default value where legal.
 
 Active list, due, start, priority, and category groupings omit that root marker
-from canonical Markdown. The parser restores it from the heading path. An
-explicit conflicting marker wins and causes the task to move to its canonical
+from canonical Markdown. The parser restores it from the heading path. A
+single-list document also omits root list markers because membership is
+unambiguous; multi-list documents without list grouping require `@list`.
+An explicit conflicting marker wins and causes the task to move to its canonical
 group after save.
 
 Completion is different: every task must contain `[ ]` or `[x]`, so the checkbox

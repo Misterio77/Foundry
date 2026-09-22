@@ -173,10 +173,12 @@ retain their own markers and always inherit their parent's list. Completion is
 always controlled by `[ ]` / `[x]`. Unknown list names, malformed dates or
 category sets, and invalid fixed labels are rejected.
 
-With no grouping, roots render every field explicitly. When grouped by list,
-roots omit `@list`; when grouped by due, start, priority, or categories, they
-omit that corresponding marker. Missing values use headings such as `No due
-date` and `No categories`.
+With no grouping, roots render every field explicitly except an unambiguous
+list: when the session contains exactly one list, roots omit `@list` and new
+roots inherit that list automatically. Multi-list sessions still require either
+an explicit `@list` or a list grouping heading. When grouped by due, start,
+priority, or categories, roots omit that corresponding marker. Missing values
+use headings such as `No due date` and `No categories`.
 
 A vdir `color` file containing `#RRGGBB` is exposed through LSP for list-group
 headings. Helix 25.07 and newer can show the color inline.

@@ -366,6 +366,82 @@ fn explicit_session_can_create_and_delete_a_task() {
 }
 
 #[test]
+fn explicit_session_infers_the_sole_ungrouped_list() {
+    let case = Case::new(0);
+    let created = case
+        .base("false")
+        .args(["session", "create", "--no-group", "Personal"])
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", output_text(&created));
+    let session = PathBuf::from(String::from_utf8(created.stdout).unwrap().trim());
+    let tasks_path = session.join("tasks.md");
+    let mut tasks = fs::read_to_string(&tasks_path).unwrap();
+    assert!(!tasks.contains("@Personal"), "{tasks}");
+    tasks.push_str("- [ ] Inferred list\n");
+    fs::write(&tasks_path, tasks).unwrap();
+
+    let applied = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(applied.status.success(), "{}", output_text(&applied));
+    assert!(output_text(&applied).contains("1 created"));
+    let canonical = fs::read_to_string(&tasks_path).unwrap();
+    assert!(!canonical.contains("@Personal"), "{canonical}");
+    assert!(
+        canonical.contains("- [ ] Inferred list <!--t"),
+        "{canonical}"
+    );
+    assert!(
+        fs::read_dir(case.calendars.join("Personal"))
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .any(|entry| fs::read_to_string(entry.path())
+                .is_ok_and(|contents| contents.contains("SUMMARY:Inferred list")))
+    );
+
+    // A document written before markers became optional still carries them.
+    fs::write(
+        &tasks_path,
+        canonical.replace("- [ ] Inferred list", "- [ ] @Personal Inferred list"),
+    )
+    .unwrap();
+    let noop = case
+        .base("false")
+        .args(["session", "apply", session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(noop.status.success(), "{}", output_text(&noop));
+    assert!(output_text(&noop).contains("no changes"));
+    assert_eq!(fs::read_to_string(&tasks_path).unwrap(), canonical);
+
+    let multi = case
+        .base("false")
+        .args(["session", "create", "--no-group", "Personal", "Postgrad"])
+        .output()
+        .unwrap();
+    assert!(multi.status.success(), "{}", output_text(&multi));
+    let multi_session = PathBuf::from(String::from_utf8(multi.stdout).unwrap().trim());
+    let multi_tasks_path = multi_session.join("tasks.md");
+    let multi_tasks = fs::read_to_string(&multi_tasks_path).unwrap();
+    assert!(multi_tasks.contains("@Personal"), "{multi_tasks}");
+    fs::write(&multi_tasks_path, multi_tasks + "- [ ] Ambiguous\n").unwrap();
+    let rejected = case
+        .base("false")
+        .args(["session", "apply", multi_session.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success());
+    assert!(
+        output_text(&rejected).contains("when editing multiple lists"),
+        "{}",
+        output_text(&rejected)
+    );
+}
+
+#[test]
 fn explicit_session_can_reopen_a_task_completed_in_active_scope() {
     let case = Case::new(0);
     let created = case

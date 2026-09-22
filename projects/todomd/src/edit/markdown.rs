@@ -56,6 +56,7 @@ pub fn render_with_view(
 ) -> Result<String> {
     let mut output = String::new();
     let mut previous_headings = Vec::<String>::new();
+    let sole_list_selected = state.lists.len() == 1;
 
     for tree in view::project(state, active_view) {
         let common = previous_headings
@@ -86,7 +87,7 @@ pub fn render_with_view(
             let checked = if task.completed { 'x' } else { ' ' };
             let root = projected.depth == 0;
             let grouped = |key| root && active_view.group_by.contains(&key);
-            let list = if root && !grouped(view::GroupKey::List) {
+            let list = if root && !grouped(view::GroupKey::List) && !sole_list_selected {
                 format!("{} ", render_list_marker(tree.list_name))
             } else {
                 String::new()
@@ -143,6 +144,7 @@ pub fn parse_with_view(
         .iter()
         .map(|list| list.name.as_str())
         .collect::<BTreeSet<_>>();
+    let sole_list = (baseline.lists.len() == 1).then(|| baseline.lists[0].name.clone());
     let mut parsed_lists = baseline
         .lists
         .iter()
@@ -193,9 +195,10 @@ pub fn parse_with_view(
                 .list
                 .clone()
                 .or_else(|| heading_list(&headings).map(str::to_owned))
+                .or_else(|| sole_list.clone())
                 .with_context(|| {
                     format!(
-                        "line {line_number}: a root task must contain an @list marker or appear beneath a list grouping"
+                        "line {line_number}: a root task must contain an @list marker when editing multiple lists without list grouping"
                     )
                 })?
         } else {
@@ -821,7 +824,7 @@ mod tests {
         };
         let mut manifest = IdentityManifest::default();
         let document = render_with_view(&state, &view, &mut manifest).unwrap();
-        assert!(document.contains("# 2026-09-22\n\n- [ ] @Work Root <!--t1-->"));
+        assert!(document.contains("# 2026-09-22\n\n- [ ] Root <!--t1-->"));
         assert!(document.contains("  - [ ] -2026-09-24 Child <!--t2-->"));
 
         let moved = document.replace("# 2026-09-22", "# 2026-09-23");
@@ -829,7 +832,7 @@ mod tests {
         assert_eq!(parsed.lists[0].tasks[0].due, Some(test_date("2026-09-23")));
         assert_eq!(parsed.lists[0].tasks[1].due, Some(test_date("2026-09-24")));
 
-        let explicit = moved.replace("@Work Root", "@Work -2026-09-25 Root");
+        let explicit = moved.replace("Root <!--t1-->", "@Work -2026-09-25 Root <!--t1-->");
         let parsed = parse_with_view(&explicit, &state, &manifest, &view).unwrap();
         assert_eq!(parsed.lists[0].tasks[0].due, Some(test_date("2026-09-25")));
     }
@@ -1457,6 +1460,70 @@ mod tests {
                 "expected a parse error for {line:?}"
             );
         }
+    }
+
+    #[test]
+    fn sole_ungrouped_list_is_implicit_for_roots() {
+        let baseline = TaskState {
+            lists: vec![TaskList {
+                name: "Personal".into(),
+                tasks: vec![Task {
+                    id: TaskId::new("existing"),
+                    summary: "Existing".into(),
+                    completed: false,
+                    priority: Priority::None,
+                    categories: vec![],
+                    parent: None,
+                    start: None,
+                    due: None,
+                }],
+            }],
+        };
+        let view = View {
+            group_by: vec![],
+            sort_by: vec![view::SortKey::Summary],
+        };
+        let mut manifest = IdentityManifest::default();
+        let mut document = render_with_view(&baseline, &view, &mut manifest).unwrap();
+        assert!(document.contains("- [ ] Existing <!--t1-->"));
+        assert!(!document.contains("@Personal"));
+
+        document.push_str("- [ ] New task\n");
+        let parsed = parse_with_view(&document, &baseline, &manifest, &view).unwrap();
+        assert_eq!(parsed.lists[0].tasks.len(), 2);
+        assert_eq!(parsed.lists[0].tasks[1].summary, "New task");
+    }
+
+    #[test]
+    fn multiple_ungrouped_lists_require_root_list_markers() {
+        let baseline = TaskState {
+            lists: vec![
+                TaskList {
+                    name: "Personal".into(),
+                    tasks: Vec::new(),
+                },
+                TaskList {
+                    name: "Postgrad".into(),
+                    tasks: Vec::new(),
+                },
+            ],
+        };
+        let view = View {
+            group_by: vec![],
+            sort_by: vec![view::SortKey::Summary],
+        };
+
+        let error = parse_with_view(
+            "- [ ] Ambiguous\n",
+            &baseline,
+            &IdentityManifest::default(),
+            &view,
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}").contains("when editing multiple lists"),
+            "{error:#}"
+        );
     }
 
     #[test]
