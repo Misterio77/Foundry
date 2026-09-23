@@ -1,4 +1,17 @@
 {...}: {
+  # Ubuntu's network-manager package (dragged in transitively by desktop
+  # metapackages, and not autoremoved with them) enables itself and claims the
+  # wifi link. It can never actually drive it, since our wpa_supplicant is not
+  # DBus-controlled, but it still clobbers the link's IPv6 link-local address,
+  # so networkd never reaches "configured" and wait-online burns its full
+  # 120s timeout. Mask rather than disable: gnome-shell & co would otherwise
+  # DBus-activate it right back.
+  systemd.maskedUnits = [
+    "NetworkManager.service"
+    "NetworkManager-wait-online.service"
+    "NetworkManager-dispatcher.service"
+  ];
+
   # systemd-networkd has no implicit "manage everything" default: a link that
   # matches no .network file stays unmanaged and is never even brought up. On
   # NixOS this file is generated for you (nixos/modules/tasks/
