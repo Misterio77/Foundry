@@ -25,6 +25,8 @@ autoinstall:
       - openssh-client
       - pcscd
       - pipewire
+      - pipewire-alsa
+      - pipewire-audio
       - pipewire-pulse
       - policykit-1
       - policykit-1-gnome
