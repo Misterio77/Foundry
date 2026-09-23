@@ -32,16 +32,10 @@ in {
         reserveTokens = 16384;
       };
       defaultProvider = "openai-codex";
-      defaultModel = "gpt-5.6-sol";
+      defaultModel = "gpt-6-sol";
       enabledModels = [
-        "openai-codex/gpt-5.6-sol"
-        "openai-codex/gpt-5.6-terra"
-        "openai-codex/gpt-5.6-luna"
-        "deepseek/deepseek-v4-flash"
-        "deepseek/deepseek-v4-pro"
-        "claude-bridge/claude-opus-5"
-        "claude-bridge/claude-sonnet-5"
-        "claude-bridge/claude-haiku-4-5"
+        "openai-codex/*"
+        "deepseek/*"
       ];
 
       skills = [./skills];
@@ -52,10 +46,6 @@ in {
         braveApiKeyFile = osConfig.sops.secrets.brave_api_key.path or null;
         kagiSessionTokenFile = osConfig.sops.secrets.kagi_session_token.path or null;
       };
-    };
-    models.providers.deepseek.modelOverrides = {
-      "deepseek-v4-pro".thinkingLevelMap.low = "low";
-      "deepseek-v4-flash".thinkingLevelMap.low = "low";
     };
     keybindings = {
       "app.editor.external" = ["alt+e"];
