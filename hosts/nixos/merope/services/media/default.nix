@@ -13,6 +13,5 @@
     ./deluge.nix
     ./sabnzbd.nix
     ./jellyseerr.nix
-    ./jellysearch.nix
   ];
 }
