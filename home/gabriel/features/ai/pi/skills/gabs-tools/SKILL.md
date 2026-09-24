@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Manage Gabs's todos (todomd), appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail)
+description: Check Gabs's overall pending work and deadlines with todomd, and manage todos, appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail). Use for questions like "what's pending on my end?" even when a project workspace is in context.
 ---
 
 ## Syncing vdir-backed data
@@ -15,6 +15,17 @@ systemctl --user start vdirsyncer
 
 Todos live in a vdir at `~/Calendars/personal/`. `todomd` is the CLI, and `todo`
 is a fish abbreviation for it. Todoman is no longer installed.
+
+**Source of truth for Gabs's overall todos:** when asked what's pending, what to do
+next, or whether anything remains on their end, run `todomd show` first, without
+waiting for an explicit instruction to use it. Use the relevant list (e.g.
+`Postgrad`) to narrow the answer when the question has a clear scope. Project
+repos, `AGENTS.md`, and `.agents/STATUS.md` hold more granular plans, context,
+and dependencies; consult them to interpret a todo or answer project-specific
+questions, but don't substitute their next-action lists for the overall todo
+list. Distinguish tasks awaiting Gabs from external responses and from
+project-internal work not tracked in todomd. Don't assume an unlisted task is
+complete; say which source you checked.
 
 ### Reading
 
@@ -144,7 +155,7 @@ Plain markdown files. Key locations:
 
 | Path | Purpose |
 |---|---|
-| `~/Atelier/notes/TODO` | Main working todo (plain text, not a vdir todo) |
+| `~/Atelier/notes/TODO` | Human-written working notes (plain text; not the overall todo source) |
 | `~/Atelier/notes/Elisa/` | Advisor meeting notes, dated `YYYY-MM-DD.md` |
 | `~/Atelier/notes/old/` | Archived/older notes |
 | `~/Atelier/notes/old/very-old/` | Ancient notes, GELOS, classes, etc. |
