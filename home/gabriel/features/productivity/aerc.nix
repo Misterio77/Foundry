@@ -13,6 +13,11 @@
 in {
   programs.aerc = {
     enable = true;
+    # Maildir reports the new flags, but aerc otherwise ORs them into the
+    # cached flags, so removing a flag stays visible until the next launch.
+    package = pkgs.aerc.overrideAttrs (old: {
+      patches = (old.patches or []) ++ [./aerc-maildir-replace-flags.patch];
+    });
     extraBinds = lib.recursiveUpdate (import ./aerc-default-bindings.nix) {
       global = {
         "<C-c>" = ":quit<Enter>";
