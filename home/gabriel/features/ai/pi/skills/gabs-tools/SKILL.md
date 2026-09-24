@@ -13,8 +13,9 @@ systemctl --user start vdirsyncer
 
 ## Todos (todomd + `.ics`)
 
-Todos live in a vdir at `~/Calendars/personal/`. `todomd` is the CLI, and `todo`
-is a fish abbreviation for it. Todoman is no longer installed.
+Todos live as `.ics` files in a vdir at `~/Calendars/personal/`. `todomd`
+renders them as Markdown in Gabs's editor; the `.ics` files are authoritative.
+`todo` is a fish abbreviation for `todomd`. Todoman is no longer installed.
 
 **Source of truth for Gabs's overall todos:** when asked what's pending, what to do
 next, or whether anything remains on their end, run `todomd show` first, without
@@ -151,20 +152,8 @@ rm ~/.cache/khal/khal.db
 
 ## Notes (`~/Atelier/notes`)
 
-Plain markdown files. Key locations:
-
-| Path | Purpose |
-|---|---|
-| `~/Atelier/notes/TODO` | Human-written working notes (plain text; not the overall todo source) |
-| `~/Atelier/notes/Elisa/` | Advisor meeting notes, dated `YYYY-MM-DD.md` |
-| `~/Atelier/notes/old/` | Archived/older notes |
-| `~/Atelier/notes/old/very-old/` | Ancient notes, GELOS, classes, etc. |
-
-The Elisa notes typically have `# Pre` (agenda) and `# Post` (action items) sections.
-
-The `~/Atelier/notes/old/todo.md` file has a dated task breakdown (work, masters, GELOS, personal).
-
-The notes directory is a jj (Jujutsu) repo. Always run `jj new` before making any edits there — same workflow as any other jj repo. Use `jj` for all VCS operations, never `git`.
+There may be useful human-written context there, but notes are not the todo source.
+For pending tasks, use `todomd` and the `.ics` files.
 
 ## Contacts (khard)
 
