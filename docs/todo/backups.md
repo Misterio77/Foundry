@@ -1,8 +1,9 @@
 # Backups
 
-This is a plan and configuration inventory, **not** evidence that a backup has
-run successfully or that an archive can be restored. Verify the deployed units,
-repository contents, passphrase recovery, and a test restore on the hosts.
+This is a plan and configuration inventory with dated spot checks, **not**
+proof that all services can be recovered. The latest Borg archive passed a
+metadata check; a Radicale collection item and Headscale database passed
+limited scratch-restore tests. Other data and full service recovery need testing.
 
 ## Declared today
 
@@ -40,12 +41,29 @@ repository contents, passphrase recovery, and a test restore on the hosts.
   available**, despite printing "no errors found". This does not establish a
   completed scrub or supersede the old report of 2233 corruption errors on
   `merope`. No `btrfs-scrub*` timer appeared there.
+- Using root-only Borg credentials on `alcyone`, `borg check --archives-only
+  --last 1` exited successfully. The newest archive was
+  `alcyone-alcyone-2026-09-24T04:15:02`. A scratch extraction of
+  `run/borgbackup-alcyone-source/srv/git/.cache/nix/fetcher-cache-v1.sqlite`
+  returned 20,480 bytes, matching its archived size; the temporary file was
+  removed. This checks archive metadata and retrieval of one file, **not**
+  repository-wide data integrity, SQLite consistency, or recovery of any
+  irreplaceable application data.
+- A later scratch test of the same archive restored a **non-cache Radicale
+  collection item** (619 bytes) with matching `VCALENDAR` start/end lines, and
+  the Headscale SQLite database (110,592 bytes, with any archived WAL/journal
+  restored alongside it) returned `ok` from `PRAGMA integrity_check`. The
+  first `.ics` candidate was a 152-byte file with no recognized component
+  markers; restricting selection to `collection-root` and excluding cache
+  directories yielded the valid item. The temporary files were removed.
 
-These were unprivileged, read-only SSH checks. A successful systemd exit is not
-proof that the archive contains every intended path or can be decrypted and
-restored. Repository contents, integrity, passphrase recovery, database
-consistency, and an actual restore remain **unverified**. The old capacity and
-corruption figures are historical observations; recheck them on the hosts.
+The host inspection was unprivileged and read-only; the separate Borg checks
+used root-only credentials without archive repair or production-file writes.
+Full archive contents, other archives, passphrase recovery from an independent
+location, other databases, and full application restores remain **unverified**.
+Calendar framing and SQLite integrity alone do not prove the services can be
+restarted from these files. The old capacity and corruption figures are
+historical observations; recheck them on the hosts.
 
 ## What matters
 
@@ -95,10 +113,10 @@ least the irreplaceable data; large reacquirable downloads need not go there.
 Define retention per repository and budget for the actual current sizes rather
 than the old estimates.
 
-1. **Verify what's there:** check Borg timer/job results, latest archives and
-   contents, repository mount, key/passphrase recovery, Btrfs scrub status, and
-   whether the music mirror still exists. Restore one `alcyone` file and a
-   database into a scratch location.
+1. **Extend the verification:** check full archive contents, repository-wide
+   integrity and key/passphrase recovery from an independent location; confirm
+   Btrfs scrub history and whether the music mirror still runs. Extend the
+   scratch tests to a full service recovery and databases not yet covered.
 2. **Close `merope`'s gap:** create an independent backup job for critical
    service state and Immich media/database. Back up from a consistent source,
    exclude replaceable bulk data, and restore-test it. A repository on another
