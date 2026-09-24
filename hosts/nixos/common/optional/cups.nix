@@ -27,6 +27,17 @@
         Saturation = "15";
       };
     }
+    {
+      description = "Epson L5590 (Network IPP)";
+      name = "Epson_L5590_IPP";
+      deviceUri = "ipp://192.168.0.12/ipp/print";
+      model = "everywhere";
+      ppdOptions = {
+        PageSize = "A4";
+        MediaType = "Stationery";
+        cupsPrintQuality = "Normal";
+      };
+    }
   ];
   hardware.sane = {
     enable = true;
