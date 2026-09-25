@@ -42,7 +42,7 @@ in {
           language-servers = ["marksman" "todomd"];
         }
       ];
-      global-language-servers = ["llm-suggest" "colors"];
+      global-language-servers = ["colors"];
       language-server = {
         tinymist.config = {
           typstExtraArgs = ["main.typ"];
@@ -60,7 +60,6 @@ in {
           args = ["lsp"];
         };
         colors.command = lib.getExe pkgs.uwu-colors;
-        llm-suggest.command = lib.getExe pkgs.llm-suggest-lsp;
       };
     };
     themes."nix-${hash}" = import ./theme.nix {inherit colorscheme;};

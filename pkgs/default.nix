@@ -31,7 +31,6 @@ in {
   xpo = pkgs.callPackage ./xpo {};
   clip-notify = pkgs.callPackage ./clip-notify {};
   jagex-auth = pkgs.callPackage ./jagex-auth {};
-  llm-suggest-lsp = pkgs.callPackage ./llm-suggest-lsp {};
   overleaf-sync = pkgs.callPackage ./overleaf-sync {};
 
   # My slightly customized plymouth theme, just makes the blue outline white
