@@ -20,7 +20,7 @@ in {
       online-mode = true;
       white-list = true;
       motd = "Greg\\u00f3rio T\\u00e9cnico: Novidades Horizontais";
-      max-tick-time = 60000; # 1 minute
+      max-tick-time = 180000; # 3 minutes
       level-seed = "4387134805370572030";
     };
     files = {
