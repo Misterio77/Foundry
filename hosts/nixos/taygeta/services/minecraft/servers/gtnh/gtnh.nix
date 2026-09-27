@@ -28,11 +28,11 @@
 in
   stdenvNoCC.mkDerivation {
     pname = "gt-new-horizons";
-    version = "2.8.0";
+    version = "2.8.4";
 
     src = fetchzip {
-      url = "https://downloads.gtnewhorizons.com/ServerPacks/GT_New_Horizons_2.8.0_Server_Java_17-25.zip";
-      hash = "sha256-HH/Z3T6H3cDHFuPsxKSlJELGLL4Hc/5s2DZCxU+Txhs=";
+      url = "https://downloads.gtnewhorizons.com/ServerPacks/GT_New_Horizons_2.8.4_Server_Java_17-25.zip";
+      hash = "sha256-WgTv53dNuH9jZ3L4+STDB/ydRjkWd1iVU7Mzpsp/Pls=";
       stripRoot = false;
     };
 
