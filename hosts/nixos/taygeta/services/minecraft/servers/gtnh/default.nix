@@ -52,6 +52,12 @@ in {
         url = "https://github.com/GTNewHorizons/GTNH-Web-Map/releases/download/${version}/gtnh-web-map-${version}.jar";
         hash = "sha256-e9qt0egZSQxZHlfozfoGLIDbvyyy59df0pYkHSfMRAQ=";
       };
+      "mods/gtnhrates-1.11.0-2.8.4.jar" = pkgs.fetchurl rec {
+        pname = "gtnhrates";
+        version = "1.11.0-2.8.4";
+        url = "https://github.com/Sladki/GTNHRates/releases/download/${version}/gtnhrates-${version}.jar";
+        hash = "sha256-YXXzrAhyfPOWJQfXxCXheDU4ObFft7atQv5g+3wdppw=";
+      };
     };
   };
 
