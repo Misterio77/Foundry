@@ -33,6 +33,7 @@
     jq # JSON pretty printer and manipulator
     timer # To help with my ADHD paralysis
     viddy # Better watch
+    unzip # Always useful
     overleaf-sync # Synchronize LaTeX projects with Overleaf
 
     nixd # Nix LSP
