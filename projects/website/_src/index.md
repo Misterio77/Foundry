@@ -4,9 +4,11 @@ title: About me
 
 Hey 👋, my name is Gabriel. I'm a Brazilian software engineer, researcher, and activist. Welcome to my little cozy web corner!
 
+Check [now]({% link now.md %}) for what I have been doing, and [uses]({% link uses.md %}) if you're curious on what tools I like using.
+
 ## Interests
 
-I'm interested in free/open-source software, reproductibility, distributed systems, software engineering, and functional programming.
+I'm interested in free/open-source software, reproducibility, distributed systems, software engineering, and functional programming.
 
 I've been into computers, science and math since I was little. I love Linux, Free Software, CLI programs, and design.
 
