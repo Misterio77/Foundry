@@ -14,9 +14,9 @@ My work is mostly around development processes, build systems, infrastructure,
 DevOps, CI/CD, and backend.
 
 I currently work full-time at Magalu Cloud, where I work on underlying cloud
-resources, virtualization, packaging, and deployment orchestration. I am also
-pursuing a Computer Science M.Sc. at the University of São Paulo, researching
-software sustainability in open-source ecosystems.
+resources, virtualization, packaging, and deployment orchestration. I have
+also recently obtained a Computer Science M.Sc. at the University of São Paulo,
+researching software sustainability in open-source ecosystems.
 
 I frequently work with Rust, Python, Lua, PostgreSQL, Nix/NixOS, Docker,
 Terraform, Linux, Juju, and GitHub Actions. I also have experience with UI/UX
@@ -141,7 +141,7 @@ most prestigious university, and frequently the top university in Latin America.
 During my time here, I helped create and currently lead our [Open-Source & Free
 Software extracurricular group](https://gelos.club).
 
-#### Master's: Computer Science and Computational Mathematics (2023-present)
+#### Master's: Computer Science and Computational Mathematics (2023-2026)
 
 I'm currently researching Software Sustainability in open-source software
 projects, hoping to contribute to our understanding of best practices
