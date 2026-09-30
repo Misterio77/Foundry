@@ -31,12 +31,6 @@ in {
         keepRecentTokens = 20000;
         reserveTokens = 16384;
       };
-      defaultProvider = "openai-codex";
-      defaultModel = "gpt-6-sol";
-      enabledModels = [
-        "openai-codex/*"
-        "deepseek/*"
-      ];
 
       skills = [./skills];
       prompts = [./prompts];

@@ -15,10 +15,7 @@
     npmDepsHash = "sha256-/wY2r/wZHnc+7/3VGhjDp+iNujR0IPCZ5m7K+/OnvNU=";
   };
 in {
-  programs.pi-coding-agent.settings = {
-    enabledModels = ["claude-bridge/*"];
-    packages = [piClaudeBridge];
-  };
+  programs.pi-coding-agent.settings.packages = [piClaudeBridge];
   home.file.".pi/agent/claude-bridge.json".text = builtins.toJSON {
     askClaude.enabled = false;
     provider = {
