@@ -115,7 +115,7 @@
             type = "btrfs";
             subvolumes = {
               "/backups" = {
-                mountOptions = ["noatime"];
+                mountOptions = ["noatime" "nofail" "x-systemd.device-timeout=10s"];
                 mountpoint = "/srv/backups";
               };
             };
