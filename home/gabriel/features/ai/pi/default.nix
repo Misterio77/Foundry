@@ -26,12 +26,6 @@ in {
     ];
     context = ./context.md;
     settings = {
-      compaction = {
-        enabled = true;
-        keepRecentTokens = 20000;
-        reserveTokens = 16384;
-      };
-
       skills = [./skills];
       prompts = [./prompts];
       extensions = [customExtensions];
