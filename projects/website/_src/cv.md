@@ -4,7 +4,7 @@ description: Curriculum vitae of Gabriel Fontes, a software engineer and researc
 permalink: /cv/
 ---
 
-Last updated: 2026-07-02
+Last updated: 2026-09-29
 
 ## Overview
 
