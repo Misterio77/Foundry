@@ -184,23 +184,42 @@ in {
       });
     });
 
-    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: _: {
-      version = "0.87.0";
+    pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
+      version = "0.99.1";
       src = final.fetchFromGitHub {
         owner = "earendil-works";
         repo = "pi";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-7YkIA5IEs4U0qnoaO3IzlY+p/M7j30fSVelLeyoV+F8=";
+        hash = "sha256-bLDEt1sKiS6ReQ6Uch0tOSLU8aykKl3UwN7WVkRE9Og=";
       };
       npmDeps = final.fetchNpmDeps {
         name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
         inherit (finalAttrs) src;
-        hash = "sha256-fbxwpQHnrUihO9MU72m331Uwt9dv0fQtEjdJ9hU8UxA=";
+        hash = "sha256-eKtv1fN7X4ukuYbsj7hduGZ3W2FdmO/fAnoaWJp7MQQ=";
       };
       modelData = final.fetchurl {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-        hash = "sha256-8q353oCdA192+NrfPRSHIOvu9GBqhIqzbug02JWugS8=";
+        hash = "sha256-+fRGkhV9C/VnnEoXMEoxACgjHX2q6q6jtzJS9LeiZNM=";
       };
+      # Upstream switched from tsgo to tsc and added two runtime workspaces.
+      buildPhase = ''
+        runHook preBuild
+        for ws in chord tui telemetry codemode mcp; do
+          npm run build --workspace=packages/$ws
+        done
+        npm run build:offline --workspace=packages/ai
+        for ws in durable agent session-backends/sqlite-node protocol client server coding-agent; do
+          npm run build --workspace=packages/$ws
+        done
+        runHook postBuild
+      '';
+      postInstall =
+        oldAttrs.postInstall
+        + ''
+          local nm="$out/lib/node_modules/pi-monorepo/node_modules/@earendil-works"
+          cp -r packages/codemode "$nm/pi-codemode"
+          cp -r packages/mcp "$nm/pi-mcp"
+        '';
     });
 
     buildPiPackage = let
