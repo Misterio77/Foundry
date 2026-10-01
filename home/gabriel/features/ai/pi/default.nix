@@ -26,6 +26,14 @@ in {
     ];
     context = ./context.md;
     settings = {
+      defaultProvider = "openai";
+      defaultModel = "gpt-6.1-sol";
+      enabledModels = [
+        "openai/gpt-6-astra"
+        "openai/gpt-6.1-sol"
+        "openai/gpt-6-luna"
+        "deepseek/flash"
+      ];
       skills = [./skills];
       prompts = [./prompts];
       extensions = [customExtensions];
