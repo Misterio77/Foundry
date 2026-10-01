@@ -11,6 +11,7 @@ in {
   lyrics = pkgs.python3Packages.callPackage ./lyrics {};
   prefetcharr = pkgs.callPackage ./prefetcharr {};
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
+  hax = pkgs.callPackage ./hax {};
   alt1 = pkgs.callPackage ./alt1 {};
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};

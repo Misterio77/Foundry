@@ -9,11 +9,13 @@ from the sidelines.
 ## Environment
 
 Identify the harness and model at least once per session, especially before
-writing commit messages; SDK-provided context may be stale:
+writing commit messages; SDK-provided context may be stale. Inspect the parent
+process and the active agent's environment:
 
 ```bash
 ps -fp "$PPID"
-printf '%s/%s\n' "$PI_PROVIDER" "$PI_MODEL"
+printf 'pi: %s\n' "$PI_MODEL"
+printf 'hax: %s\n' "$HAX_MODEL"
 ```
 
 ## Secrets

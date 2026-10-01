@@ -24,7 +24,7 @@ in {
       pkgs.python3 # Often used
       pkgs.python3Packages.trafilatura # Used by the web-fetch skill
     ];
-    context = ./context.md;
+    context = ../common/context.md;
     settings = {
       defaultProvider = "openai";
       defaultModel = "gpt-6.1-sol";
@@ -34,7 +34,7 @@ in {
         "openai/gpt-6-luna"
         "deepseek/flash"
       ];
-      skills = [./skills];
+      skills = [../common/skills];
       prompts = [./prompts];
       extensions = [customExtensions];
       enableInstallTelemetry = false;
