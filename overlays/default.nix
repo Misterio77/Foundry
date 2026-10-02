@@ -185,21 +185,21 @@ in {
     });
 
     pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
-      version = "0.99.1";
+      version = "1.0.0";
       src = final.fetchFromGitHub {
         owner = "earendil-works";
         repo = "pi";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-bLDEt1sKiS6ReQ6Uch0tOSLU8aykKl3UwN7WVkRE9Og=";
+        hash = "sha256-CGznIVHXG6gr2F8vzHcR/v4P9xJgZHeMTt/CJ/kB78o=";
       };
       npmDeps = final.fetchNpmDeps {
         name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
         inherit (finalAttrs) src;
-        hash = "sha256-eKtv1fN7X4ukuYbsj7hduGZ3W2FdmO/fAnoaWJp7MQQ=";
+        hash = "sha256-ndEvWdB6sa5nNNtabk2OMZKUFG9x3op185deZHxFnXk=";
       };
       modelData = final.fetchurl {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-        hash = "sha256-+fRGkhV9C/VnnEoXMEoxACgjHX2q6q6jtzJS9LeiZNM=";
+        hash = "sha256-85uZwpuFmPF1sQhA5dKoGYPnwM5crk19+DoQB0R9LCs=";
       };
       # Upstream switched from tsgo to tsc and added two runtime workspaces.
       buildPhase = ''
@@ -208,7 +208,7 @@ in {
           npm run build --workspace=packages/$ws
         done
         npm run build:offline --workspace=packages/ai
-        for ws in durable agent session-backends/sqlite-node protocol client server coding-agent; do
+        for ws in durable agent protocol client server coding-agent; do
           npm run build --workspace=packages/$ws
         done
         runHook postBuild

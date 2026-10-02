@@ -26,6 +26,7 @@ in {
     ];
     context = ../common/context.md;
     settings = {
+      tuiMode = "regular";
       defaultProvider = "openai";
       defaultModel = "gpt-6.1-sol";
       enabledModels = [
