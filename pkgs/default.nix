@@ -13,6 +13,7 @@ in {
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   hax = pkgs.callPackage ./hax {};
   alt1 = pkgs.callPackage ./alt1 {};
+  runelite-hd = pkgs.callPackage ./runelite-hd {};
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   jellysearch = pkgs.callPackage ./jellysearch {};
