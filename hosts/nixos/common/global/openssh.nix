@@ -60,9 +60,11 @@ in {
       hostKeyFiles;
   };
 
-  # Passwordless sudo when SSH'ing with keys
-  # security.pam.sshAgentAuth = {
-  #   enable = true;
-  #   authorizedKeysFiles = ["/etc/ssh/authorized_keys.d/%u"];
-  # };
+  # Authenticate sudo through the local or forwarded SSH agent, with password fallback.
+  # Only trust root-managed keys; user-writable authorized_keys would bypass sudo auth.
+  security.pam.rssh = {
+    enable = true;
+    settings.auth_key_file = "/etc/ssh/authorized_keys.d/$ruser";
+  };
+  security.pam.services.sudo.rssh = true;
 }
