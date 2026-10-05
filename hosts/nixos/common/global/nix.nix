@@ -9,10 +9,9 @@ in {
     settings = {
       extra-substituters = lib.mkAfter ["https://cache.m7.rs"];
       extra-trusted-public-keys = ["cache.m7.rs:kszZ/NSwE/TjhOcPPQ16IuUiuRSisdiIwhKZCxguaWg="];
-      trusted-users = [
-        "root"
-        "@wheel"
-      ];
+      # Nix daemon trust is root-equivalent; wheel users must authenticate via sudo.
+      # Builder service accounts add their trust separately in the relevant modules.
+      trusted-users = ["root"];
       auto-optimise-store = lib.mkDefault true;
       experimental-features = [
         "nix-command"
