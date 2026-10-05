@@ -28,14 +28,14 @@ in {
       signing = {
         backend = "ssh";
         key = sshPublicKey;
-        # Sign explicitly with jj sign; edits/rebases drop existing signatures.
+        # Edits/rebases drop signatures; sign explicitly or automatically on push.
         behavior = "drop";
         backends.ssh = {
           program = "${pkgs.openssh}/bin/ssh-keygen";
           allowed-signers = "${allowedSigners}";
         };
       };
-      git.sign-on-push = false;
+      git.sign-on-push = true;
       revsets = {
         # Pick @ parents reachable from the nearest bookmarks.
         # Errors out if ambiguous, by design
