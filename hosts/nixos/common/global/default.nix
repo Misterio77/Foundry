@@ -50,6 +50,11 @@
   hardware.enableRedistributableFirmware = true;
   networking.domain = "m7.rs";
 
+  # Keep the cached authentication window short after removing the hardware key.
+  security.sudo.extraConfig = ''
+    Defaults timestamp_timeout=1
+  '';
+
   # Increase open file limit for sudoers
   security.pam.loginLimits = [
     {
