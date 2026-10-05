@@ -17,6 +17,8 @@ in {
         "nix-command"
         "flakes"
         "ca-derivations"
+        # Hydra and auto-upgraders fetch flake URLs with pinned commit-signing keys.
+        "verified-fetches"
       ];
       warn-dirty = false;
       system-features = [
