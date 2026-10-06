@@ -2,13 +2,14 @@
   outputs,
   lib,
   config,
+  osConfig,
   pkgs,
   ...
 }: let
   nixosConfigs = builtins.attrNames outputs.nixosConfigurations;
   systemConfigs = builtins.attrNames outputs.systemConfigs;
   homeConfigs = map (n: lib.last (lib.splitString "@" n)) (builtins.attrNames outputs.homeConfigurations);
-  configNames = lib.unique (homeConfigs ++ nixosConfigs ++ systemConfigs);
+  configNames = lib.remove osConfig.networking.hostName (lib.unique (homeConfigs ++ nixosConfigs ++ systemConfigs));
 
   trustedHosts = lib.flatten (["m7.rs"]
     ++ (map (host: [
