@@ -15,6 +15,18 @@ use crate::{
     model::{Priority, Task, TaskId, TaskList, TaskState},
 };
 
+// Count repository source reads in unit tests so scan-count regressions can be
+// asserted deterministically rather than with machine-dependent timing limits.
+#[cfg(test)]
+thread_local! {
+    static SOURCE_READ_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(crate) fn source_read_count() -> usize {
+    SOURCE_READ_COUNT.with(std::cell::Cell::get)
+}
+
 /// Which tasks a command operates on.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Scope {
@@ -177,7 +189,7 @@ pub fn load_lists(
     requested_lists: &[String],
     scope: Scope,
 ) -> Result<(TaskState, SourceSnapshot)> {
-    let (state, snapshot, _) = load_lists_inner(config, requested_lists, scope, false)?;
+    let (state, snapshot, _) = load_lists_inner(config, requested_lists, scope, None)?;
     Ok((state, snapshot))
 }
 
@@ -188,14 +200,25 @@ pub fn load_lists_with_recovery(
     requested_lists: &[String],
     scope: Scope,
 ) -> Result<(TaskState, SourceSnapshot, TaskState)> {
-    load_lists_inner(config, requested_lists, scope, true)
+    load_lists_inner(config, requested_lists, scope, Some(&BTreeSet::new()))
+}
+
+/// Read the current scope and recovery baseline together, including source-file
+/// mappings for hidden identities needed by a reconciliation transaction.
+pub fn load_lists_for_reconciliation(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+    retained_tasks: &BTreeSet<TaskId>,
+) -> Result<(TaskState, SourceSnapshot, TaskState)> {
+    load_lists_inner(config, requested_lists, scope, Some(retained_tasks))
 }
 
 fn load_lists_inner(
     config: &Config,
     requested_lists: &[String],
     scope: Scope,
-    include_recovery: bool,
+    retained_tasks: Option<&BTreeSet<TaskId>>,
 ) -> Result<(TaskState, SourceSnapshot, TaskState)> {
     let discovered = discover_lists(config)?;
     let mut state = TaskState { lists: Vec::new() };
@@ -213,6 +236,8 @@ fn load_lists_inner(
         let mut loaded = BTreeMap::new();
 
         for path in ics_files(list_dir)? {
+            #[cfg(test)]
+            SOURCE_READ_COUNT.with(|count| count.set(count.get() + 1));
             let bytes =
                 fs::read(&path).with_context(|| format!("failed to read {}", path.display()))?;
             let sha256 = Sha256::digest(&bytes).into();
@@ -247,7 +272,14 @@ fn load_lists_inner(
             );
         }
 
-        if include_recovery && scope != Scope::All {
+        if let Some(retained_tasks) = retained_tasks {
+            for id in retained_tasks {
+                if let Some(task) = loaded.get(id) {
+                    snapshot.task_files.insert(id.clone(), task.path.clone());
+                }
+            }
+        }
+        if retained_tasks.is_some() && scope != Scope::All {
             let tasks = project_tasks(loaded.clone(), Scope::All, &mut SourceSnapshot::default())
                 .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
             recovery.lists.push(TaskList {
@@ -263,7 +295,7 @@ fn load_lists_inner(
         });
     }
 
-    if include_recovery && scope == Scope::All {
+    if retained_tasks.is_some() && scope == Scope::All {
         recovery = state.clone();
     }
     Ok((state, snapshot, recovery))

@@ -51,13 +51,11 @@ pub fn apply(root: &Path) -> Result<ApplyOutcome> {
         .with_context(|| format!("failed to read {}", root.join("tasks.md").display()))?;
     let context = reconciliation_context(&loaded);
     match session_reconcile::prepare(&context, &text, &BTreeSet::new())? {
-        Prepared::NoChange { baseline } => {
-            let recovery = session_reconcile::load_recovery(&context)?;
+        Prepared::NoChange { baseline, recovery } => {
             accept_state(&loaded, baseline, recovery)?;
             Ok(ApplyOutcome::NoChange)
         }
-        Prepared::Inbound { current } => {
-            let recovery = session_reconcile::load_recovery(&context)?;
+        Prepared::Inbound { current, recovery } => {
             accept_state(&loaded, current, recovery)?;
             Ok(ApplyOutcome::Inbound)
         }

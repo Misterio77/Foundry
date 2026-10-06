@@ -813,10 +813,7 @@ fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
             document.state_diagnostic = None;
             Ok(Outcome::Quiet)
         }
-        Prepared::Inbound { current } => {
-            let recovery = session_reconcile::load_recovery(&reconciliation_context(document))?;
-            accept_inbound(document, current, recovery)
-        }
+        Prepared::Inbound { current, recovery } => accept_inbound(document, current, recovery),
         Prepared::Outgoing(_) if matches!(trigger, Trigger::Source) => Ok(Outcome::Quiet),
         Prepared::Outgoing(outgoing) => {
             let message = applied_changes_message(outgoing.plan.counts());
