@@ -20,7 +20,8 @@ in {
       ];
       extra-substituters = ["https://cache.m7.rs"];
       extra-trusted-public-keys = ["cache.m7.rs:kszZ/NSwE/TjhOcPPQ16IuUiuRSisdiIwhKZCxguaWg="];
-      trusted-users = ["@sudo"];
+      # Nix daemon trust is root-equivalent; sudo users must authenticate to elevate.
+      trusted-users = ["root"];
       warn-dirty = false;
     };
   };
