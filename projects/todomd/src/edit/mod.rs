@@ -55,13 +55,10 @@ pub fn create_session(
     options: SessionOptions,
 ) -> Result<CreatedSession> {
     let lists = resolve_lists(config, requested_lists)?;
-    let rendered = render_lists_with_view(config, &lists, options.scope, &options.view)?;
+    let (state, sources, recovery_baseline) =
+        repository::load_lists_with_recovery(config, &lists, options.scope)?;
+    let rendered = render_state_with_view(state, sources, &options.view)?;
     let warning = rendered.sources.unrepresentable_warning();
-    let recovery_baseline = if options.scope == Scope::All {
-        rendered.baseline.clone()
-    } else {
-        repository::load_lists(config, &lists, Scope::All)?.0
-    };
     let metadata = session::SessionMetadata {
         format_version: session::SESSION_FORMAT_VERSION,
         config: config.clone(),
@@ -104,6 +101,14 @@ pub fn render_lists_with_view(
     view: &View,
 ) -> Result<RenderedSession> {
     let (state, sources) = repository::load_lists(config, requested_lists, scope)?;
+    render_state_with_view(state, sources, view)
+}
+
+fn render_state_with_view(
+    state: TaskState,
+    sources: SourceSnapshot,
+    view: &View,
+) -> Result<RenderedSession> {
     let mut manifest = IdentityManifest::default();
     let markdown = render_with_view(&state, view, &mut manifest)?;
 

@@ -177,8 +177,29 @@ pub fn load_lists(
     requested_lists: &[String],
     scope: Scope,
 ) -> Result<(TaskState, SourceSnapshot)> {
+    let (state, snapshot, _) = load_lists_inner(config, requested_lists, scope, false)?;
+    Ok((state, snapshot))
+}
+
+/// Project the session document and its all-task recovery baseline from the
+/// same source read. Hidden tasks must remain recoverable without reparsing ICS.
+pub fn load_lists_with_recovery(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+) -> Result<(TaskState, SourceSnapshot, TaskState)> {
+    load_lists_inner(config, requested_lists, scope, true)
+}
+
+fn load_lists_inner(
+    config: &Config,
+    requested_lists: &[String],
+    scope: Scope,
+    include_recovery: bool,
+) -> Result<(TaskState, SourceSnapshot, TaskState)> {
     let discovered = discover_lists(config)?;
     let mut state = TaskState { lists: Vec::new() };
+    let mut recovery = TaskState { lists: Vec::new() };
     let mut snapshot = SourceSnapshot::default();
     let date_context = DateContext::local_now()?;
     let mut seen_task_ids = BTreeSet::new();
@@ -197,8 +218,7 @@ pub fn load_lists(
             let sha256 = Sha256::digest(&bytes).into();
             let contents = String::from_utf8(bytes)
                 .with_context(|| format!("{} is not valid UTF-8", path.display()))?;
-            let task = parse_task(&contents, &path, &date_context)?;
-            let manual_order = parse_manual_sort_order(&contents, &path)?;
+            let task = parse_source(&contents, &path, &date_context)?;
             snapshot.files.insert(
                 path.clone(),
                 SourceFile {
@@ -208,7 +228,7 @@ pub fn load_lists(
                 },
             );
 
-            let Some(task) = task else {
+            let Some((task, manual_order)) = task else {
                 continue;
             };
             if !seen_task_ids.insert(task.id.clone()) {
@@ -227,6 +247,14 @@ pub fn load_lists(
             );
         }
 
+        if include_recovery && scope != Scope::All {
+            let tasks = project_tasks(loaded.clone(), Scope::All, &mut SourceSnapshot::default())
+                .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
+            recovery.lists.push(TaskList {
+                name: requested.clone(),
+                tasks,
+            });
+        }
         let tasks = project_tasks(loaded, scope, &mut snapshot)
             .with_context(|| format!("invalid task hierarchy in list {requested:?}"))?;
         state.lists.push(TaskList {
@@ -235,7 +263,10 @@ pub fn load_lists(
         });
     }
 
-    Ok((state, snapshot))
+    if include_recovery && scope == Scope::All {
+        recovery = state.clone();
+    }
+    Ok((state, snapshot, recovery))
 }
 
 fn discover_lists(config: &Config) -> Result<BTreeMap<String, Vec<PathBuf>>> {
@@ -355,6 +386,7 @@ fn ics_files(list_dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
+#[derive(Clone)]
 struct LoadedTask {
     task: Task,
     path: PathBuf,
@@ -471,7 +503,16 @@ fn validate_acyclic(loaded: &LoadedTasks) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result<Option<Task>> {
+    Ok(parse_source(contents, path, date_context)?.map(|(task, _)| task))
+}
+
+fn parse_source(
+    contents: &str,
+    path: &Path,
+    date_context: &DateContext,
+) -> Result<Option<(Task, Option<i64>)>> {
     let unfolded = unfold(contents);
     let calendar = read_calendar(&unfolded)
         .map_err(anyhow::Error::msg)
@@ -500,47 +541,29 @@ fn parse_task(contents: &str, path: &Path, date_context: &DateContext) -> Result
     let start = temporal_property(todo, "DTSTART", path, date_context)?;
     let due = temporal_property(todo, "DUE", path, date_context)?;
     let categories = category_properties(&unfolded, path)?;
+    let manual_order = parse_manual_sort_order(todo, path)?;
     // SUMMARY is optional in RFC 5545, so a task without one is valid but has
     // nothing to render. Every scope skips it and reports it instead.
-    let Some(summary) =
-        optional_property(todo, "SUMMARY", path)?.filter(|summary| !summary.trim().is_empty())
-    else {
-        return Ok(Some(Task {
+    let summary = optional_property(todo, "SUMMARY", path)?
+        .filter(|summary| !summary.trim().is_empty())
+        .unwrap_or_default();
+
+    Ok(Some((
+        Task {
             id: TaskId::new(uid),
-            summary: String::new(),
+            summary,
             completed,
             priority,
             categories,
             parent,
             start,
             due,
-        }));
-    };
-
-    Ok(Some(Task {
-        id: TaskId::new(uid),
-        summary,
-        completed,
-        priority,
-        categories,
-        parent,
-        start,
-        due,
-    }))
+        },
+        manual_order,
+    )))
 }
 
-fn parse_manual_sort_order(contents: &str, path: &Path) -> Result<Option<i64>> {
-    let unfolded = unfold(contents);
-    let calendar = read_calendar(&unfolded)
-        .map_err(anyhow::Error::msg)
-        .with_context(|| format!("failed to parse {}", path.display()))?;
-    let Some(todo) = calendar
-        .components
-        .iter()
-        .find(|component| component.name.as_str().eq_ignore_ascii_case("VTODO"))
-    else {
-        return Ok(None);
-    };
+fn parse_manual_sort_order(todo: &Component, path: &Path) -> Result<Option<i64>> {
     optional_property(todo, "X-APPLE-SORT-ORDER", path)?
         .map(|value| {
             value.trim().parse::<i64>().with_context(|| {
@@ -1136,6 +1159,100 @@ mod tests {
             ]
         );
         assert_eq!(all_sources.unrepresentable.len(), 1);
+    }
+
+    #[test]
+    fn session_projection_preserves_hidden_recovery_and_scope_specific_warnings() {
+        let directory = tempfile::tempdir().unwrap();
+        let list = directory.path().join("list");
+        fs::create_dir(&list).unwrap();
+        fs::write(list.join("displayname"), "Work\n").unwrap();
+        write_todo(&list, "active", Some("Active root"), None, None);
+        write_todo(
+            &list,
+            "done-child",
+            Some("Done child"),
+            Some("COMPLETED"),
+            Some("active"),
+        );
+        write_todo(
+            &list,
+            "grandchild",
+            Some("Hidden grandchild"),
+            None,
+            Some("done-child"),
+        );
+        write_todo(&list, "done", Some("Done root"), Some("COMPLETED"), None);
+        write_todo(
+            &list,
+            "hidden-child",
+            Some("Hidden child"),
+            None,
+            Some("done"),
+        );
+        write_todo(&list, "blank", None, None, None);
+        write_todo(&list, "done-blank", None, Some("COMPLETED"), None);
+        let config = Config::new(vec![directory.path().to_path_buf()]).unwrap();
+        let requested = ["Work".to_owned()];
+
+        let (active, sources, recovery) =
+            load_lists_with_recovery(&config, &requested, Scope::Active).unwrap();
+        assert_eq!(
+            active.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.id.as_str())
+                .collect::<Vec<_>>(),
+            ["active", "done-child"]
+        );
+        assert_eq!(
+            recovery.lists[0]
+                .tasks
+                .iter()
+                .map(|task| task.id.as_str())
+                .collect::<Vec<_>>(),
+            ["active", "done-child", "grandchild", "done", "hidden-child"]
+        );
+        assert_eq!(sources.unrepresentable, [list.join("blank.ics")]);
+        assert_eq!(sources.task_files.len(), 2);
+        assert_eq!(sources.files.len(), 7);
+
+        let (expected_active, expected_sources) =
+            load_lists(&config, &requested, Scope::Active).unwrap();
+        let (expected_all, _) = load_lists(&config, &requested, Scope::All).unwrap();
+        assert_eq!(active, expected_active);
+        assert_eq!(recovery, expected_all);
+        assert_eq!(sources.file_hashes(), expected_sources.file_hashes());
+        assert_eq!(sources.task_files, expected_sources.task_files);
+
+        let (all, all_sources, recovery) =
+            load_lists_with_recovery(&config, &requested, Scope::All).unwrap();
+        assert_eq!(all, expected_all);
+        assert_eq!(recovery, all);
+        assert_eq!(
+            all_sources.unrepresentable,
+            [list.join("blank.ics"), list.join("done-blank.ics")]
+        );
+        assert_eq!(all_sources.task_files.len(), 5);
+    }
+
+    #[test]
+    fn parses_manual_order_together_with_task_fields() {
+        let calendar = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nUID:a\r\nSUMMARY:Ordered task\r\nPRIORITY:1\r\nX-APPLE-SORT-ORDER:-42\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+        let (task, order) = parse_source(calendar, Path::new("ordered.ics"), &date_context())
+            .unwrap()
+            .unwrap();
+        assert_eq!(task.id.as_str(), "a");
+        assert_eq!(task.summary, "Ordered task");
+        assert_eq!(task.priority, Priority::High);
+        assert_eq!(order, Some(-42));
+        let without_order = calendar.replace("X-APPLE-SORT-ORDER:-42\r\n", "");
+        let (same_task, order) =
+            parse_source(&without_order, Path::new("ordered.ics"), &date_context())
+                .unwrap()
+                .unwrap();
+        assert_eq!(same_task, task);
+        assert_eq!(order, None);
     }
 
     #[test]
