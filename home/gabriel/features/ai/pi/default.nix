@@ -40,7 +40,6 @@ in {
       extensions = [customExtensions];
       enableInstallTelemetry = false;
       webSearch = {
-        braveApiKeyFile = osConfig.sops.secrets.brave_api_key.path or null;
         kagiSessionTokenFile = osConfig.sops.secrets.kagi_session_token.path or null;
       };
     };
