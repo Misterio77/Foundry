@@ -769,6 +769,53 @@ fn lsp_applies_saves_and_loads_source_changes() {
             "contentChanges": [{"text": canonical}]
         }
     }));
+    // Reject an inbound update: reloading tasks.md must still recover the
+    // accepted document, without losing the buffer that failed to refresh.
+    let source = fs::read_to_string(&source_path).unwrap();
+    fs::write(
+        &source_path,
+        source.replace("SUMMARY:Changed externally", "SUMMARY:Rejected update"),
+    )
+    .unwrap();
+    let (accepted, _) = receive_workspace_edit_result(&mut peer, "Rejected update", false);
+    receive_progress_end(&mut peer);
+    assert_eq!(fs::read_to_string(session.tasks_path()).unwrap(), accepted);
+    assert_eq!(
+        fs::read_to_string(session.path().join("unaccepted.md")).unwrap(),
+        canonical
+    );
+
+    // Saving the stale buffer rewrites the file. The out-of-sync guard must
+    // restore it again so the instruction to reload remains actionable.
+    fs::write(session.tasks_path(), &canonical).unwrap();
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didSave",
+        "params": {"textDocument": {"uri": uri}, "text": canonical}
+    }));
+    loop {
+        let message = peer.read();
+        if message["method"] == "window/showMessage"
+            && message["params"]["message"]
+                .as_str()
+                .is_some_and(|text| text.contains("live document is out of sync"))
+        {
+            break;
+        }
+    }
+    assert_eq!(fs::read_to_string(session.tasks_path()).unwrap(), accepted);
+    assert_eq!(
+        fs::read_to_string(session.path().join("unaccepted.md")).unwrap(),
+        canonical
+    );
+    peer.send(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": 6},
+            "contentChanges": [{"text": accepted}]
+        }
+    }));
     peer.send(json!({
         "jsonrpc": "2.0",
         "id": 50,
@@ -803,7 +850,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
         "params": {
-            "textDocument": {"uri": uri, "version": 6},
+            "textDocument": {"uri": uri, "version": 7},
             "contentChanges": [{"text": flat}]
         }
     }));
@@ -833,7 +880,7 @@ fn lsp_applies_saves_and_loads_source_changes() {
         "jsonrpc": "2.0",
         "method": "textDocument/didChange",
         "params": {
-            "textDocument": {"uri": uri, "version": 7},
+            "textDocument": {"uri": uri, "version": 8},
             "contentChanges": [{"text": default_view}]
         }
     }));
@@ -860,6 +907,14 @@ fn read_response(peer: &mut LspPeer, id: u64) -> Value {
 }
 
 fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Value>) {
+    receive_workspace_edit_result(peer, expected, true)
+}
+
+fn receive_workspace_edit_result(
+    peer: &mut LspPeer,
+    expected: &str,
+    applied: bool,
+) -> (String, Vec<Value>) {
     let mut events = Vec::new();
     for _ in 0..32 {
         let message = peer.read();
@@ -885,7 +940,7 @@ fn receive_workspace_edit(peer: &mut LspPeer, expected: &str) -> (String, Vec<Va
         peer.send(json!({
             "jsonrpc": "2.0",
             "id": message["id"],
-            "result": {"applied": true}
+            "result": {"applied": applied}
         }));
         return (new_text, events);
     }

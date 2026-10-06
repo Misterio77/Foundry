@@ -205,6 +205,12 @@ impl Backend {
                     }
                     Err(error) => {
                         state.synchronized = false;
+                        let error = match restore_reloadable_document(&state) {
+                            Ok(()) => error,
+                            Err(recovery) => error.context(format!(
+                                "failed to restore the accepted session document: {recovery:#}"
+                            )),
+                        };
                         state.state_diagnostic =
                             Some(diagnostic(&error, &state.text, DiagnosticSeverity::ERROR));
                         message = Some((MessageType::ERROR, format!("todomd: {error:#}")));
@@ -743,10 +749,19 @@ fn validate_document(document: &LiveDocument) -> Result<()> {
     session_reconcile::validate(&reconciliation_context(document), &document.text)
 }
 
+fn restore_reloadable_document(document: &LiveDocument) -> Result<()> {
+    session::close_live(&document.root, &document.accepted_text, &document.text)?;
+    Ok(())
+}
+
 fn reconcile(document: &mut LiveDocument, trigger: Trigger) -> Result<Outcome> {
     if !document.synchronized {
+        // A save may have overwritten tasks.md with the stale buffer again.
+        // Preserve those edits before restoring the file the editor can reload.
+        restore_reloadable_document(document)
+            .context("failed to restore the accepted session document")?;
         return Err(anyhow!(
-            "live document is out of sync; reload the accepted session document before saving"
+            "live document is out of sync; reload tasks.md before saving; unapplied buffer changes are preserved in unaccepted.md"
         ));
     }
     let prepared = session_reconcile::prepare(
