@@ -68,8 +68,11 @@ manual ranks sort last; a specific time sorts before the all-day value on the
 same date. Task identity is the final deterministic tie-breaker. `manual` reads
 `X-APPLE-SORT-ORDER`, but Markdown reordering does not write it.
 
-`after_apply` runs directly after a successful source transaction. Failure is
-reported through LSP without rolling back the already-applied transaction.
+`after_apply` runs after a successful source transaction and, in live mode, after
+the editor accepts the canonical document update. Live hooks run in a per-session
+background queue: edits, saves, and inbound source updates continue while a hook
+runs, but hooks do not overlap. Failure is reported through LSP without rolling
+back the already-applied transaction or stopping later queued hooks.
 
 ## Commands
 

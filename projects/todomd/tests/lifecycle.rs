@@ -6,6 +6,12 @@ use std::{
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{ChildStdin, ChildStdout, Command, Output, Stdio},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde_json::{Value, json};
@@ -897,6 +903,192 @@ fn lsp_applies_saves_and_loads_source_changes() {
     assert!(output.status.success(), "{}", output_text(&output));
 }
 
+#[test]
+fn lsp_reconciles_while_hooks_run_and_serializes_queued_hooks() {
+    let case = Case::new(0);
+    let mut config = Config::load(Some(&case.config)).unwrap();
+    let release = case._root.path().join("release-hook");
+    let hook = case._root.path().join("slow-hook");
+    write_executable(
+        &hook,
+        "#!/bin/sh\nfirst=false\n[ -e \"$1\" ] || first=true\nprintf 'start\\n' >> \"$1\"\nwhile [ ! -e \"$2\" ]; do sleep 0.02; done\nprintf 'end\\n' >> \"$1\"\nif $first; then exit 1; fi\n",
+    );
+    config.hooks.after_apply = Some(vec![
+        "sh".into(),
+        hook.to_string_lossy().into_owned(),
+        case.hook_log.to_string_lossy().into_owned(),
+        release.to_string_lossy().into_owned(),
+    ]);
+    let lists = vec!["Postgrad".to_owned()];
+    let rendered = edit::render_lists(&config, &lists, Scope::Active).unwrap();
+    let recovery = repository::load_lists(&config, &lists, Scope::All)
+        .unwrap()
+        .0;
+    let metadata = SessionMetadata {
+        format_version: SESSION_FORMAT_VERSION,
+        view: config.view(None).unwrap(),
+        config,
+        lists,
+        scope: Scope::Active,
+        hooks_enabled: true,
+    };
+    let session = Session::create(&rendered, &metadata, &recovery).unwrap();
+    let uri = format!("file://{}", session.tasks_path().display());
+    let mut child = Command::new(env!("CARGO_BIN_EXE_todomd"))
+        .arg("lsp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut peer = LspPeer {
+        stdin: child.stdin.take().unwrap(),
+        stdout: BufReader::new(child.stdout.take().unwrap()),
+    };
+    peer.send(json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"capabilities": {
+            "workspace": {"applyEdit": true, "workspaceEdit": {"documentChanges": true}},
+            "window": {"workDoneProgress": true}
+        }}
+    }));
+    read_response(&mut peer, 1);
+    peer.send(json!({"jsonrpc": "2.0", "method": "initialized", "params": {}}));
+    peer.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didOpen",
+        "params": {"textDocument": {
+            "uri": uri, "languageId": "markdown", "version": 1, "text": rendered.markdown
+        }}
+    }));
+
+    let edited = rendered.markdown.replace("Write paper draft", "First save");
+    send_buffer_change(&mut peer, &uri, 2, &edited);
+    send_buffer_save(&mut peer, &uri);
+    let (canonical, _) = receive_workspace_edit_checked(&mut peer, "First save", true, Some(2));
+    send_buffer_change(&mut peer, &uri, 3, &canonical);
+    loop {
+        let message = peer.read();
+        if message["method"] == "window/workDoneProgress/create" {
+            peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
+        } else if message["method"] == "$/progress"
+            && message["params"]["value"]["message"] == "Running after_apply hook"
+        {
+            break;
+        }
+    }
+
+    // A watchdog releases a regressed blocking hook, turning deadlock into a
+    // bounded failure. The test must reconcile before this fallback fires.
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let watchdog_timeout = Arc::clone(&timed_out);
+    let watchdog_release = release.clone();
+    let watchdog = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !watchdog_release.exists() {
+            if Instant::now() >= deadline {
+                watchdog_timeout.store(true, Ordering::Relaxed);
+                fs::write(&watchdog_release, "").unwrap();
+                break;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    });
+
+    let edited = canonical.replace("First save", "Second save");
+    send_buffer_change(&mut peer, &uri, 4, &edited);
+    send_buffer_save(&mut peer, &uri);
+    let (canonical, _) = receive_workspace_edit_checked(&mut peer, "Second save", true, Some(4));
+    send_buffer_change(&mut peer, &uri, 5, &canonical);
+
+    // Source watching must also keep working during a hook, and may not start
+    // another after_apply for an inbound update.
+    let source_path = case.calendars.join("Postgrad/write.ics");
+    let source = fs::read_to_string(&source_path).unwrap();
+    fs::write(
+        &source_path,
+        source.replace("SUMMARY:Second save", "SUMMARY:Inbound during hook"),
+    )
+    .unwrap();
+    let (canonical, _) =
+        receive_workspace_edit_checked(&mut peer, "Inbound during hook", true, Some(5));
+    receive_progress_end(&mut peer);
+    send_buffer_change(&mut peer, &uri, 6, &canonical);
+    let edited = canonical.replace("Inbound during hook", "Third save");
+    send_buffer_change(&mut peer, &uri, 7, &edited);
+
+    // At least one hook has actually reached the shell, and the second must
+    // remain queued until the first exits.
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while !case.hook_log.exists() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+    let blocked_log = case.hooks();
+    fs::write(&release, "").unwrap();
+    watchdog.join().unwrap();
+    assert!(
+        !timed_out.load(Ordering::Relaxed),
+        "reconciliation blocked behind a hook"
+    );
+    assert_eq!(blocked_log, "start\n", "hooks overlapped");
+
+    // A failed first hook reports its error without poisoning reconciliation
+    // or stopping the queued second hook.
+    let mut ended = 0;
+    let mut reported_failure = false;
+    while ended < 2 || !reported_failure {
+        let message = peer.read();
+        if message["method"] == "window/workDoneProgress/create" {
+            peer.send(json!({"jsonrpc": "2.0", "id": message["id"], "result": null}));
+        } else if message["method"] == "$/progress" && message["params"]["value"]["kind"] == "end" {
+            ended += 1;
+        } else if message["method"] == "window/showMessage" && message["params"]["type"] == 1 {
+            assert!(
+                message["params"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("after_apply hook exited unsuccessfully")
+            );
+            reported_failure = true;
+        }
+    }
+    assert_eq!(case.hooks(), "start\nend\nstart\nend\n");
+    send_buffer_save(&mut peer, &uri);
+    let (canonical, events) =
+        receive_workspace_edit_checked(&mut peer, "Third save", true, Some(7));
+    assert_hook_follows_workspace_edit(&mut peer, &events);
+    assert!(
+        fs::read_to_string(&source_path)
+            .unwrap()
+            .contains("SUMMARY:Third save")
+    );
+    assert_eq!(case.hooks(), "start\nend\nstart\nend\nstart\nend\n");
+    send_buffer_change(&mut peer, &uri, 8, &canonical);
+    peer.send(json!({"jsonrpc": "2.0", "method": "textDocument/didClose", "params": {"textDocument": {"uri": uri}}}));
+    peer.send(json!({"jsonrpc": "2.0", "id": 99, "method": "shutdown"}));
+    read_response(&mut peer, 99);
+    peer.send(json!({"jsonrpc": "2.0", "method": "exit"}));
+    drop(peer);
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", output_text(&output));
+}
+
+fn send_buffer_change(peer: &mut LspPeer, uri: &str, version: i32, text: &str) {
+    peer.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didChange",
+        "params": {
+            "textDocument": {"uri": uri, "version": version},
+            "contentChanges": [{"text": text}]
+        }
+    }));
+}
+
+fn send_buffer_save(peer: &mut LspPeer, uri: &str) {
+    peer.send(json!({
+        "jsonrpc": "2.0", "method": "textDocument/didSave",
+        "params": {"textDocument": {"uri": uri}}
+    }));
+}
+
 fn read_response(peer: &mut LspPeer, id: u64) -> Value {
     loop {
         let message = peer.read();
@@ -915,6 +1107,15 @@ fn receive_workspace_edit_result(
     expected: &str,
     applied: bool,
 ) -> (String, Vec<Value>) {
+    receive_workspace_edit_checked(peer, expected, applied, None)
+}
+
+fn receive_workspace_edit_checked(
+    peer: &mut LspPeer,
+    expected: &str,
+    applied: bool,
+    version: Option<i32>,
+) -> (String, Vec<Value>) {
     let mut events = Vec::new();
     for _ in 0..32 {
         let message = peer.read();
@@ -931,6 +1132,12 @@ fn receive_workspace_edit_result(
         }
         if message["method"] != "workspace/applyEdit" {
             continue;
+        }
+        if let Some(version) = version {
+            assert_eq!(
+                message["params"]["edit"]["documentChanges"][0]["textDocument"]["version"],
+                version
+            );
         }
         let new_text = message["params"]["edit"]["documentChanges"][0]["edits"][0]["newText"]
             .as_str()

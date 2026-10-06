@@ -278,8 +278,13 @@ requests a workspace edit without entering reconciliation. Clients supporting
 next configured view.
 
 The optional `after_apply` hook runs only after a successful outgoing
-transaction. Hook failure is reported but cannot roll back source changes that
-already succeeded.
+transaction. In live mode it is queued after the editor accepts the canonical
+workspace edit. Each attached session has a background worker that runs queued
+hooks serially, without holding the document mutex or keeping the save handler
+pending. Typing, later saves, and inbound source reconciliation remain responsive
+while a hook runs. Closing a document lets already queued hooks drain while the
+server remains running. Hook failure is reported but cannot roll back source
+changes that already succeeded or prevent later queued hooks from running.
 
 ## Scripting boundary
 

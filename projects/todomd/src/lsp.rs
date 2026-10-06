@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow, bail};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc};
 use tower_lsp::{
     Client, LanguageServer, LspService, Server,
     jsonrpc::{ErrorCode, Result as LspResult},
@@ -100,7 +100,12 @@ impl Backend {
             Arc::clone(&self.work_done_progress),
         )?;
         let document = Arc::new(Mutex::new(LiveDocument::new(
-            text, version, loaded, watcher, lock,
+            text,
+            version,
+            loaded,
+            watcher,
+            lock,
+            after_apply_queue(self.client.clone(), Arc::clone(&self.work_done_progress)),
         )));
         self.documents
             .lock()
@@ -192,12 +197,16 @@ impl Backend {
                         state.synchronized = true;
                         source_loaded = matches!(trigger, Trigger::Source);
                         if run_after_apply {
-                            // Refresh the editor before a potentially slow
-                            // synchronization hook starts.
-                            self.client.show_message(kind, &text_message).await;
-                            if let Err(error) = self.run_after_apply(state.lifecycle.clone()).await
+                            // Submit in reconciliation order, but never wait
+                            // for the hook while holding the document mutex.
+                            self.client.show_message(kind, text_message).await;
+                            if state.lifecycle.has_after_apply()
+                                && state.after_apply.send(state.lifecycle.clone()).is_err()
                             {
-                                message = Some((MessageType::ERROR, format!("todomd: {error:#}")));
+                                message = Some((
+                                    MessageType::ERROR,
+                                    "todomd: after_apply worker stopped".into(),
+                                ));
                             }
                         } else {
                             message = Some((kind, text_message));
@@ -240,55 +249,13 @@ impl Backend {
         }
     }
 
-    async fn run_after_apply(&self, lifecycle: Lifecycle) -> Result<()> {
-        if !lifecycle.has_after_apply() {
-            return lifecycle.after_apply();
-        }
-        let progress = self.begin_progress("Running after_apply hook").await;
-        let result = match tokio::task::spawn_blocking(move || lifecycle.after_apply()).await {
-            Ok(result) => result,
-            Err(error) => Err(anyhow!("after_apply hook task failed: {error}")),
-        };
-        if let Some(progress) = progress {
-            progress
-                .finish(Some(if result.is_ok() {
-                    "after_apply hook finished"
-                } else {
-                    "after_apply hook failed"
-                }))
-                .await;
-        }
-        result
-    }
-
     async fn begin_progress(&self, message: &str) -> Option<ActiveProgress> {
-        if !self.work_done_progress.load(Ordering::Relaxed) {
-            return None;
-        }
-        let token = NumberOrString::String(format!("todomd-{}", uuid::Uuid::new_v4()));
-        self.client
-            .send_request::<WorkDoneProgressCreate>(WorkDoneProgressCreateParams {
-                token: token.clone(),
-            })
-            .await
-            .ok()?;
-        self.client
-            .send_notification::<Progress>(ProgressParams {
-                token: token.clone(),
-                value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(
-                    WorkDoneProgressBegin {
-                        title: "todomd".into(),
-                        cancellable: Some(false),
-                        message: Some(message.into()),
-                        percentage: None,
-                    },
-                )),
-            })
-            .await;
-        Some(ActiveProgress {
-            client: self.client.clone(),
-            token,
-        })
+        begin_progress(
+            &self.client,
+            self.work_done_progress.load(Ordering::Relaxed),
+            message,
+        )
+        .await
     }
 
     async fn change_view_command(&self) -> Result<()> {
@@ -636,6 +603,73 @@ impl LanguageServer for Backend {
     }
 }
 
+// One worker per session keeps hooks ordered without tying up an LSP request
+// or blocking buffer notifications. Closing the document drops the sender;
+// already queued hooks drain before the worker exits.
+fn after_apply_queue(
+    client: Client,
+    work_done_progress: Arc<AtomicBool>,
+) -> mpsc::UnboundedSender<Lifecycle> {
+    let (sender, mut receiver) = mpsc::unbounded_channel::<Lifecycle>();
+    tokio::spawn(async move {
+        while let Some(lifecycle) = receiver.recv().await {
+            let progress = begin_progress(
+                &client,
+                work_done_progress.load(Ordering::Relaxed),
+                "Running after_apply hook",
+            )
+            .await;
+            let result = match tokio::task::spawn_blocking(move || lifecycle.after_apply()).await {
+                Ok(result) => result,
+                Err(error) => Err(anyhow!("after_apply hook task failed: {error}")),
+            };
+            if let Some(progress) = progress {
+                progress
+                    .finish(Some(if result.is_ok() {
+                        "after_apply hook finished"
+                    } else {
+                        "after_apply hook failed"
+                    }))
+                    .await;
+            }
+            if let Err(error) = result {
+                client
+                    .show_message(MessageType::ERROR, format!("todomd: {error:#}"))
+                    .await;
+            }
+        }
+    });
+    sender
+}
+
+async fn begin_progress(client: &Client, enabled: bool, message: &str) -> Option<ActiveProgress> {
+    if !enabled {
+        return None;
+    }
+    let token = NumberOrString::String(format!("todomd-{}", uuid::Uuid::new_v4()));
+    client
+        .send_request::<WorkDoneProgressCreate>(WorkDoneProgressCreateParams {
+            token: token.clone(),
+        })
+        .await
+        .ok()?;
+    client
+        .send_notification::<Progress>(ProgressParams {
+            token: token.clone(),
+            value: ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(WorkDoneProgressBegin {
+                title: "todomd".into(),
+                cancellable: Some(false),
+                message: Some(message.into()),
+                percentage: None,
+            })),
+        })
+        .await;
+    Some(ActiveProgress {
+        client: client.clone(),
+        token,
+    })
+}
+
 struct LiveDocument {
     text: String,
     accepted_text: String,
@@ -647,6 +681,7 @@ struct LiveDocument {
     scope: Scope,
     hooks_enabled: bool,
     lifecycle: Lifecycle,
+    after_apply: mpsc::UnboundedSender<Lifecycle>,
     view: View,
     baseline: TaskState,
     recovery_baseline: TaskState,
@@ -665,6 +700,7 @@ impl LiveDocument {
         loaded: LoadedSession,
         watcher: RecommendedWatcher,
         lock: session::SessionLock,
+        after_apply: mpsc::UnboundedSender<Lifecycle>,
     ) -> Self {
         let lifecycle =
             Lifecycle::live(&loaded.metadata.config.hooks, loaded.metadata.hooks_enabled);
@@ -694,6 +730,7 @@ impl LiveDocument {
             scope: loaded.metadata.scope,
             hooks_enabled: loaded.metadata.hooks_enabled,
             lifecycle,
+            after_apply,
             view: loaded.metadata.view,
             baseline: loaded.baseline,
             recovery_baseline: loaded.recovery_baseline,
