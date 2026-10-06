@@ -11,7 +11,8 @@ in {
     settings = {
       extra-substituters = lib.mkAfter ["https://cache.m7.rs"];
       extra-trusted-public-keys = ["cache.m7.rs:kszZ/NSwE/TjhOcPPQ16IuUiuRSisdiIwhKZCxguaWg="];
-      experimental-features = [
+      # Add user features without overriding the system's enabled features.
+      extra-experimental-features = [
         "nix-command"
         "flakes"
         "ca-derivations"

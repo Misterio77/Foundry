@@ -6,7 +6,8 @@
   nix = {
     package = lib.mkDefault pkgs.nix;
     settings = {
-      experimental-features = [
+      # Add user features without overriding the system's enabled features.
+      extra-experimental-features = [
         "nix-command"
         "flakes"
         "ca-derivations"
