@@ -5,7 +5,7 @@
     ../common/optional/wireless.nix
   ];
 
-  _module.args.systemManagerHostName = "electra";
+  networking.hostName = "electra";
   nixpkgs.hostPlatform = "x86_64-linux";
   networking.wireless = {
     # system-manager lacks the NixOS D-Bus module that installs its policy.

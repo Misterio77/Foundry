@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  systemManagerHostName,
   ...
 }: let
   inherit (config.users.users.gabriel) home;
@@ -52,5 +51,5 @@ in {
     };
   };
 
-  home-manager.users.gabriel = import ../../../../../home/gabriel/${systemManagerHostName}.nix;
+  home-manager.users.gabriel = import ../../../../../home/gabriel/${config.networking.hostName}.nix;
 }
