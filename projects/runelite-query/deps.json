@@ -203,9 +203,9 @@
   }
  },
  "https://repo.runelite.net/net": {
-  "runelite#client/1.12.35": {
-   "jar": "sha256-O88cL5jGxvg0NVwnsU+pLLc5ZX/XubDOWI83fNci3SE=",
-   "pom": "sha256-Y5Uosxhqnlmrzv3j2oSZAkTyX6sUIUXb5YKdUWMg+ww="
+  "runelite#client/1.13.1": {
+   "jar": "sha256-Wr7XyWio64HAwtU05YNpyHUSnuLCRrA8++hMzYkcjcY=",
+   "pom": "sha256-rKyjtbpIKgPQJNCb19hSLyzSPgvbirSPvHLN4fTF3XY="
   },
   "runelite#discord/1.4": {
    "jar": "sha256-ZAlyP9E0ljht+xM1qXlNwJGdthMlIvK3SG1nNPxd9uU=",
@@ -221,13 +221,13 @@
    "module": "sha256-dyoqpYvYyZfluvJG6Ylto5BC1yi167BChDXfgLm3Lhs=",
    "pom": "sha256-cNMBZGiyviMljXRKEOnBk/FT5oJI9OwicSBVeb7RGOU="
   },
-  "runelite#injected-client/1.12.35": {
-   "jar": "sha256-GHFdN6C1HJlf+qjsjYnK/+HCv6tVmNaD9XxahBITtBI=",
-   "pom": "sha256-tElsafmzm71/ZyZAHgf6ulNqH/nTaOOxzxsfk3mqXCo="
+  "runelite#injected-client/1.13.1": {
+   "jar": "sha256-mB66SIj0zw7I/XTwm57YVyjXsryMH1cZSIOu1k3sdoo=",
+   "pom": "sha256-q/h4VVqVOG5Ex0LO2AGlZ3BU7VDPHFcfjs1Y6+qKp+0="
   },
-  "runelite#jshell/1.12.35": {
+  "runelite#jshell/1.13.1": {
    "jar": "sha256-M2KPB5axP4PVbaZhHWgsN5kgKvY0S3WnkUqf0jM+m2A=",
-   "pom": "sha256-z4qoFgYUbshLKI43ML/9E8TK+BrAKhqEUyzC6SB48x0="
+   "pom": "sha256-jTilPl+nbC+HCBJQqQKu+gm5WuutZLfJnAzecew0Bwo="
   },
   "runelite#rlawt/1.8": {
    "jar": "sha256-JPm2132N6BSo2s3fnE4iJ9pwRZN1ynLMlhroHTPv91o=",
@@ -239,16 +239,16 @@
   "runelite#rlicn/1.1/windows": {
    "jar": "sha256-bHYn5Tr2scVvPP9TL8m5SW2T4crGVexQbI8B52COae8="
   },
-  "runelite#runelite-api/1.12.35": {
-   "jar": "sha256-iXME5lACMLjf6zMOXHlBzgx3iCmaLoa0tjrBt2OT4bk=",
-   "pom": "sha256-/d4EBGCbyePfccHknZxjMqh++iQLrYIPDPvV8+l3nxM="
+  "runelite#runelite-api/1.13.1": {
+   "jar": "sha256-W4cF89jyp43gWe1DtNc0O5tuI65pJFqIfhQmhCRmCvk=",
+   "pom": "sha256-8aNKaL9smswhRw3g4XQk9hRdmkzegGgpDyajvQzovOY="
   },
-  "runelite/arn#http-api/1.2.23": {
-   "jar": "sha256-r++lI5+25Df5PMQcVPMDDPexZjOXprNPG74wZRFMm2Y=",
-   "pom": "sha256-fJm0UG1MXtMnJ0WET8/6dSgNm06Gkh01H+fAF98apa4="
+  "runelite/arn#http-api/1.2.25": {
+   "jar": "sha256-ozS5bbo6N7/v/aRIHoYSDKkzx8mDAn/iPtsnbAyRmfY=",
+   "pom": "sha256-FlaEqokBaUG9gJvBlJCgvyI1OYJ4ifa/+XM2b9I7Eh8="
   },
-  "runelite/arn#parent/1.2.23": {
-   "pom": "sha256-VjyopuyVM8a726zbHwPjg7PNqcoBirUv/mQYyza7axE="
+  "runelite/arn#parent/1.2.25": {
+   "pom": "sha256-cIpo0WCbw7iuBJ7axD/KK/myXDFizYi96xIlHH6+TmA="
   }
  }
 }

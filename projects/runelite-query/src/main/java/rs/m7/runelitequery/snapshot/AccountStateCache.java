@@ -136,7 +136,7 @@ public final class AccountStateCache
 			}
 			ItemComposition definition = client.getItemDefinition(id);
 			String name = definition == null ? null : definition.getName();
-			int price = itemManager == null ? 0 : Math.max(0, itemManager.getItemPrice(id));
+			long price = itemManager == null ? 0 : Math.max(0L, itemManager.getItemPrice(id));
 			synchronized (this)
 			{
 				metadata.put(id, new ItemMetadata(name, price, System.currentTimeMillis()));
@@ -220,10 +220,10 @@ public final class AccountStateCache
 	public static final class ItemMetadata
 	{
 		private final String name;
-		private final int marketPrice;
+		private final long marketPrice;
 		private final long observedAt;
 
-		private ItemMetadata(String name, int marketPrice, long observedAt)
+		private ItemMetadata(String name, long marketPrice, long observedAt)
 		{
 			this.name = name;
 			this.marketPrice = marketPrice;
@@ -231,7 +231,7 @@ public final class AccountStateCache
 		}
 
 		public String getName() { return name; }
-		public int getMarketPrice() { return marketPrice; }
+		public long getMarketPrice() { return marketPrice; }
 		public long getObservedAt() { return observedAt; }
 	}
 
@@ -258,13 +258,13 @@ public final class AccountStateCache
 		private final int slot;
 		private final String state;
 		private final int itemId;
-		private final int price;
+		private final long price;
 		private final int totalQuantity;
 		private final int completedQuantity;
-		private final int spent;
+		private final long spent;
 
-		private OfferSnapshot(int slot, String state, int itemId, int price,
-			int totalQuantity, int completedQuantity, int spent)
+		private OfferSnapshot(int slot, String state, int itemId, long price,
+			int totalQuantity, int completedQuantity, long spent)
 		{
 			this.slot = slot;
 			this.state = state;
@@ -278,10 +278,10 @@ public final class AccountStateCache
 		public int getSlot() { return slot; }
 		public String getState() { return state; }
 		public int getItemId() { return itemId; }
-		public int getPrice() { return price; }
+		public long getPrice() { return price; }
 		public int getTotalQuantity() { return totalQuantity; }
 		public int getCompletedQuantity() { return completedQuantity; }
-		public int getSpent() { return spent; }
+		public long getSpent() { return spent; }
 	}
 
 	public static final class ContainerSnapshot

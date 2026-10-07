@@ -134,11 +134,11 @@ final class AccountStateSnapshotReader
 			for (OfferSnapshot offer : source.getOffers())
 			{
 				int id = offer.getItemId();
-				int marketPrice = metadata(id).marketPrice;
+				long marketPrice = metadata(id).marketPrice;
 				int total = offer.getTotalQuantity();
 				int completed = offer.getCompletedQuantity();
 				int remaining = Math.max(0, total - completed);
-				long offerListed = (long) offer.getPrice() * total;
+				long offerListed = offer.getPrice() * total;
 				long offerValue = offerValue(offer.getState(), marketPrice, offer.getPrice(),
 					total, completed, remaining, offer.getSpent());
 				JsonObject value = new JsonObject();
@@ -403,18 +403,18 @@ final class AccountStateSnapshotReader
 		return component;
 	}
 
-	private static long offerValue(String state, int marketPrice, int listedPrice,
-		int total, int completed, int remaining, int spent)
+	private static long offerValue(String state, long marketPrice, long listedPrice,
+		int total, int completed, int remaining, long spent)
 	{
 		if (state.contains("SELL"))
 		{
-			return (long) spent + (long) marketPrice * remaining;
+			return spent + marketPrice * remaining;
 		}
 		if (state.contains("BUY"))
 		{
-			return (long) marketPrice * completed + (long) listedPrice * remaining;
+			return marketPrice * completed + listedPrice * remaining;
 		}
-		return (long) marketPrice * total;
+		return marketPrice * total;
 	}
 
 	private static Set<String> strings(JsonObject arguments, String name)
@@ -467,9 +467,9 @@ final class AccountStateSnapshotReader
 	private static final class ItemMetadata
 	{
 		private final String name;
-		private final int marketPrice;
+		private final long marketPrice;
 
-		private ItemMetadata(String name, int marketPrice)
+		private ItemMetadata(String name, long marketPrice)
 		{
 			this.name = name;
 			this.marketPrice = marketPrice;

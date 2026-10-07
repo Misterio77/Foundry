@@ -252,7 +252,7 @@ public class RuneLiteSnapshotProvider implements SnapshotProvider
 				}
 				else
 				{
-					int price = Math.max(0, itemManager.getItemPrice(id));
+					long price = Math.max(0L, itemManager.getItemPrice(id));
 					value.addProperty("name", definition.getName());
 					if (price == 0)
 					{
