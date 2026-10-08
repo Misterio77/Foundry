@@ -1,6 +1,5 @@
 {
   hostname = import ./hostname.nix;
-  nix-registry = import ./nix-registry.nix;
   unix-chkpwd = import ./unix-chkpwd.nix;
   wireless = import ./wireless.nix;
 }
