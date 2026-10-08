@@ -6,11 +6,23 @@
 }: let
   hydraUser = config.users.users.hydra.name;
   hydraGroup = config.users.users.hydra.group;
+  builderToken = config.sops.secrets.hydra-queue-runner-token.path;
+  restrictedAccess = ''
+    allow 127.0.0.1;
+    allow ::1;
+    allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+    allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+    deny all;
+  '';
 in {
-  imports = [./machines.nix];
+  imports = [../../../common/optional/hydra-builder.nix];
 
   # https://github.com/NixOS/nix/issues/4178#issuecomment-738886808
   systemd.services.hydra-evaluator.environment.GC_DONT_GC = "true";
+  systemd.sockets.hydra-queue-runner-grpc.socketConfig.BindIPv6Only = "both";
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [
+    config.services.hydra.queueRunner.grpc.port
+  ];
 
   services = {
     hydra = {
@@ -21,14 +33,21 @@ in {
       listenHost = "localhost";
       smtpHost = "localhost";
       useSubstitutes = true;
+      queueRunner = {
+        grpc.address = "[::]";
+        settings = {
+          maxUnsupportedTimeInS = 30;
+          tokenPaths = [builderToken];
+        };
+      };
       extraConfig =
         /*
         xml
         */
         ''
           Include ${config.sops.secrets.hydra-gh-auth.path}
-          max_unsupported_time = 30
           allow_import_from_derivation = true
+          ws_endpoint = wss://hydra.m7.rs/ws
           <githubstatus>
             jobs = .*
             useShortContext = true
@@ -46,13 +65,12 @@ in {
           "~* ^/shield/([^\\s]*)".return = "302 https://img.shields.io/endpoint?url=https://hydra.m7.rs/$1/shield";
           "/" = {
             proxyPass = "http://localhost:${toString config.services.hydra.port}";
-            extraConfig = ''
-              allow 127.0.0.1;
-              allow ::1;
-              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
-              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
-              deny all;
-            '';
+            extraConfig = restrictedAccess;
+          };
+          "= /ws" = {
+            proxyPass = "http://${config.services.hydra.ws.bind.address}:${toString config.services.hydra.ws.bind.port}";
+            proxyWebsockets = true;
+            extraConfig = restrictedAccess;
           };
         };
       };
@@ -69,20 +87,23 @@ in {
       group = hydraGroup;
       mode = "0440";
     };
-    nix-ssh-key = {
-      sopsFile = ../../secrets.yaml;
-      owner = hydraUser;
-      group = hydraGroup;
-      mode = "0440";
+    hydra-queue-runner-token = {
+      sopsFile = ../../../common/secrets.yaml;
+      key = "hydra-builder-token";
+      owner = "hydra-queue-runner";
+      mode = "0400";
+      reloadUnits = ["hydra-queue-runner.service"];
     };
   };
 
   environment.persistence = {
-    "/persist".directories = [{
-      directory = config.users.users.hydra.home;
-      user = config.users.users.hydra.name;
-      group = config.users.users.hydra.group;
-      mode = "0700";
-    }];
+    "/persist".directories = [
+      {
+        directory = config.users.users.hydra.home;
+        user = config.users.users.hydra.name;
+        group = config.users.users.hydra.group;
+        mode = "0700";
+      }
+    ];
   };
 }

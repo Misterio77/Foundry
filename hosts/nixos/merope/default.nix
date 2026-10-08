@@ -10,6 +10,7 @@
     ../common/optional/wireless.nix
     ../common/users/gabriel
     ../common/optional/persist-snapshots.nix
+    ../common/optional/hydra-builder.nix
   ];
 
   boot.initrd.systemd.emergencyAccess = true;
