@@ -25,6 +25,10 @@
         name = "${pname}-npm-deps";
         hash = "sha256-pu8dxL0NRB1cyqlQEf2zT2wdVp2fbe+Vp85qMs7f6s0=";
       };
+      preInstall = ''
+        npm run prod --workspace=v1
+        npm run build --workspace=v2
+      '';
     });
     settings = {
       APP_KEY_FILE = config.sops.secrets.firefly-key.path;
