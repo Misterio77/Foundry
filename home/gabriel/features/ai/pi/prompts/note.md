@@ -1,15 +1,15 @@
 ---
-description: Write a markdown note under ~/Atelier/notes
+description: Capture todos in todomd and other context in its workspace
 argument-hint: "<topic/details>"
 ---
-Write a concise markdown note somewhere under `~/Atelier/notes` about: $ARGUMENTS
+Capture the following in the context it belongs to: $ARGUMENTS
 
 Workflow:
-1. Use the `gabs-tools` skill if available, since this touches `~/Atelier/notes`.
-2. `~/Atelier/notes` is a jj repository. Before editing, inspect state with `jj st` and `jj log`; if the current change is not empty or is already described, start a fresh change with `jj new`.
-3. Infer the best location under `~/Atelier/notes` from context (for example `Personal/`, `Elisa/`, project-specific folders, or another existing area). If unsure, ask instead of guessing wildly.
-4. Create a separate, clearly named markdown file; do not append to an unrelated existing note unless I explicitly ask for that.
+1. Route durable personal todos to `todomd` using the `gabs-tools` skill and its non-interactive `.ics` writing and sync workflow. Do not create a Markdown todo list instead. For mixed requests, keep the task in `todomd` and supporting context in its workspace.
+2. Put other context in the relevant project or workspace, following its `AGENTS.md` and existing layout. Keep agent-authored handoffs in that workspace's `.agents/` directory; do not edit human-written notes unless explicitly requested. If the destination is unclear, ask rather than creating a catch-all notes directory.
+3. Before changing repository files, check version control from the destination repository. If `jj root` succeeds, load the `jujutsu` skill and follow its full preflight and workflow. Otherwise, check for Git and inspect status and the relevant diff. Preserve unrelated work.
+4. Create a separate, clearly named Markdown file for workspace context; do not append to an unrelated existing note unless I explicitly ask for that. Follow the workspace's naming convention.
 5. Do not assume drafts, code changes, or other context exist. If I refer to a diff, command, URL, or file, inspect/read it first and summarize what it actually says.
-6. Keep the note factual and useful for future me: context, relevant paths/commands, open questions, and concrete next steps.
-7. After writing, verify with `jj st` in `~/Atelier/notes`, then describe the notes jj change with a concise conventional-commit style message.
-8. Verify with `jj st` / `jj log` afterwards and tell me the note path plus the commit description.
+6. Keep the context factual and useful for future me: relevant paths/commands, open questions, and project-specific next steps. Durable todos remain in `todomd`, not a duplicate task backlog here.
+7. Verify the result using the destination's workflow. Repository commits must follow local conventions and include the required `Assisted-by` trailer. Todo changes must be synced as instructed by `gabs-tools`.
+8. Tell me the resulting workspace path or todo list/item, and any commit description.

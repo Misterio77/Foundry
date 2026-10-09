@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Check Gabs's overall pending work and deadlines with todomd, and manage todos, appointments (khal), contacts (khard), notes (~/Atelier/notes), and email (~/Mail). Use for questions like "what's pending on my end?" even when a project workspace is in context.
+description: Check Gabs's overall pending work and deadlines with todomd, and manage durable todos, appointments (khal), contacts (khard), and email (~/Mail). Use for questions like "what's pending on my end?" even when a project workspace is in context.
 ---
 
 ## Syncing vdir-backed data
@@ -150,10 +150,14 @@ The underlying sync is done by vdirsyncer. (DAVx5 handles sync on Android.) The 
 rm ~/.cache/khal/khal.db
 ```
 
-## Notes (`~/Atelier/notes`)
+## Workspace context
 
-There may be useful human-written context there, but notes are not the todo source.
-For pending tasks, use `todomd` and the `.ics` files.
+Durable personal todos belong in `todomd` and its authoritative `.ics` files.
+Do not create a parallel todo list in Markdown. Project plans, research notes,
+drafts, and other context belong in the workspace they concern, following its
+`AGENTS.md` and existing layout. Agent-authored handoffs belong in that workspace's
+`.agents/` directory. If the relevant workspace is unclear, ask rather than
+creating a catch-all notes directory.
 
 ## Contacts (khard)
 
