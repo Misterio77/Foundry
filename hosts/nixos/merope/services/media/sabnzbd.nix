@@ -27,6 +27,19 @@ in {
         ebooks.name = "ebooks";
       };
       servers = {
+        eweka = {
+          enable = true;
+          name = "eweka";
+          displayname = "eweka";
+          host = "news.eweka.nl";
+          ssl = true;
+          ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
+          port = 563;
+          username = "043b11d25e1d9f6f";
+          password = "@eweka-key@";
+          connections = 10;
+          priority = 0;
+        };
         frugal = {
           enable = true;
           name = "frugal";
@@ -38,7 +51,7 @@ in {
           username = "misterio";
           password = "@frugalusenet-key@";
           connections = 30;
-          priority = 0;
+          priority = 1;
         };
         frugal-secondary = {
           enable = true;
@@ -51,7 +64,7 @@ in {
           username = "misterio";
           password = "@frugalusenet-key@";
           connections = 15;
-          priority = 0;
+          priority = 1;
         };
         frugal-bonus = {
           enable = true;
@@ -63,19 +76,6 @@ in {
           port = 563;
           username = "misterio";
           password = "@frugalusenet-key@";
-          connections = 10;
-          priority = 1;
-        };
-        eweka = {
-          enable = true;
-          name = "eweka";
-          displayname = "eweka";
-          host = "news.eweka.nl";
-          ssl = true;
-          ssl_ciphers = "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
-          port = 563;
-          username = "043b11d25e1d9f6f";
-          password = "@eweka-key@";
           connections = 10;
           priority = 2;
         };
