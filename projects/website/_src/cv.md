@@ -36,6 +36,8 @@ Brazilian public cloud platform.
 
 ### [Zoocha](https://zoocha.com) (2023-2024)
 
+Web development agency focused in Drupal.
+
 #### DevOps Engineer (2023-2024)
 
 - Migrated Chef-based client infrastructure from AWS OpsWorks to
@@ -78,10 +80,10 @@ Startup developing computer vision-based vending systems.
 - PhD: Computer Science and Computational Mathematics (2026-present)
 - MSc: Computer Science and Computational Mathematics (2023-2026)
 
-Research across my master's and doctoral studies focuses on software
-sustainability in open-source ecosystems and practices that support long-lived,
-self-sustaining projects. Some of this work was
-[published at Designing '26]({% link _publications/fontes-design-2026.md %}).
+My research focuses on software sustainability in open-source ecosystems and
+practices that support long-lived, self-sustaining projects. Some of this work
+was [published at Designing '26]({% link _publications/fontes-design-2026.md
+%}).
 
 - Bachelor's: Computer Information Systems (2020-2022)
 
@@ -90,8 +92,8 @@ Teaching assistant for a semester in Database Practice.
 ### University of Groningen (2025)
 
 **Research Internship:** Three months researching cloud computing sustainability
-and open-source tooling. Some of this work was
-[published at SESoS '26]({% link _publications/fontes-sesos-2026.md %}).
+ecosystems. Some of this work was [published at SESoS '26]({% link
+_publications/fontes-sesos-2026.md %}).
 
 See all [publications]({% link publications.html %}).
 

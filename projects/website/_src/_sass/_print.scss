@@ -8,11 +8,22 @@
     print-color-adjust: exact;
   }
 
+  @page {
+    margin: 15mm;
+  }
+
+  html,
+  body {
+    background: white;
+    color: black;
+  }
+
   body {
     width: 100%;
     margin: 0 auto;
     padding: 0;
     font-size: 11pt;
+    line-height: 1.35;
 
     &::before,
     &::after {
@@ -24,17 +35,84 @@
   .toc,
   details,
   body > header,
-  body > footer > .copyleft,
-  body > footer > .theme-constellation {
+  body > footer > :not(.print-site-link) {
     display: none;
   }
 
-  main > article > section > :is(h2, h3, h4) {
-    break-after: avoid;
+  main > article.document {
+    max-width: none;
+
+    > header {
+      padding: 0 0 8pt;
+
+      h1 {
+        max-width: none;
+        margin: 0;
+        font-size: 20pt;
+
+        &::before {
+          display: none;
+        }
+      }
+    }
+
+    > section {
+      max-width: none;
+      background: white;
+      box-shadow: none;
+      overflow: visible;
+
+      > :is(h2, h3, h4) {
+        break-after: avoid;
+        line-height: 1.2;
+      }
+
+      > h2 {
+        margin: 12pt 0 5pt;
+        padding-top: 5pt;
+        font-size: 15pt;
+      }
+
+      > h3 {
+        margin: 9pt 0 4pt;
+        font-size: 12pt;
+      }
+
+      > h4 {
+        margin: 7pt 0 3pt;
+        font-size: 11pt;
+      }
+
+      > p {
+        margin: 0 0 5pt;
+        orphans: 3;
+        widows: 3;
+      }
+
+      > ul {
+        margin: 3pt 0 6pt;
+        padding-left: 16pt;
+
+        li {
+          break-inside: avoid;
+        }
+
+        li + li {
+          margin-top: 3pt;
+        }
+      }
+    }
   }
 
-  body > footer > .print-site-link {
-    display: block;
+  body > footer {
+    margin-top: 8pt;
+    padding-top: 5pt;
+    border: 0;
+
+    > .print-site-link {
+      display: block;
+      margin: 0;
+    }
   }
 }
 
