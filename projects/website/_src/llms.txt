@@ -1,6 +1,6 @@
 # Gabriel Fontes
 
-> Personal website of Gabriel Fontes, a Brazilian programmer, SRE/DevOps engineer, OSS contributor, and Computer Science MSc student researching software sustainability in open source projects.
+> Personal website of Gabriel Fontes, a Brazilian programmer, SRE/DevOps engineer, OSS contributor, and Computer Science PhD student researching software sustainability in open source projects.
 
 This site contains Gabriel's personal profile, blog posts, publications, and CV.
 

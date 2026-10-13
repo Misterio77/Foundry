@@ -4,7 +4,7 @@ description: Curriculum vitae of Gabriel Fontes, a software engineer and researc
 permalink: /cv/
 ---
 
-Last updated: 2026-09-29
+Gabriel Silva Fontes - gabriel@gsfontes.com
 
 ## Overview
 
@@ -16,7 +16,8 @@ DevOps, CI/CD, and backend.
 I currently work full-time at Magalu Cloud, where I work on underlying cloud
 resources, virtualization, packaging, and deployment orchestration. I have
 also recently obtained a Computer Science M.Sc. at the University of São Paulo,
-researching software sustainability in open-source ecosystems.
+researching software sustainability in open-source ecosystems, and am now
+pursuing a PhD.
 
 I frequently work with Rust, Python, Lua, PostgreSQL, Nix/NixOS, Docker,
 Terraform, Linux, Juju, and GitHub Actions. I also have experience with UI/UX
@@ -135,25 +136,23 @@ research was [published at SESoS '26]({% link _publications/fontes-sesos-2026.md
 
 ### University of São Paulo (2020-present)
 
-[University of São Paulo](https://usp.br) (USP) is considered to be Brazil's
-most prestigious university, and frequently the top university in Latin America.
+- PhD: Computer Science and Computational Mathematics (2026-present)
+- MSc: Computer Science and Computational Mathematics (2023-2026)
 
-During my time here, I helped create and currently lead our [Open-Source & Free
-Software extracurricular group](https://gelos.club).
-
-#### Master's: Computer Science and Computational Mathematics (2023-2026)
-
-I'm currently researching Software Sustainability in open-source software
+I'm currently researching software sustainability in open-source software
 projects, hoping to contribute to our understanding of best practices
 for successful, long-lived, self-sustaining OSS. Some of this research was
 [published at Designing '26]({% link _publications/fontes-design-2026.md %}).
 
-#### Bachelor's: Computer Information Systems (2020-2022)
+- Bachelor's: Computer Information Systems (2020-2022)
 
 I studied different areas in computing, especially software engineering,
 software testing, databases, and operating systems.
 
 I was a teaching assistant for a semester, on a Database Practice subject.
+
+During my time here, I helped create and currently lead our [Open-Source & Free
+Software extracurricular group](https://gelos.club).
 
 ## Open-source and Community
 
