@@ -2,3 +2,28 @@
 ---
 
 @use "main";
+
+// Palette selection is independent of system light/dark mode.
+{% assign modes = "dark,light,print" | split: "," %}
+{% for mode in modes %}
+  {% assign color_mode = mode %}
+  {% if mode == "light" %}
+@media (prefers-color-scheme: light) {
+  {% elsif mode == "print" %}
+    {% assign color_mode = "light" %}
+@media print {
+  {% endif %}
+  {% for scheme in site.data.colorscheme %}
+    {% if scheme[0] == site.default_scheme %}
+:root,
+    {% endif %}
+:root[data-scheme="{{ scheme[0] }}"] {
+    {% for color in scheme[1].colors[color_mode] %}
+  --{{ color[0] }}: {{ color[1] }};
+    {% endfor %}
+}
+  {% endfor %}
+  {% unless mode == "dark" %}
+}
+  {% endunless %}
+{% endfor %}

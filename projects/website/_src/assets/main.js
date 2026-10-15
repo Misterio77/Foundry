@@ -2,9 +2,16 @@
 layout: null
 ---
 
-var schemes = {{ site.data.colorscheme | jsonify }};
+// Only favicon colors are needed in JS; palette declarations live in CSS.
+var schemes = {
+    {% for scheme in site.data.colorscheme %}
+    "{{ scheme[0] }}": {
+        dark: "{{ scheme[1].colors.dark.primary }}",
+        light: "{{ scheme[1].colors.light.primary }}"
+    }{% unless forloop.last %},{% endunless %}
+    {% endfor %}
+};
 var schemeNames = Object.keys(schemes);
-var chosenSchemeStyle = null;
 var starPath = "M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z";
 
 // One icon per colour scheme, matching the markup in favicon.html.liquid: a
@@ -30,11 +37,11 @@ function setFavicon(media, href) {
 }
 
 function updateFavicon(scheme) {
-    var colors = schemes[scheme] && schemes[scheme].colors;
+    var colors = schemes[scheme];
     if (!colors) return;
 
-    setFavicon(null, faviconUri(colors.dark.primary));
-    setFavicon("(prefers-color-scheme: light)", faviconUri(colors.light.primary));
+    setFavicon(null, faviconUri(colors.dark));
+    setFavicon("(prefers-color-scheme: light)", faviconUri(colors.light));
 }
 
 function setCookie(name, value, days) {
@@ -63,30 +70,10 @@ function eraseCookie(name) {
     document.cookie = name + "=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; SameSite=Lax";
 }
 
-function colorDeclarations(colors) {
-    var css = "";
-    for (var key in colors) {
-        if (Object.prototype.hasOwnProperty.call(colors, key)) {
-            css += "    --" + key + ": " + colors[key] + ";\n";
-        }
-    }
-    return css;
-}
-
 function setTheme(scheme, persist) {
-    var colors = schemes[scheme] && schemes[scheme].colors;
-    if (!colors) return;
+    if (schemeNames.indexOf(scheme) < 0) return;
 
-    if (!chosenSchemeStyle) {
-        chosenSchemeStyle = document.createElement("style");
-        chosenSchemeStyle.id = "theme-css";
-        document.head.appendChild(chosenSchemeStyle);
-    }
-
-    chosenSchemeStyle.textContent =
-        ":root {\n" + colorDeclarations(colors.dark) + "}\n" +
-        "@media (prefers-color-scheme: light) {\n  :root {\n" + colorDeclarations(colors.light) + "  }\n}\n" +
-        "@media print {\n  :root {\n" + colorDeclarations(colors.light) + "  }\n}";
+    document.documentElement.setAttribute("data-scheme", scheme);
 
     updateThemeControls(scheme);
     updateFavicon(scheme);
@@ -99,10 +86,7 @@ function getTheme() {
 }
 
 function resetTheme() {
-    if (chosenSchemeStyle) {
-        chosenSchemeStyle.remove();
-        chosenSchemeStyle = null;
-    }
+    document.documentElement.removeAttribute("data-scheme");
     eraseCookie("fontes_theme");
 
     updateThemeControls("{{ site.default_scheme }}");
@@ -110,7 +94,7 @@ function resetTheme() {
 }
 
 function updateThemeControls(scheme) {
-    var buttons = document.querySelectorAll("[data-scheme]");
+    var buttons = document.querySelectorAll("button[data-scheme]");
     for (var i = 0; i < buttons.length; i++) {
         var active = buttons[i].getAttribute("data-scheme") === scheme;
         buttons[i].setAttribute("aria-pressed", active ? "true" : "false");
@@ -137,7 +121,7 @@ document.addEventListener("DOMContentLoaded", function () {
     constellation.hidden = false;
     updateThemeControls(storedTheme || "{{ site.default_scheme }}");
 
-    var buttons = constellation.querySelectorAll("[data-scheme]");
+    var buttons = constellation.querySelectorAll("button[data-scheme]");
     for (var j = 0; j < buttons.length; j++) {
         buttons[j].addEventListener("click", function () {
             setTheme(this.getAttribute("data-scheme"));
