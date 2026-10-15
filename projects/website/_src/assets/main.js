@@ -54,35 +54,18 @@ function setCookie(name, value, days) {
     document.cookie = name + "=" + encodeURIComponent(value) + expires + "; Path=/; SameSite=Lax";
 }
 
-function getCookie(name) {
-    var prefix = name + "=";
-    var cookies = document.cookie.split(";");
-    for (var i = 0; i < cookies.length; i++) {
-        var cookie = cookies[i].trim();
-        if (cookie.indexOf(prefix) === 0) {
-            return decodeURIComponent(cookie.substring(prefix.length));
-        }
-    }
-    return null;
-}
-
 function eraseCookie(name) {
     document.cookie = name + "=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; SameSite=Lax";
 }
 
-function setTheme(scheme, persist) {
+function setTheme(scheme) {
     if (schemeNames.indexOf(scheme) < 0) return;
 
     document.documentElement.setAttribute("data-scheme", scheme);
 
     updateThemeControls(scheme);
     updateFavicon(scheme);
-    if (persist !== false) setCookie("fontes_theme", scheme, 365);
-}
-
-function getTheme() {
-    var theme = getCookie("fontes_theme");
-    return schemeNames.indexOf(theme) >= 0 ? theme : null;
+    setCookie("fontes_theme", scheme, 365);
 }
 
 function resetTheme() {
@@ -101,8 +84,9 @@ function updateThemeControls(scheme) {
     }
 }
 
-var storedTheme = getTheme();
-if (storedTheme) setTheme(storedTheme, false);
+// The inline head script has already restored the palette before first paint.
+var storedTheme = document.documentElement.getAttribute("data-scheme");
+if (storedTheme) updateFavicon(storedTheme);
 
 document.addEventListener("DOMContentLoaded", function () {
     var headings = document.querySelectorAll("main :is(h2, h3, h4, h5, h6)[id]");

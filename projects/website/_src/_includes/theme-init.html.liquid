@@ -1,0 +1,17 @@
+<script>
+  // Restore the palette before styles load; enhancements must not block rendering.
+  (function () {
+    try {
+      var cookie = document.cookie.match(/(?:^|;\s*)fontes_theme=([^;]*)/);
+      if (!cookie) return;
+
+      var scheme = decodeURIComponent(cookie[1]);
+      var names = [{% for scheme in site.data.colorscheme %}{{ scheme[0] | jsonify }}{% unless forloop.last %}, {% endunless %}{% endfor %}];
+      if (names.indexOf(scheme) >= 0) {
+        document.documentElement.setAttribute("data-scheme", scheme);
+      }
+    } catch (error) {
+      // Unavailable cookies or malformed values leave the CSS default intact.
+    }
+  }());
+</script>

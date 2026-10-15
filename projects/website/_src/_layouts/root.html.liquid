@@ -21,8 +21,9 @@
     {%- endif %}
 
     {% include favicon.html.liquid %}
+    {% include theme-init.html.liquid %}
     <link rel="stylesheet" href="/assets/style.css" />
-    <script src="/assets/main.js"></script>
+    <script src="/assets/main.js" defer></script>
   </head>
   <body>
     {{ content | extlinks }}
