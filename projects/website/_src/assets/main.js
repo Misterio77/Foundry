@@ -44,20 +44,6 @@ function updateFavicon(scheme) {
     setFavicon("(prefers-color-scheme: light)", faviconUri(colors.light));
 }
 
-function setCookie(name, value, days) {
-    var expires = "";
-    if (days) {
-        var date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        expires = "; Expires=" + date.toUTCString();
-    }
-    document.cookie = name + "=" + encodeURIComponent(value) + expires + "; Path=/; SameSite=Lax";
-}
-
-function eraseCookie(name) {
-    document.cookie = name + "=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Path=/; SameSite=Lax";
-}
-
 function setTheme(scheme) {
     if (schemeNames.indexOf(scheme) < 0) return;
 
@@ -65,15 +51,23 @@ function setTheme(scheme) {
 
     updateThemeControls(scheme);
     updateFavicon(scheme);
-    setCookie("fontes_theme", scheme, 365);
+    try {
+        localStorage.setItem("fontes_theme", scheme);
+    } catch (error) {
+        // Switching still works when storage is unavailable or full.
+    }
 }
 
 function resetTheme() {
     document.documentElement.removeAttribute("data-scheme");
-    eraseCookie("fontes_theme");
-
     updateThemeControls("{{ site.default_scheme }}");
     updateFavicon("{{ site.default_scheme }}");
+
+    try {
+        localStorage.removeItem("fontes_theme");
+    } catch (error) {
+        // Resetting still works for this page when storage is unavailable.
+    }
 }
 
 function updateThemeControls(scheme) {
