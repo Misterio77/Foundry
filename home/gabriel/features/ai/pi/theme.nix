@@ -3,7 +3,7 @@
 in {
   programs.pi-coding-agent.settings.theme = name;
   home.file.".pi/agent/themes/${name}.json".text = builtins.toJSON {
-    "$schema" = "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json";
+    "$schema" = "https://pi.dev/schemas/theme.schema.json";
     name = name;
     vars = config.colorscheme.colors;
     colors = {

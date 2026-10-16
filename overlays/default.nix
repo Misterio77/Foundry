@@ -185,41 +185,30 @@ in {
     });
 
     pi-coding-agent = prev.pi-coding-agent.overrideAttrs (finalAttrs: oldAttrs: {
-      version = "1.0.0";
+      version = "1.3.0";
       src = final.fetchFromGitHub {
         owner = "earendil-works";
         repo = "pi";
         tag = "v${finalAttrs.version}";
-        hash = "sha256-CGznIVHXG6gr2F8vzHcR/v4P9xJgZHeMTt/CJ/kB78o=";
+        hash = "sha256-AsutbwnjiwwLkB5tqLW+1GdGZyLmXsU0W+SNdNhJu7U=";
       };
       npmDeps = final.fetchNpmDeps {
         name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
         inherit (finalAttrs) src;
-        hash = "sha256-ndEvWdB6sa5nNNtabk2OMZKUFG9x3op185deZHxFnXk=";
+        hash = "sha256-+gFyvrhkCsF99oNvs0gBmLXnDW0hWnZI/wFId7UbI6Q=";
       };
       modelData = final.fetchurl {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-        hash = "sha256-85uZwpuFmPF1sQhA5dKoGYPnwM5crk19+DoQB0R9LCs=";
+        hash = "sha256-U0PhY5vzQ73DNE3zrWwxwFpQtoutB6xrzhCJDUtrimE=";
       };
-      # Upstream switched from tsgo to tsc and added two runtime workspaces.
-      buildPhase = ''
-        runHook preBuild
-        for ws in chord tui telemetry codemode mcp; do
-          npm run build --workspace=packages/$ws
-        done
-        npm run build:offline --workspace=packages/ai
-        for ws in durable agent protocol client server coding-agent; do
-          npm run build --workspace=packages/$ws
-        done
-        runHook postBuild
-      '';
+      # Upstream removed these runtime dependencies in 1.2.0.
       postInstall =
-        oldAttrs.postInstall
-        + ''
-          local nm="$out/lib/node_modules/pi-monorepo/node_modules/@earendil-works"
-          cp -r packages/codemode "$nm/pi-codemode"
-          cp -r packages/mcp "$nm/pi-mcp"
-        '';
+        final.lib.replaceStrings [
+          "@earendil-works/chord:packages/chord"
+          "@earendil-works/pi-client:packages/client"
+          "@earendil-works/pi-protocol:packages/protocol"
+        ] ["" "" ""]
+        oldAttrs.postInstall;
     });
 
     buildPiPackage = let
