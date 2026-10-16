@@ -26,6 +26,7 @@ in
       root = ./.;
       fileset = lib.fileset.unions [
         ./jagex_auth
+        ./LICENSE
         ./README.md
         ./SECURITY.md
         ./tests
@@ -50,6 +51,7 @@ in
 
       install -Dm644 jagex_auth/__init__.py $out/share/jagex-auth/jagex_auth/__init__.py
       install -Dm644 jagex_auth/__main__.py $out/share/jagex-auth/jagex_auth/__main__.py
+      install -Dm644 LICENSE $out/share/doc/jagex-auth/LICENSE
       makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
         --set PYTHONPATH $out/share/jagex-auth \
         --add-flags "-P -m jagex_auth"
