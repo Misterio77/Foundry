@@ -1,4 +1,10 @@
-{php, fetchgit, lessc, roundcube, ...}:
+{
+  php,
+  fetchgit,
+  lessc,
+  roundcube,
+  ...
+}:
 php.buildComposerProject2 (finalAttrs: {
   pname = "kolab-plugins";
   version = "2025-12-08";
@@ -27,15 +33,10 @@ php.buildComposerProject2 (finalAttrs: {
     composerNoPlugins = true;
     composerNoScripts = true;
     strictDeps = true;
-    vendorHash = "sha256-QYERch9v0glBK+rqvsh36s78YziVed07TsHz10N6zgs=";
+    vendorHash = "sha256-QpA4dCoE7Fd1eTsXPim8eAuvRNdX9HjGLqF0mpCvLtw=";
     postInstall = ''
       # Cleanup .git directories from git dependencies
       rm -rf $out/vendor/**/*/.git
-      # Make include_paths.php deterministic
-      head -n 8 $out/vendor/composer/include_paths.php > include_paths.php
-      tail -n +9 $out/vendor/composer/include_paths.php | head -n -1 | sort >> include_paths.php
-      tail -n 1 $out/vendor/composer/include_paths.php >> include_paths.php
-      mv include_paths.php $out/vendor/composer/include_paths.php
     '';
   };
 
