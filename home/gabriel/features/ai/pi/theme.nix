@@ -8,7 +8,7 @@ in {
     vars = config.colorscheme.colors;
     colors = {
       accent = "primary";
-      border = "outline_variant";
+      border = "secondary";
       borderAccent = "primary";
       borderMuted = "surface_variant";
       success = "green";
@@ -20,27 +20,27 @@ in {
       thinkingText = "on_surface_variant";
 
       selectedBg = "primary_container";
-      userMessageBg = "surface_container_high";
-      userMessageText = "on_surface";
+      userMessageBg = "primary_container";
+      userMessageText = "on_primary_container";
       customMessageBg = "secondary_container";
       customMessageText = "on_secondary_container";
       customMessageLabel = "primary";
       toolPendingBg = "surface_container";
       toolSuccessBg = "green_container";
       toolErrorBg = "error_container";
-      toolTitle = "primary";
+      toolTitle = "blue";
       toolOutput = "on_surface";
 
-      mdHeading = "primary";
-      mdLink = "blue";
-      mdLinkUrl = "on_surface_variant";
-      mdCode = "cyan";
+      mdHeading = "blue";
+      mdLink = "red";
+      mdLinkUrl = "orange";
+      mdCode = "green";
       mdCodeBlock = "on_surface";
-      mdCodeBlockBorder = "surface_variant";
-      mdQuote = "on_surface_variant";
-      mdQuoteBorder = "outline_variant";
-      mdHr = "outline_variant";
-      mdListBullet = "cyan";
+      mdCodeBlockBorder = "secondary";
+      mdQuote = "cyan";
+      mdQuoteBorder = "cyan";
+      mdHr = "secondary";
+      mdListBullet = "red";
 
       toolDiffAdded = "green";
       toolDiffRemoved = "red";
