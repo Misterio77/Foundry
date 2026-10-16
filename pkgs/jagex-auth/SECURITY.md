@@ -1,9 +1,10 @@
 # Authentication security model
 
 This is an unofficial client for Jagex's existing desktop-launcher authentication
-flow, not a separately registered OAuth application. Real login/client smoke
-verification of this refactor is still pending. Do not include tokens, callback
-URLs, credential files, or HTTP response bodies in reports.
+flow, not a separately registered OAuth application. User-operated browser
+callback, character selection, and in-game login with RuneLite, HDOS, and RS3
+were verified on 2026-10-16. Do not include tokens, callback URLs, credential
+files, or HTTP response bodies in reports.
 
 ## Protocol and authoritative validation
 

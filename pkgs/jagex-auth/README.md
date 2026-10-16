@@ -7,8 +7,9 @@ It does not download/update clients or fix RS3's GTK2/OpenSSL dependencies.
 
 This project is being hardened in Foundry before standalone release. See
 [SECURITY.md](SECURITY.md) for the server-validation trust boundary and callback lifetime details,
-and `.agents/2026-10-16-refactor.md` for progress. Real-client smoke tests are
-pending. It is not affiliated with Jagex.
+and `.agents/2026-10-16-refactor.md` for progress. Browser authorization and
+in-game login with RuneLite, HDOS, and RS3 were smoke-tested on 2026-10-16.
+It is not affiliated with Jagex.
 
 ## Usage
 
@@ -68,10 +69,10 @@ pkgs.jagex-auth.wrapLaunch pkgs.runelite
 
 The returned package preserves the client's desktop files and wraps its main
 executable with `jagex-auth launch -- <original-executable>`. Authentication is
-runtime-only; credentials never become Nix inputs or store contents. RuneLite,
-HDOS, and RS3 are Foundry integration targets; real-client smoke tests for the
-refactor are pending. The helper's successful launch does not guarantee that a
-particular client's runtime dependencies or account integration work.
+runtime-only; credentials never become Nix inputs or store contents. In-game
+login was verified with the RuneLite 2.8.0 launcher, HDOS launcher 8, and RS3
+2.2.12 package on 2026-10-16. This does not guarantee that other versions or
+systems satisfy each client's runtime dependencies.
 
 ## Storage
 
