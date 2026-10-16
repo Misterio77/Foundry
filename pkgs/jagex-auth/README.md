@@ -7,9 +7,9 @@ It does not download/update clients or fix RS3's GTK2/OpenSSL dependencies.
 
 This is Foundry's frozen integration copy. Active development has moved to the
 standalone `jagex-auth` repository; a portable upstream flake input is pending
-publication. See `.agents/2026-10-16-refactor.md` for extraction status and
-[SECURITY.md](SECURITY.md) for the server-validation trust boundary. Browser authorization and
-in-game login with RuneLite, HDOS, and RS3 were smoke-tested on 2026-10-16.
+publication. See [SECURITY.md](SECURITY.md) for the server-validation trust
+boundary. Browser authorization and in-game login with RuneLite, HDOS, and RS3
+were smoke-tested on 2026-10-16.
 It is not affiliated with Jagex.
 
 ## Usage
