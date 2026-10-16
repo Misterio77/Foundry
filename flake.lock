@@ -316,11 +316,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792187667,
-        "narHash": "sha256-82lImW4ulhf2AoRnkIpT6nQsET5a5p/nzy1LWqkqca4=",
+        "lastModified": 1792191837,
+        "narHash": "sha256-VSx5YKeKxWhEoO80KxFugUig3JCOavnF6LWBPaA68fs=",
         "owner": "Misterio77",
         "repo": "jagex-auth",
-        "rev": "f9f4eb3e31fc167f2ce943d3ac59144a8e9a9ab2",
+        "rev": "24e818772c6501cc90ee483f5708acc24ab8f37d",
         "type": "github"
       },
       "original": {
