@@ -4,6 +4,7 @@
     ./pi-codex-image-gen.nix
     ./pi-context-view.nix
     ./pi-invisible-continue.nix
+    ./ponytail.nix
     ./agent-browser.nix
     ./rpiv-ask-user-question.nix
   ];
