@@ -131,7 +131,7 @@ class AuthTests(unittest.TestCase):
     def test_character_selection(self):
         accounts = [{"accountId": "a"}, {"accountId": "b"}]
         self.assertEqual(auth.choose_account(accounts[:1]), accounts[0])
-        with patch("builtins.input", side_effect=["bad", "0", "3", "2"]):
+        with patch("builtins.input", side_effect=["bad", "", "²", "0", "3", "2"]):
             self.assertEqual(auth.choose_account(accounts), accounts[1])
 
     def test_credentials_private_and_replaced(self):

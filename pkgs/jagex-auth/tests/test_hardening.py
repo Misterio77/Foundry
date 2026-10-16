@@ -226,16 +226,27 @@ class HardeningTests(unittest.TestCase):
         self.addCleanup(os.close, write)
         stream = os.fdopen(read, "rb")
         self.addCleanup(stream.close)
-        os.write(write, b"stale-invalid-paste\n")
-        with auth.authorization_attempt() as (state, _), patch.object(auth.sys, "stdin", stream):
-            url = self.callback(state=state, id_token="browser")
+        for chunk in (b"stale-invalid-paste\n", b"\xff\n", b"x" * (auth.MAX_CALLBACK + 1)):
+            with self.subTest(size=len(chunk)), auth.authorization_attempt() as (state, _), patch.object(auth.sys, "stdin", stream):
+                url = self.callback(state=state, id_token="browser")
 
-            def deliver_between_poll_and_stdin(*args):
-                self.handle(url)
-                return [read], [], []
+                def deliver_between_poll_and_stdin(*args):
+                    self.handle(url)
+                    return [read], [], []
 
-            with patch.object(auth.select, "select", side_effect=deliver_between_poll_and_stdin):
-                self.assertEqual(auth.wait_for_authentication(timeout=1), url)
+                with patch.object(auth.select, "select", side_effect=deliver_between_poll_and_stdin), patch.object(auth.os, "read", return_value=chunk):
+                    self.assertEqual(auth.wait_for_authentication(timeout=1), url)
+
+    def test_invalid_manual_input_without_callback_is_rejected(self):
+        read, write = os.pipe()
+        self.addCleanup(os.close, write)
+        stream = os.fdopen(read, "rb")
+        self.addCleanup(stream.close)
+        for chunk, message in ((b"\xff\n", "encoding"), (b"x" * (auth.MAX_CALLBACK + 1), "too large")):
+            with self.subTest(message=message), auth.authorization_attempt(), patch.object(auth.sys, "stdin", stream):
+                with patch.object(auth.select, "select", return_value=([read], [], [])), patch.object(auth.os, "read", return_value=chunk):
+                    with self.assertRaisesRegex(SystemExit, message):
+                        auth.wait_for_authentication(timeout=1)
 
     def test_initialization_interruption_cleans_published_state(self):
         original = auth.atomic_write_private

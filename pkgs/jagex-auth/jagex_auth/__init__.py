@@ -245,22 +245,22 @@ def _wait_for_authentication(timeout: float) -> str:
         if readable:
             chunk = os.read(stdin, MAX_CALLBACK + 1)
             buffer += chunk
-            if len(buffer) > MAX_CALLBACK:
-                raise SystemExit("Authentication response too large")
-            if b"\n" in buffer or (not chunk and buffer):
-                try:
-                    url = buffer.split(b"\n", 1)[0].rstrip(b"\r").decode("utf-8")
-                    with callback_guard():
-                        callback = consume_browser_callback()
-                        if callback is not None:
-                            return callback
-                        pending = read_private_json(PENDING_FILE)
-                        if not isinstance(pending, dict) or pending.get("accepting") is not True:
-                            raise SystemExit("Authentication response already consumed")
-                        close_callback_delivery()
+            with callback_guard():
+                callback = consume_browser_callback()
+                if callback is not None:
+                    return callback
+                if len(buffer) > MAX_CALLBACK:
+                    raise SystemExit("Authentication response too large")
+                if b"\n" in buffer or (not chunk and buffer):
+                    try:
+                        url = buffer.split(b"\n", 1)[0].rstrip(b"\r").decode("utf-8")
+                    except UnicodeError:
+                        raise SystemExit("Invalid authentication response encoding") from None
+                    pending = read_private_json(PENDING_FILE)
+                    if not isinstance(pending, dict) or pending.get("accepting") is not True:
+                        raise SystemExit("Authentication response already consumed")
+                    close_callback_delivery()
                     return url
-                except UnicodeError:
-                    raise SystemExit("Invalid authentication response encoding") from None
             if not chunk:
                 stdin = None
     raise SystemExit("Authentication timed out; run 'jagex-auth authorize' again")
@@ -361,9 +361,12 @@ def choose_account(accounts: list[dict]) -> dict:
         print(f"  {index}. {name} ({account.get('accountId')})", file=sys.stderr)
 
     while True:
-        choice = input("Character number: ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(accounts):
-            return accounts[int(choice) - 1]
+        try:
+            choice = int(input("Character number: "))
+            if 1 <= choice <= len(accounts):
+                return accounts[choice - 1]
+        except ValueError:
+            pass
         print("Invalid character number", file=sys.stderr)
 
 
