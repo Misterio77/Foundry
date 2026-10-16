@@ -20,8 +20,21 @@ in
     pname = "jagex-auth";
     version = "0-unstable";
 
-    src = ./jagex-auth.py;
-    dontUnpack = true;
+    src = lib.fileset.toSource {
+      root = ./.;
+      fileset = lib.fileset.unions [
+        ./jagex-auth.py
+        ./jagex_auth.py
+        ./tests
+      ];
+    };
+
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      PYTHONDONTWRITEBYTECODE=1 ${lib.getExe python3} -m unittest discover -s tests -v
+      runHook postCheck
+    '';
 
     nativeBuildInputs = [
       copyDesktopItems
@@ -32,9 +45,10 @@ in
     installPhase = ''
       runHook preInstall
 
-      install -Dm644 $src $out/share/jagex-auth/jagex-auth.py
+      install -Dm644 jagex-auth.py $out/share/jagex-auth/jagex-auth.py
+      install -Dm644 jagex_auth.py $out/share/jagex-auth/jagex_auth.py
       makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
-        --add-flags $out/share/jagex-auth/jagex-auth.py \
+        --add-flags $out/share/jagex-auth/jagex-auth.py
 
       runHook postInstall
     '';
