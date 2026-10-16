@@ -7,14 +7,15 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "runelite-hd";
-  version = "1.5.2-unstable-2026-10-05";
+  version = "1.5.2-unstable-2026-10-15";
 
-  # PR #655: day/night cycle, not yet available through the Plugin Hub.
+  # Upstream master: includes the day/night cycle (PR #655, merged 2026-10-06),
+  # which has not yet been released through the Plugin Hub.
   src = fetchFromGitHub {
-    owner = "3-X";
+    owner = "117HD";
     repo = "RLHD";
-    rev = "92d3cd815501ec37ab009a2d8651b68d3e7d62d0";
-    hash = "sha256-1EHpFXAU8X7z8dlw6Um7JOvKZ4ygzlqi8bOAhJaFA/U=";
+    rev = "5ec1c350b0fc49ef29e069959015ae439324c1d2";
+    hash = "sha256-252cRxq0qDjWEFCfCTrtIPzVGf9cOnlcYdGc0tmvIi4=";
   };
 
   # The upstream stress test queues 1000 * 100 ms of busy-work. On small
@@ -51,8 +52,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   '';
 
   meta = {
-    description = "117 HD RuneLite plugin with the experimental day/night cycle";
-    homepage = "https://github.com/117HD/RLHD/pull/655";
+    description = "117 HD RuneLite plugin, tracking upstream master for the day/night cycle";
+    homepage = "https://github.com/117HD/RLHD";
     license = lib.licenses.bsd2;
     platforms = lib.platforms.all;
     sourceProvenance = with lib.sourceTypes; [

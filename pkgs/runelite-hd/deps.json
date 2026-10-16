@@ -225,9 +225,9 @@
   }
  },
  "https://repo.runelite.net/net": {
-  "runelite#client/1.13.2-20261004.162010-4/SNAPSHOT": {
-   "jar": "sha256-0slOgKn6WaEOWzwUN58fTDevOYbRWSMCdgEYuuU+27s=",
-   "pom": "sha256-XvkBaZB5o/9RbtIWbgXkluhKKwdHXGE70bd9OAKyncE="
+  "runelite#client/1.13.3-20261016.134825-3/SNAPSHOT": {
+   "jar": "sha256-yFY/6jFA+ymopzF0E1+0XkPJa8TcWu4IG5Vj755VliA=",
+   "pom": "sha256-7V7RGNa4t3mst3SOSxh1Q7Aq7CSV1hBq3VkL9uemelQ="
   },
   "runelite#discord/1.4": {
    "jar": "sha256-ZAlyP9E0ljht+xM1qXlNwJGdthMlIvK3SG1nNPxd9uU=",
@@ -243,13 +243,13 @@
    "module": "sha256-dyoqpYvYyZfluvJG6Ylto5BC1yi167BChDXfgLm3Lhs=",
    "pom": "sha256-cNMBZGiyviMljXRKEOnBk/FT5oJI9OwicSBVeb7RGOU="
   },
-  "runelite#injected-client/1.13.2-20261004.162010-4/SNAPSHOT": {
-   "jar": "sha256-2kmjs74lNZ15qjXyI9nOJOEEtiESgm5NKvcQDwgEC84=",
-   "pom": "sha256-xgbCkOiO6z0YeoAmveWvTJ2VI5KpK5BOa/iGvPqW7Qs="
+  "runelite#injected-client/1.13.3-20261016.134825-3/SNAPSHOT": {
+   "jar": "sha256-99qXkOYkJt/67eo9/dK0E2L8gDsLI3X2je8JGpt4NLo=",
+   "pom": "sha256-RrXKS1Y3JeOdxVq+F0HjKD8NmNWZ7GznKfVigoNCsZU="
   },
-  "runelite#jshell/1.13.2-20261004.162010-4/SNAPSHOT": {
+  "runelite#jshell/1.13.3-20261016.134825-3/SNAPSHOT": {
    "jar": "sha256-M2KPB5axP4PVbaZhHWgsN5kgKvY0S3WnkUqf0jM+m2A=",
-   "pom": "sha256-F6q7PJWetsaBHrjK08ivQjLFo2I88AsI0gErZcuUfxc="
+   "pom": "sha256-U4rT71ksfw7wo+G7XcqZEsX69St3cvvUV9aXiFuLlq8="
   },
   "runelite#rlawt/1.8": {
    "jar": "sha256-JPm2132N6BSo2s3fnE4iJ9pwRZN1ynLMlhroHTPv91o=",
@@ -261,55 +261,55 @@
   "runelite#rlicn/1.1/windows": {
    "jar": "sha256-bHYn5Tr2scVvPP9TL8m5SW2T4crGVexQbI8B52COae8="
   },
-  "runelite#runelite-api/1.13.2-20261004.162010-4/SNAPSHOT": {
-   "jar": "sha256-W4cF89jyp43gWe1DtNc0O5tuI65pJFqIfhQmhCRmCvk=",
-   "pom": "sha256-v9Wv0QMAUjTs25V4DMhGZU84P3JVKLU9HynQvQMnKgQ="
+  "runelite#runelite-api/1.13.3-20261016.134825-3/SNAPSHOT": {
+   "jar": "sha256-M60vEj2WTLSircZzgt2zgKmaV6zBeQqxo2CkVzWIJA4=",
+   "pom": "sha256-tRasJ6Xys00NdiGziPH5yVMPr8Y8AVWyNGK0slMTOfE="
   },
-  "runelite/arn#http-api/1.2.25": {
-   "jar": "sha256-ozS5bbo6N7/v/aRIHoYSDKkzx8mDAn/iPtsnbAyRmfY=",
-   "pom": "sha256-FlaEqokBaUG9gJvBlJCgvyI1OYJ4ifa/+XM2b9I7Eh8="
+  "runelite/arn#http-api/1.2.26": {
+   "jar": "sha256-qK2HcQSvE8wnhX5sodtjw0znQqgVE67q4hvNl//lchs=",
+   "pom": "sha256-/HGHjzeutouAf69MdIAJcP4ElRcI2j8KHmoQqf+3JWI="
   },
-  "runelite/arn#parent/1.2.25": {
-   "pom": "sha256-cIpo0WCbw7iuBJ7axD/KK/myXDFizYi96xIlHH6+TmA="
+  "runelite/arn#parent/1.2.26": {
+   "pom": "sha256-6VhM1R1EjqIxkCAj7UTwVTut9OcoQPMsK3hCq27Vr48="
   },
-  "runelite/client/1.13.2-SNAPSHOT/maven-metadata": {
+  "runelite/client/1.13.3-SNAPSHOT/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162010"
+    "lastUpdated": "20261016134825"
    }
   },
   "runelite/client/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162021",
-    "latest": "1.13.2-SNAPSHOT",
-    "release": "1.13.1"
+    "lastUpdated": "20261016134838",
+    "latest": "1.13.3-SNAPSHOT",
+    "release": "1.13.2"
    }
   },
-  "runelite/injected-client/1.13.2-SNAPSHOT/maven-metadata": {
+  "runelite/injected-client/1.13.3-SNAPSHOT/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162010"
+    "lastUpdated": "20261016134825"
    }
   },
-  "runelite/jshell/1.13.2-SNAPSHOT/maven-metadata": {
+  "runelite/jshell/1.13.3-SNAPSHOT/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162010"
+    "lastUpdated": "20261016134825"
    }
   },
   "runelite/jshell/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162018",
-    "latest": "1.13.2-SNAPSHOT",
-    "release": "1.13.1"
+    "lastUpdated": "20261016134830",
+    "latest": "1.13.3-SNAPSHOT",
+    "release": "1.13.2"
    }
   },
-  "runelite/runelite-api/1.13.2-SNAPSHOT/maven-metadata": {
+  "runelite/runelite-api/1.13.3-SNAPSHOT/maven-metadata": {
    "xml": {
     "groupId": "net.runelite",
-    "lastUpdated": "20261004162010"
+    "lastUpdated": "20261016134825"
    }
   }
  }
