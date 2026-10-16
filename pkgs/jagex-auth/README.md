@@ -5,9 +5,10 @@ clients. Uses your normal browser, then starts a compatible client with the
 `JX_SESSION_ID`, `JX_CHARACTER_ID`, and `JX_DISPLAY_NAME` environment variables.
 It does not download/update clients or fix RS3's GTK2/OpenSSL dependencies.
 
-This project is being hardened in Foundry before standalone release. Callback
-concurrency and the token-validation trust boundary are still under review;
-see `.agents/2026-10-16-refactor.md`. It is not affiliated with Jagex.
+This project is being hardened in Foundry before standalone release. See
+[SECURITY.md](SECURITY.md) for token verification and callback lifetime details,
+and `.agents/2026-10-16-refactor.md` for progress. Real-client smoke tests are
+pending. It is not affiliated with Jagex.
 
 ## Usage
 
@@ -25,6 +26,9 @@ callback delivery does not work, paste the successful-login URL into the termina
 running `authorize`. Treat that URL as a secret. Installing the desktop file does
 not necessarily register it as the default handler; check your desktop's URL
 associations. Do not replace an existing handler without considering its users.
+Raw ID tokens are not accepted: paste the complete successful-login URL so its
+state can be checked. Only one authorization can run per data directory; the
+browser callback wait times out after five minutes. Ctrl-C cancels the attempt.
 
 `launch` never prompts or opens a browser. It requires existing credentials;
 if absent or invalid it asks you to run `authorize`. An expired/revoked game
@@ -33,9 +37,13 @@ automatic session refresh or local check that a saved session is still valid.
 Arguments following the command are passed through literally. `launch` replaces
 itself with the client, preserving signal and exit-status behavior.
 
-For direct Python use (Python 3.10+ on Linux; no third-party modules):
+For direct Python use (Python 3.10+ on Linux), install PyJWT and cryptography
+in a virtual environment; the Nix package supplies these automatically:
 
 ```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
 python3 -m jagex_auth authorize
 python3 -m jagex_auth launch -- runelite
 ```
@@ -85,6 +93,7 @@ is not yet implemented; deleting local files does not revoke a server session.
 ## Offline checks
 
 ```sh
+# In the virtual environment above:
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 # From the Foundry root:
 nix build .#jagex-auth .#jagex-auth.passthru.tests.launch --no-link

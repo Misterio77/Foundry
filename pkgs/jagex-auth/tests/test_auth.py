@@ -1,6 +1,5 @@
 """Offline characterization tests; security hardening adds stricter cases later."""
 
-import base64
 import contextlib
 import io
 import json
@@ -10,6 +9,10 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
+
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -18,9 +21,18 @@ import urllib.parse
 import jagex_auth as auth
 
 
-def token(payload):
-    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-    return f"header.{encoded}.signature"
+PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+JWK = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(PRIVATE_KEY.public_key()))
+JWK.update(kid="test-key", alg="RS256", use="sig")
+
+
+def token(payload=None, *, key=PRIVATE_KEY, headers=None):
+    claims = {
+        "iss": auth.ISSUER, "aud": auth.CLIENT_ID, "iat": int(time.time()),
+        "exp": int(time.time()) + 300, "sub": "subject", "nickname": "User", "nonce": "nonce",
+        **(payload or {}),
+    }
+    return jwt.encode(claims, key, algorithm="RS256", headers=headers or {"kid": "test-key"})
 
 
 class AuthTests(unittest.TestCase):
@@ -30,17 +42,22 @@ class AuthTests(unittest.TestCase):
         self.data = Path(self.temporary.name) / "jagex-auth"
         for name, value in {
             "DATA_DIR": self.data,
-            "CALLBACK_FILE": self.data / "auth-callback-url",
+            "CALLBACK_FILE": self.data / "auth-callback.json",
             "CREDENTIALS_FILE": self.data / "credentials.json",
+            "PENDING_FILE": self.data / "pending.json",
+            "AUTH_LOCK": self.data / "authorize.lock",
+            "CALLBACK_LOCK": self.data / "callback.lock",
         }.items():
             patcher = patch.object(auth, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        # Fail closed if a test accidentally reaches a real browser or network.
-        for target in ("urllib.request.urlopen", "webbrowser.open"):
-            patcher = patch(target, side_effect=AssertionError(f"Unexpected external I/O: {target}"))
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        # Only synthetic JWKS are permitted. All other network/browser I/O fails.
+        def offline(request, **kwargs):
+            if request.full_url == auth.JWKS_ENDPOINT:
+                return io.BytesIO(json.dumps({"keys": [JWK]}).encode())
+            raise AssertionError("Unexpected network I/O")
+        self.enterContext(patch.object(auth.HTTP_OPENER, "open", side_effect=offline))
+        self.enterContext(patch("webbrowser.open", side_effect=AssertionError("Unexpected browser I/O")))
         self.output = io.StringIO()
         self.enterContext(contextlib.redirect_stderr(self.output))
 
@@ -73,15 +90,14 @@ class AuthTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(SystemExit):
                 auth.authentication_params(url, "s")
 
-    def test_decode_payload_is_not_signature_verification(self):
-        payload = {"nonce": "n", "sub": "s", "nickname": "name"}
-        self.assertEqual(auth.decode_jwt_payload(token(payload)), payload)
-        for value in ("bad", "a.!.b", token([1, 2])):
+    def test_verified_token_and_malformed_tokens(self):
+        self.assertEqual(auth.verify_id_token(token(), "nonce")["sub"], "subject")
+        for value in ("bad", "a.!.b", "x" * (auth.MAX_CALLBACK + 1)):
             with self.subTest(value=value), self.assertRaises(SystemExit):
-                auth.decode_jwt_payload(value)
+                auth.verify_id_token(value, "nonce")
 
     def test_request_json_serializes_request(self):
-        with patch("urllib.request.urlopen", return_value=io.BytesIO(b'{"ok": true}')) as request:
+        with patch.object(auth.HTTP_OPENER, "open", return_value=io.BytesIO(b'{"ok": true}')) as request:
             self.assertEqual(auth.request_json("https://test.invalid", method="POST", body={"x": 1}), {"ok": True})
         args, kwargs = request.call_args
         self.assertEqual(args[0].method, "POST")
@@ -90,10 +106,10 @@ class AuthTests(unittest.TestCase):
 
     def test_network_and_json_failures(self):
         for error in (urllib.error.URLError("offline"), TimeoutError()):
-            with patch("urllib.request.urlopen", side_effect=error), self.assertRaises(SystemExit):
+            with patch.object(auth.HTTP_OPENER, "open", side_effect=error), self.assertRaises(SystemExit):
                 auth.request_json("https://test.invalid")
         for body in (b"not-json", b"null", b"123"):
-            with patch("urllib.request.urlopen", return_value=io.BytesIO(body)), self.assertRaises(SystemExit):
+            with patch.object(auth.HTTP_OPENER, "open", return_value=io.BytesIO(body)), self.assertRaises(SystemExit):
                 auth.request_json("https://test.invalid")
 
     def test_session_and_accounts(self):
@@ -132,11 +148,13 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(auth.CREDENTIALS_FILE.read_text(), contents)
 
     def test_callback_delivery_and_consumption(self):
-        url = self.callback(state="s", id_token="id")
-        auth.handle_url(type("Args", (), {"url": url})())
-        self.assertEqual(stat.S_IMODE(auth.CALLBACK_FILE.stat().st_mode), 0o600)
-        self.assertEqual(auth.wait_for_authentication(), url)
-        self.assertFalse(auth.CALLBACK_FILE.exists())
+        with auth.authorization_attempt() as (state, _):
+            url = self.callback(state=state, id_token="id")
+            auth.handle_url(type("Args", (), {"url": url})())
+            self.assertEqual(stat.S_IMODE(auth.CALLBACK_FILE.stat().st_mode), 0o600)
+            self.assertEqual(auth.wait_for_authentication(), url)
+            self.assertFalse(auth.CALLBACK_FILE.exists())
+        self.assertFalse(auth.PENDING_FILE.exists())
 
     def test_authorize_flow(self):
         payload = {"nonce": "nonce", "sub": "subject", "nickname": "User"}

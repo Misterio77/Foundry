@@ -10,6 +10,7 @@
   symlinkJoin,
   writeTextFile,
 }: let
+  python = python3.withPackages (ps: [ps.pyjwt ps.cryptography]);
   desktopItem = makeDesktopItem {
     name = "jagex-auth-handler";
     desktopName = "Jagex Auth URL Handler";
@@ -27,6 +28,8 @@ in
       fileset = lib.fileset.unions [
         ./jagex_auth
         ./README.md
+        ./SECURITY.md
+        ./requirements.txt
         ./tests
       ];
     };
@@ -34,7 +37,7 @@ in
     doCheck = true;
     checkPhase = ''
       runHook preCheck
-      PYTHONDONTWRITEBYTECODE=1 ${lib.getExe python3} -m unittest discover -s tests -v
+      PYTHONDONTWRITEBYTECODE=1 ${lib.getExe python} -m unittest discover -s tests -v
       runHook postCheck
     '';
 
@@ -49,7 +52,7 @@ in
 
       install -Dm644 jagex_auth/__init__.py $out/share/jagex-auth/jagex_auth/__init__.py
       install -Dm644 jagex_auth/__main__.py $out/share/jagex-auth/jagex_auth/__main__.py
-      makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
+      makeWrapper ${lib.getExe python} $out/bin/jagex-auth \
         --set PYTHONPATH $out/share/jagex-auth \
         --add-flags "-m jagex_auth"
 
