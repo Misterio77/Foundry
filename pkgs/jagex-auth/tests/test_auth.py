@@ -169,8 +169,14 @@ class AuthTests(unittest.TestCase):
 
     def test_entry_point_help_without_credentials(self):
         result = subprocess.run(
-            [sys.executable, str(Path(auth.__file__).with_name("jagex-auth.py")), "--help"],
-            env={**os.environ, "HOME": self.temporary.name, "XDG_DATA_HOME": self.temporary.name},
+            [sys.executable, "-m", "jagex_auth", "--help"],
+            env={
+                **os.environ,
+                "HOME": self.temporary.name,
+                "XDG_DATA_HOME": self.temporary.name,
+                "PYTHONPATH": str(Path(auth.__file__).parent.parent),
+            },
+            cwd=self.temporary.name,
             capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)

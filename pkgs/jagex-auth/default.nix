@@ -25,8 +25,7 @@ in
     src = lib.fileset.toSource {
       root = ./.;
       fileset = lib.fileset.unions [
-        ./jagex-auth.py
-        ./jagex_auth.py
+        ./jagex_auth
         ./README.md
         ./tests
       ];
@@ -48,10 +47,11 @@ in
     installPhase = ''
       runHook preInstall
 
-      install -Dm644 jagex-auth.py $out/share/jagex-auth/jagex-auth.py
-      install -Dm644 jagex_auth.py $out/share/jagex-auth/jagex_auth.py
+      install -Dm644 jagex_auth/__init__.py $out/share/jagex-auth/jagex_auth/__init__.py
+      install -Dm644 jagex_auth/__main__.py $out/share/jagex-auth/jagex_auth/__main__.py
       makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
-        --add-flags $out/share/jagex-auth/jagex-auth.py
+        --set PYTHONPATH $out/share/jagex-auth \
+        --add-flags "-m jagex_auth"
 
       runHook postInstall
     '';

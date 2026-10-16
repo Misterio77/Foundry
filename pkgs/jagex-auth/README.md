@@ -36,8 +36,8 @@ itself with the client, preserving signal and exit-status behavior.
 For direct Python use (Python 3.10+ on Linux; no third-party modules):
 
 ```sh
-python3 jagex-auth.py authorize
-python3 jagex-auth.py launch -- runelite
+python3 -m jagex_auth authorize
+python3 -m jagex_auth launch -- runelite
 ```
 
 Browser callback integration additionally requires installing an appropriate

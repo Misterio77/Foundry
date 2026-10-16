@@ -25,14 +25,18 @@ class LaunchTests(unittest.TestCase):
             "CREDENTIALS_FILE": self.data / "credentials.json",
         }.items():
             self.enterContext(patch.object(auth, name, value))
-        self.env = {**os.environ, "HOME": str(self.root), "XDG_DATA_HOME": str(self.root)}
-        self.cli = str(Path(auth.__file__).with_name("jagex-auth.py"))
+        self.env = {
+            **os.environ,
+            "HOME": str(self.root),
+            "XDG_DATA_HOME": str(self.root),
+            "PYTHONPATH": str(Path(auth.__file__).parent.parent),
+        }
         self.account = {"accountId": "character", "displayName": "A Name"}
 
     def run_cli(self, *args):
         return subprocess.run(
-            [sys.executable, self.cli, "launch", "--", *args],
-            env=self.env, capture_output=True, text=True, timeout=10,
+            [sys.executable, "-m", "jagex_auth", "launch", "--", *args],
+            env=self.env, cwd=self.root, capture_output=True, text=True, timeout=10,
         )
 
     def test_literal_credentials_and_argv(self):
