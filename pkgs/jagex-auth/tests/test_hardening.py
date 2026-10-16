@@ -17,12 +17,9 @@ import urllib.error
 import urllib.request
 import urllib.response
 
-import jwt
-from cryptography.hazmat.primitives.asymmetric import rsa
-
 import jagex_auth as auth
 import test_auth as fixtures
-from test_auth import JWK, token
+from test_auth import encode_token, token
 
 
 class HardeningTests(unittest.TestCase):
@@ -32,7 +29,7 @@ class HardeningTests(unittest.TestCase):
     def handle(self, url):
         auth.handle_url(argparse.Namespace(url=url))
 
-    def test_invalid_token_claims(self):
+    def test_inconsistent_unverified_claims(self):
         changes = [
             {"iss": "https://evil.invalid/"}, {"aud": "wrong"},
             {"exp": int(time.time()) - 120}, {"iat": int(time.time()) + 120},
@@ -43,43 +40,46 @@ class HardeningTests(unittest.TestCase):
         ]
         for claims in changes:
             with self.subTest(claims=claims), self.assertRaises(SystemExit):
-                auth.verify_id_token(token(claims), "nonce")
-
-    def test_optional_jwk_fields_and_incompatible_operations(self):
-        for omitted in (("use",), ("alg",), ("use", "alg")):
-            key = {k: v for k, v in JWK.items() if k not in omitted}
-            with patch.object(auth, "request_json", return_value={"keys": [key]}):
-                self.assertEqual(auth.verify_id_token(token(), "nonce")["sub"], "subject")
-        for changes in ({"key_ops": ["encrypt"]}, {"key_ops": "verify"}, {"alg": "HS256"}):
-            with patch.object(auth, "request_json", return_value={"keys": [{**JWK, **changes}]}), self.assertRaises(SystemExit):
-                auth.verify_id_token(token(), "nonce")
+                auth.decode_id_token(token(claims), "nonce")
 
     def test_missing_required_claims(self):
         for claim in ("exp", "iat", "sub", "iss", "aud", "nonce"):
-            value = jwt.decode(token(), options={"verify_signature": False})
+            value = auth.decode_id_token(token(), "nonce")
             del value[claim]
-            from test_auth import PRIVATE_KEY
-            encoded = jwt.encode(value, PRIVATE_KEY, algorithm="RS256", headers={"kid": "test-key"})
             with self.subTest(claim=claim), self.assertRaises(SystemExit):
-                auth.verify_id_token(encoded, "nonce")
+                auth.decode_id_token(encode_token(value), "nonce")
 
-    def test_wrong_signatures_algorithms_and_keys(self):
-        wrong_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        for encoded in (
-            token(key=wrong_key), token(headers={"kid": "unknown"}),
-            jwt.encode({"nonce": "nonce"}, "", algorithm="none", headers={"kid": "test-key"}),
-            jwt.encode({"nonce": "nonce"}, "synthetic-secret", algorithm="HS256", headers={"kid": "test-key"}),
-        ):
-            with self.subTest(encoded=encoded[:20]), self.assertRaises(SystemExit):
-                auth.verify_id_token(encoded, "nonce")
-        for keys in ([], [JWK, JWK], [{**JWK, "kty": "EC"}], [{**JWK, "use": "enc"}]):
-            with patch.object(auth, "request_json", return_value={"keys": keys}), self.assertRaises(SystemExit):
-                auth.verify_id_token(token(), "nonce")
+    def test_decoding_is_not_signature_verification_and_never_fetches_keys(self):
+        # An arbitrary signature passes local consistency checks, not login.
+        encoded = token(headers={"alg": "RS256", "kid": "unknown", "jku": "https://evil.invalid/"})
+        with patch.object(auth, "request_json") as request:
+            self.assertEqual(auth.decode_id_token(encoded, "nonce")["sub"], "subject")
+        request.assert_not_called()
 
-    def test_token_header_cannot_choose_jwks_endpoint(self):
-        with patch.object(auth, "request_json", return_value={"keys": [JWK]}) as request:
-            auth.verify_id_token(token(headers={"kid": "test-key", "jku": "https://evil.invalid/"}), "nonce")
-        request.assert_called_once_with(auth.JWKS_ENDPOINT)
+    def test_server_rejection_or_failed_character_listing_never_saves_login(self):
+        auth.write_credentials("existing", {"accountId": "c", "displayName": "Name"})
+        before = auth.CREDENTIALS_FILE.read_bytes()
+        id_token = token({"nickname": "UNTRUSTED"})
+        for failed_step in ("session", "characters"):
+            with (
+                patch.object(auth.secrets, "token_urlsafe", side_effect=["state", "nonce"]),
+                patch.object(auth, "open_browser"),
+                patch.object(auth, "wait_for_authentication", return_value=self.callback(state="state", id_token=id_token)),
+                patch.object(auth, "get_game_session", side_effect=SystemExit("rejected") if failed_step == "session" else None, return_value="session") as exchange,
+                patch.object(auth, "get_accounts", side_effect=SystemExit("rejected")) as accounts,
+                patch.object(auth, "write_credentials") as write,
+                self.assertRaises(SystemExit),
+            ):
+                auth.authorize(None)
+            exchange.assert_called_once_with(id_token)
+            if failed_step == "session":
+                accounts.assert_not_called()
+            else:
+                accounts.assert_called_once_with("session")
+            write.assert_not_called()
+            self.assertEqual(auth.CREDENTIALS_FILE.read_bytes(), before)
+            self.assertNotIn("Authenticated", self.output.getvalue())
+            self.assertNotIn("UNTRUSTED", self.output.getvalue())
 
     def test_strict_urls_and_parameters(self):
         valid = self.callback(state="s", id_token="id")

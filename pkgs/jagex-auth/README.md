@@ -6,7 +6,7 @@ clients. Uses your normal browser, then starts a compatible client with the
 It does not download/update clients or fix RS3's GTK2/OpenSSL dependencies.
 
 This project is being hardened in Foundry before standalone release. See
-[SECURITY.md](SECURITY.md) for token verification and callback lifetime details,
+[SECURITY.md](SECURITY.md) for the server-validation trust boundary and callback lifetime details,
 and `.agents/2026-10-16-refactor.md` for progress. Real-client smoke tests are
 pending. It is not affiliated with Jagex.
 
@@ -37,13 +37,14 @@ automatic session refresh or local check that a saved session is still valid.
 Arguments following the command are passed through literally. `launch` replaces
 itself with the client, preserving signal and exit-status behavior.
 
-For direct Python use (Python 3.10+ on Linux), install PyJWT and cryptography
-in a virtual environment; the Nix package supplies these automatically:
+ID tokens are not signature-verified locally. The helper checks response binding
+and unverified claims for consistency, then relies on Jagex's HTTPS session
+exchange and character listing to establish authentication before saving a login.
+
+For direct Python use (Python 3.10+ on Linux; standard library only), run from
+the source directory:
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install -r requirements.txt
 python3 -m jagex_auth authorize
 python3 -m jagex_auth launch -- runelite
 ```
@@ -93,8 +94,8 @@ is not yet implemented; deleting local files does not revoke a server session.
 ## Offline checks
 
 ```sh
-# In the virtual environment above:
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+# -S disables site packages, demonstrating that tests need only the stdlib:
+PYTHONDONTWRITEBYTECODE=1 python3 -S -m unittest discover -s tests -v
 # From the Foundry root:
 nix build .#jagex-auth .#jagex-auth.passthru.tests.launch --no-link
 ```

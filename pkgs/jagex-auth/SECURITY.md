@@ -5,7 +5,7 @@ flow, not a separately registered OAuth application. Real login/client smoke
 verification of this refactor is still pending. Do not include tokens, callback
 URLs, credential files, or HTTP response bodies in reports.
 
-## Protocol and local validation
+## Protocol and authoritative validation
 
 The following public provider metadata was checked on 2026-10-16:
 
@@ -16,13 +16,10 @@ The following public provider metadata was checked on 2026-10-16:
 - Advertised ID-token signing algorithm: `RS256`
 - `id_token` is among the advertised response types.
 
-The public JWKS inspected that day has an RSA signing key with `kid`, `use=sig`,
-and `alg=RS256`. We require one matching RSA key ID and RS256 only. Optional
-`use`/`alg` fields may be absent, but incompatible values or `key_ops` without
-verification permission are rejected. A provider key rotation is handled by fetching JWKS anew for each
-login, not by pinning a particular key. Changes in provider metadata/key policy
-may require an update. We do not follow token-supplied `jku`/`x5u` URLs, discover
-arbitrary issuers, or follow HTTP redirects for authentication requests. HTTPS
+The helper is stdlib-only and does **not verify ID-token signatures locally**,
+fetch JWKS, or implement cryptography. The metadata above describes the provider,
+not a promise of local cryptographic verification. Token-supplied `jku`/`x5u`
+URLs are ignored. HTTP redirects are disabled for authentication requests; HTTPS
 certificate verification uses Python's configured trust store.
 
 `authorize` requests an ID token for
@@ -37,19 +34,30 @@ has echo disabled while waiting; settings are restored on completion, timeout,
 or cancellation. A browser response already delivered wins over concurrent
 terminal input.
 
-Before exchanging the token for a game session, PyJWT with cryptography verifies
-its RSA signature using the fixed Jagex JWKS endpoint, issuer, audience, required
-claims, expiration, issued-at time, and optional not-before time. Timestamps must
-be integer NumericDates; a 30-second clock skew allowance applies. We additionally
-check the nonce, nonempty subject/nickname, and authorized party (`azp`) if
-present or if multiple audiences are returned. Algorithm substitution, unknown
-or duplicate key IDs, and invalid/missing claims fail closed.
+Before exchange, the helper strictly decodes the token and checks unverified
+claims for consistency: issuer, audience, integer expiration/issued-at/optional
+not-before timestamps (30-second clock skew allowance), nonce, nonempty
+subject/nickname, and authorized party (`azp`) if present or required for multiple
+audiences. These are input sanity checks and request binding, **not proof of
+identity**. A forged token with matching claims can pass them; neither its
+header nor decoded account information establishes a login.
 
-We do not claim to know every validation performed by Jagex's game-session
-endpoint. Local checks do not rely on an undocumented server-validation promise.
-The session exchange and character listing still require trusting Jagex and its
-HTTPS endpoints. The helper neither refreshes tokens nor checks a saved game
-session's validity before launch; reauthorize when the client rejects a session.
+The authentication authority is Jagex's fixed HTTPS game-session endpoint:
+`https://auth.runescape.com/game-session/v1/sessions`. We require a successful
+exchange of the complete, unchanged ID token and a successful character listing
+using the resulting game session before saving credentials or reporting success.
+Rejection at either step leaves prior credentials unchanged. The token's nickname
+is only used for a status message after those server operations have succeeded;
+character IDs/names come from the authenticated server response.
+
+This deliberately relies on Jagex correctly validating tokens and authorizing
+session creation. We have not independently established every server-side
+validation rule. If that endpoint were to accept forged tokens, the helper has
+no independent signature check to compensate. This is a thin exchange helper,
+not a standalone OIDC verifier or an identity provider for other applications.
+
+The helper neither refreshes tokens nor checks a saved game session's validity
+before launch; reauthorize when the client rejects a session.
 
 ## Callback lifetime and concurrency
 

@@ -1,8 +1,10 @@
 import argparse
+import base64
 from contextlib import contextmanager
 import fcntl
 import json
 import os
+import re
 import secrets
 import select
 import signal
@@ -17,15 +19,12 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-import jwt
-
 AUTH_ENDPOINT = "https://account.jagex.com/oauth2/auth"
 CLIENT_ID = "com_jagex_auth_desktop_launcher_rs_hub"
 REDIRECT_URI = "https://account.jagex.com/en-GB/launcher/successful-login"
 SESSION_ENDPOINT = "https://auth.runescape.com/game-session/v1/sessions"
 ACCOUNTS_ENDPOINT = "https://auth.runescape.com/game-session/v2/accounts"
 ISSUER = "https://account.jagex.com/"
-JWKS_ENDPOINT = "https://account.jagex.com/.well-known/jwks.json"
 AUTH_TIMEOUT = 300
 MAX_CALLBACK = 16384
 
@@ -49,7 +48,7 @@ def ensure_data_dir() -> None:
 
 class NoRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        # Fixed authentication endpoints must not redirect tokens or JWKS trust.
+        # Fixed authentication endpoints must not redirect tokens or credentials.
         return None
 
 
@@ -271,49 +270,50 @@ def close_callback_delivery() -> None:
     atomic_write_private(PENDING_FILE, json.dumps(pending))
 
 
-def verify_id_token(token: str, nonce: str) -> dict:
+def decode_id_token(token: str, nonce: str) -> dict:
+    """Check unverified claims for consistency, NOT authenticity.
+
+    Only Jagex's successful session exchange and character listing establish
+    authentication. Do not use these decoded claims to authorize anything.
+    """
     try:
-        if len(token) > MAX_CALLBACK:
-            raise ValueError("Token too large")
-        header = jwt.get_unverified_header(token)
-        if header.get("alg") != "RS256" or not isinstance(header.get("kid"), str):
-            raise ValueError("Invalid signing header")
-        # Always use the pinned Jagex endpoint, never jku/x5u supplied in a token.
-        jwks = request_json(JWKS_ENDPOINT)
-        keys = jwks.get("keys") if isinstance(jwks, dict) else None
-        if not isinstance(keys, list):
-            raise ValueError("Invalid JWKS")
-        matches = [key for key in keys if isinstance(key, dict) and key.get("kid") == header["kid"]]
-        if any(
-            key.get("kty") != "RSA" or key.get("use", "sig") != "sig"
-            or key.get("alg", "RS256") != "RS256"
-            or ("key_ops" in key and (not isinstance(key["key_ops"], list) or "verify" not in key["key_ops"]))
-            for key in matches
+        if not isinstance(token, str) or len(token) > MAX_CALLBACK:
+            raise ValueError("Token too large or invalid")
+        parts = token.split(".")
+        if len(parts) != 3 or any(not re.fullmatch(r"[A-Za-z0-9_-]+", p) for p in parts):
+            raise ValueError("Invalid JWT encoding")
+        decoded = [base64.b64decode(p + "=" * (-len(p) % 4), altchars=b"-_", validate=True) for p in parts]
+        header, payload = (json.loads(part) for part in decoded[:2])
+        if not isinstance(header, dict) or not isinstance(payload, dict):
+            raise ValueError("Invalid JWT objects")
+        if payload.get("iss") != ISSUER:
+            raise ValueError("Unexpected issuer")
+        audience = payload.get("aud")
+        if audience != CLIENT_ID and not (
+            isinstance(audience, list) and audience
+            and all(isinstance(value, str) for value in audience) and CLIENT_ID in audience
         ):
-            raise ValueError("Incompatible signing key")
-        if len(matches) != 1:
-            raise ValueError("Unknown or ambiguous signing key")
-        key = jwt.PyJWK.from_dict(matches[0], algorithm="RS256").key
-        payload = jwt.decode(
-            token, key, algorithms=["RS256"], issuer=ISSUER, audience=CLIENT_ID,
-            leeway=30,
-            options={"require": ["exp", "iat", "iss", "aud", "sub", "nonce"]},
-        )
-        if any(type(payload[claim]) is not int for claim in ("iat", "exp")):
+            raise ValueError("Unexpected audience")
+        if any(type(payload.get(claim)) is not int for claim in ("iat", "exp")):
             raise ValueError("Invalid token timestamps")
-        if "nbf" in payload and type(payload["nbf"]) is not int:
+        now = time.time()
+        if payload["exp"] <= now - 30 or payload["iat"] > now + 30:
+            raise ValueError("Token expired or issued in the future")
+        if "nbf" in payload and (type(payload["nbf"]) is not int or payload["nbf"] > now + 30):
             raise ValueError("Invalid token not-before timestamp")
-        if not isinstance(payload.get("nonce"), str) or not secrets.compare_digest(payload["nonce"], nonce):
+        if not isinstance(payload.get("nonce"), str) or not secrets.compare_digest(
+            payload["nonce"].encode("utf-8"), nonce.encode("utf-8")
+        ):
             raise SystemExit("OAuth nonce mismatch")
         if payload.get("azp", CLIENT_ID) != CLIENT_ID:
             raise ValueError("Wrong authorized party")
-        if isinstance(payload["aud"], list) and len(payload["aud"]) > 1 and payload.get("azp") != CLIENT_ID:
+        if isinstance(audience, list) and len(audience) > 1 and payload.get("azp") != CLIENT_ID:
             raise ValueError("Missing authorized party")
         if not all(isinstance(payload.get(k), str) and payload[k] for k in ("sub", "nickname")):
             raise ValueError("Missing account information")
         return payload
-    except (jwt.PyJWTError, ValueError, TypeError, KeyError, OverflowError):
-        raise SystemExit("Invalid Jagex ID token (signature, claims, or signing key)") from None
+    except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+        raise SystemExit("Malformed or inconsistent Jagex ID token (not signature-verified locally)") from None
 
 
 def get_game_session(id_token: str) -> str:
@@ -498,7 +498,7 @@ def authorize(_args: argparse.Namespace) -> None:
             print("Opening Jagex login in your browser.", file=sys.stderr)
             open_browser(make_auth_url(state, nonce))
             params = authentication_params(wait_for_authentication(), state)
-            payload = verify_id_token(params["id_token"], nonce)
+            payload = decode_id_token(params["id_token"], nonce)
             session_id = get_game_session(params["id_token"])
             account = choose_account(get_accounts(session_id))
             write_credentials(session_id, account)

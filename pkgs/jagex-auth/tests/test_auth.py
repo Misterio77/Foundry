@@ -1,5 +1,6 @@
 """Offline characterization tests; security hardening adds stricter cases later."""
 
+import base64
 import contextlib
 import io
 import json
@@ -11,8 +12,6 @@ import sys
 import tempfile
 import time
 
-import jwt
-from cryptography.hazmat.primitives.asymmetric import rsa
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -21,18 +20,19 @@ import urllib.parse
 import jagex_auth as auth
 
 
-PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-JWK = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(PRIVATE_KEY.public_key()))
-JWK.update(kid="test-key", alg="RS256", use="sig")
+def encode_token(claims, headers=None):
+    # Deliberately fake signature: authenticity is Jagex's responsibility.
+    parts = [json.dumps(headers or {"alg": "RS256"}).encode(), json.dumps(claims).encode(), b"synthetic-signature"]
+    return ".".join(base64.urlsafe_b64encode(part).decode().rstrip("=") for part in parts)
 
 
-def token(payload=None, *, key=PRIVATE_KEY, headers=None):
+def token(payload=None, *, headers=None):
     claims = {
         "iss": auth.ISSUER, "aud": auth.CLIENT_ID, "iat": int(time.time()),
         "exp": int(time.time()) + 300, "sub": "subject", "nickname": "User", "nonce": "nonce",
         **(payload or {}),
     }
-    return jwt.encode(claims, key, algorithm="RS256", headers=headers or {"kid": "test-key"})
+    return encode_token(claims, headers)
 
 
 class AuthTests(unittest.TestCase):
@@ -51,12 +51,8 @@ class AuthTests(unittest.TestCase):
             patcher = patch.object(auth, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        # Only synthetic JWKS are permitted. All other network/browser I/O fails.
-        def offline(request, **kwargs):
-            if request.full_url == auth.JWKS_ENDPOINT:
-                return io.BytesIO(json.dumps({"keys": [JWK]}).encode())
-            raise AssertionError("Unexpected network I/O")
-        self.enterContext(patch.object(auth.HTTP_OPENER, "open", side_effect=offline))
+        # Fail closed if a test unexpectedly reaches any real network/browser.
+        self.enterContext(patch.object(auth.HTTP_OPENER, "open", side_effect=AssertionError("Unexpected network I/O")))
         self.enterContext(patch("webbrowser.open", side_effect=AssertionError("Unexpected browser I/O")))
         self.output = io.StringIO()
         self.enterContext(contextlib.redirect_stderr(self.output))
@@ -90,11 +86,16 @@ class AuthTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(SystemExit):
                 auth.authentication_params(url, "s")
 
-    def test_verified_token_and_malformed_tokens(self):
-        self.assertEqual(auth.verify_id_token(token(), "nonce")["sub"], "subject")
-        for value in ("bad", "a.!.b", "x" * (auth.MAX_CALLBACK + 1)):
-            with self.subTest(value=value), self.assertRaises(SystemExit):
-                auth.verify_id_token(value, "nonce")
+    def test_unverified_claims_and_malformed_tokens(self):
+        self.assertEqual(auth.decode_id_token(token(), "nonce")["sub"], "subject")
+        nested = b"[" * 1500 + b"0" + b"]" * 1500
+        nested_tokens = [
+            ".".join(base64.urlsafe_b64encode(part).decode().rstrip("=") for part in parts)
+            for parts in ((b"{}", nested, b"synthetic"), (nested, b"{}", b"synthetic"))
+        ]
+        for value in ("bad", "a.!.b", "x" * (auth.MAX_CALLBACK + 1), encode_token([]), "e30.e30.", *nested_tokens):
+            with self.subTest(value=value[:80]), self.assertRaises(SystemExit):
+                auth.decode_id_token(value, "nonce")
 
     def test_request_json_serializes_request(self):
         with patch.object(auth.HTTP_OPENER, "open", return_value=io.BytesIO(b'{"ok": true}')) as request:
