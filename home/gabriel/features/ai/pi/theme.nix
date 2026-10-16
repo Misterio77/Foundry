@@ -28,19 +28,19 @@ in {
       toolPendingBg = "surface_container";
       toolSuccessBg = "green_container";
       toolErrorBg = "error_container";
-      toolTitle = "blue";
+      toolTitle = "primary";
       toolOutput = "on_surface";
 
-      mdHeading = "blue";
+      mdHeading = "primary";
       mdLink = "red";
       mdLinkUrl = "orange";
       mdCode = "green";
       mdCodeBlock = "on_surface";
-      mdCodeBlockBorder = "secondary";
+      mdCodeBlockBorder = "primary";
       mdQuote = "cyan";
       mdQuoteBorder = "cyan";
       mdHr = "secondary";
-      mdListBullet = "red";
+      mdListBullet = "primary";
 
       toolDiffAdded = "green";
       toolDiffRemoved = "red";
