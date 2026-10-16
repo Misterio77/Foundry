@@ -23,7 +23,6 @@ class LaunchTests(unittest.TestCase):
         for name, value in {
             "DATA_DIR": self.data,
             "CREDENTIALS_FILE": self.data / "credentials.json",
-            "LEGACY_CREDENTIALS_FILE": self.data / "credentials.properties",
         }.items():
             self.enterContext(patch.object(auth, name, value))
         self.env = {**os.environ, "HOME": str(self.root), "XDG_DATA_HOME": str(self.root)}
@@ -58,17 +57,11 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(argv, ["client", "arg"])
         self.assertEqual(env["JX_SESSION_ID"], "saved")
 
-    def test_missing_and_legacy_fail_without_launching(self):
-        for legacy in (False, True):
-            if legacy:
-                auth.ensure_data_dir()
-                auth.LEGACY_CREDENTIALS_FILE.write_text("$(false)")
-            result = self.run_cli(sys.executable, "-c", "print('LAUNCHED')")
-            self.assertNotEqual(result.returncode, 0)
-            self.assertNotIn("LAUNCHED", result.stdout)
-            self.assertIn("jagex-auth authorize", result.stderr)
-            if legacy:
-                self.assertIn("Legacy", result.stderr)
+    def test_missing_credentials_fail_without_launching(self):
+        result = self.run_cli(sys.executable, "-c", "print('LAUNCHED')")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("LAUNCHED", result.stdout)
+        self.assertIn("jagex-auth authorize", result.stderr)
 
     def test_invalid_schema(self):
         auth.ensure_data_dir()

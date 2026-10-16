@@ -63,7 +63,7 @@ HDOS, and RS3 are Foundry integration targets; real-client smoke tests for the
 refactor are pending. The helper's successful launch does not guarantee that a
 particular client's runtime dependencies or account integration work.
 
-## Storage and migration
+## Storage
 
 Credentials live in `$XDG_DATA_HOME/jagex-auth/credentials.json`, defaulting to
 `~/.local/share/jagex-auth/credentials.json`. The schema has `version: 1` and the
@@ -71,12 +71,10 @@ three `JX_*` fields. The directory is private (`0700`); credential files are
 created private (`0600`) and replaced atomically. Unsafe credential file types,
 symlinks, files owned by another user, and group/world permissions are rejected.
 
-The old `credentials.properties` file is **not imported or evaluated**. Run
-`jagex-auth authorize` again after upgrading. Once authorization succeeds and
-the new client launch works, delete the obsolete properties file yourself; it
-still contains a sensitive session. Do not paste either file into bug reports.
-On impermanent systems, persist the data directory if you want sessions to
-survive a reboot.
+Only the JSON format is supported; there is no legacy detection or migration.
+Run `jagex-auth authorize` to create credentials. Do not paste credentials into
+bug reports. On impermanent systems, persist the data directory if you want
+sessions to survive a reboot.
 
 Credentials are ordinary data, never shell code. They are passed to clients
 through the environment, not command arguments. This is not protection from

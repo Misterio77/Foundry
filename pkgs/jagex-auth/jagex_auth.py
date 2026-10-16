@@ -25,7 +25,6 @@ DATA_DIR = (
 )
 CALLBACK_FILE = DATA_DIR / "auth-callback-url"
 CREDENTIALS_FILE = DATA_DIR / "credentials.json"
-LEGACY_CREDENTIALS_FILE = DATA_DIR / "credentials.properties"
 CREDENTIAL_KEYS = ("JX_SESSION_ID", "JX_CHARACTER_ID", "JX_DISPLAY_NAME")
 
 
@@ -260,10 +259,7 @@ def read_credentials() -> dict[str, str]:
                 raise ValueError("Credential file too large")
             return validate_credentials(json.loads(contents))
     except FileNotFoundError:
-        if LEGACY_CREDENTIALS_FILE.exists():
-            message = "Legacy credentials need reauthorization"
-        else:
-            message = "No saved credentials"
+        message = "No saved credentials"
     except (OSError, ValueError):
         message = "Invalid or unsafe saved credentials"
     raise SystemExit(f"{message}; run 'jagex-auth authorize'.")

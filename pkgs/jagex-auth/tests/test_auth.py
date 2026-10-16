@@ -32,7 +32,6 @@ class AuthTests(unittest.TestCase):
             "DATA_DIR": self.data,
             "CALLBACK_FILE": self.data / "auth-callback-url",
             "CREDENTIALS_FILE": self.data / "credentials.json",
-            "LEGACY_CREDENTIALS_FILE": self.data / "credentials.properties",
         }.items():
             patcher = patch.object(auth, name, value)
             patcher.start()
