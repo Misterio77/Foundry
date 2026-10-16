@@ -309,6 +309,26 @@
         "type": "github"
       }
     },
+    "jagex-auth": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792187667,
+        "narHash": "sha256-82lImW4ulhf2AoRnkIpT6nQsET5a5p/nzy1LWqkqca4=",
+        "owner": "Misterio77",
+        "repo": "jagex-auth",
+        "rev": "f9f4eb3e31fc167f2ce943d3ac59144a8e9a9ab2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Misterio77",
+        "repo": "jagex-auth",
+        "type": "github"
+      }
+    },
     "lanzaboote": {
       "inputs": {
         "crane": "crane",
@@ -489,6 +509,7 @@
         "home-manager": "home-manager",
         "hytale": "hytale",
         "impermanence": "impermanence",
+        "jagex-auth": "jagex-auth",
         "lanzaboote": "lanzaboote",
         "nix-minecraft": "nix-minecraft",
         "nix-system-graphics": "nix-system-graphics",

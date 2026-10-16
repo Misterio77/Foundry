@@ -59,13 +59,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Third party programs, packaged with nix
+    # Programs packaged with Nix
     firefox-addons = {
       url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     hytale = {
       url = "github:TNAZEP/HytaleLauncherFlake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    jagex-auth = {
+      url = "github:Misterio77/jagex-auth";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

@@ -4,11 +4,11 @@
   ...
 }: {
   home.packages = [
-    (pkgs.jagex-auth.wrapLaunch pkgs.runelite)
-    (pkgs.jagex-auth.wrapLaunch pkgs.hdos)
-    (pkgs.jagex-auth.wrapLaunch pkgs.runescape)
+    (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.runelite)
+    (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.hdos)
+    (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.runescape)
     pkgs.alt1
-    pkgs.jagex-auth
+    pkgs.inputs.jagex-auth.default
     pkgs.runelite-query
     # Replaces the Plugin Hub copy of 117 HD; uninstall that to avoid duplicates.
     pkgs.runelite-hd
