@@ -30,9 +30,10 @@ response in the fragment. Query parameters and alternate paths/origins are
 rejected. Raw-token paste is intentionally unsupported: it discards the URL's
 state binding. Duplicate parameters, provider errors, missing tokens, oversized
 inputs, and malformed input are rejected without echoing secrets. Manual terminal input
-has echo disabled while waiting; settings are restored on completion, timeout,
-or cancellation. A browser response already delivered wins over concurrent
-terminal input.
+has echo disabled while waiting and bypasses the terminal's bounded line buffer.
+Unread terminal input is discarded when restoring settings on completion,
+timeout, or cancellation, so unfinished secret pastes cannot pass back to the
+shell. A browser response already delivered wins over concurrent terminal input.
 
 Before exchange, the helper strictly decodes the token and checks unverified
 claims for consistency: issuer, audience, integer expiration/issued-at/optional
@@ -97,5 +98,8 @@ untrusted client executable, an administrator, or a compromised browser. Those
 can read session files or process environments. The browser URL handler invocation
 itself carries a secret URL as an argument; avoid recording process arguments or
 shell history containing callback URLs. Keep HOME/XDG paths and the software
-installation trusted. Deleting local credentials does not revoke a server-side
-session.
+installation trusted. The installed Nix command disables Python's implicit
+current-directory import path; running it in a downloaded project must not load
+that project's code. Direct `python3 -m jagex_auth` usage intentionally loads the
+source tree and requires trusting that tree. Deleting local credentials does
+not revoke a server-side session.

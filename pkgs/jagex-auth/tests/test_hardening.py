@@ -259,9 +259,16 @@ class HardeningTests(unittest.TestCase):
         stream = os.fdopen(slave, "rb")
         self.addCleanup(stream.close)
         original = termios.tcgetattr(slave)
+        original[6][termios.VMIN] = 2
+        original[6][termios.VTIME] = 3
+        termios.tcsetattr(slave, termios.TCSANOW, original)
+        original = termios.tcgetattr(slave)
         for result in ("url", SystemExit("timed out"), KeyboardInterrupt()):
             def wait(_timeout):
-                self.assertFalse(termios.tcgetattr(slave)[3] & termios.ECHO)
+                hidden = termios.tcgetattr(slave)
+                self.assertFalse(hidden[3] & (termios.ECHO | termios.ECHONL | termios.ICANON))
+                self.assertEqual(hidden[6][termios.VMIN], 1)
+                self.assertEqual(hidden[6][termios.VTIME], 0)
                 if isinstance(result, BaseException):
                     raise result
                 return result
@@ -272,6 +279,57 @@ class HardeningTests(unittest.TestCase):
                 else:
                     self.assertEqual(auth.wait_for_authentication(timeout=1), "url")
             self.assertEqual(termios.tcgetattr(slave), original)
+
+    def test_terminal_discards_unread_input_on_all_exits(self):
+        original_wait = auth._wait_for_authentication
+        for outcome in ("browser", "timeout", "interrupt", "sigterm"):
+            with self.subTest(outcome=outcome):
+                master, slave = os.openpty()
+                self.addCleanup(os.close, master)
+                stream = os.fdopen(slave, "rb")
+                self.addCleanup(stream.close)
+                with auth.cancellation_signals(), auth.authorization_attempt() as (state, _):
+                    url = self.callback(state=state, id_token="browser")
+                    if outcome == "browser":
+                        self.handle(url)
+
+                    def wait(timeout):
+                        self.assertFalse(termios.tcgetattr(slave)[3] & termios.ECHO)
+                        os.write(master, b"synthetic unfinished secret")
+                        if outcome == "interrupt":
+                            raise KeyboardInterrupt()
+                        if outcome == "sigterm":
+                            os.kill(os.getpid(), signal.SIGTERM)
+                        return original_wait(timeout)
+
+                    with patch.object(auth.sys, "stdin", stream), patch.object(auth, "_wait_for_authentication", side_effect=wait):
+                        if outcome == "browser":
+                            self.assertEqual(auth.wait_for_authentication(timeout=1), url)
+                        else:
+                            error = KeyboardInterrupt if outcome == "interrupt" else SystemExit
+                            with self.assertRaises(error):
+                                auth.wait_for_authentication(timeout=0)
+                # A shell reading the restored terminal must not inherit the secret.
+                os.write(master, b"\n")
+                self.assertEqual(os.read(slave, 1024), b"\n")
+
+    def test_terminal_paste_above_canonical_line_limit(self):
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        stream = os.fdopen(slave, "rb")
+        self.addCleanup(stream.close)
+        original_wait = auth._wait_for_authentication
+        with auth.authorization_attempt() as (state, _):
+            url = self.callback(state=state, id_token="a" * 5000)
+            self.assertLess(len(url), auth.MAX_CALLBACK)
+
+            def wait(timeout):
+                self.assertFalse(termios.tcgetattr(slave)[3] & termios.ECHO)
+                os.write(master, url.encode() + b"\n")
+                return original_wait(timeout)
+
+            with patch.object(auth.sys, "stdin", stream), patch.object(auth, "_wait_for_authentication", side_effect=wait):
+                self.assertEqual(auth.wait_for_authentication(timeout=1), url)
 
     def test_callback_contention_is_bounded(self):
         auth.ensure_data_dir()

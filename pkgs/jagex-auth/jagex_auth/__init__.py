@@ -194,12 +194,17 @@ def private_terminal_input():
         return
     original = termios.tcgetattr(fd)
     hidden = original.copy()
-    hidden[3] &= ~(termios.ECHO | termios.ECHONL)
+    # Read long pastes ourselves instead of the terminal's bounded line buffer.
+    hidden[3] &= ~(termios.ECHO | termios.ECHONL | termios.ICANON)
+    hidden[6] = original[6].copy()
+    hidden[6][termios.VMIN] = 1
+    hidden[6][termios.VTIME] = 0
     try:
         termios.tcsetattr(fd, termios.TCSANOW, hidden)
         yield
     finally:
-        termios.tcsetattr(fd, termios.TCSANOW, original)
+        # Never hand an unfinished secret paste back to the shell.
+        termios.tcsetattr(fd, termios.TCSAFLUSH, original)
 
 
 def wait_for_authentication(timeout: float = AUTH_TIMEOUT) -> str:

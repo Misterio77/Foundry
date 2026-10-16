@@ -52,7 +52,7 @@ in
       install -Dm644 jagex_auth/__main__.py $out/share/jagex-auth/jagex_auth/__main__.py
       makeWrapper ${lib.getExe python3} $out/bin/jagex-auth \
         --set PYTHONPATH $out/share/jagex-auth \
-        --add-flags "-m jagex_auth"
+        --add-flags "-P -m jagex_auth"
 
       runHook postInstall
     '';

@@ -46,8 +46,17 @@ in
         "JX_CHARACTER_ID": "character", "JX_DISPLAY_NAME": name,
     }))
     credentials.chmod(0o600)
+    # Installed entry points must not import packages from the working directory.
+    shadow = pathlib.Path(os.environ["HOME"]) / "shadow-cwd"
+    module = shadow / "jagex_auth"
+    module.mkdir(parents=True)
+    (module / "__init__.py").write_text('raise SystemExit("untrusted cwd package imported")\n')
+    (module / "__main__.py").write_text('raise SystemExit("untrusted cwd module executed")\n')
+    help_result = subprocess.run(["${jagex-auth}/bin/jagex-auth", "--help"], cwd=shadow, capture_output=True, text=True)
+    assert help_result.returncode == 0, help_result.stderr
+    assert "authorize" in help_result.stdout
     args = ["argument with spaces", "--flag", "$(false)"]
-    result = subprocess.run(["${wrapped}/bin/test-client", *args], check=True, capture_output=True, text=True)
+    result = subprocess.run(["${wrapped}/bin/test-client", *args], cwd=shadow, check=True, capture_output=True, text=True)
     assert json.loads(result.stdout) == {"args": args, "session": "synthetic-session", "name": name}
     desktop = pathlib.Path("${wrapped}/share/applications/test-client.desktop").read_text()
     assert "Exec=test-client %U" in desktop
