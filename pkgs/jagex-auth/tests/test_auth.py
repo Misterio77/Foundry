@@ -128,6 +128,25 @@ class AuthTests(unittest.TestCase):
             with patch.object(auth, "request_json", return_value=value), self.assertRaises(SystemExit):
                 auth.get_accounts("session")
 
+    def test_unnamed_characters_do_not_hide_named_characters(self):
+        named = {"accountId": "named", "displayName": "Name"}
+        for unnamed in ({"accountId": "unnamed"}, {"accountId": "unnamed", "displayName": None}, {"accountId": "unnamed", "displayName": ""}):
+            with self.subTest(unnamed=unnamed), patch.object(auth, "request_json", return_value=[unnamed, named]):
+                self.assertEqual(auth.get_accounts("session"), [named])
+        self.assertIn("Skipping characters without a display name", self.output.getvalue())
+
+    def test_all_unnamed_characters_have_actionable_error(self):
+        with patch.object(auth, "request_json", return_value=[{"accountId": "unnamed"}]):
+            with self.assertRaisesRegex(SystemExit, "set a character name"):
+                auth.get_accounts("session")
+
+    def test_invalid_character_information_still_rejected(self):
+        named = {"accountId": "named", "displayName": "Name"}
+        for invalid in (None, {}, {"accountId": ""}, {"accountId": 123}, {"accountId": "bad\n"}, {"accountId": "id", "displayName": 123}, {"accountId": "id", "displayName": "bad\n"}):
+            with self.subTest(invalid=invalid), patch.object(auth, "request_json", return_value=[invalid, named]):
+                with self.assertRaisesRegex(SystemExit, "Invalid RuneScape character information"):
+                    auth.get_accounts("session")
+
     def test_character_selection(self):
         accounts = [{"accountId": "a"}, {"accountId": "b"}]
         self.assertEqual(auth.choose_account(accounts[:1]), accounts[0])

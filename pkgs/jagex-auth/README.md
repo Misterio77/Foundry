@@ -21,8 +21,9 @@ jagex-auth launch -- hdos
 jagex-auth launch -- runescape
 ```
 
-Authorize opens your browser and prompts for a character if needed. If browser
-callback delivery does not work, paste the successful-login URL into the terminal
+Authorize opens your browser and prompts for a character if needed. Characters
+without a display name are skipped; set a character name first if none are named.
+If browser callback delivery does not work, paste the successful-login URL into the terminal
 running `authorize`. Treat that URL as a secret. Installing the desktop file does
 not necessarily register it as the default handler; check your desktop's URL
 associations. Do not replace an existing handler without considering its users.

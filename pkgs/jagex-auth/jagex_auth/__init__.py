@@ -342,13 +342,22 @@ def get_accounts(session_id: str) -> list[dict]:
         raise SystemExit("No RuneScape characters found")
     if any(
         not isinstance(account, dict)
-        or not all(isinstance(account.get(key), str) and account[key]
-                   and not any(ord(c) < 32 for c in account[key])
-                   for key in ("accountId", "displayName"))
+        or not isinstance(account.get("accountId"), str)
+        or not account["accountId"]
+        or any(ord(c) < 32 for c in account["accountId"])
+        or (account.get("displayName") is not None and (
+            not isinstance(account["displayName"], str)
+            or any(ord(c) < 32 for c in account["displayName"])
+        ))
         for account in result
     ):
         raise SystemExit("Invalid RuneScape character information")
-    return result
+    named = [account for account in result if account.get("displayName")]
+    if not named:
+        raise SystemExit("No named RuneScape characters found; set a character name and authorize again")
+    if len(named) != len(result):
+        print("Skipping characters without a display name.", file=sys.stderr)
+    return named
 
 
 def choose_account(accounts: list[dict]) -> dict:
