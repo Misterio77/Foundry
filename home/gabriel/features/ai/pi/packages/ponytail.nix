@@ -11,4 +11,8 @@
   };
 in {
   programs.pi-coding-agent.settings.packages = [ponytail];
+  xdg.configFile."ponytail/config.json".text = builtins.toJSON {
+    hideStatus = true;
+    quietStartup = true;
+  };
 }
