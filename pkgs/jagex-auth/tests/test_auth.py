@@ -31,7 +31,8 @@ class AuthTests(unittest.TestCase):
         for name, value in {
             "DATA_DIR": self.data,
             "CALLBACK_FILE": self.data / "auth-callback-url",
-            "CREDENTIALS_FILE": self.data / "credentials.properties",
+            "CREDENTIALS_FILE": self.data / "credentials.json",
+            "LEGACY_CREDENTIALS_FILE": self.data / "credentials.properties",
         }.items():
             patcher = patch.object(auth, name, value)
             patcher.start()
@@ -124,9 +125,9 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.data.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE(auth.CREDENTIALS_FILE.stat().st_mode), 0o600)
         contents = auth.CREDENTIALS_FILE.read_text()
-        self.assertIn("JX_SESSION_ID=new\n", contents)
+        self.assertEqual(json.loads(contents)["JX_SESSION_ID"], "new")
         self.assertNotIn("old", contents)
-        self.assertFalse(auth.CREDENTIALS_FILE.with_suffix(".properties.tmp").exists())
+        self.assertEqual(list(self.data.iterdir()), [auth.CREDENTIALS_FILE])
         with self.assertRaises(SystemExit):
             auth.write_credentials("session", {"accountId": "missing-name"})
         self.assertEqual(auth.CREDENTIALS_FILE.read_text(), contents)

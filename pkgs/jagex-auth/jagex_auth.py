@@ -6,6 +6,7 @@ import secrets
 import select
 import stat
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -23,11 +24,15 @@ DATA_DIR = (
     Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "jagex-auth"
 )
 CALLBACK_FILE = DATA_DIR / "auth-callback-url"
-CREDENTIALS_FILE = DATA_DIR / "credentials.properties"
+CREDENTIALS_FILE = DATA_DIR / "credentials.json"
+LEGACY_CREDENTIALS_FILE = DATA_DIR / "credentials.properties"
+CREDENTIAL_KEYS = ("JX_SESSION_ID", "JX_CHARACTER_ID", "JX_DISPLAY_NAME")
 
 
 def ensure_data_dir() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if DATA_DIR.is_symlink() or not DATA_DIR.is_dir():
+        raise SystemExit("Refusing unsafe jagex-auth data directory")
     DATA_DIR.chmod(0o700)
 
 
@@ -53,12 +58,8 @@ def request_json(
         with urllib.request.urlopen(request, timeout=30) as response:
             result = json.load(response)
     except urllib.error.HTTPError as err:
-        detail = err.read().decode(errors="replace")
-        if "cloudflare" in detail.lower():
-            detail = "Cloudflare denied the request"
-        elif len(detail) > 1000:
-            detail = detail[:1000] + "..."
-        raise SystemExit(f"HTTP {err.code} from {url}: {detail}") from err
+        # Authentication error responses can contain secrets. Never echo bodies.
+        raise SystemExit(f"HTTP {err.code} from {url}") from err
     except (urllib.error.URLError, TimeoutError) as err:
         raise SystemExit(f"Request failed for {url}: {err}") from err
     except json.JSONDecodeError as err:
@@ -194,29 +195,95 @@ def choose_account(accounts: list[dict]) -> dict:
         print("Invalid character number", file=sys.stderr)
 
 
-def java_property_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(" ", "\\ ").replace("\n", "\\n")
+def validate_credentials(value: object) -> dict[str, str]:
+    if (
+        not isinstance(value, dict)
+        or type(value.get("version")) is not int
+        or value["version"] != 1
+        or set(value) != {"version", *CREDENTIAL_KEYS}
+        or any(
+            not isinstance(value[key], str) or not value[key] or "\0" in value[key]
+            for key in CREDENTIAL_KEYS
+        )
+    ):
+        raise ValueError("Invalid credential schema")
+    return {key: value[key] for key in CREDENTIAL_KEYS}
+
+
+def atomic_write_private(path: Path, contents: str) -> None:
+    # mkstemp creates the file with 0600, even under a permissive umask.
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(contents)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def write_credentials(session_id: str, account: dict) -> None:
-    character_id = account.get("accountId")
-    display_name = account.get("displayName")
-    if not character_id or not display_name:
-        raise SystemExit("Selected character is missing an ID or display name")
-
-    ensure_data_dir()
     values = {
+        "version": 1,
         "JX_SESSION_ID": session_id,
-        "JX_CHARACTER_ID": character_id,
-        "JX_DISPLAY_NAME": display_name,
+        "JX_CHARACTER_ID": account.get("accountId"),
+        "JX_DISPLAY_NAME": account.get("displayName"),
     }
-    contents = "".join(
-        f"{key}={java_property_escape(value)}\n" for key, value in values.items()
-    )
-    temporary = CREDENTIALS_FILE.with_suffix(".properties.tmp")
-    temporary.write_text(contents)
-    temporary.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    temporary.replace(CREDENTIALS_FILE)
+    try:
+        validate_credentials(values)
+    except ValueError:
+        raise SystemExit("Invalid session or selected character information") from None
+    ensure_data_dir()
+    try:
+        atomic_write_private(CREDENTIALS_FILE, json.dumps(values, ensure_ascii=False) + "\n")
+    except OSError:
+        raise SystemExit("Could not save credentials; existing credentials were not replaced") from None
+
+
+def read_credentials() -> dict[str, str]:
+    try:
+        ensure_data_dir()
+        fd = os.open(CREDENTIALS_FILE, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "r", encoding="utf-8") as stream:
+            info = os.fstat(stream.fileno())
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) & 0o077
+                or info.st_size > 65536
+            ):
+                raise ValueError("Unsafe credential file")
+            contents = stream.read(65537)
+            if len(contents) > 65536:
+                raise ValueError("Credential file too large")
+            return validate_credentials(json.loads(contents))
+    except FileNotFoundError:
+        if LEGACY_CREDENTIALS_FILE.exists():
+            message = "Legacy credentials need reauthorization"
+        else:
+            message = "No saved credentials"
+    except (OSError, ValueError):
+        message = "Invalid or unsafe saved credentials"
+    raise SystemExit(f"{message}; run 'jagex-auth authorize'.")
+
+
+def launch(args: argparse.Namespace) -> None:
+    command = args.command
+    if command and command[0] == "--":
+        command = command[1:]
+    if not command:
+        raise SystemExit("Usage: jagex-auth launch -- COMMAND [ARG ...]")
+    environment = {**os.environ, **read_credentials()}
+    try:
+        os.execvpe(command[0], command, environment)
+    except FileNotFoundError:
+        print("Client executable not found", file=sys.stderr)
+        raise SystemExit(127) from None
+    except OSError:
+        print("Could not execute client", file=sys.stderr)
+        raise SystemExit(126) from None
 
 
 def authorize(_args: argparse.Namespace) -> None:
@@ -273,6 +340,12 @@ def main() -> None:
     )
     callback_parser.add_argument("url")
     callback_parser.set_defaults(func=handle_url)
+
+    launch_parser = commands.add_parser(
+        "launch", help="launch a client using saved credentials (noninteractive)"
+    )
+    launch_parser.add_argument("command", nargs=argparse.REMAINDER)
+    launch_parser.set_defaults(func=launch)
 
     args = parser.parse_args()
     args.func(args)

@@ -5,8 +5,10 @@
   makeDesktopItem,
   makeWrapper,
   python3,
+  runCommand,
   stdenvNoCC,
   symlinkJoin,
+  writeTextFile,
 }: let
   desktopItem = makeDesktopItem {
     name = "jagex-auth-handler";
@@ -16,7 +18,7 @@
     noDisplay = true;
   };
 in
-  stdenvNoCC.mkDerivation {
+  stdenvNoCC.mkDerivation (finalAttrs: {
     pname = "jagex-auth";
     version = "0-unstable";
 
@@ -25,6 +27,7 @@ in
       fileset = lib.fileset.unions [
         ./jagex-auth.py
         ./jagex_auth.py
+        ./README.md
         ./tests
       ];
     };
@@ -61,14 +64,18 @@ in
         paths = [package];
         nativeBuildInputs = [makeWrapper];
         postBuild = ''
-          wrapProgram "$out/bin/${executable}" \
-            --run "set -a" \
-            --run "source \"\''${XDG_DATA_HOME:-\$HOME/.local/share}/jagex-auth/credentials.properties\" || true" \
-            --run "set +a"
+          rm "$out/bin/${executable}"
+          makeWrapper ${lib.getExe finalAttrs.finalPackage} "$out/bin/${executable}" \
+            --add-flags ${lib.escapeShellArg "launch -- ${package}/bin/${executable}"}
         '';
         inherit (package) meta;
         passthru = (package.passthru or {}) // {unwrapped = package;};
       };
+
+    passthru.tests.launch = import ./tests/wrapper.nix {
+      inherit lib makeDesktopItem python3 runCommand symlinkJoin writeTextFile;
+      jagex-auth = finalAttrs.finalPackage;
+    };
 
     meta = {
       description = "Authenticate RuneScape clients with a Jagex account";
@@ -76,4 +83,4 @@ in
       license = lib.licenses.mit;
       platforms = lib.platforms.linux;
     };
-  }
+  })
