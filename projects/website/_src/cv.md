@@ -45,7 +45,7 @@ Web development agency focused in Drupal.
 - Improved developer tooling and practices, addressed technical debt, and
   supported day-to-day cloud operations.
 
-### [U-Get](https://uget.express) (2020-2023)
+### U-Get (2020-2023)
 
 Startup developing computer vision-based vending systems.
 

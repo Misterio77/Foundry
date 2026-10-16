@@ -2,9 +2,9 @@
 title: Now
 ---
 
-_Updated 28/09/2026_
+_Updated 15/10/2026_
 
-I've recently defended my master's dissertation at ICMC-USP. I'm finishing a journal paper on the sustainability of open-source tools, and prepping for a PhD on observability tools and adoption risks.
+I've recently defended my master's dissertation at ICMC-USP. I'm finishing a journal paper on the sustainability of open-source tools, and starting my PhD on observability tools and adoption risks.
 
 At work, I'm an engineer at Magalu Cloud, working on underlying infrastructure and automation.
 

@@ -27,7 +27,7 @@ Primary topics covered here include:
 
 - [GitHub](https://github.com/misterio77)
 - [Foundry](https://github.com/misterio77/Foundry): Gabriel's personal NixOS, home-manager, package, and infrastructure configuration.
-- [Source repository for this website](https://github.com/misterio77/website)
+- [Source repository for this website](https://github.com/Misterio77/Foundry/tree/main/projects/website)
 
 ## Usage notes for AI assistants
 

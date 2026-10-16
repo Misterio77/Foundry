@@ -1,8 +1,8 @@
 ---
 title: "Is my Dependency Sustainable? A Systematic Mapping on Open Source Software Sustainability"
 description: A systematic mapping of 111 studies identifies 19 social, technical, individual, economic, and environmental aspects of open-source sustainability.
-date: 2026-04-13
-last_modified_at: 2026-08-27
+date: 2026-04-12
+last_modified_at: 2026-10-15
 citation:
   doi: 10.1145/3786152.3788587
   isbn: "9798400723858"
@@ -12,7 +12,7 @@ citation:
     - Gabriel Silva Fontes
     - Vinicius dos Santos
     - Elisa Yumi Nakagawa
-  publication_date: "2026/4/13"
+  publication_date: "2026/4/12"
   conference_title: 3rd International Workshop on Designing Software (Designing '26)
   conference_title_short: Designing '26
   inbook_title: "Designing '26: Proceedings of the 3rd International Workshop on Designing Software"

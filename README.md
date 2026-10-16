@@ -7,7 +7,7 @@ My public infrastructure monorepo: the NixOS/home-manager configuration that
 runs all my machines, plus the source of the personal projects it deploys.
 Requires [Nix flakes](https://nixos.wiki/wiki/Flakes).
 
-Looking for something simpler to start out with flakes? Try [my starter config repo](https://github.com/Misterio77/nix-starter-config).
+Looking for something simpler to start out with flakes? Try [my starter config repo](https://github.com/Misterio77/nix-starter-configs).
 
 ## Repository layout
 
@@ -39,11 +39,12 @@ projects/       my public projects deployed from here (e.g. the m7.rs website)
 
 ## About the installation
 
-All my computers use a single btrfs (encrypted on all except headless systems)
+My NixOS machines use a single btrfs (encrypted on all except headless systems)
 partition, with subvolumes for `/nix`, a `/persist` directory (which I opt in
 using `impermanence`), swap file, and a root subvolume (cleared on every boot).
 
-Home-manager is used as a NixOS module, integrated via `home-manager.users`.
+On NixOS, Home Manager is integrated via `home-manager.users`. My Ubuntu work
+laptop uses system-manager and standalone Home Manager instead.
 
 ## Secrets
 
@@ -66,8 +67,9 @@ Most relevant user apps daily drivers:
 - fish
 - alacritty
 - qutebrowser
-- neomutt + mbsync
-- khal + khard + todoman + vdirsyncer
+- aerc + mbsync
+- khal + khard + vdirsyncer
+- todomd
 - gpg + pass
 - tailscale
 - podman
