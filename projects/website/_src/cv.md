@@ -90,7 +90,8 @@ was [published at Designing '26]({% link _publications/fontes-design-2026.md
 Teaching assistant through USP's PAE program for Software Reuse (May-November
 2025), supervised by Elisa Yumi Nakagawa, the course instructor.
 
-Teaching assistant for a semester in Database Practice.
+Teaching assistant for Database Practice (Laboratório de Bases de Dados,
+September-December 2022), supervised by José Fernando Rodrigues Júnior.
 
 ### University of Groningen (2025)
 
