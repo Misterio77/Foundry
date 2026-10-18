@@ -87,6 +87,9 @@ was [published at Designing '26]({% link _publications/fontes-design-2026.md
 
 - Bachelor's: Computer Information Systems (2020-2022)
 
+Teaching assistant through USP's PAE program for Software Reuse (May-November
+2025), supervised by Elisa Yumi Nakagawa, the course instructor.
+
 Teaching assistant for a semester in Database Practice.
 
 ### University of Groningen (2025)
