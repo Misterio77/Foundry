@@ -95,9 +95,9 @@ September-December 2022), supervised by José Fernando Rodrigues Júnior.
 
 ### University of Groningen (2025)
 
-**Research Internship:** Three months researching cloud computing sustainability
-ecosystems. Some of this work was [published at SESoS '26]({% link
-_publications/fontes-sesos-2026.md %}).
+**Research Internship (May-July 2025):** Research on cloud computing sustainability
+ecosystems, supervised by Vasilios Andrikopoulos. Some of this work was
+[published at SESoS '26]({% link _publications/fontes-sesos-2026.md %}).
 
 See all [publications]({% link publications.html %}).
 
