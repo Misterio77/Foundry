@@ -101,6 +101,11 @@ _publications/fontes-sesos-2026.md %}).
 
 See all [publications]({% link publications.html %}).
 
+## Academic Service
+
+Ad hoc paper reviewer (2024-2026) for ASE, EASE, FSE Industry, ICSA,
+ICSE (NIER, SEET, and SEIP tracks), ECSA, ESEM, ICTSS, SBCARS, and SBES (NIER).
+
 ## Open-source and Community
 
 ### Nix ecosystem
