@@ -113,6 +113,11 @@ See all [publications]({% link publications.html %}).
   infrastructure: declarative hosts, services, secrets, deployment workflows, and
   reproducible development environments.
 
+### Rust tooling
+
+- Created [flavours](https://github.com/misterio77/flavours), a Rust CLI for
+  managing, generating, and applying Base16 color schemes across applications.
+
 ### GELOS - Leadership
 
 - Co-founded and help lead [GELOS](https://gelos.club), a free/open-source
