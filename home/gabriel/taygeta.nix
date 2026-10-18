@@ -1,8 +1,5 @@
 {pkgs, ...}: {
-  imports = [
-    ./global
-    ./features/ai
-  ];
+  imports = [./global];
   # Purple (320°)
   wallpaper = pkgs.wallpapers.nebula-purple-pink;
 }
