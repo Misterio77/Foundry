@@ -129,3 +129,6 @@ See all [publications]({% link publications.html %}).
   review.
 - Maintain Brazilian [free software package mirrors](https://github.com/ufscar/mirror)
   together with UFSCar's [Patos](https://patos.dev/).
+- Co-organized [Caipyra 2026](https://2026.caipyra.python.org.br/), a Python
+  community conference held June 4-7, 2026, in São Carlos, jointly organized by
+  GELOS and Grupy-Sanca.
