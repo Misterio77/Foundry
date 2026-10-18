@@ -78,7 +78,11 @@ Startup developing computer vision-based vending systems.
 ### University of São Paulo (2020-present)
 
 - PhD: Computer Science and Computational Mathematics (2026-present)
+  - Advisor: Elisa Yumi Nakagawa.
 - MSc: Computer Science and Computational Mathematics (2023-2026)
+  - Advisor: Elisa Yumi Nakagawa.
+  - Dissertation: *Free and open source software sustainability: an exploratory
+    analysis in the cloud observability ecosystem*.
 
 My research focuses on software sustainability in open-source ecosystems and
 practices that support long-lived, self-sustaining projects. Some of this work
