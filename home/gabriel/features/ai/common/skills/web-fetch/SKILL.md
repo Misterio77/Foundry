@@ -1,6 +1,6 @@
 ---
 name: web-fetch
-description: Fetch a web page or HTTP(S) URL and read it as text/Markdown. Use when you need the full content of a URL — e.g. a search result from web_search, a changelog, docs, or an API response.
+description: Fetch a web page or HTTP(S) URL and read it as text/Markdown. Use when you need the full content of a URL — e.g. a search result from web-search, a changelog, docs, or an API response.
 ---
 
 # Fetching web pages
@@ -72,7 +72,7 @@ curl -sSL 'https://example.com/raw.txt'                # plain text
 
 - If a fetch returns an anti-bot landing page or a `40x`/`429`, don't hammer it —
   report what came back.
-- To find a URL in the first place, use the `web_search` tool, then fetch the
+- To find a URL in the first place, run `web-search "query"`, then fetch the
   result you want with the commands above.
 - trafilatura can target other formats (`--txt`, `--json`, `--html`) if Markdown
   output is noisy for a given page.

@@ -18,10 +18,10 @@ printf 'pi: %s\n' "$PI_MODEL"
 printf 'hax: %s\n' "$HAX_MODEL"
 ```
 
-## Secrets
+## Web search
 
-- A Kagi session token is available at `/run/secrets/kagi_session_token` for
-  authenticating Kagi Search.
+Use `web-search "query"` for current information (Kagi; `--count N`, `--json`).
+Authentication is handled by the CLI. Read full results with the web-fetch skill.
 
 ## Tone
 

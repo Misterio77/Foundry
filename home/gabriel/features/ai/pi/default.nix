@@ -1,7 +1,6 @@
 {
   lib,
   pkgs,
-  osConfig,
   ...
 }: let
   customExtensions = pkgs.buildPiPackage {
@@ -34,9 +33,6 @@ in {
       prompts = [./prompts];
       extensions = [customExtensions];
       enableInstallTelemetry = false;
-      webSearch = {
-        kagiSessionTokenFile = osConfig.sops.secrets.kagi_session_token.path or null;
-      };
     };
     keybindings = {
       "app.editor.external" = ["alt+e"];

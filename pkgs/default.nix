@@ -24,6 +24,7 @@ in {
   todomd = pkgs.callPackage ../projects/todomd {};
 
   # Personal scripts
+  web-search = pkgs.callPackage ./web-search {};
   pass-wofi = pkgs.callPackage ./pass-wofi {};
   xpo = pkgs.callPackage ./xpo {};
   clip-notify = pkgs.callPackage ./clip-notify {};
