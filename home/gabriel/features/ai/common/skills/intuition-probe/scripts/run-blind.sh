@@ -17,7 +17,7 @@ model=${PI_INTUITION_MODEL:-openai-codex/gpt-6-luna}
 [[ $concurrency =~ ^[1-9][0-9]*$ ]] || usage
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-sub_agent_runner=$(realpath "$script_dir/../../sub-agents/scripts/run.sh")
+sub_agent_runner="$script_dir/run.sh"
 run_dir=$(mktemp -d "${TMPDIR:-/tmp}/pi-intuition-probe.XXXXXX")
 cp -- "$prompt_file" "$run_dir/frozen-prompt.md"
 

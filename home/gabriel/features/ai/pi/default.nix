@@ -24,7 +24,7 @@ in {
       pkgs.python3 # Often used
       pkgs.python3Packages.trafilatura # Used by the web-fetch skill
     ];
-    context = ../common/context.md;
+    context = builtins.readFile ../common/context.md + "\n" + builtins.readFile ./context.md;
     settings = {
       tuiMode = "regular";
       defaultProvider = "openai";
