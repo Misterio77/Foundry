@@ -71,26 +71,3 @@ it to one or two lines.
 Do not defer this check until commit time; edits and tool-generated changes already mutate the working copy.
 
 **Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
-
-## Privileged commands
-
-When a command needs interactive password entry (e.g. `sudo`), don't run it directly — the non-interactive TTY can't handle it. Spawn a terminal instead. `handlr` already forks, so don't append `&`; pass the command as split args rather than one quoted shell string:
-
-```bash
-handlr launch x-scheme-handler/terminal -- -e <cmd> <arg> ...
-```
-
-Example:
-
-```bash
-handlr launch x-scheme-handler/terminal -- -e sudo nixos-rebuild switch --flake ~/Foundry
-```
-
-Then prompt the user to confirm when the operation is complete:
-
-```
-Question: "Done? (the operation is complete)"
-Options: ["Done"]
-```
-
-The user confirms when finished, then continue.
