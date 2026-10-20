@@ -5,14 +5,14 @@
 }: let
   piClaudeBridge = pkgs.buildPiPackage {
     pname = "pi-claude-bridge";
-    version = "0.9.1";
+    version = "0.9.3";
     src = pkgs.fetchFromGitHub {
       owner = "elidickinson";
       repo = "pi-claude-bridge";
-      rev = "9dafd0301faad79cf6a1974d92af424189476b5d";
-      hash = "sha256-Y3uNnHRrcdc3v9PJepG9W+GjBNmq1V9XW08aeV/UM5U=";
+      rev = "874fa7c2678456336f23b64e784e2057e608d83e";
+      hash = "sha256-2P81N6xWuvJdB3w7egU8QNguXWkOyyRUDePveXY7p0c=";
     };
-    npmDepsHash = "sha256-wwGOr2eWVyQKt6ZQGdzNWj1xYEQYwY0aUaKwObUIxas=";
+    npmDepsHash = "sha256-bVMT1aF7s8tB8DSxSRalN+Bvrh09kuS73oD6dtkzf+g=";
   };
 in {
   programs.pi-coding-agent.settings = {
@@ -27,7 +27,7 @@ in {
     askClaude.enabled = false;
     provider = {
       plan = "max";
-      stripctMcpConfig = true;
+      strictMcpConfig = true;
       pathToClaudeCodeExecutable = lib.getExe pkgs.claude-code;
     };
   };

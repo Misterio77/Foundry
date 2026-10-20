@@ -28,11 +28,34 @@ in {
         src = pkgs.fetchFromGitHub {
           owner = "sshilovsky";
           repo = "fish-helix";
-          rev = "8a5c7999ec67ae6d70de11334aa888734b3af8d7";
-          hash = "sha256-04cL9/m5v0/5dkqz0tEqurOY+5sDjCB5mMKvqgpV4vM=";
+          rev = "c9487ea37dafee157cefb8a89c145bc98d21fd6b";
+          hash = "sha256-JqN4IbLpJFBJKNE6haZH2iFSMrLFdVh+Hbl840+xbfU=";
         };
         patches = [../../../../../overlays/fish-helix-modern-fish-compat.patch];
         dontBuild = true;
+        nativeCheckInputs = [pkgs.fish];
+        doCheck = true;
+        # shortcut: binding checks only, enable upstream's suite when its Fish 4 failures are fixed.
+        checkPhase = ''
+          runHook preCheck
+          export HOME="$TMPDIR/fish-home"
+          mkdir -p "$HOME"
+          fish --no-config --interactive --command '
+            set -g fish_greeting
+            __fish_config_interactive
+            set -p fish_function_path "$PWD/functions"
+            fish_helix_key_bindings; or exit 1
+            test "$fish_bind_mode" = insert; or exit 1
+            for mode in default visual
+              for key in enter left right up down g,h g,l t,enter f,escape space,p
+                bind --preset -M $mode -- "$key" >/dev/null; or exit 1
+              end
+              bind --preset -M $mode ctrl-y | string match -q "*yank*"; or exit 1
+            end
+            bind --preset -M insert escape | string match -q "*set fish_bind_mode default*"; or exit 1
+          '
+          runHook postCheck
+        '';
         installPhase = "cp -r . $out";
       };
     };
