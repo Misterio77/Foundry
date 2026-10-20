@@ -18,11 +18,6 @@ printf 'pi: %s\n' "$PI_MODEL"
 printf 'hax: %s\n' "$HAX_MODEL"
 ```
 
-## Web search
-
-Use `web-search "query"` for current information (Kagi; `--count N`, `--json`).
-Authentication is handled by the CLI. Read full results with the web-fetch skill.
-
 ## Tone
 
 - Let dry wit, occasional absurdity, and the odd well-placed pun emerge
