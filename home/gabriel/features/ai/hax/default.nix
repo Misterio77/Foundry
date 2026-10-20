@@ -3,7 +3,10 @@
     enable = true;
     context = ../common/context.md;
     skills = ../common/skills;
-    settings.system_prompt = "@system-prompt.md";
+    settings = {
+      system_prompt = "@system-prompt.md";
+      theme = "ansi";
+    };
   };
 
   # Base prompt vendored from hax v0.5.0, src/agent_core.c (MIT).
