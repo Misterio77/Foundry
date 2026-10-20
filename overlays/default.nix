@@ -37,17 +37,6 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
-    agent-browser = final.symlinkJoin {
-      inherit (prev.agent-browser) meta passthru;
-      name = prev.agent-browser.name;
-      paths = [prev.agent-browser];
-      nativeBuildInputs = [final.makeWrapper];
-      postBuild = ''
-        wrapProgram $out/bin/agent-browser \
-          --set-default AGENT_BROWSER_EXECUTABLE_PATH ${final.lib.getExe final.chromium}
-      '';
-    };
-
     # Automatic sync passes no reference, so ffsubsync picks whichever embedded
     # subtitle track ends last -- won by the Signs & Songs track, whose trailing
     # title card outlasts the final line of dialogue. Skip the non-dialogue
