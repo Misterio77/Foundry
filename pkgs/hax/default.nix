@@ -11,13 +11,15 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "hax";
+
+  # rev is the patch base; tarballs have no .git, so meson reports v0.6.1.
   version = "0.6.1";
 
   src = fetchFromGitHub {
     owner = "OleksandrChekhovskyi";
     repo = "hax";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-U6tLkRBwT/5gxK1O9Hu+hGJbV+39vEczD22l9c1yYDs=";
+    rev = "2273236304c8082e16ae38d08d172b9c71676a4d";
+    hash = "sha256-hvCMCjAPdOwOibcrI5o8Zy/ggjlhhQYqsBteLZ0f9sI=";
   };
 
   nativeBuildInputs = [
