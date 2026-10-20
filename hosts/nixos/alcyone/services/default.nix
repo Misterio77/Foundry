@@ -15,9 +15,6 @@
     ./firefly.nix
     ./freshrss.nix
     ./lumis.nix
-
-    # Disabled for now
-    # ./cgit
     ./website
   ];
 }

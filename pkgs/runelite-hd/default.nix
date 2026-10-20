@@ -7,12 +7,12 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "runelite-hd";
-  version = "1.6.0-unstable-2026-10-18";
+  version = "1.6.0.1";
   src = fetchFromGitHub {
     owner = "117HD";
     repo = "RLHD";
-    rev = "dc1ac74574d7eb9289db2d7fe557ded90c049a22";
-    hash = "sha256-CxrLFw0mGt/WE1BElhImIm7JhwowUTWAnWav+OJ9I1A=";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-TYtn5ba9rgDSnhiMoxk7XnpXbNxgbf0LMyGyCKVcQuA=";
   };
 
   # The upstream stress test queues 1000 * 100 ms of busy-work. On small
@@ -49,7 +49,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   '';
 
   meta = {
-    description = "117 HD RuneLite plugin, tracking upstream master";
+    description = "117 HD RuneLite plugin";
     homepage = "https://github.com/117HD/RLHD";
     license = lib.licenses.bsd2;
     platforms = lib.platforms.all;

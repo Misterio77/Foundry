@@ -7,7 +7,6 @@
     (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.runelite)
     (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.hdos)
     (pkgs.inputs.jagex-auth.default.wrapLaunch pkgs.runescape)
-    pkgs.alt1
     pkgs.inputs.jagex-auth.default
     pkgs.runelite-query
     # Replaces the Plugin Hub copy of 117 HD; uninstall that to avoid duplicates.
@@ -19,7 +18,6 @@
   home.persistence = {
     "/persist".directories = [
       ".runelite"
-      ".config/alt1"
       ".config/hdos"
       ".local/share/jagex-auth"
       "Jagex"

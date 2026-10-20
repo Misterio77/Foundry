@@ -16,7 +16,6 @@
     ./pavucontrol.nix
     ./playerctl.nix
     ./qt.nix
-    ./golive.nix
   ];
 
   home.packages = [

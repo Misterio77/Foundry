@@ -8,16 +8,11 @@
   };
 in {
   # Packages with an actual (external) source
-  lyrics = pkgs.python3Packages.callPackage ./lyrics {};
-  prefetcharr = pkgs.callPackage ./prefetcharr {};
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   hax = pkgs.callPackage ./hax {};
-  alt1 = pkgs.callPackage ./alt1 {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
-  jellysearch = pkgs.callPackage ./jellysearch {};
-  golive = pkgs.callPackage ./golive {};
   runescape = pkgs.callPackage ./runescape {
     inherit (runescapePkgs) openssl_1_1;
   };

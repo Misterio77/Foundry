@@ -37,7 +37,7 @@
       };
     };
 
-    # Make config readable by jellyfin group (e.g. jellysearch)
+    # Make config readable by the jellyfin group
     systemd = {
       tmpfiles.settings.jellyfinDirs = {
         "${config.services.jellyfin.dataDir}".d.mode = lib.mkForce "750";

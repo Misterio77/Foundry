@@ -225,7 +225,6 @@ in {
         steamBigPicture = "match:title Steam Big Picture Mode";
         firefoxPictureInPicture = "match:class firefox, match:title Picture-in-Picture";
         floatingVlc = "match:float 1, match:class vlc";
-        alt1 = "match:class (?i)^alt1lite$, match:title ^(Alt1 Lite app|Alt1Lite overlay window)$";
       in
         [
           "idle_inhibit focus, match:fullscreen_state_internal 2 *"
@@ -246,14 +245,6 @@ in {
           # RemoteApp windows carry a maximize request on every activation,
           # which reads as the window fullscreening whenever it regains focus.
           "suppress_event maximize, ${linoffice}"
-
-          "float on, ${alt1}"
-          "pin on, ${alt1}"
-          "no_blur on, ${alt1}"
-          "no_shadow on, ${alt1}"
-          "no_anim on, ${alt1}"
-          "border_size 0, ${alt1}"
-          "rounding 0, ${alt1}"
 
           "fullscreen on, ${steamBigPicture}"
 

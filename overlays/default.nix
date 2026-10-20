@@ -103,21 +103,21 @@ in {
       })
     ];
 
-    # https://gitlab.freedesktop.org/mstoeckl/waypipe/-/releases#v0.11.1
+    # https://gitlab.freedesktop.org/mstoeckl/waypipe/-/releases#v0.11.3
     # Raise when it's time to remove
-    waypipe = assert final.lib.versionOlder prev.waypipe.version "0.11.1";
+    waypipe = assert final.lib.versionOlder prev.waypipe.version "0.11.3";
       prev.waypipe.overrideAttrs (finalAttrs: _: {
-        version = "0.11.1";
+        version = "0.11.3";
         src = final.fetchFromGitLab {
           domain = "gitlab.freedesktop.org";
           owner = "mstoeckl";
           repo = "waypipe";
           tag = "v${finalAttrs.version}";
-          hash = "sha256-CQgDQJudxtUc7unORE/yAa+poopiceS/a4AMOfcsKP8=";
+          hash = "sha256-PAFqg+4gw9AC9u0QAnxtgC5mNpMTADBpO/PtRgEXa2E=";
         };
         cargoDeps = final.rustPlatform.fetchCargoVendor {
           inherit (finalAttrs) pname version src;
-          hash = "sha256-qYid2YZweunwD3ETV19mAo2CrdYItD6BSZwFNolBLv4=";
+          hash = "sha256-1ByTuQ2PenNPgWFHbAUjhGj2WCwlZ9sd5esloSzqfBI=";
         };
       });
 
