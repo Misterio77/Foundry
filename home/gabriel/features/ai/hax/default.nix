@@ -1,4 +1,4 @@
-{
+{osConfig, ...}: {
   programs.hax = {
     enable = true;
     context = ../common/context.md;
@@ -6,6 +6,7 @@
     settings = {
       system_prompt = "@system-prompt.md";
       theme = "ansi";
+      providers.deepseek.api_key_file = osConfig.sops.secrets.deepseek_api_key.path or null;
     };
   };
 

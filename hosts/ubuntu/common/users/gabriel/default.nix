@@ -49,6 +49,10 @@ in {
       sopsFile = ../../../../common/secrets.yaml;
       owner = "gabriel";
     };
+    deepseek_api_key = {
+      sopsFile = ../../../../common/secrets.yaml;
+      owner = "gabriel";
+    };
   };
 
   home-manager.users.gabriel = import ../../../../../home/gabriel/${config.networking.hostName}.nix;
