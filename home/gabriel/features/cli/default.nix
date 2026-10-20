@@ -5,6 +5,7 @@
 
     ./bash.nix
     ./bat.nix
+    ./codex-imagegen.nix
     ./direnv.nix
     ./gh.nix
     ./git.nix

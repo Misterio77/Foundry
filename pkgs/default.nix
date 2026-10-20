@@ -8,6 +8,7 @@
   };
 in {
   # Packages with an actual (external) source
+  codex-imagegen-cli = pkgs.callPackage ./codex-imagegen-cli {};
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   hax = pkgs.callPackage ./hax {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};
