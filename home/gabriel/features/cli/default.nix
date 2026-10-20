@@ -14,6 +14,7 @@
     ./pfetch.nix
     ./ssh.nix
     ./tmux.nix
+    ./web-search.nix
     ./xpo.nix
     ./fzf.nix
     ./mandoc.nix
