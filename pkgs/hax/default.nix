@@ -12,14 +12,14 @@
 stdenv.mkDerivation (finalAttrs: {
   pname = "hax";
 
-  # rev is the patch base; tarballs have no .git, so meson reports v0.6.1.
+  # Fork of upstream; tarballs have no .git, so the version comes from meson.build.
   version = "0.6.1";
 
   src = fetchFromGitHub {
-    owner = "OleksandrChekhovskyi";
+    owner = "Misterio77";
     repo = "hax";
-    rev = "2273236304c8082e16ae38d08d172b9c71676a4d";
-    hash = "sha256-hvCMCjAPdOwOibcrI5o8Zy/ggjlhhQYqsBteLZ0f9sI=";
+    rev = "2f59acdbfe32a41a35090bd7829c2ffe19f98a21";
+    hash = "sha256-2n7glc4sKWVkLJuhqmJ8cAfsMaDIA5uND+Snq/RnU/k=";
   };
 
   nativeBuildInputs = [
