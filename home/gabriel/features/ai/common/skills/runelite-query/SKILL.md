@@ -14,6 +14,9 @@ curl -fsS http://127.0.0.1:18471/v1/health | jq
 curl -fsS http://127.0.0.1:18471/v1/openapi.json | jq '.paths'
 ```
 
+If the health check fails to connect, RuneLite or the query plugin is not
+running. Say that plainly instead of guessing at game state.
+
 Query endpoints directly with `curl`; compose results with `jq`. Repeated query parameters select multiple values:
 
 ```bash

@@ -34,7 +34,7 @@ parsing with Beautiful Soup:
 
 ```bash
 page=$(mktemp)
-curl -sSL --compressed -A 'pi-coding-agent:web-fetch:v0.1 (contact: gsfontes.com)' \
+curl -sSL --compressed -A 'agent-web-fetch/1.0 (+https://gsfontes.com)' \
   'https://old.reddit.com/r/linux/comments/example/' > "$page"
 
 # Use the nix-shell skill's "Python with packages" pattern to run this with

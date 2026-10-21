@@ -5,10 +5,11 @@ description: Use go-jira to read Jira tickets, attached change-request forms, an
 
 # Jira
 
+- The `jira` binary is not installed globally. Run it from nixpkgs when needed: `nix shell nixpkgs#go-jira -c jira view <issue-key>`.
 - **go-jira** (`jira`) reads server, login, project, and credential source from `~/.jira.d/config.yml`, with directory-local `.jira.d` overrides.
 - Read tickets with `jira view <issue-key>`. Use `jira request '<path-or-url>'` for JSON; `--gjq '<query>'` filters output. Relative paths use the configured endpoint; full URLs also receive configured authentication, so use only trusted Jira/Atlassian endpoints.
 - Write with `jira request --method PUT '<path-or-url>' '<json>'`. Python can invoke it via `subprocess.run([...], capture_output=True, text=True, check=True)` and parse stdout with `json.loads`.
-- go-jira handles authentication for CLI and API requests.
+- go-jira handles authentication for CLI and API requests, so `jira request '/rest/api/2/myself'` is the cheap way to confirm auth works.
 
 ## Ticket details and AI feedback
 

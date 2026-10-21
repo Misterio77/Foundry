@@ -5,11 +5,15 @@ description: Check Gabs's overall pending work and deadlines with todomd, and ma
 
 ## Syncing vdir-backed data
 
-After creating, editing, moving, or deleting anything backed by vdir (todos, calendar events, or contacts), start vdirsyncer so the change propagates:
+After writing vdir data directly — `.ics` edits, `khal`, `khard`, hand-edited
+files — start vdirsyncer so the change propagates:
 
 ```bash
 systemctl --user start vdirsyncer
 ```
+
+`todomd session apply` runs the same sync itself through the `after_apply` hook;
+don't start vdirsyncer separately after it.
 
 ## Todos (todomd + `.ics`)
 
@@ -37,9 +41,12 @@ terminal needed.
 todomd show                       # active tasks in every list
 todomd show Postgrad Casa         # chosen lists
 todomd show --completed Postgrad  # include completed and cancelled
+todomd show --view agenda         # a named view from the config
+todomd show --sort-by due,priority --group-by due
 ```
 
-Each entry has `list`, `uid`, `summary`, `completed`, and `file`:
+Each entry has `list`, `uid`, `summary`, `completed`, `priority`,
+`categories`, `start`, `due`, `parent_uid`, and `file`:
 
 ```json
 {
@@ -47,6 +54,11 @@ Each entry has `list`, `uid`, `summary`, `completed`, and `file`:
   "uid": "542812992406319126",
   "summary": "Arrumar fechadura escritório",
   "completed": false,
+  "priority": "high",
+  "categories": ["Quick Win"],
+  "start": null,
+  "due": "2026-10-24",
+  "parent_uid": null,
   "file": "/home/gabriel/Calendars/personal/7eebf97d-.../542812992406319126.ics"
 }
 ```
@@ -63,11 +75,42 @@ through their `displayname` files.
 
 `todomd edit`, and bare `todomd`, opens `$VISUAL` and asks `[y/N]` on an
 interactive terminal. It also stops vdirsyncer for the duration. That is Gabs's
-path, not an agent's. Write through the `.ics` file instead.
+path, not an agent's.
 
-### Writing
+### Writing: editor-independent sessions
 
-Edit the `.ics` at `file`, then sync. Increment `SEQUENCE` on every change.
+`todomd session` is the agent path. It renders the lists into a `tasks.md`,
+applies edits transactionally, and runs the `after_apply` hook for you:
+
+```bash
+session=$(todomd session create Postgrad)   # prints the session dir; no lists = every list
+# edit "$session/tasks.md"
+todomd session apply "$session"             # e.g. "changes applied (1 created, 2 updated)"
+todomd session close "$session"             # refuses if tasks.md != accepted.md; --force discards
+```
+
+Scope `create` to the lists you actually touch, since loading every list makes
+`tasks.md` large. `apply` owns the mechanical parts — `SEQUENCE`, `DTSTAMP`,
+`CREATED`, `LAST-MODIFIED`, `COMPLETED`, `PERCENT-COMPLETE`, new UUIDs, and the
+sync — so don't hand-write any of them. It keeps the session open, so edit and
+apply again as needed. Errors and conflicts preserve the session: read the
+message instead of retrying blindly.
+
+`tasks.md` syntax (full spec in `projects/todomd/README.md` in the Foundry repo):
+
+- `- [ ]` / `- [x]` are the only completion switch; `- [x]` completes.
+- Leading markers, any order: `@List`, `-YYYY-MM-DD` due, `+"YYYY-MM-DD HH:MM"`
+  start, `!`/`!!`/`!!!` priority, `[Cat, "Quick Win"]` full category set.
+- Two-space indent makes a child (`RELATED-TO;RELTYPE=PARENT`); unindent detaches.
+- Adding a line without `<!--tN-->` creates a VTODO; deleting a line deletes one.
+- `<!--tN-->` is session-local identity. Never invent one, copy it between
+  sessions, or edit it: a changed or removed marker means delete-and-recreate.
+
+### Writing: direct `.ics` edits
+
+For surgical changes the session view doesn't cover — bulk repair, fields todomd
+doesn't render, `.ics` files broken enough that todomd rejects them — edit the
+`.ics` at `file` and then run vdirsyncer. Increment `SEQUENCE` on every change.
 
 | Field | Purpose |
 |---|---|
@@ -127,11 +170,18 @@ Calendar stored as vdir `.ics` files under `~/Calendars/personal/Personal/`. Use
 ```bash
 khal list today 2d             # today + next 2 days
 khal list 12/06/2026 15/06/2026  # specific date range
-khal new                        # create a new event interactively
 khal at                         # what's happening right now
-khal edit -d "12/06/2026" "Event Title"  # interactively edit/delete an event
 khal search "keyword"           # search events
+
+# Create non-interactively (START [END|DELTA] SUMMARY :: DESCRIPTION):
+khal new 12/06/2026 18:00 19:00 "Dinner with Ana" -l "Centro" -g food
+khal new 20/06/2026 "Viagem" -r weekly -u 20/07/2026 -m 15m
 ```
+
+`khal new` without arguments, and `khal edit`, are interactive and want a TTY —
+avoid both in agent runs. `khal new` also takes `--json TEXT` to print the
+created event as JSON. Dates use the khal locale format (`%d/%m/%Y`, not ISO):
+`12/06/2026`, and times are `HH:MM`.
 
 **Deleting an event non-interactively:** khal has no `delete` subcommand. Instead, find the `.ics` file and remove it:
 
@@ -173,7 +223,7 @@ khard list                    # list all contacts
 
 ### Editing contacts
 
-`khard edit <name>` opens the contact in `$EDITOR`, but requires a TTY and may not work from within opencode. The fallback is to edit the vCard file directly:
+`khard edit <name>` opens the contact in `$EDITOR`, but requires a TTY and will not work from a non-interactive agent shell. The fallback is to edit the vCard file directly:
 
 ```bash
 # Find the vCard by UID (shown in khard show output under Miscellaneous > UID)
@@ -230,35 +280,40 @@ f="${src##*/}" && mv "$src" "$dest/${f//,U=[0-9]*:/:}"
 
 ### Reading email — workflow
 
-1. **Get an overview first.** Use `grep` across `Inbox/cur/` for `^Subject:`, `^From:`, and `^Date:` to survey what's there before reading bodies.
+1. **Get an overview first.** Use `rg '^(Subject|From|Date):'` across `Inbox/cur/` to survey what's there before reading bodies.
 
-2. **Check file size before reading.** Some emails contain huge base64-encoded attachments (especially .docx, PDFs, images). Use `read` on the directory to see file sizes (listed in the entries view), then use `limit` when reading to avoid dumping megabytes of base64. Emails with attachments often stretch to 500+ lines.
+2. **Check size before reading.** Some emails contain huge base64-encoded attachments (especially .docx, PDFs, images). List with `ls -lS` first, then read only a leading slice. With the file tools that means `read` with `limit=160`; from bash, `sed -n '1,160p' <file>`. Emails with attachments often stretch to 500+ lines.
 
-3. **Read with the Read tool, not cat.** Use `read` with `limit` — start with `limit=160` to grab headers + the beginning of the body. Expand if needed.
+3. **Look for `text/plain` first.** Most emails are `multipart/alternative` with both `text/plain` and `text/html`. The plaintext part is the message without HTML soup. The boundary marker is like `--000000000000...`; skip past the headers to the `Content-Type: text/plain;` block.
 
-4. **Look for `text/plain` first.** Most emails are `multipart/alternative` with both `text/plain` and `text/html`. Read the `charset="UTF-8"` plaintext section — it contains the actual message without HTML soup. The boundary marker is like `--000000000000...`. Skip past the headers to find the `Content-Type: text/plain;` block.
+4. **Decode properly instead of eyeballing.** Bodies are often `base64` or `Content-Transfer-Encoding: quoted-printable` (`=C3=A7` for `ç`). One decoder handles both, charsets included:
 
-5. **Decode base64 oneliners.** Some emails encode the entire body as base64 (no multipart). The `read` tool renders these as-is, but you can pipe through `base64 -d` in a pinch.
+   ```bash
+   python3 -c '
+   import email, email.policy, pathlib, sys
+   m = email.message_from_bytes(pathlib.Path(sys.argv[1]).read_bytes(), policy=email.policy.default)
+   print(m.get_body(("plain", "html")).get_content())' ~/Mail/personal/Inbox/cur/<file>
+   ```
 
-6. **Quoted-printable.** Most plaintext sections use `Content-Transfer-Encoding: quoted-printable`. The Read tool handles this natively — `=C3=A7` renders as `ç`, `=C2=A0` as NBSP, etc.
+5. **Flagged emails are worth highlighting.** When summarizing, call out emails with `F` in the flags — Gabs intentionally marks these as important.
 
-7. **Flagged emails are worth highlighting.** When summarizing, call out emails with `F` in the flags — Gabs intentionally marks these as important.
-
-8. **Sort order.** Files sort by the Unix timestamp prefix in the filename, so `ls` order is chronological.
+6. **Sort order.** Files sort by the Unix timestamp prefix in the filename, so `ls` order is chronological.
 
 ### Example: reading all inbox email
 
 ```bash
 # Step 1: overview
-grep '^Subject:' ~/Mail/personal/Inbox/cur/*
-grep '^Subject:' ~/Mail/usp/Inbox/cur/*
+rg --no-heading '^(Subject|From|Date):' ~/Mail/personal/Inbox/cur/ ~/Mail/usp/Inbox/cur/
 
-# Step 2: check sizes, then read
-read ~/Mail/personal/Inbox/cur/ <-- check file sizes
-read ~/Mail/personal/Inbox/cur/<file> limit=160  <-- read one
+# Step 2: sizes first, then a leading slice
+ls -lS ~/Mail/personal/Inbox/cur/ | head
+sed -n '1,160p' ~/Mail/personal/Inbox/cur/<file>
 
-# Step 3: expand if needed
-read ~/Mail/personal/Inbox/cur/<file> offset=161 limit=200
+# Step 3: full decoded body when the raw message is base64 or quoted-printable
+python3 -c '
+import email, email.policy, pathlib, sys
+m = email.message_from_bytes(pathlib.Path(sys.argv[1]).read_bytes(), policy=email.policy.default)
+print(m.get_body(("plain", "html")).get_content())' ~/Mail/personal/Inbox/cur/<file>
 ```
 
 ### Sending email

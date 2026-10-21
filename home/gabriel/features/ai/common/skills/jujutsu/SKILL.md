@@ -141,6 +141,12 @@ Do not use a bare `jj squash` when both descriptions may be non-empty; it can re
 
 For splits, prefer `jj-hunk-tool`: inspect selections with `jj-hunk-tool hunks -r <revision>`, then run `jj-hunk-tool split <hunk-id>... -r <revision> -m "<first description>"`. It supports line ranges such as `<hunk-id>:1-3,7-9`; verify the rewrite as usual.
 
+`jj-hunk-tool` also covers the rest of hunk-level work non-interactively:
+`squash` moves selected hunks into another revision, `restore` undoes them,
+`patch` prints them, and `absorb` routes them into the ancestors that introduced
+the overlapping lines. For plain fixups builtin `jj absorb` is often enough —
+anything it cannot route stays in `@`, so check `jj status` afterward.
+
 ### Splitting with a constructed intermediate state
 
 `jj-hunk-tool` works when a split can be made by partitioning existing changed lines. If the split needs intermediate content absent from both the parent and final states—such as overlapping same-line edits or a transitional implementation—construct it manually and recover the combined state from the change's evolution log:

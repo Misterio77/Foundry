@@ -36,6 +36,12 @@ nix shell nixpkgs#jq nixpkgs#yq nixpkgs#curl -c sh
 
 This drops you into an interactive shell with all three available. Exit with `exit` or `^D`.
 
+In a non-interactive agent run, never open that shell: chain the commands instead.
+
+```bash
+nix shell nixpkgs#jq nixpkgs#curl -c bash -c 'curl -sSL https://example.com/a.json | jq .'
+```
+
 ### When to use `nix run` instead
 
 `nix run` is more concise when you just need to run a tool's default binary and

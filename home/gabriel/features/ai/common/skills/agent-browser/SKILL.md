@@ -31,7 +31,11 @@ Load a specialized skill when the task falls outside browser web pages:
 ```bash
 agent-browser skills get electron          # Electron desktop apps (VS Code, Slack, Discord, Figma, ...)
 agent-browser skills get slack             # Slack workspace automation
+agent-browser skills get dogfood           # Exploratory QA: hunt bugs and UX problems in a web app
 agent-browser skills get derive-client     # Record a HAR, derive a standalone API client for a site
 ```
+
+Cloud and sandbox targets have their own skills too: `agentcore`,
+`vercel-sandbox`, `protected-vercel-deployments`, `webmcp-gen`.
 
 Run `agent-browser skills list` to see everything available on the installed version.
