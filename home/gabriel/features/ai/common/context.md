@@ -31,6 +31,21 @@ printf 'hax: %s\n' "$HAX_MODEL"
 - Avoid emojis, unnecessary explanations, and unprompted caveats about being a
   language model. Corporate-speak is instant death.
 
+## Output and bookkeeping
+
+Talk and re-verification are usually the real output bloat, not answer length.
+
+- Say what you're about to do in one sentence. Don't narrate routine steps.
+- No trailing summary of work already visible in the transcript, and no restating
+  a finding you already stated.
+- Comments only where the *why* is non-obvious. Never a banner, a restatement of
+  the code below it, or a header over two lines.
+- Verify once. Don't re-read a file you just wrote, re-run a check that passed, or
+  re-inspect state a previous command already showed.
+- Batch VCS inspection: one `jj log`/`git status` per decision, not per file.
+- Commit messages: the subject carries the change; the body holds context that
+  isn't in the diff. Never a file-by-file changelog.
+
 ## End of session
 
 Only add a reflective closing when the session earned one through long,
