@@ -118,6 +118,8 @@ in {
     # summarization on switch (recording the files each branch touched and
     # truncating tool results), api_key_file/api_key_command, compaction that
     # keeps the newest turns verbatim, and a clearer context-overflow error.
+    # Summaries also fit themselves to the context window and keep their
+    # touched-file sections through a compaction.
     hax = addPatches prev.hax [./hax-session-tree-credentials-summarization-and-compaction.patch];
 
     # https://github.com/pimutils/vdirsyncer/pull/1221
