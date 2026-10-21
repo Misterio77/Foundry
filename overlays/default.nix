@@ -114,8 +114,10 @@ in {
 
     pass = addPatches prev.pass [./pass-wlclipboard-secret.diff];
 
-    # Unpushed local commits: /tree navigation, Escape to open it, api_key_file/api_key_command.
-    hax = addPatches prev.hax [./hax-session-tree-and-credential-sources.patch];
+    # Unpushed local commits: /tree navigation, Escape to open it, branch
+    # summarization on switch, api_key_file/api_key_command, and compaction that
+    # keeps the newest turns verbatim.
+    hax = addPatches prev.hax [./hax-session-tree-credentials-and-compaction.patch];
 
     # https://github.com/pimutils/vdirsyncer/pull/1221
     vdirsyncer = addPatches prev.vdirsyncer [
