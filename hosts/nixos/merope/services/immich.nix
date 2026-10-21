@@ -19,17 +19,18 @@
   services.nginx.virtualHosts."photos.m7.rs" = {
     forceSSL = true;
     enableACME = true;
+    extraConfig = ''
+      allow 127.0.0.1;
+      allow ::1;
+      allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+      allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+      deny all;
+    '';
     locations = {
       "/" = {
         proxyPass = "http://localhost:${toString config.services.immich.port}";
         proxyWebsockets = true;
         extraConfig = ''
-          allow 127.0.0.1;
-          allow ::1;
-          allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
-          allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
-          deny all;
-
           # https://docs.immich.app/administration/reverse-proxy
           client_max_body_size 50000M;
           proxy_request_buffering off;
@@ -40,6 +41,7 @@
         '';
       };
       "/share" = {
+        extraConfig = "allow all;";
         proxyPass = "http://localhost:${toString config.services.immich-public-proxy.port}";
       };
     };

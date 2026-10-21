@@ -1,7 +1,4 @@
-{
-  config,
-  ...
-}: let
+{config, ...}: let
   port = "5232";
 in {
   services = {
@@ -30,16 +27,15 @@ in {
         forceSSL = true;
         enableACME = true;
         locations."/" = {
-          extraConfig = ''
-            allow 127.0.0.1;
-            allow ::1;
-            allow ${config.services.headscale.settings.prefixes.v4};
-            allow ${config.services.headscale.settings.prefixes.v6};
-            deny all;
-          '';
           proxyPass = "http://localhost:${port}";
         };
         extraConfig = ''
+          allow 127.0.0.1;
+          allow ::1;
+          allow ${config.services.headscale.settings.prefixes.v4};
+          allow ${config.services.headscale.settings.prefixes.v6};
+          deny all;
+
           proxy_set_header  X-Script-Name /;
           proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_pass_header Authorization;
@@ -54,11 +50,13 @@ in {
   };
 
   environment.persistence = {
-    "/persist".directories = [{
-      directory = "/var/lib/radicale";
-      user = config.users.users.radicale.name;
-      group = config.users.users.radicale.group;
-      mode = "0755";
-    }];
+    "/persist".directories = [
+      {
+        directory = "/var/lib/radicale";
+        user = config.users.users.radicale.name;
+        group = config.users.users.radicale.group;
+        mode = "0755";
+      }
+    ];
   };
 }

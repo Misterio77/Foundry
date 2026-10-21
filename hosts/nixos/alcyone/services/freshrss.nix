@@ -21,10 +21,7 @@ in {
     nginx.virtualHosts.${domain} = {
       forceSSL = true;
       enableACME = true;
-      locations = {
-        "/".extraConfig = tailnetOnly;
-        "~ ^.+?\\.php(/.*)?$".extraConfig = tailnetOnly;
-      };
+      extraConfig = tailnetOnly;
     };
   };
 

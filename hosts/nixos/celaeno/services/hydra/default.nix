@@ -61,16 +61,15 @@ in {
       "hydra.m7.rs" = {
         forceSSL = true;
         enableACME = true;
+        extraConfig = restrictedAccess;
         locations = {
           "~* ^/shield/([^\\s]*)".return = "302 https://img.shields.io/endpoint?url=https://hydra.m7.rs/$1/shield";
           "/" = {
             proxyPass = "http://localhost:${toString config.services.hydra.port}";
-            extraConfig = restrictedAccess;
           };
           "= /ws" = {
             proxyPass = "http://${config.services.hydra.ws.bind.address}:${toString config.services.hydra.ws.bind.port}";
             proxyWebsockets = true;
-            extraConfig = restrictedAccess;
           };
         };
       };

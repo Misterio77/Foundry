@@ -8,8 +8,8 @@
   derpPort = 3478;
   inherit (lib) listToAttrs flatten attrsToList mapAttrsToList attrByPath nameValuePair any;
   isSubstring = needle: haystack: (builtins.match ".*${needle}.*" haystack) != null;
-  isRestrictedLocation = cfg: (isSubstring "allow fd7a:" cfg.extraConfig) || (isSubstring "allow 100." cfg.extraConfig);
-  isRestricted = vhost: any ({value, ...}: isRestrictedLocation value) (attrsToList vhost.locations);
+  hasTailnetAllowlist = cfg: (isSubstring "allow fd7a:" cfg.extraConfig) || (isSubstring "allow 100." cfg.extraConfig);
+  isRestricted = vhost: (hasTailnetAllowlist vhost) || any ({value, ...}: hasTailnetAllowlist value) (attrsToList vhost.locations);
   domainToNode = listToAttrs (flatten (mapAttrsToList (
       name: host: let
         vhosts = attrByPath ["services" "nginx" "virtualHosts"] {} host.config;

@@ -1,4 +1,9 @@
-{config, lib, outputs, ...}: {
+{
+  config,
+  lib,
+  outputs,
+  ...
+}: {
   services.prowlarr = {
     enable = true;
     settings = {
@@ -9,27 +14,28 @@
   services.nginx.virtualHosts."prowlarr.m7.rs" = {
     forceSSL = true;
     enableACME = true;
+    extraConfig = ''
+      allow 127.0.0.1;
+      allow ::1;
+      allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+      allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+      deny all;
+    '';
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.prowlarr.settings.server.port}";
       proxyWebsockets = true;
-      extraConfig = ''
-        allow 127.0.0.1;
-        allow ::1;
-        allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
-        allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
-        deny all;
-      '';
     };
   };
 
-
   environment.persistence = {
-    "/persist".directories = [{
-      directory = "/var/lib/prowlarr";
-      user = "prowlarr";
-      group = "prowlarr";
-      mode = "0700";
-    }];
+    "/persist".directories = [
+      {
+        directory = "/var/lib/prowlarr";
+        user = "prowlarr";
+        group = "prowlarr";
+        mode = "0700";
+      }
+    ];
   };
 
   # Disable DynamicUser
