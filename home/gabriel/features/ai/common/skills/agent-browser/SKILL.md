@@ -7,8 +7,11 @@ description: Browser automation CLI for AI agents. Use when the user needs to in
 
 Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with accessibility-tree snapshots and compact `@eN` element refs.
 
-Use `nix-shell` to get it.
+Use `nix-shell` to get it and chromium:
 
+```bash
+nix shell nixpkgs#agent-browser nixpkgs#chromium -c agent-browser
+```
 
 ## Start here
 
