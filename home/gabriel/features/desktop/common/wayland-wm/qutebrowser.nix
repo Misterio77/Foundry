@@ -14,6 +14,11 @@ in {
     ];
   };
 
+  # HN ships one hardcoded light palette and content.user_stylesheets is
+  # global-only, hence a per-site Greasemonkey stylesheet.
+  xdg.configFile."qutebrowser/greasemonkey/hn-dark.user.js".source =
+    ./qutebrowser-hn-dark.user.js;
+
   xdg.mimeApps.defaultApplications = {
     "application/xhtml+xml" = ["org.qutebrowser.qutebrowser.desktop"];
     "text/html" = ["org.qutebrowser.qutebrowser.desktop"];
