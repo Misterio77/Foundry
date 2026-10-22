@@ -3,114 +3,78 @@ name: nix-shell
 description: Use `nix shell` for ephemeral environments and one-off commands without installing packages globally. Load this skill whenever you're missing a package, command, or module. "command not found" in bash, "ModuleNotFoundError" in python, etc.
 ---
 
-## nix shell
+## Choose the environment
 
-The canonical form for running a single command in a temporary nix environment:
+| Need | Use |
+| --- | --- |
+| Dependencies already available | Run the command directly |
+| Missing executable | `nix shell nixpkgs#<package> -c <executable> [args...]` |
+| Missing Python import | `python3.withPackages` recipe below |
+| Pipes, builtins, or shell expansion inside the environment | `nix shell ... -c bash -euo pipefail -c '...'` |
+| One tool with a suitable default app | `nix run nixpkgs#<package> -- [args...]` |
 
-```
-nix shell nixpkgs#<package> -c <command> [args...]
-```
+Keep one-offs ephemeral: no global installs or profile changes. Don't open an
+interactive shell in an agent run.
 
-The `-c` flag tells `nix shell` to exec the following arguments as a command.
-Everything after `-c` is passed straight to the shell, so quoting works naturally.
+## Executables versus shell syntax
 
-DO NOT, under any circumstances, double-quote `"<command> [args...]"` together. This will cause bash to treat the entire thing as the executable name:
-- Wrong: `nix shell nixpkgs#python3 -c "python3 foo.py arg1 arg2"`
-- **RIGHT**: `nix shell nixpkgs#python3 -c python3 foo.py arg1 arg2`
-
-### Single-package one-off
-
-```bash
-nix shell nixpkgs#jq -c jq '.foo' file.json
-nix shell nixpkgs#yq -c yq eval '.foo.bar' file.yml
-nix shell nixpkgs#httpie -c https httpbin.org/json
-```
-
-### Multiple packages in one shell
-
-For ephemeral environments with multiple tools (where the "command" is `sh`):
+`nix shell -c` executes an executable with separate arguments; it does **not**
+interpret shell syntax. Never combine the executable and its arguments into one
+quoted string:
 
 ```bash
-nix shell nixpkgs#jq nixpkgs#yq nixpkgs#curl -c sh
+# Wrong: looks for an executable named "jq .name data.json".
+nix shell nixpkgs#jq -c "jq .name data.json"
+# Right: quote individual arguments as needed.
+nix shell nixpkgs#jq -c jq -r '.name' 'data file.json'
 ```
 
-This drops you into an interactive shell with all three available. Exit with `exit` or `^D`.
-
-In a non-interactive agent run, never open that shell: chain the commands instead.
+Your outer shell processes unquoted pipes, redirects, variables, and globs before
+Nix runs. A redirect such as `> result.txt` can stay outside; commands that need
+the added tools must run inside. Use an explicit shell for pipelines, `cd`, loops,
+or expansion that must happen inside the environment:
 
 ```bash
-nix shell nixpkgs#jq nixpkgs#curl -c bash -c 'curl -sSL https://example.com/a.json | jq .'
+nix shell nixpkgs#curl nixpkgs#jq -c bash -euo pipefail -c \
+  'curl -fsSL https://example.com/a.json | jq -r .name' > result.txt
 ```
 
-### When to use `nix run` instead
+`pipefail` propagates a failing pipeline stage instead of hiding it behind a
+successful final command. Pass dynamic values as arguments or environment
+variables rather than interpolating them into shell code.
 
-`nix run` is more concise when you just need to run a tool's default binary and
-don't need to control the invoked command name:
+## Python imports
 
-```bash
-nix run nixpkgs#jq -- -r '.name' file.json
-```
-
-Use `nix run` when:
-- You want a single command with arguments (everything after `--` is passed to the binary)
-- The package's default binary name matches what you need
-- You don't need multiple packages simultaneously
-
-Use `nix shell` when:
-- You need to chain multiple commands in the same ephemeral environment
-- The command name differs from the package name (e.g., `nixpkgs#nodePackages.prettier`)
-- You want an interactive shell with multiple tools available
-
-### Python with packages (playwright, requests, etc.)
-
-`nix shell nixpkgs#python3Packages.<name>` doesn't work — the Python binary
-won't see the package. Instead, use `nix eval --apply` to get the
-`python3.withPackages` derivation path, then ask `nix shell` for its `out` output:
+Do **not** just add `nixpkgs#python3Packages.<name>` alongside `python3`: that does
+not compose an interpreter that can import it. Use `python3.withPackages`:
 
 ```bash
 nix shell "$(
   nix eval nixpkgs#python3 --raw --apply \
-    'py: (py.withPackages (p: [ p.requests ])).drvPath'
-)^out" -c python3 -c '
-import requests
-print(requests.get("https://httpbin.org/json").json()["slideshow"]["title"])
-'
+    'py: (py.withPackages (p: [ p.requests p.pyyaml ])).drvPath'
+)^out" -c python3 job.py
 ```
 
-For multiple packages/tools, add them to the same shell:
+Replace the package list as needed; import names may differ from Nix attributes
+(`yaml` → `pyyaml`, `bs4` → `beautifulsoup4`). Use `.drvPath` with `^out` **outside**
+the substitution so Nix realizes the output; an evaluated `.outPath` alone may
+not exist yet. This recipe needs neither `<nixpkgs>` nor `--impure`.
+
+Add other tools to the same `nix shell` invocation when needed, for example
+`nixpkgs#jq` before `-c bash -euo pipefail -c 'python3 job.py | jq .'`.
+For direct store-path execution, realize it first with
+`nix build --no-link --print-out-paths`.
+
+## Package names and default apps
+
+Package attributes and executable names need not match:
 
 ```bash
-nix shell "$(
-  nix eval nixpkgs#python3 --raw --apply \
-    'py: (py.withPackages (p: [ p.playwright ])).drvPath'
-)^out" \
-  nixpkgs#chromium \
-  -c python3 -c '
-from playwright.sync_api import sync_playwright
-print("works")
-'
+nix shell nixpkgs#ripgrep -c rg 'pattern' .
+nix run nixpkgs#jq -- -r '.name' data.json
 ```
 
-Important details:
-
-- Use `.drvPath` with `^out`; plain `.outPath` may be unrealized.
-- Keep `^out` outside the command substitution, as part of the installable path.
-- If invoking the store path directly instead of via `nix shell`, use
-  `nix build --no-link --print-out-paths` to realize the output first.
-
-### Finding available packages
-
-```bash
-nix search nixpkgs <query>
-```
-
-### Replacing missing commands
-
-If a command fails with "command not found", wrap it with nix shell instead of
-installing the package globally:
-
-```bash
-# instead of: apt install jq  (never)
-# instead of: nix profile install nixpkgs#jq  (avoid for one-offs)
-nix shell nixpkgs#jq -c jq '.foo' data.json
-```
+`nix run` selects a flake app or the package's default executable; matching the
+package attribute's name is not required. Use `nix shell -c` when you need a
+specific executable or several packages. If an attribute is unknown, look it up
+with `nix search nixpkgs <query>`.
