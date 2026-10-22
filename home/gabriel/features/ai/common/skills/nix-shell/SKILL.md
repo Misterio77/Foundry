@@ -55,6 +55,18 @@ nix-shell -p 'python3.withPackages (ps: [ ps.requests ps.pyyaml ])' \
   --run 'python3 job.py'
 ```
 
+For inline Python, feed a quoted heredoc to `python3 -` through stdin. Quoting
+`EOF` prevents the outer shell from expanding variables or substitutions in the
+Python code:
+
+```bash
+nix-shell -p 'python3.withPackages (ps: [ ps.pyyaml ])' --run 'python3 -' <<'EOF'
+import yaml
+
+print(yaml.safe_load("message: hello from Python")["message"])
+EOF
+```
+
 Replace the package list as needed; import names may differ from Nix attributes
 (`yaml` → `pyyaml`, `bs4` → `beautifulsoup4`). Add other tools to the same
 invocation when needed:
