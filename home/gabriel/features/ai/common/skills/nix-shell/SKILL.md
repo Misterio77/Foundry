@@ -1,6 +1,6 @@
 ---
 name: nix-shell
-description: Use `nix shell` for ephemeral environments and one-off commands without installing packages globally.
+description: Use `nix shell` for ephemeral environments and one-off commands without installing packages globally. Load this skill whenever you're missing a package, command, or module. "command not found" in bash, "ModuleNotFoundError" in python, etc.
 ---
 
 ## nix shell
