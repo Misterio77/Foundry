@@ -107,57 +107,11 @@
     lumis-mail-password-hashed.sopsFile = ../secrets.yaml;
   };
 
-  # Webmail
-  services.roundcube = {
-    enable = true;
-    package = pkgs.buildEnv {
-      name = "roundcube-with-plugins";
-      ignoreCollisions = true;
-      paths = [
-        pkgs.roundcubePlugins.carddav
-        pkgs.roundcubePlugins.kolab-plugins
-        pkgs.roundcube
-      ];
-    };
-    maxAttachmentSize = 200;
-    hostName = "mail.m7.rs";
-    extraConfig = ''
-      $config['imap_host'] = "ssl://${config.mailserver.fqdn}";
-      $config['smtp_host'] = "tls://${config.mailserver.fqdn}";
-      $config['smtp_user'] = "%u";
-      $config['smtp_pass'] = "%p";
-      $config['plugins'] = ["carddav", "calendar", "tasklist"];
-      $config['calendar_driver'] = "caldav";
-      $config['calendar_caldav_server'] = "https://dav.m7.rs";
-      $config['calendar_timeslots'] = 4;
-      $config['tasklist_driver'] = "caldav";
-      $config['tasklist_caldav_server'] = "https://dav.m7.rs";
-    '';
+  # IMAP/SMTP still need this certificate without a webmail application.
+  services.nginx.virtualHosts.${config.mailserver.fqdn} = {
+    enableACME = true;
+    locations."/".return = "404";
   };
-  # Lock down to tail net.
-  services.nginx.virtualHosts."mail.m7.rs".extraConfig = ''
-    allow 127.0.0.1;
-    allow ::1;
-    allow ${config.services.headscale.settings.prefixes.v4};
-    allow ${config.services.headscale.settings.prefixes.v6};
-    deny all;
-  '';
-  # Run initial migrations for libkolab and calendar plugins
-  systemd.services.roundcube-setup.script = let
-    psql = "psql ${config.services.roundcube.database.dbname}";
-    mkDbInit = name: file: ''
-      if ! (grep -E '[a-zA-Z0-9]' <<< "$(${psql} -t <<< "select value from system where name = '${name}-version';" || true)"); then
-        echo "Missing ${name}-version in database, running ${file}"
-        ${psql} -f ${config.services.roundcube.package}/plugins/${file}
-      fi
-    '';
-  in
-    lib.mkAfter ''
-      ${mkDbInit "libkolab" "libkolab/SQL/postgres.initial.sql"}
-      ${mkDbInit "calendar-caldav" "calendar/drivers/caldav/SQL/postgres.initial.sql"}
-      ${mkDbInit "calendar-database" "calendar/drivers/database/SQL/postgres.initial.sql"}
-      ${mkDbInit "tasklist-database" "tasklist/drivers/database/SQL/postgres.initial.sql"}
-    '';
 
   # Autoconfig
   services.automx2 = {

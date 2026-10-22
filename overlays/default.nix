@@ -41,7 +41,6 @@ in {
     }
     // {
       formats = (prev.formats or {}) // import ../pkgs/formats {pkgs = final;};
-      roundcubePlugins = (prev.roundcubePlugins or {}) // import ../pkgs/roundcube-plugins {pkgs = final;};
     };
 
   # Modifies existing packages
