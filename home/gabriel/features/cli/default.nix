@@ -11,6 +11,7 @@
     ./git.nix
     ./gpg.nix
     ./jujutsu.nix
+    ./less.nix
     ./nix-index.nix
     ./pfetch.nix
     ./ssh.nix
