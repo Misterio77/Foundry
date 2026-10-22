@@ -435,6 +435,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-php": {
+      "locked": {
+        "lastModified": 1792594136,
+        "narHash": "sha256-UVMKNe7NK7C9ESawQ1GkVo+ibK7VKwxURKgVyWr9Yxo=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "c53532a938651ed45ebef072c8da6e74256e7072",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "c53532a938651ed45ebef072c8da6e74256e7072",
+        "type": "github"
+      }
+    },
     "nixpkgs-runescape": {
       "locked": {
         "lastModified": 1791426274,
@@ -515,6 +531,7 @@
         "nix-system-graphics": "nix-system-graphics",
         "nixos-mailserver": "nixos-mailserver",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-php": "nixpkgs-php",
         "nixpkgs-runescape": "nixpkgs-runescape",
         "sops-nix": "sops-nix",
         "system-manager": "system-manager",
