@@ -12,16 +12,6 @@ var schemes = {
     {% endfor %}
 };
 var schemeNames = Object.keys(schemes);
-var starPath = "M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z";
-
-// One icon per colour scheme, matching the markup in favicon.html.liquid: a
-// favicon URL is rasterised once and cached, so each mode needs its own URL
-// rather than one URL expected to render two ways.
-function faviconUri(color) {
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>" +
-        "<path fill='" + color + "' d='" + starPath + "'/></svg>";
-    return "data:image/svg+xml," + encodeURIComponent(svg);
-}
 
 function setFavicon(media, href) {
     var link = document.querySelector(media
@@ -36,12 +26,25 @@ function setFavicon(media, href) {
     link.setAttribute("href", href);
 }
 
+// See _src/_includes/favicon.html.liquid for explanation on the favicon hack
+// That one is for the initial/noscript load, and this is its port in JS for dynamic schemes.
 function updateFavicon(scheme) {
     var colors = schemes[scheme];
     if (!colors) return;
 
-    setFavicon(null, faviconUri(colors.dark));
-    setFavicon("(prefers-color-scheme: light)", faviconUri(colors.light));
+    var svg = encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>
+        <style>
+          path {fill: ${colors.light};}
+          @media (prefers-color-scheme: dark) {
+            path {fill: ${colors.dark};}
+          }
+        </style>
+        <path d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/>
+      </svg>
+    `.replace(/\s+/g, " ").replace(/>\s+</g, "><").trim());
+    setFavicon("(prefers-color-scheme: dark)", "data:image/svg+xml, " + svg);
+    setFavicon("(prefers-color-scheme: light)", "data:image/svg+xml," + svg);
 }
 
 function setTheme(scheme) {

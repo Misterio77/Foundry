@@ -1,18 +1,27 @@
 {%- assign scheme = site.data.colorscheme[site.default_scheme] -%}
+
 {%- comment -%}
-  One icon per colour scheme, so each mode gets its own URL: a favicon is
-  rasterised once per URL and the bitmap is cached, so a single URL expected to
-  render two ways is at the mercy of that cache. Dark is unconditional and light
-  overrides it, as the colours are declared in the layout, which also leaves a
-  candidate for user agents reporting no preference.
+  Firefox and chromium have two different quirks regarding dynamic favicons.
+
+  Firefox does not support media queries in <link>, so we need to use @media inside style inside the svg instead.
+  Chromium supports both query locations, but it rasterizes the svg upon loading it, so it doesn't switch modes without a reload.
+
+  To satisfy both: we make a svg with @media query inside, and put that same SVG in two different <link> with dark/light media queries.
+  Chromium caches by URI, so we put a space right before one of the SVGs to cache bust
 {%- endcomment -%}
-{%- capture dark_icon -%}
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='{{ scheme.colors.dark.primary }}' d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/></svg>
+
+{%- capture svg_raw -%}
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>
+  <style>
+    path { fill: {{ scheme.colors.light.primary }}; }
+    @media (prefers-color-scheme: dark) {
+      path { fill: {{ scheme.colors.dark.primary }}; }
+    }
+  </style>
+  <path d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/>
+</svg>
 {%- endcapture -%}
-{%- capture light_icon -%}
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path fill='{{ scheme.colors.light.primary }}' d='M16,1L21,11L31,16L21,21L16,31L11,21L1,16L11,11Z'/></svg>
-{%- endcapture -%}
-{%- assign dark_icon = dark_icon | strip | replace: "%", "%25" | replace: "#", "%23" | replace: "<", "%3C" | replace: ">", "%3E" | replace: " ", "%20" -%}
-{%- assign light_icon = light_icon | strip | replace: "%", "%25" | replace: "#", "%23" | replace: "<", "%3C" | replace: ">", "%3E" | replace: " ", "%20" -%}
-<link rel="icon" href="data:image/svg+xml,{{ dark_icon }}">
-<link rel="icon" media="(prefers-color-scheme: light)" href="data:image/svg+xml,{{ light_icon }}">
+{% assign svg = svg_raw | url_encode | replace: '+', '%20' %}
+
+<link rel="icon" media="(prefers-color-scheme: dark)" href="data:image/svg+xml, {{ svg }}">
+<link rel="icon" media="(prefers-color-scheme: light)" href="data:image/svg+xml,{{ svg }}">
