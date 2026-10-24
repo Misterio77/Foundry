@@ -1,0 +1,26 @@
+---
+title: Talks
+subtitle: Slides and resources from my talks
+description: Talks by Gabriel Fontes on Nix, reproducible environments, and open-source software.
+permalink: /talks/
+listing: true
+---
+
+{% assign talks = site.talks | sort: "date" | reverse %}
+{% for talk in talks %}
+  <article>
+    <header>
+      <div>
+        <p><time datetime="{{ talk.date | date_to_xmlschema }}">
+          {{ talk.date | date_to_long_string: "ordinal" }}
+        </time></p>
+        <p><strong>({{ talk.language }})</strong></p>
+      </div>
+      <h2><a href="{{ talk.url }}">{{ talk.title }}</a></h2>
+      <p>{{ talk.event }}</p>
+    </header>
+    <section>
+      <p>{{ talk.description }}</p>
+    </section>
+  </article>
+{% endfor %}

@@ -5,7 +5,6 @@ lang: en
 
 default_scheme: taygeta
 
-
 plugins:
   - jekyll-target-blank
   - jekyll-sitemap
@@ -19,12 +18,16 @@ sass:
 kramdown:
   syntx_highlighter: coderay
 
-
 include: [".well-known"]
 
 source: _src
 
 collections:
+  talks:
+    output: true
+    permalink: /talks/:name/
+    name: Talks
+    sort_by: date
   posts:
     output: true
     permalink: /blog/:name/
@@ -36,26 +39,27 @@ collections:
     sort_by: date
 
 defaults:
-  -
-    scope:
+  - scope:
+      path: ""
+      type: "talks"
+    values:
+      nav_current: "/talks/"
+  - scope:
       path: ""
       type: "posts"
     values:
       layout: "post.html"
       nav_current: "/blog/"
-  -
-    scope:
+  - scope:
       path: "assets/**/*.pdf"
     values:
       sitemap: false
-  -
-    scope:
+  - scope:
       path: ""
       type: "publications"
     values:
       nav_current: "/publications/"
-  -
-    scope:
+  - scope:
       path: ""
     values:
       layout: "default.html"
