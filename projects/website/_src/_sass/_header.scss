@@ -81,6 +81,9 @@ body > header nav {
   }
 
   a {
+    // Anchor decorations to the centered text, not the larger touch target.
+    --decoration-inset: calc(50% - 0.75em - var(--space-1));
+
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -90,7 +93,7 @@ body > header nav {
     padding: var(--space-1) 0.1rem;
     color: var(--primary);
     background-image: linear-gradient(var(--primary), var(--primary));
-    background-position: left calc(100% - 0.1rem);
+    background-position: left calc(100% - var(--decoration-inset) - 0.1rem);
     background-repeat: no-repeat;
     background-size: 0 var(--rule-width);
     font-size: 0.95rem;
@@ -106,7 +109,7 @@ body > header nav {
     &::after {
       position: absolute;
       right: -0.1rem;
-      bottom: 0;
+      bottom: var(--decoration-inset);
       width: 0.2rem;
       height: 0.2rem;
       background: currentColor;
