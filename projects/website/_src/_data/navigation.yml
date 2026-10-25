@@ -1,10 +1,10 @@
 - text: about
   link: /
+- text: cv
+  link: /cv/
 - text: blog
   link: /blog/
 - text: talks
   link: /talks/
 - text: publications
   link: /publications/
-- text: cv
-  link: /cv/

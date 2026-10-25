@@ -18,7 +18,9 @@ body > header {
     font-weight: 600;
     letter-spacing: 0.015em;
     text-decoration: none;
-    transition: color var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
+    transition:
+      color var(--duration-normal) var(--ease-linear),
+      transform var(--duration-normal) var(--ease-out);
 
     &:hover,
     &:focus-visible {
@@ -33,7 +35,9 @@ body > header {
       display: inline-block;
       font-size: 0.65em;
       text-shadow: var(--glow-soft);
-      transition: text-shadow var(--duration-normal) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
+      transition:
+        text-shadow var(--duration-normal) var(--ease-linear),
+        transform var(--duration-normal) var(--ease-out);
       vertical-align: 0.12em;
     }
 
@@ -56,7 +60,6 @@ body > header nav {
 
   @include settings.mobile {
     width: 100%;
-    overflow-x: auto;
   }
 
   ul {
@@ -67,8 +70,9 @@ body > header nav {
     list-style: none;
 
     @include settings.mobile {
+      flex-wrap: wrap;
       justify-content: flex-start;
-      gap: clamp(var(--space-4), 4vw, var(--space-6));
+      gap: var(--space-1) clamp(var(--space-2), 2vw, var(--space-3));
     }
   }
 
@@ -78,7 +82,11 @@ body > header nav {
 
   a {
     position: relative;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
     padding: var(--space-1) 0.1rem;
     color: var(--primary);
     background-image: linear-gradient(var(--primary), var(--primary));
@@ -90,7 +98,10 @@ body > header nav {
     letter-spacing: 0.01em;
     line-height: 1.5;
     text-decoration: none;
-    transition: color var(--duration-normal) var(--ease-linear), background-size var(--duration-normal) var(--ease-out), transform var(--duration-normal) var(--ease-out);
+    transition:
+      color var(--duration-normal) var(--ease-linear),
+      background-size var(--duration-normal) var(--ease-out),
+      transform var(--duration-normal) var(--ease-out);
 
     &::after {
       position: absolute;
@@ -103,7 +114,9 @@ body > header nav {
       opacity: 0;
       pointer-events: none;
       transform: rotate(45deg) scale(0);
-      transition: opacity var(--duration-fast) var(--ease-linear), transform var(--duration-normal) var(--ease-out);
+      transition:
+        opacity var(--duration-fast) var(--ease-linear),
+        transform var(--duration-normal) var(--ease-out);
     }
 
     &:hover,
