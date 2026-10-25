@@ -1,13 +1,7 @@
 {%- assign scheme = site.data.colorscheme[site.default_scheme] -%}
 
 {%- comment -%}
-  Firefox and chromium have two different quirks regarding dynamic favicons.
-
-  Firefox does not support media queries in <link>, so we need to use @media inside style inside the svg instead.
-  Chromium supports both query locations, but it rasterizes the svg upon loading it, so it doesn't switch modes without a reload.
-
-  To satisfy both: we make a svg with @media query inside, and put that same SVG in two different <link> with dark/light media queries.
-  Chromium caches by URI, so we put a space right before one of the SVGs to cache bust
+  See main.js for the rationale on this hack
 {%- endcomment -%}
 
 {%- capture svg_raw -%}

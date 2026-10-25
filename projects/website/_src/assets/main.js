@@ -26,8 +26,14 @@ function setFavicon(media, href) {
     link.setAttribute("href", href);
 }
 
-// See _src/_includes/favicon.html.liquid for explanation on the favicon hack
-// That one is for the initial/noscript load, and this is its port in JS for dynamic schemes.
+/*
+  Firefox and chromium have two different quirks regarding dynamic favicons.
+
+  Firefox does not support media queries in <link>, so we need to use @media inside style inside the svg instead.
+  Chromium supports both query locations, but it rasterizes the svg upon loading it, so it doesn't switch modes without a reload.
+
+  To satisfy both: we make a svg with @media query inside, and put that same-ish (just a space to cache bust) SVG in two different <link> with dark/light media queries.
+*/
 function updateFavicon(scheme) {
     var colors = schemes[scheme];
     if (!colors) return;
