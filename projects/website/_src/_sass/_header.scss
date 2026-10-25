@@ -3,7 +3,7 @@
 // Site header
 body > header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
   margin: 0;
@@ -77,6 +77,7 @@ body > header nav {
   }
 
   li {
+    display: flex;
     margin: 0;
   }
 
