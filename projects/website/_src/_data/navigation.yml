@@ -1,10 +1,15 @@
 - text: about
   link: /
+  group: profile
 - text: cv
   link: /cv/
+  group: profile
 - text: blog
   link: /blog/
+  group: work
 - text: talks
   link: /talks/
+  group: work
 - text: publications
   link: /publications/
+  group: work

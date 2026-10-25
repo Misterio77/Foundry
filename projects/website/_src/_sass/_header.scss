@@ -56,24 +56,25 @@ body > header {
 }
 
 body > header nav {
+  --nav-gap: clamp(1.25rem, 2.5vw, 2.2rem);
+
+  display: flex;
+  gap: var(--space-1) var(--nav-gap);
   margin: 0;
 
   @include settings.mobile {
+    --nav-gap: clamp(var(--space-2), 2vw, var(--space-3));
+
+    flex-wrap: wrap;
     width: 100%;
   }
 
   ul {
     display: flex;
-    gap: clamp(1.25rem, 2.5vw, 2.2rem);
+    gap: var(--nav-gap);
     margin: 0;
     padding: 0;
     list-style: none;
-
-    @include settings.mobile {
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      gap: var(--space-1) clamp(var(--space-2), 2vw, var(--space-3));
-    }
   }
 
   li {

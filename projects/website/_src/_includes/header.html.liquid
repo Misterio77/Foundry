@@ -1,7 +1,9 @@
 <a href="/" title="Gabriel Fontes" rel="home"><span aria-hidden="true">✦</span> Gabriel Fontes <span aria-hidden="true">✦</span></a>
 <nav aria-label="Site navigation">
+    {% assign groups = site.data.navigation | group_by: "group" %}
+    {% for group in groups %}
     <ul>
-      {% for item in site.data.navigation %}
+      {% for item in group.items %}
       <li>
         <a
           {% if page.nav_current == item.link or page.url == item.link %}
@@ -19,4 +21,5 @@
       </li>
       {% endfor %}
     </ul>
+    {% endfor %}
 </nav>
