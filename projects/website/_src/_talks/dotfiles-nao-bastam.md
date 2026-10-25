@@ -3,7 +3,7 @@ title: Dotfiles não bastam
 subtitle: Seu ambiente não é uma pasta de configs
 description: Como usar Nix e Home Manager para trazer ferramentas junto com as configs, compartilhar preferências entre programas e organizar módulos por funcionalidade.
 date: 2026-10-24
-event: Inauguração Sanca Hackerspace
+event: Sanca Hackerspace
 language: pt-BR
 slides_url: /assets/talks/dotfiles-nao-bastam/slides.pdf
 ---
