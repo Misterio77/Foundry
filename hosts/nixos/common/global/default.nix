@@ -16,7 +16,6 @@
       ./podman.nix
       ./sops.nix
       ./steam-hardware.nix
-      ./systemd-initrd.nix
       ./swappiness.nix
       ./tailscale.nix
       ./tpm.nix

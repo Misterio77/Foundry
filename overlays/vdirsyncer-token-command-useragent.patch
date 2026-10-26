@@ -5,11 +5,11 @@ index 219ccdf..0cd2bcf 100644
 @@ -13,6 +13,7 @@ import aiohttp
  import click
  
- from .. import exceptions
-+from ..http import USERAGENT
- from ..utils import atomic_write
- from ..utils import checkdir
- from ..utils import expand_path
+ from vdirsyncer import exceptions
++from vdirsyncer.http import USERAGENT
+ from vdirsyncer.utils import atomic_write
+ from vdirsyncer.utils import checkdir
+ from vdirsyncer.utils import expand_path
 @@ -44,6 +45,7 @@ class GoogleSession(dav.DAVSession):
          client_secret=None,
          token_command=None,

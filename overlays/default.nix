@@ -24,15 +24,6 @@ in {
       inputs;
   };
 
-  # Remove with nixpkgs-php once unstable includes the PHP2Shell fixes.
-  # https://github.com/NixOS/nixpkgs/pull/576853
-  php-security = final: prev: let
-    patched = inputs.nixpkgs-php.legacyPackages.${final.stdenv.hostPlatform.system};
-  in {
-    php84 = assert final.lib.versionOlder prev.php84.version "8.4.27"; patched.php84;
-    php85 = assert final.lib.versionOlder prev.php85.version "8.5.12"; patched.php85;
-  };
-
   # Adds my custom packages
   additions = final: prev:
     import ../pkgs {

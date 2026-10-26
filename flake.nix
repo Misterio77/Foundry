@@ -13,7 +13,6 @@
   inputs = {
     # Nix ecosystem
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-php.url = "github:nixos/nixpkgs/c53532a938651ed45ebef072c8da6e74256e7072";
     nixpkgs-runescape.url = "github:nixos/nixpkgs/nixos-26.05";
     systems.url = "github:nix-systems/default-linux";
 

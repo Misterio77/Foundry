@@ -34,7 +34,7 @@
 
     src = fetchurl {
       url = "https://content.runescape.com/downloads/ubuntu/pool/non-free/r/runescape-launcher/runescape-launcher_${version}_amd64.deb";
-      hash = "sha256-SaWUwcdxE9/xS2lvnBMI7RwafpFm3TknXoWX7AUp+gQ=";
+      hash = "sha256-Z233kkOhC6z0Bp7ACpIlzfZbXepZOUibOfj9D6A7E5Q=";
     };
 
     nativeBuildInputs = [

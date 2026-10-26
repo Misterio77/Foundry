@@ -12,8 +12,6 @@
     ../common/optional/persist-snapshots.nix
   ];
 
-  boot.initrd.systemd.emergencyAccess = true;
-
   # Static IP address
   networking = {
     hostName = "merope";
