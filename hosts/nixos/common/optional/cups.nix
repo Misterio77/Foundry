@@ -3,7 +3,19 @@
   lib,
   ...
 }: {
-  services.avahi.enable = lib.mkForce false;
+  services.avahi = {
+    enable = lib.mkForce false;
+    # ipp-usb still sets the obsolete options, even with Avahi disabled.
+    publish = {
+      enable = lib.mkForce null;
+      userServices = lib.mkForce null;
+    };
+    settings.publish = {
+      disable-publishing = false;
+      disable-user-service-publishing = false;
+      publish-addresses = true;
+    };
+  };
   services.ipp-usb.enable = true;
   services.printing = {
     enable = true;

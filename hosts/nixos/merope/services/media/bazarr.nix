@@ -5,7 +5,7 @@
 }: {
   services.bazarr = {
     enable = true;
-    listenPort = 8689;
+    settings.general.port = 8689;
   };
 
   services.nginx.virtualHosts."bazarr.m7.rs" = {
@@ -19,7 +19,7 @@
       deny all;
     '';
     locations."/" = {
-      proxyPass = "http://localhost:${toString config.services.bazarr.listenPort}";
+      proxyPass = "http://localhost:${toString config.services.bazarr.settings.general.port}";
       proxyWebsockets = true;
     };
   };

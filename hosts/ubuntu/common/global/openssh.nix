@@ -13,6 +13,8 @@
 in {
   services.openssh = {
     enable = true;
+    # Ubuntu owns the firewall; system-manager cannot apply these rules.
+    openFirewall = false;
     settings = {
       # Harden
       PasswordAuthentication = false;
@@ -38,6 +40,9 @@ in {
       }
     ];
   };
+
+  # The upstream alias is unsupported, and Ubuntu's ssh.service is masked.
+  systemd.services.ssh-system-manager.aliases = lib.mkForce [];
 
   programs.ssh = {
     # Takes over /etc/ssh/ssh_config (Ubuntu's is backed up), which is what

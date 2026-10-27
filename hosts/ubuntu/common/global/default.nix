@@ -14,7 +14,25 @@ in {
   imports =
     [
       inputs.home-manager.nixosModules.home-manager
-      inputs.nix-system-graphics.systemModules.default
+      # Adapt the upstream module's legacy stdenv flags to nixpkgs' platform API.
+      ({
+        config,
+        lib,
+        pkgs,
+        ...
+      }:
+        inputs.nix-system-graphics.systemModules.default {
+          inherit config lib;
+          pkgs =
+            pkgs
+            // {
+              stdenv =
+                pkgs.stdenv
+                // {
+                  inherit (pkgs.stdenv.hostPlatform) isi686 isx86_64;
+                };
+            };
+        })
       ./greetd.nix
       ./network.nix
       ./nix.nix
@@ -25,7 +43,11 @@ in {
     ++ (builtins.attrValues outputs.systemManagerModules);
 
   nixpkgs.config.allowUnfree = true;
-  system-graphics.enable = true;
+  system-graphics = {
+    enable = true;
+    package = pkgs.mesa;
+    package32 = pkgs.pkgsi686Linux.mesa;
+  };
 
   # Nix's D-Bus tools use /etc for their primary config, while Ubuntu keeps the
   # defaults in /usr/share and reserves /etc for local includes. Remove the
