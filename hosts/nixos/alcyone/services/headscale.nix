@@ -102,19 +102,20 @@ in {
     '';
     serviceConfig = {
       Type = "oneshot";
-      # Stay active (exited) so a changed unit is re-run on nixos-rebuild switch;
-      # an inactive oneshot is skipped by switch-to-configuration's restart pass.
-      RemainAfterExit = true;
       User = "headscale";
       Group = "headscale";
     };
   };
 
   systemd.timers.headscale-extra-records = {
-    description = "Hourly refresh of headscale extra DNS records";
+    description = "Refresh headscale extra DNS records hourly and on generator changes";
     wantedBy = ["timers.target"];
+    # Restarting the timer re-arms OnActiveSec when the generator changes on switch.
+    restartTriggers = [config.systemd.services.headscale-extra-records.serviceConfig.ExecStart];
     timerConfig = {
+      OnActiveSec = "1s";
       OnCalendar = "hourly";
+      AccuracySec = "1s";
       Persistent = true;
     };
   };
