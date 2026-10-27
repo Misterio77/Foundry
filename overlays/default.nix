@@ -46,6 +46,17 @@ in {
       ./bazarr-ffsubsync-reference-by-speech.patch
     ];
 
+    # Test progress pads each update to Hydra's PTY width, exhausting its log limit.
+    # https://github.com/NixOS/nixpkgs/issues/570642
+    duckdb = prev.duckdb.overrideAttrs (oldAttrs: {
+      postPatch =
+        (oldAttrs.postPatch or "")
+        + ''
+          substituteInPlace third_party/catch/catch.hpp \
+            --replace-fail 'renderTestProgress(current_test, total_tests_run, testCase->name);' ';'
+        '';
+    });
+
     runelite = addPatches prev.runelite [./runelite-developer-mode.patch];
 
     qutebrowser = prev.qutebrowser.overrideAttrs (oldAttrs: {
