@@ -16,6 +16,9 @@ in {
     enable = true;
     domain = "ci.m7.rs";
     nginx.enableACME = true;
+    packages.nixbot = inputs.nixbot.packages.${pkgs.stdenv.hostPlatform.system}.nixbot.overrideAttrs (old: {
+      patches = (old.patches or []) ++ [../../../../overlays/nixbot-store-paths.patch];
+    });
     buildSystems = ["aarch64-linux" "x86_64-linux"];
     evalWorkerCount = 2;
     evalMaxMemorySize = 4096;

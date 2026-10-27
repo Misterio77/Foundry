@@ -1,0 +1,98 @@
+--- a/nixbot/queries/web.sql
++++ b/nixbot/queries/web.sql
+@@ -204,7 +204,7 @@
+ ORDER BY b.status = 'pending', b.id;
+ 
+ -- name: AttributeStatus :one
+-SELECT status, eval_wall_ms, eval_alloc_bytes FROM build_attributes
++SELECT status, eval_wall_ms, eval_alloc_bytes, drv_path, outputs FROM build_attributes
+ WHERE build_id = $1 AND attr = $2;
+ 
+ -- name: AttributeError :one
+--- a/nixbot/db_gen/web.py
++++ b/nixbot/db_gen/web.py
+@@ -271,6 +271,8 @@
+     status: str
+     eval_wall_ms: int | None
+     eval_alloc_bytes: int | None
++    drv_path: str | None
++    outputs: str | None
+ 
+ 
+ @dataclasses.dataclass()
+@@ -599,7 +601,7 @@
+ """
+ 
+ ATTRIBUTE_STATUS: typing.Final[str] = """-- name: AttributeStatus :one
+-SELECT status, eval_wall_ms, eval_alloc_bytes FROM build_attributes
++SELECT status, eval_wall_ms, eval_alloc_bytes, drv_path, outputs FROM build_attributes
+ WHERE build_id = $1 AND attr = $2
+ """
+ 
+@@ -1140,7 +1142,7 @@
+     row = await conn.fetchrow(ATTRIBUTE_STATUS, build_id, attr)
+     if row is None:
+         return None
+-    return AttributeStatusRow(status=row[0], eval_wall_ms=row[1], eval_alloc_bytes=row[2])
++    return AttributeStatusRow(status=row[0], eval_wall_ms=row[1], eval_alloc_bytes=row[2], drv_path=row[3], outputs=row[4])
+ 
+ 
+ async def attribute_error(conn: ConnectionLike, *, build_id: int, attr: str) -> str | None:
+--- a/nixbot/web/logs.py
++++ b/nixbot/web/logs.py
+@@ -1042,7 +1042,7 @@
+             request, forge, owner, name, number, attr
+         )
+         row = await gen.attribute_status(self.ctx.pool, build_id=build["id"], attr=attr)
+-        attr_row: dict[str, Any] = row_dict(row) if row else {}
++        attr_row: dict[str, Any] = clean_row(row_dict(row)) if row else {}
+         attr_status = row.status if row else None
+         # Live pages render no snapshot: the stream replays full
+         # history on connect, the client would throw it away.
+--- a/nixbot/web/templates/log.html
++++ b/nixbot/web/templates/log.html
+@@ -39,6 +39,28 @@
+           {% endif %}
+         </div>
+       </div>
++      {% if attr_row.drv_path or attr_row.outputs %}
++        <dl class="store-paths">
++          {% if attr_row.drv_path %}
++            <dt>derivation</dt>
++            <dd>
++              <code>{{ attr_row.drv_path }}</code>
++              <button class="copy-btn" type="button" data-copy="{{ attr_row.drv_path }}" aria-label="copy derivation path">copy</button>
++            </dd>
++          {% endif %}
++          {% for name, path in (attr_row.outputs or {}).items() %}
++            <dt>output <code>{{ name }}</code></dt>
++            <dd>
++              {% if path %}
++                <code>{{ path }}</code>
++                <button class="copy-btn" type="button" data-copy="{{ path }}" aria-label="copy output {{ name }} path">copy</button>
++              {% else %}
++                <span class="muted">not yet known</span>
++              {% endif %}
++            </dd>
++          {% endfor %}
++        </dl>
++      {% endif %}
+       {% if waiting %}
+         <p class="muted">waiting for the build to start…</p>
+       {% elif unavailable %}
+--- a/nixbot/web/static/style.css
++++ b/nixbot/web/static/style.css
+@@ -976,6 +976,13 @@
+ .webhook-panel code {
+ 	overflow-wrap: anywhere;
+ }
++.store-paths dd {
++	margin: 0.25rem 0 0.75rem;
++	overflow-wrap: anywhere;
++}
++.store-paths .copy-btn {
++	margin-left: 0.5rem;
++}
+ .copy-btn {
+ 	font-size: 0.75rem;
+ 	padding: 0.15rem 0.5rem;
