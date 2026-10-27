@@ -16,6 +16,10 @@
     nixpkgs-runescape.url = "github:nixos/nixpkgs/nixos-26.05";
     systems.url = "github:nix-systems/default-linux";
 
+    nixbot = {
+      url = "github:Mic92/nixbot";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     hardware = {
       url = "github:nixos/nixos-hardware";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -111,7 +115,7 @@
     homeManagerModules = import ./modules/home-manager;
 
     overlays = import ./overlays {inherit inputs outputs;};
-    hydraJobs = import ./hydra.nix {inherit inputs outputs;};
+    ciJobs = import ./ci.nix {inherit inputs outputs;};
 
     packages = forEachSystem (pkgs: import ./pkgs {inherit inputs pkgs;});
     devShells = forEachSystem (pkgs: import ./shell.nix {inherit pkgs;});

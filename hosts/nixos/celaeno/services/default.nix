@@ -5,6 +5,6 @@
     ../../common/optional/postgres.nix
 
     ./binary-cache.nix
-    ./hydra
+    ./nixbot.nix
   ];
 }

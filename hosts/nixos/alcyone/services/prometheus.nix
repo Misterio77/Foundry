@@ -15,9 +15,9 @@ in {
       };
       scrapeConfigs = [
         {
-          job_name = "hydra";
+          job_name = "nixbot";
           scheme = "https";
-          static_configs = [{targets = ["hydra.m7.rs"];}];
+          static_configs = [{targets = ["ci.m7.rs"];}];
         }
         {
           job_name = "headscale";

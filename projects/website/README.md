@@ -2,7 +2,7 @@
 
 ## About
 [![built with nix](https://img.shields.io/static/v1?logo=nixos&logoColor=white&label=&message=Built%20with%20Nix&color=41439a)](https://nixos.org)
-[![hydra status](https://img.shields.io/endpoint?url=https://hydra.m7.rs/job/foundry/main/pkgs.x86_64-linux.website/shield)](https://hydra.m7.rs/jobset/foundry/main#tabs-jobs)
+[![nixbot status](https://ci.m7.rs/repos/pull_based/m7/Foundry/badge.svg)](https://ci.m7.rs/repos/pull_based/m7/Foundry/attrs/ciJobs.pkgs.x86_64-linux.website)
 
 My personal website.
 

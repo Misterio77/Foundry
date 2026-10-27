@@ -6,11 +6,10 @@
     ../common/global
     ../common/users/gabriel
     ../common/optional/ssh-serve-store.nix
-    ../common/optional/hydra-builder.nix
     ../common/optional/nginx.nix
   ];
 
-  services.hydra-builder.settings.maxJobs = 8;
+  nix.settings.max-jobs = 8;
 
   networking = {
     hostName = "taygeta";

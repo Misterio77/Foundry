@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  cfg = config.system.hydraAutoUpgrade;
+  cfg = config.system.nixbotAutoUpgrade;
   cached-nixos-rebuild = pkgs.writeShellApplication {
     name = "cached-nixos-rebuild";
     runtimeInputs = with pkgs; [
@@ -20,8 +20,7 @@
     ];
     text = ''
       action="''${1:-build}"
-      jobset="''${2:-${cfg.jobset}}"
-      job="''${3:-${cfg.job}}"
+      job="''${2:-${cfg.job}}"
 
       fetch_json() {
         curl \
@@ -41,12 +40,15 @@
       current_ts="$(nix flake metadata "self" --json | jq -er '.lastModified | select(type == "number")')"
       echo "Current flake modified at: $(date -d @"$current_ts")" >&2
 
-      latest="$(fetch_json "${cfg.instance}/job/${cfg.project}/$jobset/$job/latest")"
-      eval="$(jq -er '.jobsetevals[0] | select((type == "number") or (type == "string")) | tostring' <<<"$latest")"
-      path="$(jq -er '.buildoutputs.out.path | select(type == "string" and startswith("/nix/store/"))' <<<"$latest")"
+      history="$(fetch_json "${cfg.instance}/api/repos/${cfg.project}/attrs/$job")"
+      latest="$(jq -ec --arg branch ${lib.escapeShellArg cfg.branch} '
+        [.[] | select(.branch == $branch and .status == "succeeded")]
+        | max_by(.build_number) | select(. != null)
+      ' <<<"$history")"
+      revision="$(jq -er '.commit_sha | select(test("^[0-9a-f]{40}$"))' <<<"$latest")"
+      path="$(jq -er '.outputs.out | select(test("^/nix/store/[0-9a-z]{32}-[^/]+$"))' <<<"$latest")"
 
-      eval_data="$(fetch_json "${cfg.instance}/eval/$eval")"
-      new_flake="$(jq -er '.flake | select(type == "string" and length > 0)' <<<"$eval_data")"
+      new_flake=${lib.escapeShellArg cfg.source}"&rev=$revision"
       echo "New flake: $new_flake" >&2
       new_ts="$(nix flake metadata "$new_flake" --json | jq -er '.lastModified | select(type == "number")')"
       echo "Modified at: $(date -d @"$new_ts")" >&2
@@ -104,8 +106,8 @@
   };
 in {
   options = {
-    system.hydraAutoUpgrade = {
-      enable = lib.mkEnableOption "periodic hydra-based auto upgrade";
+    system.nixbotAutoUpgrade = {
+      enable = lib.mkEnableOption "periodic Nixbot-based auto upgrade";
       operation = lib.mkOption {
         type = lib.types.enum ["switch" "boot"];
         default = "switch";
@@ -118,15 +120,20 @@ in {
 
       instance = lib.mkOption {
         type = lib.types.str;
-        example = "https://hydra.m7.rs";
+        example = "https://ci.m7.rs";
       };
       project = lib.mkOption {
         type = lib.types.str;
-        example = "foundry";
+        example = "pull_based/m7/Foundry";
+        description = "Nixbot project API path: forge/owner/repository.";
       };
-      jobset = lib.mkOption {
+      branch = lib.mkOption {
         type = lib.types.str;
-        example = "main";
+        default = "main";
+      };
+      source = lib.mkOption {
+        type = lib.types.str;
+        description = "Git flake URL for source metadata, including query parameters but no revision.";
       };
       job = lib.mkOption {
         type = lib.types.str;
@@ -140,7 +147,7 @@ in {
       {
         assertion = cfg.enable -> !config.system.autoUpgrade.enable;
         message = ''
-          hydraAutoUpgrade and autoUpgrade are mutually exclusive.
+          nixbotAutoUpgrade and autoUpgrade are mutually exclusive.
         '';
       }
     ];
@@ -150,12 +157,12 @@ in {
       unitConfig.X-StopOnRemoval = false;
       serviceConfig.Type = "oneshot";
 
-      script = "${lib.getExe cached-nixos-rebuild} ${cfg.operation} ${cfg.jobset} ${cfg.job}";
+      script = "${lib.getExe cached-nixos-rebuild} ${cfg.operation} ${cfg.job}";
       startAt = cfg.dates;
       after = ["network-online.target"];
       wants = ["network-online.target"];
     };
-    # Make script available for admin usage
+    system.build.cached-nixos-rebuild = cached-nixos-rebuild;
     environment.systemPackages = [cached-nixos-rebuild];
   };
 }

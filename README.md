@@ -1,5 +1,5 @@
 [![built with nix](https://img.shields.io/static/v1?logo=nixos&logoColor=white&label=&message=Built%20with%20Nix&color=41439a)](https://builtwithnix.org)
-[![hydra status](https://img.shields.io/endpoint?url=https://hydra.m7.rs/job/foundry/main/hosts.atlas/shield)](https://hydra.m7.rs/jobset/foundry/main#tabs-jobs)
+[![nixbot status](https://ci.m7.rs/repos/pull_based/m7/Foundry/badge.svg)](https://ci.m7.rs/repos/pull_based/m7/Foundry)
 
 # Foundry
 
@@ -34,7 +34,7 @@ projects/       my public projects deployed from here (e.g. the m7.rs website)
 - Flexible **Home Manager** configs through **feature flags**
 - Extensively configured **hyprland** environment
 - **Declarative theming**: wallpapers and a pure-Nix **Material You** color engine
-- **Hydra CI/CD** builds every host, serves a binary cache, and hosts auto-upgrade by pull deployment
+- **Nixbot CI/CD** polls my self-hosted Git, builds every host, and drives pull deployment through an independent binary cache
 
 
 ## About the installation
@@ -80,7 +80,7 @@ Most relevant user apps daily drivers:
 
 Some of the services I host:
 
-- hydra
+- nixbot
 - jellyfin
 - *arrs (including torrent and usenet)
 - prometheus

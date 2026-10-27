@@ -10,7 +10,7 @@ Foundry is my public infra monorepo: the NixOS/home-manager config, plus:
   mirrored to the standalone repo.
 - `pkgs/wallpapers/` — my wallpaper collection. Each entry in `list.json` carries a
   committed `sourceColor` (matugen's extracted seed), and they're exposed as
-  `pkgs.wallpapers` plus a Hydra-cached `wallpapers` package (imgur is upstream).
+  `pkgs.wallpapers` plus a CI-cached `wallpapers` package (imgur is upstream).
 - `lib/` — a from-scratch pure-Nix implementation of Material You color science
   (`math`, `hct`, `palettes`, `scheme`, `material-you`), validated bit-for-bit
   against matugen. `modules/home-manager/colors.nix` uses it via
@@ -124,7 +124,7 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 - Deploy to this host: use nixos-rebuild: `nixos-rebuild switch --flake .`
 - Deploy to another host: use deploy.sh: `./deploy.sh {host}`
 
-- Production, uses CI/CD: Hydra at `hydra.m7.rs` builds all hosts on push; hosts auto-upgrade from the latest successful build (see `modules/nixos/hydra-auto-upgrade.nix`). No need to deploy manually, unless quickly iterating locally.
+- Production, uses CI/CD: Nixbot at `ci.m7.rs` polls self-hosted Git and builds `ciJobs`; CI verifies commit signatures in a required post-build step, and hosts trust its API to select their latest successful output and auto-upgrade without evaluating their configurations locally (see `modules/nixos/nixbot-auto-upgrade.nix`). No need to deploy manually after the initial migration, unless quickly iterating locally.
 
 ### Post-deploy verification
 

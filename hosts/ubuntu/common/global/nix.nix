@@ -7,7 +7,7 @@
 in {
   nix = {
     enable = true;
-    # Register every flake input (incl. `self`, which the hydra auto-upgrade
+    # Register every flake input (incl. `self`, which the cached auto-upgrade
     # resolves via `nix flake metadata self`). System Manager supplies the
     # upstream nix.registry option.
     registry = lib.mapAttrs (_: flake: {inherit flake;}) flakeInputs;

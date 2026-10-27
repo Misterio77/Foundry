@@ -1,5 +1,9 @@
 # Atelier publishing
 
+This proposal predates the Nixbot migration. Its Hydra RunCommand
+sections are historical design notes, not the current CI configuration; port
+publication to Nixbot effects or post-build steps before implementing them.
+
 Atelier is the canonical home for paper sources, figures and research notes. It
 is private-ish by design: the individual files are not necessarily secret, but
 the aggregate work-in-progress history should not become part of a public online
