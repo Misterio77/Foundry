@@ -2,6 +2,7 @@
   config,
   outputs,
   lib,
+  pkgs,
   ...
 }: {
   users.users = {
@@ -12,6 +13,7 @@
   services = {
     calibre-server = {
       enable = true;
+      package = pkgs.calibre.override {speechSupport = false;};
       libraries = ["/srv/media/books"];
       auth.enable = true;
       # Readarr connects locally
