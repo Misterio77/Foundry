@@ -25,9 +25,30 @@
         name = "${pname}-npm-deps";
         hash = "sha256-pu8dxL0NRB1cyqlQEf2zT2wdVp2fbe+Vp85qMs7f6s0=";
       };
+      passthru =
+        old.passthru
+        // {
+          releaseTarball = pkgs.fetchzip {
+            pname = "firefly-iii-release-tarball";
+            inherit version;
+            url = "https://github.com/firefly-iii/firefly-iii/releases/download/v${version}/FireflyIII-v${version}.tar.gz";
+            stripRoot = false;
+            hash = "sha256-5o8fw2WDIdM9IQImTWVasf7pV2XK2LJ2WuSNSkdzGdE=";
+          };
+        };
       preInstall = ''
         npm run prod --workspace=v1
         npm run build --workspace=v2
+      '';
+      # This release predates the v3 frontend and its separate translations.
+      postInstall = ''
+        chmod -R u+w $out/share
+        mv $out/share/php/firefly-iii/* $out/
+        cp -r ${passthru.releaseTarball}/resources/lang/* $out/resources/lang/
+
+        rm -R $out/share $out/storage $out/bootstrap/cache $out/node_modules
+        ln -s ${config.services.firefly-iii.dataDir}/storage $out/storage
+        ln -s ${config.services.firefly-iii.dataDir}/cache $out/bootstrap/cache
       '';
     });
     settings = {
