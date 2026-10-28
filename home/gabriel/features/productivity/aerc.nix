@@ -49,7 +49,10 @@ in {
     };
     extraConfig = {
       general.unsafe-accounts-conf = true;
-      compose.address-book-cmd = "khard email --remove-first-line --parsable %s";
+      compose = {
+        address-book-cmd = "khard email --remove-first-line --parsable %s";
+        reply-to-self = false;
+      };
       ui = {
         styleset-name = "colorscheme";
         # Nest subfolders (Archive/2025) under their parent, folded by default
