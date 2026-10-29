@@ -1,4 +1,9 @@
-{inputs, lib, ...}: {
+{
+  inputs,
+  lib,
+  config,
+  ...
+}: {
   imports = [
     inputs.disko.nixosModules.disko
     ../common/optional/ephemeral-btrfs.nix
@@ -8,6 +13,7 @@
   hardware.graphics.enable = true;
 
   hardware.nvidia = {
+    package = config.boot.kernelPackages.nvidiaPackages.legacy_580;
     powerManagement = {
       enable = false;
       finegrained = false;
@@ -33,7 +39,7 @@
   powerManagement.cpuFreqGovernor = "ondemand";
 
   boot = {
-    kernelParams = [ "usbcore.autosuspend=-1" ];
+    kernelParams = ["usbcore.autosuspend=-1"];
     initrd = {
       availableKernelModules = [
         "xhci_pci"
