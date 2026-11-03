@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Check Gabs's overall pending work and deadlines with todomd, consult their daily journal (~/Atelier/journal) for check-ins and recaps, and manage durable todos, appointments (khal), contacts (khard), and email (~/Mail). Use for questions like "what's pending on my end?" or "what did I do today?" even when a project workspace is in context.
+description: Check Gabs's overall pending work with todomd, consult their daily journal (~/Atelier/journal) for check-ins and recaps, and manage durable todos, appointments/deadlines (khal), contacts (khard), and email (~/Mail). Use for questions like "what's pending on my end?" or "what did I do today?" even when a project workspace is in context.
 ---
 
 ## Syncing vdir-backed data
@@ -30,7 +30,9 @@ and dependencies; consult them to interpret a todo or answer project-specific
 questions, but don't substitute their next-action lists for the overall todo
 list. Distinguish tasks awaiting Gabs from external responses and from
 project-internal work not tracked in todomd. Don't assume an unlisted task is
-complete; say which source you checked.
+complete; say which source you checked. Assume due dates as work deadlines
+during usual operations, but also check the calendar for a hard deadline if the
+due date seems to be always changing or if it conflicts with other state.
 
 ### Reading
 
@@ -163,7 +165,10 @@ Gabs uses categories as tags.
 Priority markers: `!!!` (high), `!!` (medium), `!` (low), `Quick Win` (category).
 Status markers: `Blocked` (category) — means an **external** dependency prevents progress (e.g. out of supplies, waiting on someone else). NOT "I haven't gotten to it" or "it's my turn." If Gabs could do it right now but hasn't, that's not blocked — that's just pending.
 
-## Appointments (khal)
+## Appointments/deadlines (khal)
+
+Carries appointments and, for longer-term work such as paper submissions, the
+hard deadlines.
 
 Calendar stored as vdir `.ics` files under `~/Calendars/personal/Personal/`. Use `khal`.
 
