@@ -177,7 +177,12 @@ hl.bind(
   dsp.exec_cmd(cmd.pactl .. " set-source-mute @DEFAULT_SOURCE@ toggle; swayosd-client --input-volume +0"),
   { locked = true }
 )
-hl.bind("Caps_Lock", dsp.exec_cmd("sleep 0.2; swayosd-client --caps-lock"), { locked = true })
+-- Caps Lock itself contributes to the modifier mask in Hyprland 0.57.
+hl.bind(
+  "Caps_Lock",
+  dsp.exec_cmd("sleep 0.2; swayosd-client --caps-lock"),
+  { locked = true, ignore_mods = true, non_consuming = true }
+)
 if cmd.playerctl then
   for key, action in pairs({
     XF86AudioNext = "next",
