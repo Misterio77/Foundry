@@ -19,6 +19,8 @@ material separately.
 - Notify a phone when a new authorization or security-sensitive change occurs.
 - Introduce SSO for suitable services without forcing every protocol through a
   browser login page.
+- Extend centralized identity to invited media/book users without granting
+  infrastructure access or requiring everyone to adopt a hardware key.
 
 Unplugging a hardware key prevents new decryptions, but does not retract a
 password already handed to a client or terminate an authenticated connection.
@@ -53,6 +55,7 @@ Relevant files:
 - `home/gabriel/features/productivity/{mail,calendar,oama}.nix`
 - `home/gabriel/features/productivity/accounts/{personal,mgc,usp}.nix`
 - `modules/home-manager/oama.nix`
+- `hosts/nixos/merope/services/media/{jellyfin,jellyseerr,calibre-web}.nix`
 - `docs/todo/backups.md`
 
 ## Candidate: Authentik
@@ -91,6 +94,8 @@ Authentik on Alcyone, behind nginx
        +-- OAuth tokens --> Dovecot --> existing mailboxes
        +-- event webhook --> authenticated push transport --> phone
        +-- optional LDAP outpost <-- password-only clients via Dovecot
+       |                        <-- Jellyfin / Calibre-Web on Merope
+       +-- Jellyfin identity indirectly enables Seerr sign-in initially
 
 Mail delivery, service senders, SSH recovery, SOPS, and deployment signing
 remain independent of interactive Authentik login.
@@ -99,9 +104,17 @@ remain independent of interactive Authentik login.
 ### Placement and exposure
 
 Use a stable hostname, tentatively `auth.m7.rs`, with ACME and backend listeners
-restricted to loopback. Start tailnet-only, following existing nginx allowlist
-conventions. The Headscale extra-record generator recognizes restricted vhosts
-and maps them to tailnet addresses; verify the new vhost is discovered.
+restricted to loopback. A private pilot can start tailnet-only, following
+existing nginx allowlist conventions. The Headscale extra-record generator
+recognizes restricted vhosts and maps them to tailnet addresses; verify the new
+vhost is discovered.
+
+Before onboarding media users outside the tailnet, make the IdP's user-facing
+HTTPS portal publicly reachable for enrollment, credential management, recovery,
+and eventual browser SSO. The existing media sites are publicly accessible;
+users should not need tailnet membership merely to manage their identity.
+Keep LDAP private between Alcyone and Merope, and evaluate separate restrictions
+for administrative access without breaking required user/API endpoints.
 
 Check Alcyone's actual resources before choosing placement definitively.
 Upstream's small Docker Compose deployment guide calls for a host with at least
@@ -172,8 +185,10 @@ procedures separately without committing recovery credentials.
 
 - Start with the existing human identity and an explicit canonical mailbox
   claim. Do not assume the Authentik username equals the mailbox address.
-- Require YubiKey/FIDO2 for interactive authentication. Enroll a second hardware
-  key if available and establish an independent recovery mechanism.
+- Require YubiKey/FIDO2 for operator and administrator interactive authentication.
+  Enroll a second hardware key if available and establish an independent
+  recovery mechanism. Use a separate, protocol-aware policy for invited media
+  users rather than imposing hardware-key authentication on every user/client.
 - Disable public self-registration and add explicit application access
   bindings. Avoid accidental access for every user.
 - Separate ordinary application use from IdP superuser administration. Broadly
@@ -280,8 +295,120 @@ client credentials; test logout semantics per application.
 | Headscale | Native OIDC for enrollment | Later, after bootstrap and independent recovery are resolved. IdP logout does not automatically remove a tailnet node. |
 | FreshRSS | Investigate web SSO separately from client API access | The API is enabled; do not redirect native clients to browser login. |
 | Firefly | Investigate trusted-header authentication | Preserve PAT-based automation and intentional route access; validate the installed version. |
-| Jellyfin / Calibre | Client compatibility first | Do not break TVs, native apps, OPDS, or service-to-service access. Not initial scope. |
+| Jellyfin | Authentik LDAP through Jellyfin's LDAP plugin | Shared-media track; preserve TV/native clients and application-local tokens. |
+| Seerr | Jellyfin sign-in initially | Direct OIDC is documented as experimental; verify packaged-version support before considering it. |
+| Calibre-Web | LDAP with selected user imports | Shared-media track; assign local book permissions and test OPDS. Leave the separate content server unchanged initially. |
 | Nixbot / Prometheus | Optional protection for interactive browser use | Preserve build/auto-upgrade APIs and metrics scraping. Do not blanket-gate these vhosts. |
+
+## Shared media identities
+
+This is a separate rollout track for invited users of Jellyfin, Seerr, and
+Calibre-Web, not an extension of the operator's privileges. Centralize people
+and new-login checks while acknowledging that applications still own some
+permissions and sessions.
+
+### User lifecycle and access boundaries
+
+- Create one account per person, with invitation-only enrollment and a usable
+  password-change/recovery workflow. Do not commit invitations, recipient
+  details, or user rosters to this public plan.
+- Use explicit application bindings and groups, tentatively `media-users` for
+  Jellyfin, `book-users` for Calibre-Web, and a separate `infra-admins` group.
+  Identity existence alone must not grant access to mail, finance, photos, CI,
+  administration, or the tailnet.
+- For ordinary users, start with password-manager-friendly passwords and offer
+  passkeys for browser access. Keep hardware-key requirements for operators
+  and administrators. A TV's password dialog cannot perform WebAuthn.
+- Keep LDAP search identities dedicated and least-privileged. Restrict provider
+  access and query filters to the intended users; verify what directory data
+  each application can actually retrieve.
+- Let users choose separate app passwords where useful, but explain that their
+  names do not enforce per-application scope. Test acceptance across enabled
+  providers rather than assuming a Jellyfin-labelled credential works only
+  there.
+- Preserve existing accounts and link identities deliberately. Verify stable
+  identifiers, watch history, requests, and book preferences before enabling
+  automatic user creation. Do not silently merge users based on an untrusted
+  or mutable identity claim.
+
+### Jellyfin
+
+The current Authentik integration guide uses Jellyfin's LDAP Authentication
+plugin rather than native OIDC. Use it as the compatibility baseline:
+
+```text
+Jellyfin username/password login -> private LDAP outpost -> Authentik
+                               -> Jellyfin issues its own client token
+```
+
+Test ordinary user passwords and, where enabled by the bind flow, app passwords
+in actual TV/mobile clients. Set default library access narrowly and keep admin
+assignment separate. A password-only bind flow needs its own access policy;
+it cannot simply inherit a WebAuthn-required browser flow.
+
+Browser SSO plus Jellyfin Quick Connect is a later experiment, not the initial
+client baseline. Review plugin maintenance before selecting an implementation:
+the historically common `9p4/jellyfin-plugin-sso` repository was archived at the
+time of review. Do not rely on an old tutorial as evidence of current support.
+
+Jellyfin issues application-local tokens. Disabling the Authentik identity,
+removing group membership, or deleting an app password may prevent new logins
+without ending an existing TV session. Offboarding must also disable the
+Jellyfin user and revoke its tokens/sessions using supported application
+controls; measure existing-playback behavior separately.
+
+### Seerr
+
+Foundry's `jellyseerr.nix` already enables `services.seerr`; the reviewed nixpkgs
+package is Seerr 3.5.0. Initially retain Seerr's Jellyfin sign-in so that users
+managed through Jellyfin can access requests without another IdP integration.
+Validate the installed version's login path with LDAP-backed Jellyfin users.
+
+Seerr can admit new media-server users with default permissions. Configure
+request limits, approval requirements, and user-management privileges explicitly;
+a successful identity login must not imply unlimited or automatically approved
+requests. Existing users' permissions need separate review because defaults
+apply to newly created users, not retroactively.
+
+The current Authentik guide describes direct Seerr OIDC as experimental and
+requires a preview build. Do not assume it exists in the pinned package or
+switch production to a preview just to obtain SSO. Revisit stable support later,
+using deliberate account linking to preserve existing users and requests.
+
+### Calibre-Web and the content server
+
+Integrate the user-facing Calibre-Web service, not the separate tailnet-only
+Calibre content server used by local automation. Leave the latter's
+credentials and service-to-service access unchanged initially.
+
+The documented Authentik integration uses LDAP, requires Calibre-Web's optional
+LDAP dependencies, and imports a selected group of users. Confirm the Nix
+package includes those dependencies. After import, assign download, upload,
+editing, and administrative permissions explicitly in Calibre-Web; LDAP login
+is not a complete authorization policy.
+
+Test browser login and OPDS with actual ebook clients, including cover retrieval
+and downloads. Do not wrap the whole site in browser forward-auth and assume
+native readers can follow the login redirect. Validate that the installed
+Calibre-Web version accepts the intended LDAP/app-password path for OPDS.
+
+### Offboarding and availability
+
+Treat account removal as a multi-application procedure, not one IdP button:
+
+1. Disable the identity or remove application access, then revoke relevant
+   Authentik credentials and grants.
+2. Disable application-local access and revoke Jellyfin, Seerr, and Calibre-Web
+   sessions/tokens as supported. Check password fallback and linked accounts.
+3. Verify new logins, existing sessions, playback/downloads, and retained API
+   credentials against a documented revocation-delay target.
+
+Retain protected local administrative recovery access during migration. Test
+IdP/LDAP outages without relying on cached authentication as an accidental
+availability strategy. Back up application state as well as the identity
+database; user mapping and permissions may live in either place. Merope's
+independent-backup gap is recorded in `docs/todo/backups.md` and matters before
+changing production user identities.
 
 ## Notifications and visibility
 
@@ -386,10 +513,36 @@ Do not migrate all clients based only on successful browser login.
 - [ ] Consider Headscale only after enrollment bootstrap and recovery tests.
 - [ ] Document per-service session revocation and remaining local credentials.
 
+### Shared-media track: after standalone identity and recovery are proven
+
+This can proceed independently of the personal-mail prototype. Public user
+onboarding waits for a reachable portal, tested recovery, and application
+backups.
+
+- [ ] Define invitation/recovery policies and explicit media/book access groups.
+- [ ] Make user-facing HTTPS reachable without tailnet enrollment; keep LDAP
+  private and verify administrative-access restrictions.
+- [ ] Confirm plugin/package support and back up existing application identities.
+- [ ] Test a non-admin Jellyfin LDAP user in browser, TV, and mobile clients.
+- [ ] Verify existing account mapping, watch history, library permissions, and
+  token behavior; preserve local administrative recovery access.
+- [ ] Test Seerr's Jellyfin sign-in, existing request history, request limits,
+  and approval permissions without depending on preview OIDC support.
+- [ ] Test Calibre-Web LDAP imports, local permissions, browser login, and OPDS
+  covers/downloads; leave the Calibre content server unchanged.
+- [ ] Verify media users cannot access operator services or enroll tailnet nodes.
+- [ ] Test app-password scope boundaries and authentication caches.
+- [ ] Perform offboarding and IdP-outage drills across all three applications,
+  including already-issued client tokens and local password fallbacks.
+- [ ] Migrate invited users incrementally; keep rosters and invitations private.
+
 ## Outstanding decisions
 
 - Actual phone/mail/DAV client inventory and arbitrary-provider OAuth support.
-- Stable IdP hostname and tailnet-only versus eventual public exposure.
+- Media-user TV/mobile/ebook client compatibility and Quick Connect support.
+- Stable IdP hostname and timing of public user-portal exposure.
+- Invitation/recovery policy, media/book permissions, and acceptable
+  application-local session revocation delays.
 - Hardware-key availability and independent recovery arrangement.
 - Push transport, its availability outside the tailnet, and notification policy.
 - Acceptable token lifetimes and revocation delay for existing connections.
@@ -421,4 +574,9 @@ or device identifiers here.
 - [Grafana integration](https://integrations.goauthentik.io/monitoring/grafana/)
 - [Immich integration](https://integrations.goauthentik.io/media/immich/)
 - [Headscale integration](https://integrations.goauthentik.io/networking/headscale/)
+- [Jellyfin LDAP integration](https://integrations.goauthentik.io/media/jellyfin/)
+- [Seerr integration and experimental OIDC caveat](https://integrations.goauthentik.io/media/seerr/)
+- [Seerr user settings, default permissions, and request limits](https://docs.seerr.dev/using-seerr/settings/users/)
+- [Calibre-Web LDAP integration](https://integrations.goauthentik.io/media/calibre-web/)
+- [Historical Jellyfin SSO plugin, archived at review time](https://github.com/9p4/jellyfin-plugin-sso)
 - [Reviewed Authentik OAuth token model](https://github.com/goauthentik/authentik/blob/version/2026.8.5/authentik/providers/oauth2/models.py)
