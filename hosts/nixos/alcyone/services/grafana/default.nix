@@ -1,6 +1,7 @@
 {
   config,
   outputs,
+  pkgs,
   ...
 }: {
   sops.secrets = {
@@ -21,7 +22,9 @@
   services = {
     grafana = {
       enable = true;
+      declarativePlugins = [pkgs.grafanaPlugins.prometheus];
       settings = {
+        plugins.plugin_admin_enabled = false;
         security.secret_key = "$__file{${config.sops.secrets.grafana-key.path}}";
         server.http_port = 3000;
         users.default_theme = "system";
