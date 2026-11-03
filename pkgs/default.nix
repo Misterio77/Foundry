@@ -27,6 +27,7 @@ in {
   # Personal scripts
   web-search = pkgs.callPackage ./web-search {};
   pass-wofi = pkgs.callPackage ./pass-wofi {};
+  tmux-picker = pkgs.callPackage ./tmux-picker {};
   xpo = pkgs.callPackage ./xpo {};
   clip-notify = pkgs.callPackage ./clip-notify {};
   overleaf-sync = pkgs.callPackage ./overleaf-sync {};

@@ -28,5 +28,9 @@
   home.packages = let
     inherit (config.programs.password-store) package enable;
   in
-    lib.optional enable (pkgs.pass-wofi.override {pass = package;});
+    lib.optional enable (pkgs.pass-wofi.override {pass = package;})
+    ++ lib.optional config.programs.tmux.enable (pkgs.tmux-picker.override {
+      tmux = config.programs.tmux.package;
+      wofi = config.programs.wofi.package;
+    });
 }

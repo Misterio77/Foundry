@@ -8,13 +8,13 @@
 }:
 hyprland.stdenv.mkDerivation (final: {
   pname = "hyprbars";
-  version = "0.56.0";
+  version = "0.57.0";
 
   src = "${fetchFromGitHub {
     owner = "hyprwm";
     repo = "hyprland-plugins";
-    rev = "7644cecdb947060682891a0db2a0cdc5c0b9e704";
-    hash = "sha256-piRpwar7VZI3YviYo0a/UMFz9+rLesfv3nRLGKxjVGg=";
+    tag = "v${final.version}";
+    hash = "sha256-y+V5RFJcjnV1+ZzImkfiSJ97iDIflanjP2OR9lemvTs=";
   }}/hyprbars";
   buildInputs = [hyprland] ++ hyprland.buildInputs;
   nativeBuildInputs = [pkg-config cmake];

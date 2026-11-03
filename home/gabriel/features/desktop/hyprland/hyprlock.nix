@@ -1,4 +1,8 @@
-{config, lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: {
   programs.hyprlock = {
     enable = true;
     settings = {
@@ -20,7 +24,10 @@
       background = {
         path = "screenshot";
         blur_passes = 4;
-        brightness = if config.colorscheme.mode == "light" then 1.1 else 0.8;
+        brightness =
+          if config.colorscheme.mode == "light"
+          then 1.1
+          else 0.8;
       };
       input-field = lib.forEach config.monitors (monitor: {
         monitor = monitor.name;
@@ -56,17 +63,6 @@
           position = "0, -40%";
         }
       ]));
-    };
-  };
-
-  wayland.windowManager.hyprland = {
-    settings = {
-      bind = let
-        hyprlock = lib.getExe config.programs.hyprlock.package;
-      in [
-        "SUPER,backspace,exec,${hyprlock}"
-        "SUPER,XF86Calculator,exec,${hyprlock}"
-      ];
     };
   };
 }

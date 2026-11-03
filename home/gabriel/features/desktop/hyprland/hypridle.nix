@@ -1,14 +1,19 @@
-{config, lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: {
   services.hypridle = {
     enable = true;
     settings = let
+      dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
       isLocked = "pgrep hyprlock";
       isDischarging = "grep Discharging /sys/class/power_supply/BAT{0,1}/status -q";
     in {
       general = {
         lock_cmd = "if ! ${isLocked}; then ${lib.getExe config.programs.hyprlock.package} --grace 5; fi";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "hyprctl dispatch dpms on";
+        after_sleep_cmd = dpms "enable";
         inhibit_sleep = 3; # Wait for lock before suspend
       };
       listener = [
@@ -36,8 +41,8 @@
         }
         {
           timeout = 140;
-          on-timeout = "hyprctl dispatch dpms off";
-          on-resume = "hyprctl dispatch dpms on";
+          on-timeout = dpms "disable";
+          on-resume = dpms "enable";
         }
 
         # If already locked
@@ -47,8 +52,8 @@
         }
         {
           timeout = 20;
-          on-timeout = "if ${isLocked}; then hyprctl dispatch dpms off; fi";
-          on-resume = "hyprctl dispatch dpms on";
+          on-timeout = "if ${isLocked}; then ${dpms "disable"}; fi";
+          on-resume = dpms "enable";
         }
 
         # If discharging
