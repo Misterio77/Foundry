@@ -15,7 +15,7 @@ in {
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   runescape = pkgs.callPackage ./runescape {
-    inherit (runescapePkgs) openssl_1_1;
+    inherit (runescapePkgs) gtk2 openssl_1_1;
   };
 
   # Foundry projects
