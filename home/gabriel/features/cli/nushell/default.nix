@@ -39,5 +39,6 @@
       source ${./prompt.nu}
       source ${./completion.nu}
     '';
+    loadSessionVariables = true;
   };
 }
