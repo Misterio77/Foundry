@@ -1,6 +1,6 @@
 ---
 name: gabs-tools
-description: Check Gabs's overall pending work and deadlines with todomd, and manage durable todos, appointments (khal), contacts (khard), and email (~/Mail). Use for questions like "what's pending on my end?" even when a project workspace is in context.
+description: Check Gabs's overall pending work and deadlines with todomd, consult their daily journal (~/Atelier/journal) for check-ins and recaps, and manage durable todos, appointments (khal), contacts (khard), and email (~/Mail). Use for questions like "what's pending on my end?" or "what did I do today?" even when a project workspace is in context.
 ---
 
 ## Syncing vdir-backed data
@@ -199,6 +199,19 @@ The underlying sync is done by vdirsyncer. (DAVx5 handles sync on Android.) The 
 ```bash
 rm ~/.cache/khal/khal.db
 ```
+
+## Daily journal (`~/Atelier/journal/`)
+
+Gabs writes free-form daily entries in `~/Atelier/journal/YYYY-MM-DD.md`.
+For recaps, read the relevant dates alongside workspace context; entries aren't
+exhaustive logs or replacements for `todomd`.
+
+During check-ins or planning, check the local date and gently nudge once if
+today's entry is missing. Skip the reminder during unrelated work.
+
+Follow `~/Atelier/AGENTS.md`: entries are private and human-written, so only
+edit them or share their contents elsewhere when explicitly asked. Agent recaps
+and handoffs belong in the relevant workspace's `.agents/`.
 
 ## Workspace context
 
