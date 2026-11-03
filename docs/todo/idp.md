@@ -10,6 +10,11 @@ recovery material, or private notification destinations. Keep those out of
 this public repository; use SOPS for deployment secrets and maintain recovery
 material separately.
 
+A private Alcyone pilot with Grafana OIDC was test-activated later on
+2026-11-03. See [pilot operations and verification](idp-pilot.md) for the actual
+implementation, accepted resource constraints, and remaining acceptance tests.
+The review and proposal below are not proof of those tests passing.
+
 ## Goals and security model
 
 - Use a YubiKey/FIDO2 credential to authorize devices and interactive access.
@@ -468,7 +473,7 @@ helpers.
 ### Phase 1: standalone identity service
 
 - [ ] Confirm Alcyone capacity and select a supported, patched deployment pin.
-- [ ] Deploy behind nginx without changing existing service authentication.
+- [x] Deploy behind nginx without changing existing service authentication.
 - [ ] Configure hardware-key login, explicit access policies, and recovery.
 - [ ] Add persistence, PostgreSQL dumps, off-host backup, and monitoring.
 - [ ] Select and test an authenticated phone-notification transport.
@@ -476,7 +481,7 @@ helpers.
 
 ### Phase 2: one real application
 
-- [ ] Integrate Grafana using native OAuth/OIDC.
+- [x] Integrate Grafana using native OAuth/OIDC (private pilot; browser tests pending).
 - [ ] Verify account linking, role mapping, expiry, logout, and IdP downtime.
 - [ ] Retain local recovery access until the new path is proven.
 

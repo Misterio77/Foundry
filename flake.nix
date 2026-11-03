@@ -63,6 +63,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Keep Authentik's Python dependency set on its own nixpkgs pin.
+    authentik-nix.url = "github:nix-community/authentik-nix";
+
     # Programs packaged with Nix
     firefox-addons = {
       url = "gitlab:rycee/nur-expressions?dir=pkgs/firefox-addons";

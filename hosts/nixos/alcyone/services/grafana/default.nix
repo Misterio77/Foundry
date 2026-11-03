@@ -36,6 +36,30 @@
           admin_password = "$__file{${config.sops.secrets.grafana-gabriel-password.path}}";
           cookie_secure = true;
         };
+        auth = {
+          disable_login_form = false;
+          oauth_auto_login = false;
+          oauth_allow_insecure_email_lookup = false;
+          signout_redirect_url = "https://auth.m7.rs/application/o/grafana/end-session/";
+        };
+        "auth.generic_oauth" = {
+          enabled = true;
+          name = "Authentik";
+          allow_sign_up = true;
+          client_id = "grafana";
+          client_secret = "$__file{${config.sops.secrets.authentik-grafana-client-secret.path}}";
+          scopes = "openid profile email offline_access";
+          auth_url = "https://auth.m7.rs/application/o/authorize/";
+          token_url = "https://auth.m7.rs/application/o/token/";
+          api_url = "https://auth.m7.rs/application/o/userinfo/";
+          use_pkce = true;
+          use_refresh_token = true;
+          # Keep OAuth identities separate from the local recovery administrator.
+          login_attribute_path = "join('', ['authentik-', preferred_username])";
+          role_attribute_path = "contains(groups[*], 'grafana-admins') && 'Admin' || contains(groups[*], 'grafana-users') && 'Viewer'";
+          role_attribute_strict = true;
+          allow_assign_grafana_admin = false;
+        };
         "auth.anonymous" = {
           enabled = true;
         };
