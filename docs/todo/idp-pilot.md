@@ -184,13 +184,13 @@ uses the pinned upstream email-verification flow with these overrides:
   session or an MFA-reset mechanism.
 - Global email settings authenticate as the dedicated send-only `auth@m7.rs`
   account at `mail.m7.rs:465`, using implicit TLS and certificate verification.
-  The password is injected at runtime from `authentik-mail-password` in Alcyone's
-  SOPS file; `authentik-mail-password-hashed` stores its matching bcrypt hash for
-  the mail server. No password enters the Nix store. This uses the existing
+  Both Authentik and the mail server use `authentik-mail-password` from Alcyone's
+  SOPS file at runtime; the mail module hashes it before passing it to Dovecot,
+  as for the other service accounts. No password enters the Nix store. This uses the existing
   tailnet-restricted submission service, not the trusted local relay path;
   Authentik needs tailnet access to mail if moved to another host.
-  Rotate both secrets together. Until all mail hashes have a restart hook,
-  restart `dovecot.service` after rotation so SMTP authentication uses the new hash.
+  Until all mail passwords have a restart hook, restart `dovecot.service` after
+  rotation so SMTP authentication uses the new hash.
 
 Set usable, unique recovery email addresses before relying on this. For the
 operator, preserve mailbox access independently of the IdP. After deployment,

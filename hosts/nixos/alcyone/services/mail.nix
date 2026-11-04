@@ -42,26 +42,26 @@
       };
       "auth@m7.rs" = lib.mkIf config.services.authentik.enable {
         sendOnly = true;
-        hashedPasswordFile = config.sops.secrets.authentik-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.authentik-mail-password.path;
       };
       "grafana@m7.rs" = lib.mkIf config.services.grafana.enable {
         sendOnly = true;
-        hashedPasswordFile = config.sops.secrets.grafana-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.grafana-mail-password.path;
       };
       "media@m7.rs" = {
         sendOnly = true;
-        hashedPasswordFile = config.sops.secrets.media-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.media-mail-password.path;
       };
       "firefly@m7.rs" = {
         sendOnly = true;
-        hashedPasswordFile = config.sops.secrets.firefly-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.firefly-mail-password.path;
       };
       "calibre@m7.rs" = {
         sendOnly = true;
-        hashedPasswordFile = config.sops.secrets.calibre-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.calibre-mail-password.path;
       };
       "contato@lumis.cards" = {
-        hashedPasswordFile = config.sops.secrets.lumis-mail-password-hashed.path;
+        passwordFile = config.sops.secrets.lumis-mail-password.path;
       };
     };
     mailboxes = {
@@ -104,13 +104,13 @@
 
   sops.secrets = {
     gabriel-mail-password.sopsFile = ../secrets.yaml;
-    # FIXME: Restart dovecot.service when any mail password hash changes.
-    authentik-mail-password-hashed.sopsFile = ../secrets.yaml;
-    grafana-mail-password-hashed.sopsFile = ../secrets.yaml;
-    media-mail-password-hashed.sopsFile = ../secrets.yaml;
-    firefly-mail-password-hashed.sopsFile = ../secrets.yaml;
-    calibre-mail-password-hashed.sopsFile = ../secrets.yaml;
-    lumis-mail-password-hashed.sopsFile = ../secrets.yaml;
+    # FIXME: Restart dovecot.service when any mail password changes.
+    authentik-mail-password.sopsFile = ../secrets.yaml;
+    grafana-mail-password.sopsFile = ../secrets.yaml;
+    firefly-mail-password.sopsFile = ../secrets.yaml;
+    media-mail-password.sopsFile = ../secrets.yaml;
+    calibre-mail-password.sopsFile = ../secrets.yaml;
+    lumis-mail-password.sopsFile = ../secrets.yaml;
   };
 
   # IMAP/SMTP still need this certificate without a webmail application.
