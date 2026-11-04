@@ -8,11 +8,10 @@ elif [ "$XDG_CURRENT_DESKTOP" == "sway" ]; then
 fi
 
 if [[ "$class" == "org.qutebrowser.qutebrowser" ]] || [[ "$class" == "qutebrowser" ]]; then
-    wtype -k escape
-    wtype yy
+    # Synthetic keys can inherit held launcher modifiers and trigger WM bindings.
+    qutebrowser ':yank url' ':mode-enter insert'
     sleep 0.2
     query=$(wl-paste | cut -d '/' -f3 | sed s/"www."//)
-    wtype i
 elif [[ "$class" == "discord" ]]; then
     query="discord.com"
 elif [[ "$class" == "Steam" ]]; then

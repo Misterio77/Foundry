@@ -3,6 +3,7 @@
   stdenv,
   makeWrapper,
   pass,
+  qutebrowser,
   jq,
   wofi,
   libnotify,
@@ -12,39 +13,40 @@
   gnused,
   coreutils,
 }:
-  stdenv.mkDerivation {
-    name = "pass-wofi";
-    version = "1.0";
-    src = ./pass-wofi.sh;
+stdenv.mkDerivation {
+  name = "pass-wofi";
+  version = "1.0";
+  src = ./pass-wofi.sh;
 
-    nativeBuildInputs = [makeWrapper];
+  nativeBuildInputs = [makeWrapper];
 
-    dontUnpack = true;
-    dontBuild = true;
-    dontConfigure = true;
+  dontUnpack = true;
+  dontBuild = true;
+  dontConfigure = true;
 
-    installPhase = ''
-      install -Dm 0755 $src $out/bin/pass-wofi
-      wrapProgram $out/bin/pass-wofi --prefix PATH ':' \
-        "${
-        lib.makeBinPath [
-          pass
-          jq
-          wofi
-          libnotify
-          wl-clipboard
-          wtype
-          findutils
-          gnused
-          coreutils
-        ]
-      }"
-    '';
+  installPhase = ''
+    install -Dm 0755 $src $out/bin/pass-wofi
+    wrapProgram $out/bin/pass-wofi --prefix PATH ':' \
+      "${
+      lib.makeBinPath [
+        pass
+        qutebrowser
+        jq
+        wofi
+        libnotify
+        wl-clipboard
+        wtype
+        findutils
+        gnused
+        coreutils
+      ]
+    }"
+  '';
 
-    meta = {
-      description = "A wofi graphical menu for pass";
-      license = lib.licenses.mit;
-      platforms = lib.platforms.all;
-      mainProgram = "pass-wofi";
-    };
-  }
+  meta = {
+    description = "A wofi graphical menu for pass";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.all;
+    mainProgram = "pass-wofi";
+  };
+}
