@@ -16,6 +16,7 @@ in {
 
   sops.secrets = {
     authentik-key.sopsFile = ../secrets.yaml;
+    authentik-immich-client-secret.sopsFile = ../secrets.yaml;
     authentik-grafana-client-secret = {
       sopsFile = ../secrets.yaml;
       owner = "grafana";
@@ -26,6 +27,7 @@ in {
     content = ''
       AUTHENTIK_SECRET_KEY=${config.sops.placeholder.authentik-key}
       AUTHENTIK_GRAFANA_CLIENT_SECRET=${config.sops.placeholder.authentik-grafana-client-secret}
+      AUTHENTIK_IMMICH_CLIENT_SECRET=${config.sops.placeholder.authentik-immich-client-secret}
     '';
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };

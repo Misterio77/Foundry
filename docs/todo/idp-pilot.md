@@ -107,6 +107,47 @@ anonymous tailnet viewing but may prevent authenticated administration; this is
 accepted because recovery and provisioning use independent SSH/Nix/SOPS access.
 No local Grafana recovery account is retained by this design.
 
+## Immich OIDC rollout
+
+Configured for Authentik-only login; live browser/mobile verification is still
+pending. Existing Immich user records, photo ownership, admin roles, API keys
+and sessions are retained. Password login is disabled and browser login
+launches OAuth automatically. This changes authentication, not photo storage.
+
+- Generate one new single-line client secret with `openssl rand -hex 32` and
+  privately add the **same value** as `authentik-immich-client-secret` to both
+  `hosts/nixos/alcyone/secrets.yaml` and `hosts/nixos/merope/secrets.yaml` using
+  SOPS. Never put the value in chat, Nix, or the Blueprint. Alcyone injects it
+  through the Authentik environment; Merope loads it through systemd credentials
+  into Immich's runtime JSON configuration.
+- Deploy Alcyone first. Confirm the Foundry Blueprint applied, then add the
+  intended Authentik account to `immich-users`. This group grants access only
+  to Immich, not Grafana or IdP administration.
+- Before deploying Merope, confirm the Authentik account's email matches the
+  existing Immich account. Immich 3.3.5 automatically links matching emails at
+  first OAuth login if the Immich account is not already linked to another
+  subject. Review both the email and group membership deliberately: an allowed
+  Authentik identity with that email can take over the matching Immich account.
+  If emails cannot match, temporarily retain password login, link OAuth from
+  the existing account's user settings, then disable password login again.
+- Deploy Merope and sign in through `https://photos.m7.rs`. Check that the
+  existing library and admin status remain attached to the same account.
+  Auto-registration is enabled for authorized `immich-users` without an
+  existing account; those new accounts receive ordinary user privileges.
+  No admin/quota claims are sent, so existing local permissions are preserved.
+- Test mobile OAuth with the existing server URL. The provider allows exactly
+  the browser login, user-settings linking, and `app.immich:///oauth-callback`
+  redirects. Both browser and mobile clients still need tailnet access to
+  `auth.m7.rs` and `photos.m7.rs`.
+- Public `/share` handling remains unchanged. Back-channel logout is configured
+  at `https://photos.m7.rs/api/oauth/backchannel-logout`; this is not a claim
+  that every existing session or API key is revoked by IdP logout.
+
+Recovery is SSH plus declarative configuration, not a permanent local login:
+restore `services.immich.settings.passwordLogin.enabled = true` and set
+`services.immich.settings.oauth.autoLaunch = false`, then redeploy Merope.
+Do not delete Immich users or its database to reset authentication.
+
 ## State and recovery
 
 - The database/user are both `authentik`, using the existing local PostgreSQL

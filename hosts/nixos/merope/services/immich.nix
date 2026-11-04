@@ -3,12 +3,30 @@
   outputs,
   ...
 }: {
+  sops.secrets.authentik-immich-client-secret = {
+    sopsFile = ../secrets.yaml;
+    restartUnits = ["immich-server.service"];
+  };
+
   services.immich = {
     enable = true;
     accelerationDevices = ["/dev/dri/renderD128"];
     mediaLocation = "/srv/media/photos";
     settings = {
       server.externalDomain = "https://photos.m7.rs";
+      passwordLogin.enabled = false;
+      oauth = {
+        enabled = true;
+        issuerUrl = "https://auth.m7.rs/application/o/immich/";
+        clientId = "immich";
+        clientSecret._secret = config.sops.secrets.authentik-immich-client-secret.path;
+        scope = "openid email profile";
+        signingAlgorithm = "RS256";
+        buttonText = "Sign in with Authentik";
+        autoLaunch = true;
+        autoRegister = true;
+        mobileOverrideEnabled = false;
+      };
     };
   };
   services.immich-public-proxy = {
