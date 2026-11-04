@@ -46,10 +46,12 @@ PostgreSQL cluster remains on major version 14.
    (Grafana organization Admin) or `grafana-users` (Viewer). No one receives
    membership from the Blueprint, and neither group grants Grafana server-admin
    or Authentik admin rights.
-5. At `https://dash.m7.rs/login`, choose Authentik. OAuth users have an
-   `authentik-` login prefix and email-based linking is disabled. Keep the
-   existing local `gabriel` login as independent recovery access. Anonymous
-   tailnet viewing is intentionally unchanged.
+5. At `https://dash.m7.rs/login`, choose Authentik. OAuth usernames use the
+   `preferred_username` claim directly; email-based linking remains disabled.
+   Local password/form and HTTP Basic authentication and bootstrap-admin creation
+   are disabled. Anonymous tailnet viewing is intentionally unchanged. Recovery
+   is through independent SSH/SOPS access and declarative redeployment, not a
+   local Grafana password. See the one-time state reset below before rollout.
 
 Public registration is not added. The portal is tailnet/loopback-only; Headscale
 should discover the vhost and publish private DNS records automatically. Public
@@ -66,8 +68,9 @@ are unchanged. SMTP/recovery email and phone notifications are not configured.
 - Test hardware-key and TOTP enrollment, fresh login using either method,
   absence of password-only fallback, and a second key. Arrange independent
   administrative recovery.
-- Confirm an unbound user cannot authorize Grafana, Viewer/Admin mappings are
-  correct, and the local recovery login still works.
+- Confirm an unbound user cannot authorize Grafana and Viewer/Admin mappings are
+  correct, without granting Grafana server-admin rights. Verify local password
+  and HTTP Basic authentication are disabled, including on a fresh database.
 - Test token refresh after ten minutes, logout in both directions and IdP
   downtime. Grafana has local sessions; group removal or IdP session deletion
   is not a promise of immediate Grafana session revocation.
@@ -76,6 +79,32 @@ are unchanged. SMTP/recovery email and phone notifications are not configured.
 - Start `postgresqlBackup-authentik`, then the Borg job, and verify an off-host
   archive includes the SQL dump and Authentik files. Inspect archive metadata,
   not dump contents. Restore-test in isolation before making the IdP authoritative.
+
+## Grafana OAuth-only rollout
+
+The OAuth-only configuration requires a one-time reset of Grafana's ephemeral
+state. Do not remove the username prefix against the old database: a plain
+username could match the former local bootstrap administrator. The encrypted
+`grafana-gabriel-password` entry may remain in SOPS, but is no longer consumed.
+
+Coordinate the reset with activation of the new configuration, before allowing
+OAuth logins. Stop Grafana, remove its ephemeral data directory
+(`/var/lib/grafana/data`), activate the OAuth-only configuration, then start
+Grafana. This deletes users, sessions, preferences and alert runtime state;
+provisioned dashboards, data sources and alert rules are reconstructed. Never
+remove the data directory while Grafana is running. A service restart alone
+will not reset the database. The reset ends any ongoing session-lifecycle test.
+
+After activation, verify there is no bootstrap administrator or local login
+form, HTTP Basic authentication cannot authenticate, and a fresh OAuth login
+uses the plain username with the expected organization role. Preserve the
+existing `allow_assign_grafana_admin = false` and strict group-role mapping.
+Do not add email-based linking to work around account collisions.
+
+Grafana state remains intentionally nonpersistent. An IdP outage preserves
+anonymous tailnet viewing but may prevent authenticated administration; this is
+accepted because recovery and provisioning use independent SSH/Nix/SOPS access.
+No local Grafana recovery account is retained by this design.
 
 ## State and recovery
 
@@ -148,10 +177,18 @@ are unchanged. SMTP/recovery email and phone notifications are not configured.
   ordinary Authentik user in `grafana-admins`, and successful WebAuthn in a
   separate test. This confirms login with the allowed group, not denial for an
   unbound user, Viewer mapping, or absence of server-admin privileges.
-- Remaining browser checks: unbound-user denial, Viewer/Admin permission
-  boundaries, independent local recovery login, token refresh after ten minutes,
-  logout/revocation, and IdP downtime. Independent IdP administrative recovery,
-  isolated restore, notifications, and backup-age alerts also remain open.
+- The operator subsequently verified that removing the Grafana groups denies
+  fresh authorization and `grafana-users` grants Viewer access; the previous
+  `grafana-admins` test covered organization Admin. An existing Grafana session
+  survived group removal immediately; refresh-time behavior is not yet proven.
+- Remaining browser checks: absence of Grafana server-admin privileges, token
+  refresh after ten minutes, logout/revocation, and IdP downtime. Independent
+  IdP administrative recovery, isolated restore, notifications, and backup-age
+  alerts also remain open. Local Grafana recovery was deliberately dropped in
+  favor of OAuth-only access and independent declarative recovery.
+- Archived Authentik SQL dump retrieval and gzip integrity checks passed, as
+  did dry-run extraction of the mutable files. These are retrieval checks, not
+  proof of a working database/application restore.
 
 Implementation details found during live testing: listener settings require
 lists, Blueprint retrieval rejects symlinks resolving outside `blueprints_dir`,

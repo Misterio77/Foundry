@@ -5,10 +5,6 @@
   ...
 }: {
   sops.secrets = {
-    grafana-gabriel-password = {
-      sopsFile = ../../secrets.yaml;
-      owner = "grafana";
-    };
     grafana-mail-password = {
       sopsFile = ../../secrets.yaml;
       owner = "grafana";
@@ -31,17 +27,17 @@
         dashboards.default_home_dashboard_path = "${./dashboards}/hosts.json";
         feature_toggles.enable = "dashboardSectionVariables";
         security = {
-          admin_user = "gabriel";
-          admin_email = "hi@m7.rs";
-          admin_password = "$__file{${config.sops.secrets.grafana-gabriel-password.path}}";
+          disable_initial_admin_creation = true;
           cookie_secure = true;
         };
         auth = {
-          disable_login_form = false;
+          disable_login = true;
+          disable_login_form = true;
           oauth_auto_login = false;
           oauth_allow_insecure_email_lookup = false;
           signout_redirect_url = "https://auth.m7.rs/application/o/grafana/end-session/";
         };
+        "auth.basic".enabled = false;
         "auth.generic_oauth" = {
           enabled = true;
           name = "Authentik";
@@ -54,8 +50,7 @@
           api_url = "https://auth.m7.rs/application/o/userinfo/";
           use_pkce = true;
           use_refresh_token = true;
-          # Keep OAuth identities separate from the local recovery administrator.
-          login_attribute_path = "join('', ['authentik-', preferred_username])";
+          login_attribute_path = "preferred_username";
           role_attribute_path = "contains(groups[*], 'grafana-admins') && 'Admin' || contains(groups[*], 'grafana-users') && 'Viewer'";
           role_attribute_strict = true;
           allow_assign_grafana_admin = false;
