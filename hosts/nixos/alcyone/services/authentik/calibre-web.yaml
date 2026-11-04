@@ -98,15 +98,3 @@ entries:
       target: !KeyOf calibre-web
       user: !KeyOf calibre-web-search
       order: 1
-
-  - model: authentik_outposts.outpost
-    identifiers:
-      name: Merope LDAP
-    attrs:
-      type: ldap
-      service_connection: null
-      config:
-        authentik_host: https://auth.m7.rs
-        authentik_host_insecure: false
-      providers:
-        - !KeyOf calibre-web-provider

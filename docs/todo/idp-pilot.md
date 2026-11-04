@@ -26,13 +26,22 @@ The input is community `authentik-nix` at `5d339402`, packaging Authentik
 by this version; recheck advisories before subsequent deployments. The shared
 PostgreSQL cluster remains on major version 14.
 
+Blueprints live under `hosts/nixos/alcyone/services/authentik/`: `foundry.yaml`
+contains shared authentication/MFA setup, while `grafana.yaml`, `immich.yaml`,
+`calibre-web.yaml` and `merope-ldap.yaml` own their respective integrations.
+Grafana and Immich explicitly apply the shared Blueprint; the Merope LDAP outpost
+applies the Calibre-Web provider Blueprint before finding its provider by name.
+`recovery.yaml` owns password recovery. Object names and existing identities are
+preserved when moving entries between files.
+
 ## Bootstrap and access
 
 1. Immediately open `https://auth.m7.rs/if/flow/initial-setup/` from the tailnet
    after deployment. Set the `akadmin` password privately. No bootstrap password
    or API token is stored in Foundry. Do not leave initial setup unclaimed.
 2. Confirm the `Foundry - private identity pilot` Blueprint applied successfully
-   in the admin interface. It explicitly depends on the default flows and scope
+   in the admin interface, along with `Foundry - Grafana`. The shared Blueprint
+   explicitly depends on the default flows and scope
    mappings, and modifies the default MFA stage to accept WebAuthn or TOTP,
    offering enrollment when neither is configured. WebAuthn requires user
    verification. TOTP is an explicit compatibility option for qutebrowser,
@@ -124,7 +133,7 @@ launches OAuth automatically. This changes authentication, not photo storage.
   SOPS. Never put the value in chat, Nix, or the Blueprint. Alcyone injects it
   through the Authentik environment; Merope loads it through systemd credentials
   into Immich's runtime JSON configuration.
-- Deploy Alcyone first. Confirm the Foundry Blueprint applied, then add the
+- Deploy Alcyone first. Confirm `Foundry - Immich` applied, then add the
   intended Authentik account to `immich-users`. This group grants access only
   to Immich, not Grafana or IdP administration.
 - Before deploying Merope, confirm the Authentik account's email matches the
