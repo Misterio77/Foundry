@@ -33,13 +33,13 @@
         auth = {
           disable_login = true;
           disable_login_form = true;
-          oauth_auto_login = false;
           oauth_allow_insecure_email_lookup = false;
           signout_redirect_url = "https://auth.m7.rs/application/o/grafana/end-session/";
         };
         "auth.basic".enabled = false;
         "auth.generic_oauth" = {
           enabled = true;
+          auto_login = true;
           name = "Authentik";
           allow_sign_up = true;
           client_id = "grafana";
