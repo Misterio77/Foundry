@@ -56,7 +56,7 @@ entries:
     attrs:
       name: Grafana
       provider: !KeyOf grafana-provider
-      meta_launch_url: https://dash.m7.rs
+      meta_launch_url: https://dash.m7.rs/login
       policy_engine_mode: any
   - model: authentik_policies.policybinding
     identifiers:
