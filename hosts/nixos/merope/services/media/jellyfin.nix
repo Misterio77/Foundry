@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  outputs,
   ...
 }: {
   # https://jellyfin.org/docs/general/post-install/networking/
@@ -22,6 +23,17 @@
           locations."/" = {
             proxyPass = "http://localhost:${toString config.services.jellyfin.port}";
             proxyWebsockets = true;
+          };
+          # ASP.NET routes are case-insensitive; cover /Metrics too.
+          locations."~* ^/metrics(?:/|$)" = {
+            proxyPass = "http://localhost:${toString config.services.jellyfin.port}";
+            extraConfig = ''
+              allow 127.0.0.1;
+              allow ::1;
+              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+              deny all;
+            '';
           };
         };
         "music.m7.rs" = {

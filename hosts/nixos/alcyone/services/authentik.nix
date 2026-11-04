@@ -5,6 +5,13 @@
   ...
 }: let
   components = config.services.authentik.authentikComponents;
+  metricsAccess = ''
+    allow 127.0.0.1;
+    allow ::1;
+    allow ${config.services.headscale.settings.prefixes.v4};
+    allow ${config.services.headscale.settings.prefixes.v6};
+    deny all;
+  '';
   # Blueprint retrieval rejects symlinks resolving outside blueprints_dir.
   blueprints = pkgs.runCommand "authentik-blueprints" {} ''
     cp -rL ${components.staticWorkdirDeps}/blueprints "$out"
@@ -77,8 +84,14 @@ in {
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
-    locations."= /metrics".proxyPass = "http://127.0.0.1:9300/metrics";
-    locations."= /metrics/worker".proxyPass = "http://127.0.0.1:9301/metrics";
+    locations."= /metrics" = {
+      proxyPass = "http://127.0.0.1:9300/metrics";
+      extraConfig = metricsAccess;
+    };
+    locations."= /metrics/worker" = {
+      proxyPass = "http://127.0.0.1:9301/metrics";
+      extraConfig = metricsAccess;
+    };
     locations."/" = {
       proxyPass = "http://127.0.0.1:9000";
       proxyWebsockets = true;

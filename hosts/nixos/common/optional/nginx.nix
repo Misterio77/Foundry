@@ -1,6 +1,7 @@
 {
   lib,
   config,
+  outputs,
   ...
 }: let
   inherit (config.networking) hostName;
@@ -20,6 +21,13 @@ in {
         enableACME = true;
         locations."/metrics" = {
           proxyPass = "http://localhost:${toString config.services.prometheus.exporters.nginxlog.port}";
+          extraConfig = ''
+            allow 127.0.0.1;
+            allow ::1;
+            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+            deny all;
+          '';
         };
       };
     };
@@ -59,11 +67,13 @@ in {
   };
 
   environment.persistence = {
-    "/persist".directories = [{
-      directory = "/var/lib/acme";
-      user = "acme";
-      group = "acme";
-      mode = "0700";
-    }];
+    "/persist".directories = [
+      {
+        directory = "/var/lib/acme";
+        user = "acme";
+        group = "acme";
+        mode = "0700";
+      }
+    ];
   };
 }

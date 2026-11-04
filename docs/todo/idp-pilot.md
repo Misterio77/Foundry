@@ -67,18 +67,22 @@ Public registration is not added. `auth.m7.rs` is configured for public HTTPS,
 including the portal, OIDC endpoints and email password recovery. The admin UI
 is also reachable and remains protected by Authentik authentication, MFA and
 permissions, not a separate network ACL. Backend and metrics listeners stay
-on loopback, but nginx intentionally exposes `/metrics` and `/metrics/worker`
-publicly over HTTPS without authentication. Prometheus scrapes both through
-`auth.m7.rs`. Other applications' network ACLs are unchanged.
+on loopback; nginx restricts `/metrics` and `/metrics/worker` to loopback and
+tailnet clients. Headscale detects tailnet ACLs in individual locations too,
+so `auth.m7.rs` gets private DNS for tailnet clients while remaining public
+outside the tailnet. Prometheus keeps scraping both through `auth.m7.rs`.
+The same metrics-only restriction covers Headscale, Jellyfin and the shared
+host nginx exporters; it does not restrict their public application routes.
 Phone notifications are not configured.
 
 ## Acceptance checks before relying on it
 
 - Verify `authentik`, `authentik-worker`, `authentik-migrate`, nginx and PostgreSQL
   health; check migration/Blueprint failures without dumping credentials.
-- Check public HTTPS works for `auth.m7.rs`, including `/metrics` and
-  `/metrics/worker`. Check that backend and metrics listening sockets remain
-  loopback-only.
+- Check public HTTPS works for `auth.m7.rs`, while `/metrics` and
+  `/metrics/worker` reject public clients and work over the tailnet. Check
+  private DNS generation and hostname-based scrapes, and confirm backend and
+  metrics listening sockets remain loopback-only.
 - Test hardware-key and TOTP enrollment, fresh login using either method,
   absence of password-only fallback, and a second key. Arrange independent
   administrative recovery.
