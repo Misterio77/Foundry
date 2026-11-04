@@ -148,6 +148,12 @@ restore `services.immich.settings.passwordLogin.enabled = true` and set
 `services.immich.settings.oauth.autoLaunch = false`, then redeploy Merope.
 Do not delete Immich users or its database to reset authentication.
 
+## Calibre-Web LDAP rollout
+
+See [the Calibre-Web runbook](calibre-web-auth.md) for the staged rollout,
+Authentik app-password self-service, existing-user mapping and removal of local
+password hashes. This integration is prepared but not yet verified live.
+
 ## State and recovery
 
 - The database/user are both `authentik`, using the existing local PostgreSQL

@@ -10,6 +10,7 @@
     cp -rL ${components.staticWorkdirDeps}/blueprints "$out"
     chmod u+w "$out"
     cp ${./authentik/foundry.yaml} "$out/foundry.yaml"
+    cp ${./authentik/calibre-web.yaml} "$out/calibre-web.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
