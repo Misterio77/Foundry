@@ -146,6 +146,8 @@
     "autodiscover.misterio.me"
   ];
 
+  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/srv/mail"];
+
   environment.persistence = {
     "/persist".directories = [
       {

@@ -31,6 +31,8 @@ in {
     group = config.users.users.${config.services.freshrss.user}.group;
   };
 
+  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source${config.services.freshrss.dataDir}"];
+
   environment.persistence."/persist".directories = [
     {
       directory = config.services.freshrss.dataDir;

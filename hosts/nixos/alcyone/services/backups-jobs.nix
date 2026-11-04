@@ -22,17 +22,6 @@ in {
   };
 
   services.borgbackup.jobs.alcyone = {
-    paths = [
-      "${snapshotMount}/var/lib/firefly-iii"
-      "${snapshotMount}/var/lib/freshrss"
-      "${snapshotMount}/var/lib/headscale"
-      "${snapshotMount}/var/lib/private/authentik"
-      "${snapshotMount}${config.services.postgresqlBackup.location}"
-      "${snapshotMount}/var/lib/radicale/collections"
-      "${snapshotMount}/srv/files"
-      "${snapshotMount}/srv/git"
-      "${snapshotMount}/srv/mail"
-    ];
     repo = "borg@merope:.";
     doInit = true;
     encryption = {

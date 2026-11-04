@@ -55,11 +55,7 @@ in {
 
   # Importing the community module must not upgrade the shared database cluster.
   services.postgresql.package = pkgs.postgresql_14;
-  services.postgresqlBackup = {
-    enable = true;
-    databases = ["authentik"];
-    startAt = "*-*-* 03:45:00";
-  };
+  services.postgresqlBackup.databases = ["authentik"];
 
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
@@ -71,6 +67,8 @@ in {
       allow ${config.services.headscale.settings.prefixes.v6};
       deny all;
     '';
+    locations."= /metrics".proxyPass = "http://127.0.0.1:9300/metrics";
+    locations."= /metrics/worker".proxyPass = "http://127.0.0.1:9301/metrics";
     locations."/" = {
       proxyPass = "http://127.0.0.1:9000";
       proxyWebsockets = true;
@@ -86,30 +84,13 @@ in {
     };
   };
 
+  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/var/lib/private/authentik"];
+
   environment.persistence."/persist".directories = [
     # DynamicUser's StateDirectory lives here, not at its public symlink.
     {
       directory = "/var/lib/private/authentik";
       mode = "0700";
     }
-    {
-      directory = config.services.postgresqlBackup.location;
-      user = "postgres";
-      group = "postgres";
-      mode = "0700";
-    }
   ];
-
-  services.prometheus.scrapeConfigs = [
-    {
-      job_name = "authentik";
-      static_configs = [{targets = ["127.0.0.1:9300" "127.0.0.1:9301"];}];
-    }
-  ];
-
-  # Finish the dump before taking the snapshot Borg reads.
-  systemd.services.btrbk-persist = {
-    requires = ["postgresqlBackup-authentik.service"];
-    after = ["postgresqlBackup-authentik.service"];
-  };
 }

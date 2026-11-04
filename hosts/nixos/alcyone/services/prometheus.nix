@@ -15,6 +15,17 @@ in {
       };
       scrapeConfigs = [
         {
+          job_name = "authentik";
+          scheme = "https";
+          static_configs = [{targets = ["auth.m7.rs"];}];
+        }
+        {
+          job_name = "authentik-worker";
+          scheme = "https";
+          metrics_path = "/metrics/worker";
+          static_configs = [{targets = ["auth.m7.rs"];}];
+        }
+        {
           job_name = "nixbot";
           scheme = "https";
           static_configs = [{targets = ["ci.m7.rs"];}];

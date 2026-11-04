@@ -125,6 +125,8 @@ in {
 
   environment.systemPackages = [config.services.headscale.package];
 
+  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/var/lib/headscale"];
+
   environment.persistence = {
     "/persist".directories = [
       {
