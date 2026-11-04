@@ -260,30 +260,40 @@ in {
           exec-if = gpgCmds.isUnlocked;
           exec = mkScriptJson {
             script = ''
-              results="$(systemctl --user show mbsync.service vdirsyncer.service --property Id,Result,ActiveState)"
-              last_sync="$(date --date="$(systemctl --user show mbsync.timer vdirsyncer.timer --property LastTriggerUSec --value | head -1)" +%H:%M)"
+              results="$(systemctl --user show 'mbsync-*.service' 'vdirsyncer-*.service' --property Id,Result,ActiveState)"
+              last_trigger="$(systemctl --user show 'mbsync-*.timer' 'vdirsyncer-*.timer' --property LastTriggerUSec --value |
+                while IFS= read -r trigger; do
+                  if [ -n "$trigger" ] && timestamp="$(date --date="$trigger" +%s 2>/dev/null)"; then
+                    echo "$timestamp"
+                  fi
+                done | sort -nr | head -1)"
+              last_sync="never"
+              if [ -n "$last_trigger" ]; then
+                last_sync="$(date --date="@$last_trigger" +%H:%M)"
+              fi
               if grep -q ActiveState=activating <<< "$results"; then
                 tooltip="Syncing calendars and mail"
                 status="activating"
-              elif grep -q Result=exit-code <<< "$results"; then
+              elif grep -q ActiveState=failed <<< "$results"; then
                 tooltip="Failed to sync calendars and mail"
                 status="failed"
               elif grep -q Result=exec-condition <<< "$results"; then
                 tooltip="Sync is paused as GPG key is not available"
                 status="condition"
-              elif [ "$(grep -c Result=success <<< "$results")" == 2 ]; then
+              elif grep -q '^Result=success$' <<< "$results" &&
+                [ "$(grep -c '^Result=success$' <<< "$results")" == "$(grep -c '^Id=' <<< "$results")" ]; then
                 tooltip="Calendars and mail are synced"
                 status="success"
               else
                 tooltip="Unknown sync state"
                 status="unknown"
               fi
-              tooltip+=$'\n'"Last sync: $last_sync"
+              tooltip+=$'\n'"Last timer trigger: $last_sync"$'\n\n'"$results"
             '';
             tooltip = "$tooltip";
             alt = "$status";
           };
-          on-click = mkScript {script = "systemctl --user start mbsync.service vdirsyncer.service";};
+          on-click = mkScript {script = "systemctl --user start 'mbsync-*.service' 'vdirsyncer-*.service'";};
           format = "{icon}";
           format-icons = {
             activating = "󰘿";

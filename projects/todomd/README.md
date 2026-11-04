@@ -49,7 +49,7 @@ group_by = []
 sort_by = ["due", "priority", "list", "summary"]
 
 [hooks]
-after_apply = ["systemctl", "--user", "start", "vdirsyncer.service"]
+after_apply = ["systemctl", "--user", "start", "vdirsyncer-calendar_personal.service"]
 ```
 
 Each `calendar_roots` entry contains vdir collection directories with `.ics`

@@ -1,4 +1,11 @@
-{config, pkgs, lib, ...}: {
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}: let
+  gpgCmds = import ../cli/gpg-commands.nix {inherit pkgs config lib;};
+in {
   home.persistence = {
     "/persist".directories = [
       "Calendars"
@@ -10,13 +17,8 @@
   accounts.calendar.basePath = "Calendars";
 
   programs.vdirsyncer.enable = true;
-  services.vdirsyncer.enable = true;
-  # Only run if gpg is unlocked
-  systemd.user.services.vdirsyncer.Service = {
-    ExecCondition = let
-      gpgCmds = import ../cli/gpg-commands.nix {inherit pkgs config lib;};
-    in ''
-      /bin/sh -c "${gpgCmds.isUnlocked}"
-    '';
+  services.vdirsyncer = {
+    enable = true;
+    execCondition = ''/bin/sh -c "${gpgCmds.isUnlocked}"'';
   };
 }

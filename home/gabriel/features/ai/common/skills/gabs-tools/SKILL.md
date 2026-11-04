@@ -6,14 +6,23 @@ description: Check Gabs's overall pending work with todomd, consult their daily 
 ## Syncing vdir-backed data
 
 After writing vdir data directly — `.ics` edits, `khal`, `khard`, hand-edited
-files — start vdirsyncer so the change propagates:
+files — start the matching vdirsyncer pair so the change propagates. For
+personal calendar/task edits:
 
 ```bash
-systemctl --user start vdirsyncer
+systemctl --user start vdirsyncer-calendar_personal.service
 ```
 
-`todomd session apply` runs the same sync itself through the `after_apply` hook;
-don't start vdirsyncer separately after it.
+Use `vdirsyncer-calendar_usp.service` or `vdirsyncer-calendar_mgc.service` for
+the other accounts. Failed pairs retry on their next timer tick; they don't
+block healthy pairs.
+Inspect an individual pair with `systemctl --user status vdirsyncer-calendar_personal`
+and `journalctl --user -u vdirsyncer-calendar_personal` (likewise `calendar_usp`
+and `calendar_mgc`). Each pair has its own five-minute timer.
+
+`todomd session apply` syncs only `calendar_personal` through the `after_apply`
+hook, since the other accounts don't support VTODO; don't start another sync
+after it.
 
 ## Todos (todomd + `.ics`)
 
@@ -76,8 +85,7 @@ through their `displayname` files.
 ### Do not run `todomd edit`
 
 `todomd edit`, and bare `todomd`, opens `$VISUAL` and asks `[y/N]` on an
-interactive terminal. It also stops vdirsyncer for the duration. That is Gabs's
-path, not an agent's.
+interactive terminal. That is Gabs's path, not an agent's.
 
 ### Writing: editor-independent sessions
 
@@ -269,10 +277,15 @@ Mail lives in `~/Mail/` as a Maildir. Each account gets a subdirectory:
 
 Standard Maildir: `Inbox/{cur,new,tmp}` plus `Archive/`, `Drafts/`, `Junk/`, `Sent/`, `Trash/`.
 
-**Syncing:** mbsync syncs automatically via a systemd timer. To force an immediate sync:
+**Syncing:** each mail account syncs automatically via its own five-minute
+timer, which also retries failed accounts. To force an immediate personal sync:
 ```bash
-systemctl --user start mbsync
+systemctl --user start mbsync-personal.service
 ```
+
+Use `mbsync-usp.service` or `mbsync-mgc.service` for the other accounts. Inspect
+an account with `systemctl --user status` or `journalctl --user -u` followed by
+its service name. One account's failure doesn't block the others.
 
 All mail in `new/` has already been synced by mbsync — `new/` and `cur/` both contain read mail. Email files are named like:
 

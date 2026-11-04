@@ -26,6 +26,6 @@ in {
         sort_by = ["priority" "list" "summary"];
       };
     };
-    hooks.after_apply = [systemctl "--user" "start" "vdirsyncer.service"];
+    hooks.after_apply = [systemctl "--user" "start" "vdirsyncer-calendar_personal.service"];
   };
 }

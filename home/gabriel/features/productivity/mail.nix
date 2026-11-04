@@ -3,7 +3,9 @@
   lib,
   config,
   ...
-}: {
+}: let
+  gpgCmds = import ../cli/gpg-commands.nix {inherit pkgs config lib;};
+in {
   home.persistence = {
     "/persist".directories = ["Mail"];
   };
@@ -20,14 +22,8 @@
   };
   services.mbsync = {
     enable = true;
-    package = config.programs.mbsync.package;
+    execCondition = ''/bin/sh -c "${gpgCmds.isUnlocked}"'';
   };
-  # Only run if gpg is unlocked
-  systemd.user.services.mbsync.Service.ExecCondition = let
-    gpgCmds = import ../cli/gpg-commands.nix {inherit pkgs config lib;};
-  in ''
-    /bin/sh -c "${gpgCmds.isUnlocked}"
-  '';
 
   # Ensure 'createMaildir' runs after 'linkGeneration'
   home.activation = {
