@@ -14,21 +14,30 @@
         "virtio_pci"
       ];
     };
-    loader.grub = {
-      enable = true;
-      device = "/dev/disk/by-path/virtio-pci-0000:00:05.0";
-    };
   };
 
   disko.devices.disk.main = {
     device = "/dev/disk/by-path/virtio-pci-0000:00:05.0";
     type = "disk";
-    # TODO: switch to gpt when reinstalling alcyone, eventually.
     content = {
-      type = "table";
-      format = "msdos";
-      partitions = [
-        {
+      type = "gpt";
+      partitions = {
+        boot = {
+          size = "1M";
+          type = "EF02";
+        };
+        esp = {
+          name = "ESP";
+          size = "512M";
+          type = "EF00";
+          content = {
+            type = "filesystem";
+            format = "vfat";
+            mountpoint = "/boot";
+          };
+        };
+        root = {
+          size = "100%";
           content = {
             type = "btrfs";
             postCreateHook = ''
@@ -38,10 +47,6 @@
               btrfs subvolume snapshot -r $MNTPOINT/root $MNTPOINT/root-blank
             '';
             subvolumes = {
-              "/boot" = {
-                mountOptions = [];
-                mountpoint = "/boot";
-              };
               "/root" = {
                 mountOptions = ["compress=zstd"];
                 mountpoint = "/";
@@ -64,8 +69,8 @@
               };
             };
           };
-        }
-      ];
+        };
+      };
     };
   };
 
