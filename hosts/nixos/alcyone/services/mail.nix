@@ -40,6 +40,10 @@
         hashedPasswordFile = config.sops.secrets.gabriel-mail-password.path;
         aliases = map (d: "@" + d) domains;
       };
+      "auth@m7.rs" = lib.mkIf config.services.authentik.enable {
+        sendOnly = true;
+        hashedPasswordFile = config.sops.secrets.authentik-mail-password-hashed.path;
+      };
       "grafana@m7.rs" = lib.mkIf config.services.grafana.enable {
         sendOnly = true;
         hashedPasswordFile = config.sops.secrets.grafana-mail-password-hashed.path;
@@ -100,6 +104,8 @@
 
   sops.secrets = {
     gabriel-mail-password.sopsFile = ../secrets.yaml;
+    # FIXME: Restart dovecot.service when any mail password hash changes.
+    authentik-mail-password-hashed.sopsFile = ../secrets.yaml;
     grafana-mail-password-hashed.sopsFile = ../secrets.yaml;
     media-mail-password-hashed.sopsFile = ../secrets.yaml;
     firefly-mail-password-hashed.sopsFile = ../secrets.yaml;

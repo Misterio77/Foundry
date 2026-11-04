@@ -182,9 +182,15 @@ uses the pinned upstream email-verification flow with these overrides:
   a redirect discards recovery context and starts normal authentication,
   including the configured MFA stages. Email possession alone is not an SSO
   session or an MFA-reset mechanism.
-- Global email settings submit as `authentik@m7.rs` through Postfix on
-  `127.0.0.1:25`, using its trusted local relay path. No new SMTP password,
-  mailbox account, public relay permission or submission port is added.
+- Global email settings authenticate as the dedicated send-only `auth@m7.rs`
+  account at `mail.m7.rs:465`, using implicit TLS and certificate verification.
+  The password is injected at runtime from `authentik-mail-password` in Alcyone's
+  SOPS file; `authentik-mail-password-hashed` stores its matching bcrypt hash for
+  the mail server. No password enters the Nix store. This uses the existing
+  tailnet-restricted submission service, not the trusted local relay path;
+  Authentik needs tailnet access to mail if moved to another host.
+  Rotate both secrets together. Until all mail hashes have a restart hook,
+  restart `dovecot.service` after rotation so SMTP authentication uses the new hash.
 
 Set usable, unique recovery email addresses before relying on this. For the
 operator, preserve mailbox access independently of the IdP. After deployment,

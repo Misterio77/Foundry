@@ -22,6 +22,7 @@ in {
   sops.secrets = {
     authentik-key.sopsFile = ../secrets.yaml;
     authentik-immich-client-secret.sopsFile = ../secrets.yaml;
+    authentik-mail-password.sopsFile = ../secrets.yaml;
     authentik-grafana-client-secret = {
       sopsFile = ../secrets.yaml;
       owner = "grafana";
@@ -33,6 +34,7 @@ in {
       AUTHENTIK_SECRET_KEY=${config.sops.placeholder.authentik-key}
       AUTHENTIK_GRAFANA_CLIENT_SECRET=${config.sops.placeholder.authentik-grafana-client-secret}
       AUTHENTIK_IMMICH_CLIENT_SECRET=${config.sops.placeholder.authentik-immich-client-secret}
+      AUTHENTIK_EMAIL__PASSWORD=${config.sops.placeholder.authentik-mail-password}
     '';
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };
@@ -45,13 +47,12 @@ in {
       cert_discovery_dir = "${pkgs.emptyDirectory}";
       disable_startup_analytics = true;
       email = {
-        host = "127.0.0.1";
-        port = 25;
-        username = "";
-        password = "";
+        host = "mail.m7.rs";
+        port = 465;
+        username = "auth@m7.rs";
         use_tls = false;
-        use_ssl = false;
-        from = "Foundry accounts <authentik@m7.rs>";
+        use_ssl = true;
+        from = "Foundry accounts <auth@m7.rs>";
       };
       avatars = "initials";
       storage.file.path = "/var/lib/authentik/data";
