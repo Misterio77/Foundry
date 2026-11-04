@@ -2,8 +2,8 @@
   inherit (lib) mkOption types;
   inherit (types) attrsOf submodule nullOr str listOf;
 in {
-  options = {
-    accounts.calendar.accounts = mkOption {
+  options.accounts = lib.genAttrs ["calendar" "contact"] (_: {
+    accounts = mkOption {
       type = attrsOf (submodule {
         options.vdirsyncer.tokenCommand = mkOption {
           type = nullOr (listOf str);
@@ -19,5 +19,5 @@ in {
         };
       });
     };
-  };
+  });
 }

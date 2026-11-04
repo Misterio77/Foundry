@@ -15,6 +15,7 @@ in {
   };
 
   accounts.calendar.basePath = "Calendars";
+  accounts.contact.basePath = "Contacts";
 
   programs.vdirsyncer.enable = true;
   services.vdirsyncer = {

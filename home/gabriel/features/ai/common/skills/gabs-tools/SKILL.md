@@ -237,7 +237,13 @@ creating a catch-all notes directory.
 
 ## Contacts (khard)
 
-khard is a CardDAV address book client. Contacts are synced via vdirsyncer.
+khard is a CardDAV address book client. Contacts in `~/Contacts/Main/` are
+synced with the personal DAV account by `vdirsyncer-contacts_personal.service`
+and its five-minute timer. After editing contacts, sync that pair:
+
+```bash
+systemctl --user start vdirsyncer-contacts_personal.service
+```
 
 **To look up a contact, always use `khard show <name>` first.** It handles fuzzy matching and gives you everything (email, phone, notes, UID) in one shot. Only fall back to grep on `~/Contacts/Main/` for bulk operations or when khard misbehaves.
 

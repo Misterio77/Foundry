@@ -56,6 +56,21 @@ in {
       };
     };
 
+    contact.accounts.personal = {
+      # Keep the existing flat address-book layout used by khard.
+      local.path = config.accounts.contact.basePath;
+      remote = {
+        type = "carddav";
+        url = "https://${davHost}";
+        userName = address;
+        passwordCommand = [pass "${mailHost}/${address}"];
+      };
+      vdirsyncer = {
+        enable = true;
+        collections = ["Main"];
+      };
+    };
+
     calendar.accounts.personal = {
       primaryCollection = "Personal";
       khal = {
