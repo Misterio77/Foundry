@@ -9,15 +9,15 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: Default - Brand
+        name: Foundry - private identity pilot
 
   - model: authentik_flows.flow
     id: recovery
     identifiers:
       slug: default-recovery-flow
     attrs:
-      name: Foundry password recovery
-      title: Reset your password
+      name: Gablogin password recovery
+      title: Redefinir sua senha
       designation: recovery
       authentication: require_unauthenticated
   - model: authentik_stages_identification.identificationstage
@@ -38,7 +38,7 @@ entries:
       use_global_settings: true
       template: email/password_reset.html
       token_expiry: minutes=15
-      subject: Reset your Foundry password
+      subject: Redefina sua senha do Gablogin
       activate_user_on_success: false
       recovery_max_attempts: 5
       recovery_cache_timeout: minutes=15

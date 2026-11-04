@@ -59,7 +59,7 @@ in {
         username = "auth@m7.rs";
         use_tls = false;
         use_ssl = true;
-        from = "Foundry accounts <auth@m7.rs>";
+        from = "Gablogin <auth@m7.rs>";
       };
       avatars = "initials";
       storage.file.path = "/var/lib/authentik/data";
@@ -84,6 +84,7 @@ in {
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
+    locations."/branding/".alias = "${./authentik/branding}/";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = metricsAccess;
