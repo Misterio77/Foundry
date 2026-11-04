@@ -193,6 +193,7 @@ in {
         url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
         hash = "sha256-U0PhY5vzQ73DNE3zrWwxwFpQtoutB6xrzhCJDUtrimE=";
       };
+      patches = (oldAttrs.patches or []) ++ [./pi-retry-model-access.patch];
       # Upstream removed these runtime dependencies in 1.2.0.
       postInstall =
         final.lib.replaceStrings [

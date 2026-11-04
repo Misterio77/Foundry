@@ -1,0 +1,37 @@
+diff --git a/packages/ai/src/utils/retry.ts b/packages/ai/src/utils/retry.ts
+--- a/packages/ai/src/utils/retry.ts
++++ b/packages/ai/src/utils/retry.ts
+@@ -56,6 +56,9 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
+ 	// Gateway failure relaying the upstream response stream, sent as an OpenAI
+ 	// Responses `response.failed` event without an error code (#10920).
+ 	"unable to forward upstream",
++	// OpenAI can temporarily fail its access check even for authorized models.
++	// This arrives without a retryable HTTP status in the error message.
++	"unable to verify model access right now",
+ 
+ 	// Network, proxy, and fetch transport failures. This includes OpenAI Codex
+ 	// raw-fetch failures such as "upstream connect", "connection refused", and
+diff --git a/packages/ai/test/retry.test.ts b/packages/ai/test/retry.test.ts
+--- a/packages/ai/test/retry.test.ts
++++ b/packages/ai/test/retry.test.ts
+@@ -16,6 +16,20 @@ const azurePeakLoadError =
+ 	"The system is currently experiencing high demand and cannot process your request. Your request exceeds the maximum usage size allowed during peak load. For improved capacity reliability, consider switching to Provisioned Throughput.";
+ 
+ describe("provider retry classification", () => {
++	it.each([
++		"Unable to verify model access right now. Please retry.",
++		"Codex error: Unable to verify model access right now. Please retry.",
++	])("matches temporary model access verification failures: %s", (errorMessage) => {
++		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(true);
++	});
++
++	it.each([
++		"You do not have access to this model. Please retry.",
++		"Unable to verify model access right now. Please retry. insufficient_quota",
++	])("keeps permanent access and quota errors non-retryable: %s", (errorMessage) => {
++		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(false);
++	});
++
+ 	it("matches explicit provider retry guidance", () => {
+ 		expect(
+ 			isRetryableAssistantError(
