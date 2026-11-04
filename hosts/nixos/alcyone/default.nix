@@ -19,13 +19,13 @@
       wakeOnLan.enable = true;
       ipv4.addresses = [
         {
-          address = "216.238.110.82";
+          address = "216.238.101.79";
           prefixLength = 23;
         }
       ];
       ipv6.addresses = [
         {
-          address = "2001:19f0:b800:1bf8::1";
+          address = "2001:19f0:b800:26b0::1";
           prefixLength = 64;
         }
       ];

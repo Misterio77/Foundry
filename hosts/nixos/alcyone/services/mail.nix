@@ -94,7 +94,7 @@
   services.postfix.settings.main = {
     # Authentication is only available through the Tailscale-restricted submissions service.
     smtpd_sasl_auth_enable = lib.mkForce false;
-    smtp_bind_address6 = "2001:19f0:b800:1bf8::1";
+    smtp_bind_address6 = "2001:19f0:b800:26b0::1";
     smtp_address_preference = "ipv4";
   };
 
