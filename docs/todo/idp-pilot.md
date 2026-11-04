@@ -171,6 +171,50 @@ See [the Calibre-Web runbook](calibre-web-auth.md) for the staged rollout,
 Authentik app-password self-service, existing-user mapping and removal of local
 password hashes. This integration is prepared but not yet verified live.
 
+## Gablogin branding and Portuguese defaults
+
+The default brand selects `pt-BR` through `attributes.settings.locale`. Authentik
+uses this for both its frontend locale hint and its backend `default_locale`;
+there is no separate writable `default_locale` Blueprint field. Explicit user,
+session or URL language selections can override the frontend default. Test in a
+clean browser session rather than treating a saved English selection as a
+failure of the default.
+
+Flow names/titles are stored text, not translated UI messages. The shared
+Blueprint localizes login, logout, account settings, password change, MFA setup,
+application authorization/logout and access requests; recovery owns its own
+Portuguese wording. Application logout now reads `Você saiu de %(app)s`.
+The native `Voltar ao início` footer exits to the portal, without pretending to
+rewind a partially completed flow.
+
+The copied upstream Blueprints also localize password/account form labels and
+placeholders, password-policy feedback, account-edit denial messages and default
+names for newly enrolled authenticators. Existing device names and user-chosen
+labels are not renamed. Substitutions fail the build if their upstream text
+changes, and preserve policy code rather than maintaining a second copy of its
+permission checks. The pinned upstream Portuguese catalogs are incomplete,
+particularly in the admin interface; these changes do not claim to translate
+all upstream UI strings or third-party application screens.
+
+Before calling the rollout verified:
+
+1. Publish/deploy the reviewed changes through the normal signed workflow, then
+   confirm the deployed revision. No deployment or sudo is performed by these
+   offline localization checks.
+2. In a clean session, check Portuguese login, recovery, password/account forms,
+   both MFA setup screens and application logout, including Immich. Confirm
+   light/dark logos, favicon and the footer link render correctly.
+3. With a disposable account, verify recovery email delivery, password reset and
+   a fresh normal login requiring MFA. Do not reset the operator's credentials
+   merely to test labels. Password recovery remains a separate acceptance gate.
+
+Offline verification on 2026-11-04 built the Blueprint package and full Alcyone
+system, and parsed the four modified default Blueprints. Object identifiers and entry counts were
+unchanged; an AST comparison confirmed the account-edit policy changed only its
+three display messages. Earlier flow-label/footer importer checks ran in a
+rolled-back live transaction; the newest form/device translations still need
+post-deployment verification.
+
 ## Email password recovery
 
 Configured, with live delivery/reset verification still pending. The login page

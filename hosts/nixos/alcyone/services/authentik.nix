@@ -15,7 +15,36 @@
   # Blueprint retrieval rejects symlinks resolving outside blueprints_dir.
   blueprints = pkgs.runCommand "authentik-blueprints" {} ''
     cp -rL ${components.staticWorkdirDeps}/blueprints "$out"
-    chmod u+w "$out"
+    chmod -R u+w "$out"
+    # These strings are stored verbatim, not translated by the UI locale.
+    substituteInPlace "$out/default/flow-password-change.yaml" \
+      --replace-fail 'label: Password (repeat)' 'label: Confirmar senha' \
+      --replace-fail 'placeholder: Password (repeat)' 'placeholder: Confirmar senha' \
+      --replace-fail 'label: Password' 'label: Senha' \
+      --replace-fail 'placeholder: Password' 'placeholder: Senha' \
+      --replace-fail 'Password needs to be 8 characters or longer.' 'Use uma senha forte com pelo menos 8 caracteres.' \
+      --replace-fail 'name: Change Password' 'name: Alterar senha' \
+      --replace-fail 'title: Change password' 'title: Alterar sua senha'
+    substituteInPlace "$out/default/flow-default-user-settings-flow.yaml" \
+      --replace-fail 'label: Username' 'label: Nome de usuário' \
+      --replace-fail 'placeholder: Username' 'placeholder: Nome de usuário' \
+      --replace-fail 'label: Name' 'label: Nome' \
+      --replace-fail 'placeholder: Name' 'placeholder: Nome' \
+      --replace-fail 'label: Email' 'label: E-mail' \
+      --replace-fail 'placeholder: Email' 'placeholder: E-mail' \
+      --replace-fail 'label: Locale' 'label: Idioma' \
+      --replace-fail 'placeholder: Locale' 'placeholder: Idioma' \
+      --replace-fail 'Not allowed to change email address.' 'Você não pode alterar seu endereço de e-mail.' \
+      --replace-fail 'Not allowed to change name.' 'Você não pode alterar seu nome.' \
+      --replace-fail 'Not allowed to change username.' 'Você não pode alterar seu nome de usuário.' \
+      --replace-fail 'name: User settings' 'name: Minha conta' \
+      --replace-fail 'title: Update your info' 'title: Atualizar seus dados'
+    substituteInPlace "$out/default/flow-default-authenticator-totp-setup.yaml" \
+      --replace-fail 'friendly_name: TOTP Device' 'friendly_name: Aplicativo autenticador' \
+      --replace-fail 'title: Set up Two-Factor authentication' 'title: Configurar aplicativo autenticador'
+    substituteInPlace "$out/default/flow-default-authenticator-webauthn-setup.yaml" \
+      --replace-fail 'friendly_name: WebAuthn device' 'friendly_name: Chave de acesso' \
+      --replace-fail 'title: Setup WebAuthn' 'title: Configurar chave de acesso'
     cp ${./authentik/foundry.yaml} "$out/foundry.yaml"
     cp ${./authentik/grafana.yaml} "$out/grafana.yaml"
     cp ${./authentik/immich.yaml} "$out/immich.yaml"
