@@ -17,7 +17,7 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: Default - Provider authorization flow (explicit consent)
+        name: Default - Provider authorization flow (implicit consent)
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
