@@ -175,14 +175,17 @@ password hashes. This integration is prepared but not yet verified live.
 
 Configured, with live delivery/reset verification still pending. The login page
 links to `default-recovery-flow`, also selected by the default brand. Recovery
-uses the pinned upstream email-verification flow with these overrides:
+defines the email-verification stages directly, following the pinned upstream
+example. That example is not auto-instantiated and cannot be a
+`metaapplyblueprint` dependency. The flow reuses the default password-change
+prompt, password policy and never-create user-write stage:
 
 - Identification does not reveal whether the account exists.
 - Recovery links have a configured 15-minute expiry, with five email attempts
   per account per 15 minutes. The existing password-change policy validates
   the new password, and the flow never creates users.
 - Email verification does not reactivate disabled users or remove MFA devices.
-- The upstream automatic-login binding is removed. After writing the password,
+- No automatic-login stage is bound. After writing the password,
   a redirect discards recovery context and starts normal authentication,
   including the configured MFA stages. Email possession alone is not an SSO
   session or an MFA-reset mechanism.
@@ -202,6 +205,11 @@ use a disposable account to check external delivery, password reset, subsequent
 MFA login, and rejection of invalid/expired links. Confirm the recovery Blueprint
 applied successfully and Prometheus still scrapes both targets. No successful
 live recovery is claimed by these configuration checks.
+
+On 2026-11-04, the revised Blueprint passed Authentik's real importer against the
+live database inside a rolled-back transaction. The five stage bindings, password
+policy, login-page/brand recovery links and unchanged MFA settings were checked.
+No email was sent, no password was reset, and the test did not enable the flow.
 
 Lost MFA devices and administrative disaster recovery still require independent
 SSH/management access; this flow only recovers the account password.
