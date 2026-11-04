@@ -79,31 +79,54 @@ in {
     };
   };
 
+  # Headscale reads this before opening the API used by the generator.
+  systemd.services.headscale.preStart = ''
+    if [ ! -e /var/lib/headscale/extra-records.json ]; then
+      printf '[]\n' > /var/lib/headscale/extra-records.json
+    fi
+  '';
+
   systemd.services.headscale-extra-records = {
     description = "Generate headscale extra DNS records from live node list";
     after = ["headscale.service"];
     wants = ["headscale.service"];
-    path = [pkgs.headscale pkgs.jq];
+    startLimitIntervalSec = 0;
+    path = [config.services.headscale.package pkgs.jq];
     script = ''
-      JSON=$(headscale nodes list --output json 2>/dev/null || echo "[]")
-      echo "$JSON" \
-        | jq --argjson mapping '${builtins.toJSON domainToNode}' -r '
-            reduce .[] as $node ({}; .[$node.given_name] = {
+      set -euo pipefail
+      records=/var/lib/headscale/extra-records.json
+      tmp=$(mktemp "$records.XXXXXX")
+      trap 'rm -f "$tmp"' EXIT
+
+      JSON=$(headscale nodes list --output json)
+      printf '%s\n' "$JSON" \
+        | jq -e --argjson mapping '${builtins.toJSON domainToNode}' '
+            if type != "array" then error("expected a node array") else . end
+            | reduce .[] as $node ({}; .[$node.given_name] = {
               v4: ([$node.ip_addresses[] | select(startswith("100."))] | first),
               v6: ([$node.ip_addresses[] | select(startswith("fd7a:"))] | first)
             }) as $ips
             | $mapping | to_entries
-            | map(select($ips[.value].v4 != null)
-              | [{ name: .key, type: "A",    value: $ips[.value].v4 },
-                 { name: .key, type: "AAAA", value: $ips[.value].v6 }])
+            | map(
+                if $ips[.value].v4 == null or $ips[.value].v6 == null
+                then error("missing tailnet addresses for \(.value)")
+                else [{ name: .key, type: "A",    value: $ips[.value].v4 },
+                      { name: .key, type: "AAAA", value: $ips[.value].v6 }]
+                end)
             | flatten
-          ' > /var/lib/headscale/extra-records.json.new \
-        && mv /var/lib/headscale/extra-records.json.new /var/lib/headscale/extra-records.json
+          ' > "$tmp"
+      if ! cmp -s "$tmp" "$records"; then
+        mv "$tmp" "$records"
+      fi
     '';
     serviceConfig = {
       Type = "oneshot";
       User = "headscale";
       Group = "headscale";
+      # Type=simple ordering is not API readiness; retry failed snapshots instead.
+      Restart = "on-failure";
+      RestartSec = "15s";
+      TimeoutStartSec = "30s";
     };
   };
 
