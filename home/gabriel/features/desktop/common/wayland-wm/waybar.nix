@@ -260,7 +260,7 @@ in {
           exec-if = gpgCmds.isUnlocked;
           exec = mkScriptJson {
             script = ''
-              results="$(systemctl --user show 'mbsync-*.service' 'vdirsyncer-*.service' --property Id,Result,ActiveState)"
+              results="$(systemctl --user --all show 'mbsync-*.service' 'vdirsyncer-*.service' --property Id,Result,ActiveState)"
               last_trigger="$(systemctl --user show 'mbsync-*.timer' 'vdirsyncer-*.timer' --property LastTriggerUSec --value |
                 while IFS= read -r trigger; do
                   if [ -n "$trigger" ] && timestamp="$(date --date="$trigger" +%s 2>/dev/null)"; then
@@ -293,7 +293,7 @@ in {
             tooltip = "$tooltip";
             alt = "$status";
           };
-          on-click = mkScript {script = "systemctl --user start 'mbsync-*.service' 'vdirsyncer-*.service'";};
+          on-click = mkScript {script = "systemctl --user --all start 'mbsync-*.service' 'vdirsyncer-*.service'";};
           format = "{icon}";
           format-icons = {
             activating = "󰘿";
