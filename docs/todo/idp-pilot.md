@@ -132,6 +132,27 @@ are unchanged. SMTP/recovery email and phone notifications are not configured.
   outage behavior still need browser tests. Recovery email, phone notifications
   and backup-age alerts remain unconfigured.
 
+## Verification record (2026-11-04)
+
+- Alcyone was cold-migrated to a replacement VM with one vCPU, about 2 GiB RAM,
+  and a 64 GiB GPT disk. Authentik and its worker are active after a disk boot;
+  the authentication flow returns HTTPS 200 over the tailnet. Public access is
+  still rejected with 403. This improves capacity but remains below upstream's
+  two-core guidance; sustained-load observation is still needed.
+- A fresh PostgreSQL dump, persist snapshot, and off-host Borg backup to Merope
+  completed successfully on the replacement. Archive
+  `alcyone-alcyone-2026-11-04T13:40:55` contains the nonempty Authentik SQL dump
+  and mutable Authentik files. Archive metadata/content-list inspection passed;
+  no isolated restore has been performed.
+- The operator confirmed successful Grafana login using TOTP with a separate
+  ordinary Authentik user in `grafana-admins`, and successful WebAuthn in a
+  separate test. This confirms login with the allowed group, not denial for an
+  unbound user, Viewer mapping, or absence of server-admin privileges.
+- Remaining browser checks: unbound-user denial, Viewer/Admin permission
+  boundaries, independent local recovery login, token refresh after ten minutes,
+  logout/revocation, and IdP downtime. Independent IdP administrative recovery,
+  isolated restore, notifications, and backup-age alerts also remain open.
+
 Implementation details found during live testing: listener settings require
 lists, Blueprint retrieval rejects symlinks resolving outside `blueprints_dir`,
 and certificate discovery needs an existing directory even when unused. Keep
