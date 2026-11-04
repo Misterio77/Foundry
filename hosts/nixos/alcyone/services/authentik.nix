@@ -84,7 +84,7 @@ in {
     };
   };
 
-  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/var/lib/private/authentik"];
+  services.borgbackup.jobs.alcyone.paths = ["/var/lib/private/authentik"];
 
   environment.persistence."/persist".directories = [
     # DynamicUser's StateDirectory lives here, not at its public symlink.

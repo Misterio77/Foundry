@@ -49,7 +49,7 @@ in {
     group = config.users.users.radicale.group;
   };
 
-  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source${config.services.radicale.settings.storage.filesystem_folder}"];
+  services.borgbackup.jobs.alcyone.paths = [config.services.radicale.settings.storage.filesystem_folder];
 
   environment.persistence = {
     "/persist".directories = [

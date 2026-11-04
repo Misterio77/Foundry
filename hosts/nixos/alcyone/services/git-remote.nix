@@ -67,7 +67,7 @@
       advertisePushOptions = true
   '';
 in {
-  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/srv/git"];
+  services.borgbackup.jobs.alcyone.paths = ["/srv/git"];
 
   services.gitDaemon = {
     enable = true;

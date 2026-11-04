@@ -31,7 +31,7 @@ in {
   ];
 
   services.borgbackup.jobs = lib.mkIf (backup.enable && config.networking.hostName == "alcyone") {
-    alcyone.paths = ["/run/borgbackup-alcyone-source${backup.location}"];
+    alcyone.paths = [backup.location];
   };
 
   # Finish dumps before taking the snapshot Borg reads.

@@ -1,5 +1,5 @@
 {config, ...}: {
-  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/srv/files"];
+  services.borgbackup.jobs.alcyone.paths = ["/srv/files"];
 
   services.nginx.virtualHosts = {
     "files.m7.rs" = {

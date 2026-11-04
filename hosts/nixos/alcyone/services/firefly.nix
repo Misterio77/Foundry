@@ -163,7 +163,7 @@
     };
   };
 
-  services.borgbackup.jobs.alcyone.paths = ["/run/borgbackup-alcyone-source/var/lib/firefly-iii"];
+  services.borgbackup.jobs.alcyone.paths = ["/var/lib/firefly-iii"];
 
   environment.persistence = {
     "/persist".directories = ["/var/lib/firefly-iii"];

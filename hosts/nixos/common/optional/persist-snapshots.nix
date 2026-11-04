@@ -1,17 +1,7 @@
-{config, ...}: {
-  # Mount the Btrfs top level so snapshots are siblings of /persist rather than
-  # children of the ephemeral root subvolume.
-  fileSystems."/mnt/btrfs" = {
-    device = config.fileSystems."/persist".device;
-    fsType = "btrfs";
-    options = [
-      "noatime"
-      "subvolid=5"
-    ];
-  };
-
+{
+  # A nested subvolume is excluded from snapshots of its parent.
   systemd.tmpfiles.rules = [
-    "d /mnt/btrfs/.snapshots 0750 root btrbk -"
+    "v /persist/.snapshots 0750 root btrbk -"
   ];
 
   services.btrbk.instances.persist = {
@@ -21,12 +11,12 @@
       timestamp_format = "long";
       snapshot_preserve_min = "24h";
       snapshot_preserve = "7d 4w 4m";
-      volume."/mnt/btrfs" = {
-        snapshot_dir = ".snapshots";
-        subvolume.persist = {};
+      subvolume."/persist" = {
+        snapshot_dir = "/persist/.snapshots";
+        snapshot_name = "persist";
       };
     };
   };
 
-  systemd.services.btrbk-persist.unitConfig.RequiresMountsFor = ["/mnt/btrfs"];
+  systemd.services.btrbk-persist.unitConfig.RequiresMountsFor = ["/persist"];
 }
