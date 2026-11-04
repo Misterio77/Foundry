@@ -1,7 +1,8 @@
 # Authentik pilot operations
 
 Pilot test-activated on Alcyone on 2026-11-03. See [the rollout plan](idp.md)
-for the wider migration. This is not a restore-test record.
+for the wider migration. An isolated restore record is included below; it does
+not prove independent key recovery or browser MFA after restoration.
 
 ## Before deployment
 
@@ -9,8 +10,8 @@ for the wider migration. This is not a restore-test record.
   deployment guidance is at least two cores and 2 GB RAM; account for existing
   services rather than treating that as spare capacity.
 - Add `authentik-key` and `authentik-grafana-client-secret` to
-  `hosts/nixos/alcyone/secrets.yaml` using SOPS. Generate them independently with
-  `openssl rand -base64 60` and `openssl rand -hex 32`, respectively. Never paste
+  `hosts/nixos/alcyone/secrets.yaml` using SOPS. Generate each independently with
+  `openssl rand -hex 32`, keeping each value on one line. Never paste
   values into chat or Nix files. Preserve the Authentik key independently for
   disaster recovery; changing it is not a routine credential rotation.
 - Build with `nixos-rebuild build --flake .#alcyone --no-link`, then deploy with
@@ -172,7 +173,7 @@ No local Grafana recovery account is retained by this design.
   completed successfully on the replacement. Archive
   `alcyone-alcyone-2026-11-04T13:40:55` contains the nonempty Authentik SQL dump
   and mutable Authentik files. Archive metadata/content-list inspection passed;
-  no isolated restore has been performed.
+  an isolated restore was subsequently tested as recorded below.
 - The operator confirmed successful Grafana login using TOTP with a separate
   ordinary Authentik user in `grafana-admins`, and successful WebAuthn in a
   separate test. This confirms login with the allowed group, not denial for an
@@ -181,14 +182,78 @@ No local Grafana recovery account is retained by this design.
   fresh authorization and `grafana-users` grants Viewer access; the previous
   `grafana-admins` test covered organization Admin. An existing Grafana session
   survived group removal immediately; refresh-time behavior is not yet proven.
-- Remaining browser checks: absence of Grafana server-admin privileges, token
-  refresh after ten minutes, logout/revocation, and IdP downtime. Independent
-  IdP administrative recovery, isolated restore, notifications, and backup-age
-  alerts also remain open. Local Grafana recovery was deliberately dropped in
-  favor of OAuth-only access and independent declarative recovery.
+- Remaining browser checks: absence of Grafana server-admin privileges,
+  logout/revocation, and IdP downtime. Group removal denied fresh authorization
+  but the existing authenticated profile remained usable after almost twelve
+  minutes. A later refresh-token deletion experiment ended with the approved
+  Grafana state reset, before a conclusive refresh failure was observed.
+  OAuth-only Grafana was deployed at revision `55ba6ed5`; its state was reset,
+  and the operator confirmed fresh login with a plain username. Independent
+  IdP administrative recovery, notifications, and backup-age alerts remain open.
+  Local Grafana recovery was deliberately dropped in favor of independent
+  declarative recovery.
 - Archived Authentik SQL dump retrieval and gzip integrity checks passed, as
   did dry-run extraction of the mutable files. These are retrieval checks, not
   proof of a working database/application restore.
+
+## Isolated restore drill (2026-11-04)
+
+A one-off NixOS restore test was built and run on Atlas using the pinned
+Authentik 2026.8.5 module and PostgreSQL 14. The disposable KVM VM had only
+loopback: QEMU was given `-nic none`, and the test asserted the absence of other
+interfaces before importing anything. It could not send email, contact clients,
+or reach production. Production services and database were not stopped or
+modified by the restore.
+
+Inputs came from Borg archive `alcyone-alcyone-2026-11-04T13:40:55`: the native
+SQL dump and `var/lib/private/authentik` files. The runtime-effective secret key
+was retrieved separately from the running production service for this drill.
+All private inputs, logs, shared exchange files and VM state were confined to
+mode-0700 scratch directories under Atlas's runtime tmpfs, outside the Nix store
+and repository, and removed after the driver exited. Remote export staging was
+also removed.
+
+Verified:
+
+- The native SQL dump imported with `ON_ERROR_STOP`; it includes `CREATE
+  DATABASE` and a reconnect, so import it into the maintenance database after
+  dropping the disposable empty `authentik` database, not in one transaction.
+- Authentik migration, server, worker and the authentication-flow HTTP endpoint
+  started against the restored database/files.
+- The configured secret key matched the separately injected effective key.
+- Grafana application/groups and the OIDC signing private key were usable.
+- Restored TOTP and WebAuthn device records existed. No credential values or
+  device identifiers were displayed.
+- Anonymous administrative API access was denied. A new five-minute API token
+  created through management access for the restored administrator successfully
+  accessed the live administrative API. The token was deleted in `finally`;
+  it existed only in the disconnected clone and was never printed.
+
+This proves a working database/application restore and management-assisted API
+recovery. It does **not** prove browser login with restored MFA credentials,
+recovery through independently stored key material after loss of production,
+or a complete external-client/OIDC recovery. Those remain separate checks.
+
+### Secret-key recovery hazard
+
+The raw SOPS `authentik-key` contained an internal newline. The unquoted
+`AUTHENTIK_SECRET_KEY=` template caused systemd to load only the first line;
+comparison against the running process confirmed that this 64-character value
+was the actual production key. The first restore attempt using the full raw
+value failed the explicit key-equality check. Retrying with the effective key
+passed the complete drill. Production's key was not changed.
+
+The operator subsequently normalized the SOPS entry privately to the
+**existing effective first line**, preserving the production key. Preserve that
+exact key independently before making the IdP authoritative.
+Do not concatenate the lines, quote the full multiline value, switch directly
+to a file-backed full value, or generate a replacement as a formatting fix:
+those change the effective key. New keys should use a non-wrapping generator
+such as `openssl rand -hex 32`. Never print existing key material or put it in
+Nix expressions or test fixtures committed to the repository.
+
+The temporary test harness was intentionally not retained in Foundry. This is
+a record of the completed drill, not a maintained restore tool or CI check.
 
 Implementation details found during live testing: listener settings require
 lists, Blueprint retrieval rejects symlinks resolving outside `blueprints_dir`,
