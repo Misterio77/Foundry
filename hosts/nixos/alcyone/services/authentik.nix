@@ -11,6 +11,7 @@
     chmod u+w "$out"
     cp ${./authentik/foundry.yaml} "$out/foundry.yaml"
     cp ${./authentik/calibre-web.yaml} "$out/calibre-web.yaml"
+    cp ${./authentik/recovery.yaml} "$out/recovery.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
@@ -40,6 +41,15 @@ in {
       blueprints_dir = blueprints;
       cert_discovery_dir = "${pkgs.emptyDirectory}";
       disable_startup_analytics = true;
+      email = {
+        host = "127.0.0.1";
+        port = 25;
+        username = "";
+        password = "";
+        use_tls = false;
+        use_ssl = false;
+        from = "Foundry accounts <authentik@m7.rs>";
+      };
       avatars = "initials";
       storage.file.path = "/var/lib/authentik/data";
       listen = {
@@ -63,13 +73,6 @@ in {
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
-    extraConfig = ''
-      allow 127.0.0.1;
-      allow ::1;
-      allow ${config.services.headscale.settings.prefixes.v4};
-      allow ${config.services.headscale.settings.prefixes.v6};
-      deny all;
-    '';
     locations."= /metrics".proxyPass = "http://127.0.0.1:9300/metrics";
     locations."= /metrics/worker".proxyPass = "http://127.0.0.1:9301/metrics";
     locations."/" = {

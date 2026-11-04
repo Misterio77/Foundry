@@ -54,18 +54,22 @@ PostgreSQL cluster remains on major version 14.
    is through independent SSH/SOPS access and declarative redeployment, not a
    local Grafana password. See the one-time state reset below before rollout.
 
-Public registration is not added. The portal is tailnet/loopback-only; Headscale
-should discover the vhost and publish private DNS records automatically. Public
-DNS must still resolve to Alcyone for ACME's HTTP challenge. Backend and metrics
-listeners are loopback-only. Mail, DAV, Headscale enrollment and media services
-are unchanged. SMTP/recovery email and phone notifications are not configured.
+Public registration is not added. `auth.m7.rs` is configured for public HTTPS,
+including the portal, OIDC endpoints and email password recovery. The admin UI
+is also reachable and remains protected by Authentik authentication, MFA and
+permissions, not a separate network ACL. Backend and metrics listeners stay
+on loopback, but nginx intentionally exposes `/metrics` and `/metrics/worker`
+publicly over HTTPS without authentication. Prometheus scrapes both through
+`auth.m7.rs`. Other applications' network ACLs are unchanged.
+Phone notifications are not configured.
 
 ## Acceptance checks before relying on it
 
 - Verify `authentik`, `authentik-worker`, `authentik-migrate`, nginx and PostgreSQL
   health; check migration/Blueprint failures without dumping credentials.
-- Check public access is rejected, tailnet HTTPS works and DNS contains
-  `auth.m7.rs`. Check actual listening sockets, including metrics.
+- Check public HTTPS works for `auth.m7.rs`, including `/metrics` and
+  `/metrics/worker`. Check that backend and metrics listening sockets remain
+  loopback-only.
 - Test hardware-key and TOTP enrollment, fresh login using either method,
   absence of password-only fallback, and a second key. Arrange independent
   administrative recovery.
@@ -137,8 +141,8 @@ launches OAuth automatically. This changes authentication, not photo storage.
   No admin/quota claims are sent, so existing local permissions are preserved.
 - Test mobile OAuth with the existing server URL. The provider allows exactly
   the browser login, user-settings linking, and `app.immich:///oauth-callback`
-  redirects. Both browser and mobile clients still need tailnet access to
-  `auth.m7.rs` and `photos.m7.rs`.
+  redirects. `photos.m7.rs` still requires tailnet access for browser and mobile
+  clients; making the IdP public does not expose the photo service.
 - Public `/share` handling remains unchanged. Back-channel logout is configured
   at `https://photos.m7.rs/api/oauth/backchannel-logout`; this is not a claim
   that every existing session or API key is revoked by IdP logout.
@@ -153,6 +157,35 @@ Do not delete Immich users or its database to reset authentication.
 See [the Calibre-Web runbook](calibre-web-auth.md) for the staged rollout,
 Authentik app-password self-service, existing-user mapping and removal of local
 password hashes. This integration is prepared but not yet verified live.
+
+## Email password recovery
+
+Configured, with live delivery/reset verification still pending. The login page
+links to `default-recovery-flow`, also selected by the default brand. Recovery
+uses the pinned upstream email-verification flow with these overrides:
+
+- Identification does not reveal whether the account exists.
+- Recovery links have a configured 15-minute expiry, with five email attempts
+  per account per 15 minutes. The existing password-change policy validates
+  the new password, and the flow never creates users.
+- Email verification does not reactivate disabled users or remove MFA devices.
+- The upstream automatic-login binding is removed. After writing the password,
+  a redirect discards recovery context and starts normal authentication,
+  including the configured MFA stages. Email possession alone is not an SSO
+  session or an MFA-reset mechanism.
+- Global email settings submit as `authentik@m7.rs` through Postfix on
+  `127.0.0.1:25`, using its trusted local relay path. No new SMTP password,
+  mailbox account, public relay permission or submission port is added.
+
+Set usable, unique recovery email addresses before relying on this. For the
+operator, preserve mailbox access independently of the IdP. After deployment,
+use a disposable account to check external delivery, password reset, subsequent
+MFA login, and rejection of invalid/expired links. Confirm the recovery Blueprint
+applied successfully and Prometheus still scrapes both targets. No successful
+live recovery is claimed by these configuration checks.
+
+Lost MFA devices and administrative disaster recovery still require independent
+SSH/management access; this flow only recovers the account password.
 
 ## State and recovery
 

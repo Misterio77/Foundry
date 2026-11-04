@@ -85,9 +85,10 @@ has been removed. Existing application sessions are separate from LDAP binds.
   browser sessions are not reauthenticated on every request.
 - Stop the outpost briefly and confirm the old Calibre-Web password cannot
   authenticate. Restart it afterward.
-- Browser access remains public, but app-password self-service at `auth.m7.rs`
-  currently requires tailnet access. App passwords are not per-provider scoped
-  by default; do not describe them as Calibre-only tokens.
+- `auth.m7.rs` is configured for public HTTPS, so app-password self-service no
+  longer requires tailnet enrollment once that change is deployed. App passwords
+  are not per-provider scoped by default; do not describe them as Calibre-only
+  tokens.
 
 Recovery is independent SSH and administrative database access. Restoring an
 old application database can restore old local password hashes too; clear them
