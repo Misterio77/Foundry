@@ -49,7 +49,56 @@ entries:
     identifiers:
       slug: default-authentication-flow
     attrs:
+      name: Entrar no Gablogin
       title: Entrar no Gablogin
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-invalidation-flow
+    attrs:
+      name: Sair do Gablogin
+      title: Sair do Gablogin
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-user-settings-flow
+    attrs:
+      name: Minha conta
+      title: Atualizar seus dados
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-password-change
+    attrs:
+      name: Alterar senha
+      title: Alterar sua senha
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-authenticator-totp-setup
+    attrs:
+      name: Configurar aplicativo autenticador
+      title: Configurar aplicativo autenticador
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-authenticator-webauthn-setup
+    attrs:
+      name: Configurar chave de acesso
+      title: Configurar chave de acesso
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-provider-authorization-implicit-consent
+    attrs:
+      name: Acessar aplicativo
+      title: Redirecionando para %(app)s
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-provider-invalidation-flow
+    attrs:
+      name: Sair do aplicativo
+      title: Você saiu de %(app)s
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-request
+    attrs:
+      name: Solicitar acesso
+      title: Solicitar acesso
   - model: authentik_brands.brand
     identifiers:
       default: true

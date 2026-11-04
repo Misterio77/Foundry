@@ -16,7 +16,7 @@ entries:
     identifiers:
       slug: default-recovery-flow
     attrs:
-      name: Gablogin password recovery
+      name: Recuperar acesso ao Gablogin
       title: Redefinir sua senha
       designation: recovery
       authentication: require_unauthenticated

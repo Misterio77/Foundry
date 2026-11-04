@@ -5,7 +5,7 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: Default - Provider invalidation flow
+        name: Foundry - private identity pilot
 
   - model: authentik_core.group
     id: book-users
