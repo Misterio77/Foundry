@@ -56,6 +56,7 @@
           {
             id = 1;
             name = "Radarr";
+            externalUrl = "https://radarr.m7.rs";
             hostname = "localhost";
             port = config.services.radarr.settings.server.port;
             apiKey.file = config.sops.secrets.radarr-key.path;
@@ -69,6 +70,7 @@
           {
             id = 1;
             name = "Sonarr";
+            externalUrl = "https://sonarr.m7.rs";
             hostname = "localhost";
             port = config.services.sonarr.settings.server.port;
             apiKey.file = config.sops.secrets.sonarr-key.path;
