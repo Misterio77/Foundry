@@ -11,6 +11,8 @@ in
     patches =
       (old.patches or [])
       ++ [./quick-connect-qr.patch ./quick-connect-helper.patch ./translations.patch ./gablogin-label.patch ./logout.patch ./oidc-login.patch ./session-expiry.patch ./session-expiry-tests.patch ./quick-connect-locales.patch];
+    # Webpack's locale import context also picks up patch backup files.
+    patchFlags = (old.patchFlags or ["-p1"]) ++ ["--no-backup-if-mismatch"];
     postPatch =
       (old.postPatch or "")
       + ''

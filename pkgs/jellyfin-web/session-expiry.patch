@@ -31,7 +31,8 @@
 --- a/src/lib/jellyfin-apiclient/ServerConnections.js
 +++ b/src/lib/jellyfin-apiclient/ServerConnections.js
 @@ -7,6 +7,7 @@
- import Dashboard from 'utils/dashboard';
+-import Dashboard from 'utils/dashboard';
++import Dashboard, { logoutOnSessionExpired } from 'utils/dashboard';
  import Events from 'utils/events';
  import { createApiClient } from 'utils/jellyfin-apiclient/createApiClient';
 +import { watchSessionExpiry } from 'utils/sessionExpiry';
@@ -46,7 +47,7 @@
 +                apiClient,
 +                () => this.currentApiClient() === apiClient,
 +                () => {
-+                    Dashboard.logout(true).catch(error => console.error('Session cleanup failed', error));
++                    logoutOnSessionExpired().catch(error => console.error('Session cleanup failed', error));
 +                }
 +            );
          });
@@ -54,7 +55,7 @@
  
 --- a/src/utils/dashboard.js
 +++ b/src/utils/dashboard.js
-@@ -101,16 +101,30 @@
+@@ -101,16 +101,38 @@
      ServerConnections.setLocalApiClient(apiClient);
  }
  
@@ -62,7 +63,15 @@
 -    return ServerConnections.logout().then(function () {
 +let logoutPromise;
 +
-+export function logout(sessionExpired = false) {
++export function logout() {
++    return logoutInternal(false);
++}
++
++export function logoutOnSessionExpired() {
++    return logoutInternal(true);
++}
++
++function logoutInternal(sessionExpired) {
 +    // Logout requests can themselves return 401; share cleanup across all failures.
 +    if (logoutPromise) return logoutPromise;
 +
