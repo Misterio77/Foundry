@@ -1,6 +1,7 @@
 --- /dev/null
 +++ b/src/scripts/foundryQuickConnect.js
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,25 @@
++import globalize from 'lib/globalize';
 +import qrcode from './qrcode.cjs';
 +
 +export default function quickConnectQrHtml(code) {
@@ -17,9 +18,9 @@
 +            cellSize: 4,
 +            margin: 16,
 +            scalable: true,
-+            title: 'Autorizar o dispositivo com o código ' + code
++            title: globalize.translate('QuickConnectQrTitle', code)
 +        });
-+        return '<div class="foundry-quick-connect-qr">' + svg + '</div><div class="foundry-quick-connect-instructions">Ou visite https://media.m7.rs/connect</div>';
++        return '<div class="foundry-quick-connect-qr">' + svg + '</div><div class="foundry-quick-connect-instructions">' + globalize.translate('QuickConnectOrVisit', 'https://media.m7.rs/connect') + '</div>';
 +    } catch (error) {
 +        console.warn('Unable to generate device approval QR', error);
 +        return '';
@@ -27,8 +28,10 @@
 +}
 --- /dev/null
 +++ b/src/scripts/foundryQuickConnect.test.js
-@@ -0,0 +1,47 @@
-+import { beforeEach, expect, it, vi } from 'vitest';
+@@ -0,0 +1,68 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import enUS from '../strings/en-us.json';
++import ptBR from '../strings/pt-br.json';
 +import qrcode from './qrcode.cjs';
 +import quickConnectQrHtml from './foundryQuickConnect';
 +
@@ -41,37 +44,56 @@
 +    default: vi.fn(() => ({ addData, make: vi.fn(), createSvgTag }))
 +}));
 +
++const locale = vi.hoisted(() => ({ current: 'en-us' }));
++const translations = { 'en-us': enUS, 'pt-br': ptBR };
++
++vi.mock('lib/globalize', () => ({
++    default: {
++        translate: (key, ...args) => args.reduce(
++            (text, value, index) => text.replace('{' + index + '}', value),
++            translations[locale.current][key]
++        )
++    }
++}));
++
 +beforeEach(() => vi.clearAllMocks());
 +
-+it.each(['000000', '012345', '999999'])('renders an unlinked public-code QR for %s', code => {
-+    const html = quickConnectQrHtml(code);
-+    const content = document.createElement('div');
-+    content.innerHTML = html;
++describe.each([
++    ['en-us', 'Or visit https://media.m7.rs/connect', 'Authorize the device with code '],
++    ['pt-br', 'Ou visite https://media.m7.rs/connect', 'Autorizar o dispositivo com o código ']
++])('Quick Connect in %s', (language, instructions, titlePrefix) => {
++    beforeEach(() => { locale.current = language; });
 +
-+    expect(qrcode).toHaveBeenCalledWith(0, 'M');
-+    expect(addData).toHaveBeenCalledExactlyOnceWith('https://media.m7.rs/connect?user_code=' + code);
-+    expect(createSvgTag).toHaveBeenCalledWith(expect.objectContaining({
-+        margin: 16,
-+        scalable: true,
-+        title: 'Autorizar o dispositivo com o código ' + code
-+    }));
-+    expect(content.querySelector('.foundry-quick-connect-qr svg')).not.toBeNull();
-+    expect(content.querySelector('a')).toBeNull();
-+    expect(content.querySelector('.foundry-quick-connect-instructions')?.textContent)
-+        .toBe('Ou visite https://media.m7.rs/connect');
-+    expect(html).not.toMatch(/user_code=|secret|access_token|id_token|<img|<script|src=/i);
-+});
++    it.each(['000000', '012345', '999999'])('renders an unlinked public-code QR for %s', code => {
++        const html = quickConnectQrHtml(code);
++        const content = document.createElement('div');
++        content.innerHTML = html;
 +
-+it.each([undefined, null, 123456, '', '12345', '1234567', '123456\n', ' 123456', '１２３４５６', '<img/>', '123&45'])(
-+    'rejects malformed public code %s', code => {
-+        expect(quickConnectQrHtml(code)).toBe('');
-+        expect(qrcode).not.toHaveBeenCalled();
-+    }
-+);
++        expect(qrcode).toHaveBeenCalledWith(0, 'M');
++        expect(addData).toHaveBeenCalledExactlyOnceWith('https://media.m7.rs/connect?user_code=' + code);
++        expect(createSvgTag).toHaveBeenCalledWith(expect.objectContaining({
++            margin: 16,
++            scalable: true,
++            title: titlePrefix + code
++        }));
++        expect(content.querySelector('.foundry-quick-connect-qr svg')).not.toBeNull();
++        expect(content.querySelector('a')).toBeNull();
++        expect(content.querySelector('.foundry-quick-connect-instructions')?.textContent)
++            .toBe(instructions);
++        expect(html).not.toMatch(/user_code=|secret|access_token|id_token|<img|<script|src=/i);
++    });
 +
-+it('omits the QR if encoding fails', () => {
-+    vi.spyOn(console, 'warn').mockImplementation(() => {});
-+    vi.mocked(qrcode).mockImplementationOnce(() => { throw new Error('encoding failed'); });
-+    expect(quickConnectQrHtml('012345')).toBe('');
-+    expect(console.warn).toHaveBeenCalledOnce();
++    it.each([undefined, null, 123456, '', '12345', '1234567', '123456\n', ' 123456', '１２３４５６', '<img/>', '123&45'])(
++        'rejects malformed public code %s', code => {
++            expect(quickConnectQrHtml(code)).toBe('');
++            expect(qrcode).not.toHaveBeenCalled();
++        }
++    );
++
++    it('omits the QR if encoding fails', () => {
++        vi.spyOn(console, 'warn').mockImplementation(() => {});
++        vi.mocked(qrcode).mockImplementationOnce(() => { throw new Error('encoding failed'); });
++        expect(quickConnectQrHtml('012345')).toBe('');
++        expect(console.warn).toHaveBeenCalledOnce();
++    });
 +});

@@ -1,0 +1,12 @@
+--- a/src/strings/en-us.json
++++ b/src/strings/en-us.json
+@@ -1487,1 +1487,3 @@
+     "QuickConnect": "Quick Connect",
++    "QuickConnectOrVisit": "Or visit {0}",
++    "QuickConnectQrTitle": "Authorize the device with code {0}",
+--- a/src/strings/pt-br.json
++++ b/src/strings/pt-br.json
+@@ -1206,1 +1206,3 @@
+     "QuickConnect": "Conexão rápida",
++    "QuickConnectOrVisit": "Ou visite {0}",
++    "QuickConnectQrTitle": "Autorizar o dispositivo com o código {0}",
