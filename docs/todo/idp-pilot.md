@@ -89,7 +89,7 @@ Phone notifications are not configured.
 - Confirm an unbound user cannot authorize Grafana and Viewer/Admin mappings are
   correct, without granting Grafana server-admin rights. Verify local password
   and HTTP Basic authentication are disabled, including on a fresh database.
-- Test token refresh after ten minutes, logout in both directions and IdP
+- Test token refresh after one minute, logout in both directions and IdP
   downtime. Grafana has local sessions; group removal or IdP session deletion
   is not a promise of immediate Grafana session revocation.
 - Confirm Prometheus scrapes both Authentik targets and existing service-down
