@@ -56,9 +56,9 @@ index 7120d7c92d..6d29e02481 100644
 +issuance time, and optional `sid`. Persistent database revocation markers are
 +checked before authenticating every session-backed API request, and before
 +completing an OIDC callback. A `sid` logout targets that IdP session; when both
-+`sid` and `sub` are supplied, both must match. A subject-only logout revokes all
-+of that subject's sessions whose ID tokens were issued at or before the event.
-+Freshly issued tokens in the same second are conservatively rejected too.
++`sid` and `sub` are supplied, both must match. Matching sessions are revoked
++only if their ID tokens were issued at or before the event, even if a fresh
++login reuses the `sid`. Tokens issued in the same second are rejected too.
 +Markers survive process restarts and session-save races. Repeated events are
 +idempotent, and older events cannot move a revocation timestamp backwards.
 +
@@ -343,7 +343,7 @@ new file mode 100644
 index 0000000000..b64dbaccd9
 --- /dev/null
 +++ b/server/lib/oidcBackchannel.ts
-@@ -0,0 +1,164 @@ function key(
+@@ -0,0 +1,162 @@ function key(
 +import { getRepository } from '@server/datasource';
 +import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
 +import type { OidcProvider } from '@server/lib/settings';
@@ -504,9 +504,7 @@ index 0000000000..b64dbaccd9
 +  const records = await getRepository(OidcSessionRevocation).findBy({
 +    id: In(ids),
 +  });
-+  return records.some(
-+    (record) => record.id !== subjectKey || info.issuedAt <= record.issuedAt
-+  );
++  return records.some((record) => info.issuedAt <= record.issuedAt);
 +}
 diff --git a/server/lib/settings/declarative.test.ts b/server/lib/settings/declarative.test.ts
 index 99449c8324..2cd1276655 100644
@@ -673,7 +671,10 @@ index b229fcc04d..b349bf1104 100644
    };
  
    // Claims for existing seeded user (demo@seerr.dev)
-@@ -1109,6 +1111,22 @@ async function setupFetchMock(options?: {
+@@ -1046 +1048 @@
+-        .setIssuedAt()
++        .setIssuedAt(typeof claims?.iat === 'number' ? claims.iat : undefined)
+@@ -1109,6 +1111,62 @@ async function setupFetchMock(options?: {
        fetchMock.hardReset();
      });
  
@@ -691,6 +692,46 @@ index b229fcc04d..b349bf1104 100644
 +      });
 +      assert.equal((await agent.get('/auth/me')).status, 403);
 +      assert.equal((await performOidcCallback()).status, 403);
++    });
++
++    it('allows re-entry with a reused sid without reviving old sessions or tokens', async () => {
++      const issuedAt = Math.floor(Date.now() / 1000) - 30;
++      fetchMock.hardReset();
++      await setupFetchMock({ idTokenClaims: { iat: issuedAt } });
++      const old = request.agent(app);
++      assert.equal((await performOidcCallback(old)).status, 204);
++      assert.equal((await old.get('/auth/me')).status, 200);
++      const event = {
++        providerSlug: 'test',
++        issuer: 'https://example.com',
++        clientId: 'jellyseerr',
++        subject: DEFAULT_CLAIMS.sub,
++        sid: DEFAULT_CLAIMS.sid,
++        issuedAt: issuedAt + 10,
++      };
++      await recordOidcLogout(event);
++      assert.equal((await old.get('/auth/me')).status, 403);
++      assert.equal((await performOidcCallback()).status, 403);
++
++      fetchMock.hardReset();
++      await setupFetchMock({ idTokenClaims: { iat: event.issuedAt } });
++      assert.equal((await performOidcCallback()).status, 403);
++
++      fetchMock.hardReset();
++      await setupFetchMock({ idTokenClaims: { iat: event.issuedAt + 1 } });
++      const fresh = request.agent(app);
++      assert.equal((await performOidcCallback(fresh)).status, 204);
++      assert.equal((await fresh.get('/auth/me')).status, 200);
++      assert.equal((await old.get('/auth/me')).status, 403);
++
++      await recordOidcLogout(event);
++      await recordOidcLogout({ ...event, issuedAt });
++      assert.equal((await fresh.get('/auth/me')).status, 200);
++
++      fetchMock.hardReset();
++      await setupFetchMock({ idTokenClaims: { iat: issuedAt } });
++      assert.equal((await performOidcCallback()).status, 403);
++      assert.equal((await fresh.get('/auth/me')).status, 200);
 +    });
 +
      it('defaults to local logout for OIDC sessions', async () => {
@@ -775,7 +816,7 @@ new file mode 100644
 index 0000000000..623386fa41
 --- /dev/null
 +++ b/server/routes/oidcBackchannel.test.ts
-@@ -0,0 +1,371 @@ function createApp(info?: OidcSessionInfo) {
+@@ -0,0 +1,388 @@ function createApp(info?: OidcSessionInfo) {
 +import csurf from '@dr.pogodin/csurf';
 +import { getRepository } from '@server/datasource';
 +import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
@@ -959,6 +1000,23 @@ index 0000000000..623386fa41
 +    await recordOidcLogout({ ...identity(), subject: 'other-sub' });
 +    assert.equal(await isOidcSessionRevoked(identity()), false);
 +  });
++
++  for (const subject of ['friend-sub', undefined]) {
++    it(`allows fresh logins with the same sid after ${subject ? 'sid-sub' : 'sid-only'} logout`, async () => {
++      const issuedAt = now() - 10;
++      await recordOidcLogout({ ...identity(), subject, issuedAt });
++      assert.equal(await isOidcSessionRevoked(identity()), true);
++      assert.equal(await isOidcSessionRevoked(identity({ issuedAt })), true);
++      assert.equal(
++        await isOidcSessionRevoked(identity({ issuedAt: issuedAt + 1 })),
++        false
++      );
++      assert.equal(
++        await isOidcSessionRevoked(identity({ sid: 'sid-b' })),
++        false
++      );
++    });
++  }
 +
 +  it('subject logout revokes all older sessions but not future logins or other identities', async () => {
 +    const event = { ...identity(), sid: undefined, issuedAt: now() - 10 };
