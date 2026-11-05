@@ -22,6 +22,16 @@ entries:
             return {"immich_role": "user"}
         return {}
 
+  - model: authentik_providers_oauth2.scopemapping
+    id: immich-quota
+    identifiers:
+      name: foundry-immich-quota
+    attrs:
+      scope_name: immich_quota
+      description: Immich storage quota in GiB (defaults to 8; -1 for unlimited)
+      expression: |
+        return {"immich_quota": int(request.user.attributes.get("immich_quota", 8))}
+
   - model: authentik_providers_oauth2.oauth2provider
     id: immich-provider
     identifiers:
@@ -54,6 +64,7 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
         - !KeyOf immich-roles
+        - !KeyOf immich-quota
 
   - model: authentik_core.application
     id: immich
