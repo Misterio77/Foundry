@@ -45,24 +45,24 @@
     substituteInPlace "$out/default/flow-default-authenticator-webauthn-setup.yaml" \
       --replace-fail 'friendly_name: WebAuthn device' 'friendly_name: Chave de acesso' \
       --replace-fail 'title: Setup WebAuthn' 'title: Configurar chave de acesso'
-    cp ${./authentik/foundry.yaml} "$out/foundry.yaml"
-    cp ${./authentik/grafana.yaml} "$out/grafana.yaml"
-    cp ${./authentik/immich.yaml} "$out/immich.yaml"
-    cp ${./authentik/recovery.yaml} "$out/recovery.yaml"
-    cp ${./authentik/jellyfin.yaml} "$out/jellyfin.yaml"
-    cp ${./authentik/seerr.yaml} "$out/seerr.yaml"
+    cp ${./foundry.yaml} "$out/foundry.yaml"
+    cp ${./grafana.yaml} "$out/grafana.yaml"
+    cp ${./immich.yaml} "$out/immich.yaml"
+    cp ${./recovery.yaml} "$out/recovery.yaml"
+    cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
+    cp ${./seerr.yaml} "$out/seerr.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
 
   sops.secrets = {
-    authentik-jellyfin-client-secret.sopsFile = ../secrets.yaml;
-    authentik-seerr-client-secret.sopsFile = ../secrets.yaml;
-    authentik-key.sopsFile = ../secrets.yaml;
-    authentik-immich-client-secret.sopsFile = ../secrets.yaml;
-    authentik-mail-password.sopsFile = ../secrets.yaml;
+    authentik-jellyfin-client-secret.sopsFile = ../../secrets.yaml;
+    authentik-seerr-client-secret.sopsFile = ../../secrets.yaml;
+    authentik-key.sopsFile = ../../secrets.yaml;
+    authentik-immich-client-secret.sopsFile = ../../secrets.yaml;
+    authentik-mail-password.sopsFile = ../../secrets.yaml;
     authentik-grafana-client-secret = {
-      sopsFile = ../secrets.yaml;
+      sopsFile = ../../secrets.yaml;
       owner = "grafana";
       restartUnits = ["grafana.service"];
     };
@@ -131,7 +131,7 @@ in {
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
-    locations."/branding/".alias = "${./authentik/branding}/";
+    locations."/branding/".alias = "${./branding}/";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = metricsAccess;
