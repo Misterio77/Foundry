@@ -34,6 +34,8 @@ in {
             scopes = "openid profile email seerr_permissions";
             permissionsClaim = "seerr_permissions";
             newUserLogin = true;
+            logoutMode = "provider";
+            backchannelLogout = true;
           }
         ];
         jellyfin = {

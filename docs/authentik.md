@@ -25,10 +25,10 @@ Application membership is shared; `admins` also grants ordinary access.
 Neither group grants Authentik administration. Roles below are OIDC claims,
 not Authentik RBAC roles or additional membership groups.
 
-| Group | Jellyfin roles | Immich role | Grafana organization role |
-| --- | --- | --- | --- |
-| `users` | `jellyfin-users` | `user` | `Viewer` |
-| `admins` | `jellyfin-users`, `jellyfin-admins` | `admin` | `Admin` |
+| Group    | Jellyfin roles                      | Immich role | Grafana organization role |
+| -------- | ----------------------------------- | ----------- | ------------------------- |
+| `users`  | `jellyfin-users`                    | `user`      | `Viewer`                  |
+| `admins` | `jellyfin-users`, `jellyfin-admins` | `admin`     | `Admin`                   |
 
 Each provider/client uses its own `jellyfin_roles`, `immich_roles` or
 `grafana_roles` scope. Membership is assigned manually, never by the Blueprint.
@@ -87,6 +87,15 @@ permission-edit endpoints are disabled; password, media-server and Quick Connect
 login are disabled. Permissions refresh on login, not continuously; revoke
 existing Seerr sessions/API keys separately when immediate removal is needed.
 
+Seerr's logout button clears its local session, then opens Authentik's provider
+logout choices. Authentik is configured to send signed back-channel logout
+requests to `/api/v1/auth/oidc/backchannel/authentik`. Seerr persists revocation
+markers and checks them on API requests and OIDC callbacks, correlating the
+verified issuer/client/subject and optional session ID. Existing sessions without
+this metadata need a fresh login (or explicit session clearing during rollout).
+Provider logout delivery still depends on an unexpired Authentik provider token;
+test both fresh and aged sessions. Email remains required.
+
 ### Seerr preview rollout
 
 1. Generate a client secret locally (for example, `openssl rand -hex 32`). Add
@@ -98,10 +107,12 @@ existing Seerr sessions/API keys separately when immediate removal is needed.
    Matching emails are deliberately not auto-linked. Alternatively, start fresh
    and reconfigure Seerr's media-server/Sonarr/Radarr connections; Seerr state is
    disposable, and requester history is retained by Sonarr/Radarr tags.
-3. Build through CI or natively on Merope (`aarch64-linux`). Deploy Alcyone's
-   provider first, then Merope's client. Startup merges managed login settings
-   into `settings.json`, preserving other settings. It does not back up or
-   migrate state. A release rollback may require starting with fresh Seerr state.
+3. Build through CI or natively on Merope (`aarch64-linux`). For initial setup,
+   deploy Alcyone's provider before Merope's client. For the back-channel logout
+   upgrade, deploy the patched client before enabling Alcyone's callback URI.
+   Seerr reads its operator-owned declarative configuration; the database remains
+   persistent. Back it up before the logout patch adds its revocation table.
+   Existing sessions need a fresh login to acquire logout correlation metadata.
 4. Verify admin/user permissions, an explicit override, demotion, rejected local
    permission edits, and rejection without shared group membership. Login is at
    `https://requests.m7.rs/login`.
@@ -112,14 +123,17 @@ Role changes apply on OAuth login; removing group membership is not immediate
 application-session revocation. Disable application-local access and revoke its
 sessions/API keys when immediate removal matters.
 
-Back-channel logout is configured for Jellyfin and Immich, but is not a blanket
-revocation guarantee. With the pinned Authentik/Jellyfin plugin:
+Back-channel logout is configured for Jellyfin, Immich and Seerr, but is not a
+blanket revocation guarantee. With the pinned Authentik and application patches:
 
 - Authentik session deletion dispatches against unexpired access tokens;
-  Jellyfin's unrefreshed ten-minute token can age out of notification delivery.
+  Jellyfin's and Seerr's unrefreshed ten-minute tokens can age out of notification
+  delivery.
 - Jellyfin's session correlation is in memory. Restart fallback can widen
   revocation to all of a user's tokens; Quick Connect is not reliably scoped
   to the originating browser session.
+- Seerr's correlation and revocation markers survive restarts, but only sessions
+  created after the back-channel patch carry the required identity metadata.
 - Grafana sessions can survive IdP group/session changes.
 
 Test fresh and aged logins, restart, Quick Connect and two independent sessions

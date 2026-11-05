@@ -72,6 +72,8 @@ entries:
           [name, authentik Self-signed Certificate],
         ]
       access_token_validity: minutes=10
+      logout_method: backchannel
+      logout_uri: https://requests.m7.rs/api/v1/auth/oidc/backchannel/authentik
       property_mappings:
         - !Find [
             authentik_providers_oauth2.scopemapping,

@@ -1,0 +1,621 @@
+diff --git a/DECLARATIVE.md b/DECLARATIVE.md
+index 54a1f4bea0..7120d7c92d 100644
+--- a/DECLARATIVE.md
++++ b/DECLARATIVE.md
+@@ -32,7 +32,8 @@ ## Example
+           "clientSecret": { "file": "/run/credentials/seerr.service/oidc" },
+           "scopes": "openid profile email seerr_permissions",
+           "permissionsClaim": "seerr_permissions",
+-          "newUserLogin": true
++          "newUserLogin": true,
++          "logoutMode": "provider"
+         }
+       ]
+     },
+@@ -141,6 +142,23 @@ ## Ownership and bootstrap
+ User preferences and request management remain available. Operational settings
+ POST endpoints (including manual job triggers) are also disabled for now.
+ 
++## OIDC logout
++
++Each provider accepts `logoutMode`: `"local"` (the default) or `"provider"`.
++Provider mode destroys the Seerr session first, then the browser navigates to
++that provider's discovered `end_session_endpoint`. No tokens or automatic
++post-logout redirect parameters are sent, leaving the provider's logout choices
++visible (including Authentik's choice about ending the wider SSO session).
++Providers requiring an ID-token hint or other logout parameters are not supported.
++
++The authenticating provider is tracked in the server-side session, not inferred
++from linked accounts. Account linking does not change it. Existing sessions
++without this information log out locally; sign in again to enable provider
++logout. Local/Plex/Jellyfin logins always log out locally. Discovery failures,
++a missing endpoint, or a removed provider fall back to local logout; discovery
++has a three-second timeout. Local session destruction failures remain errors.
++This is browser-initiated logout, not back-channel or global session revocation.
++
+ ## State and migration
+ 
+ The database remains writable and persistent. Requests, users, identities,
+diff --git a/seerr-api.yml b/seerr-api.yml
+index 1e27b58517..ce42bc3c11 100644
+--- a/seerr-api.yml
++++ b/seerr-api.yml
+@@ -4350,7 +4350,7 @@
+   /auth/logout:
+     post:
+       summary: Sign out and clear session cookie
+-      description: Completely clear the session cookie and associated values, effectively signing the user out.
++      description: Destroy the local session and clear its cookie. When provider logout is enabled for the session's authenticating OIDC provider, return an optional URL for browser navigation after local cleanup.
+       tags:
+         - auth
+       responses:
+@@ -4364,6 +4364,11 @@
+                   status:
+                     type: string
+                     example: 'ok'
++                  redirectUrl:
++                    type: string
++                    format: uri
++                    description: Discovered OIDC end-session endpoint. Only returned after successful local session destruction when provider logout is enabled and available.
++                    example: 'https://auth.example.com/application/o/seerr/end-session/'
+   /auth/reset-password:
+     post:
+       summary: Send a reset password email
+diff --git a/server/lib/oidcLogout.test.ts b/server/lib/oidcLogout.test.ts
+new file mode 100644
+index 0000000000..d3c72bdeab
+--- /dev/null
++++ b/server/lib/oidcLogout.test.ts
+@@ -0,0 +1,111 @@
++import { getOidcLogoutUrl } from '@server/lib/oidcLogout';
++import { getSettings } from '@server/lib/settings';
++import fetchMock from 'fetch-mock';
++import assert from 'node:assert/strict';
++import { afterEach, beforeEach, describe, it } from 'node:test';
++
++const discoveryUrl = 'https://example.com/.well-known/openid-configuration';
++const metadata = {
++  issuer: 'https://example.com',
++  authorization_endpoint: 'https://example.com/authorize',
++  token_endpoint: 'https://example.com/token',
++  jwks_uri: 'https://example.com/jwks',
++  response_types_supported: ['code'],
++  subject_types_supported: ['public'],
++  id_token_signing_alg_values_supported: ['RS256'],
++};
++
++describe('OIDC logout discovery', () => {
++  let previousAllowInsecure: string | undefined;
++
++  beforeEach(() => {
++    previousAllowInsecure = process.env.OIDC_ALLOW_INSECURE;
++    delete process.env.OIDC_ALLOW_INSECURE;
++    getSettings().load({
++      oidc: {
++        providers: [
++          {
++            slug: 'test',
++            name: 'Test',
++            issuerUrl: 'https://example.com',
++            clientId: 'seerr',
++            clientSecret: 'secret',
++            logoutMode: 'provider',
++          },
++        ],
++      },
++    });
++    fetchMock.mockGlobal();
++  });
++
++  afterEach(() => {
++    fetchMock.hardReset();
++    getSettings().reset();
++    if (previousAllowInsecure === undefined) {
++      delete process.env.OIDC_ALLOW_INSECURE;
++    } else {
++      process.env.OIDC_ALLOW_INSECURE = previousAllowInsecure;
++    }
++  });
++
++  it('returns the bare endpoint without tokens or redirect parameters', async () => {
++    fetchMock.get(discoveryUrl, {
++      ...metadata,
++      end_session_endpoint: 'https://example.com/end-session/',
++    });
++    assert.equal(
++      await getOidcLogoutUrl('test'),
++      'https://example.com/end-session/'
++    );
++  });
++
++  it('does not discover providers for sessions without provenance', async () => {
++    assert.equal(await getOidcLogoutUrl(), undefined);
++    assert.equal(fetchMock.callHistory.calls().length, 0);
++  });
++
++  it('does not discover providers when provider logout is disabled', async () => {
++    getSettings().oidc.providers[0].logoutMode = 'local';
++    assert.equal(await getOidcLogoutUrl('test'), undefined);
++    assert.equal(fetchMock.callHistory.calls().length, 0);
++  });
++
++  it('falls back when discovery has no end-session endpoint', async () => {
++    fetchMock.get(discoveryUrl, metadata);
++    assert.equal(await getOidcLogoutUrl('test'), undefined);
++  });
++
++  it('falls back when discovery fails', async () => {
++    fetchMock.get(discoveryUrl, 503);
++    assert.equal(await getOidcLogoutUrl('test'), undefined);
++  });
++
++  it('bounds discovery even when the provider is slow', async () => {
++    fetchMock.get(discoveryUrl, metadata, { delay: 5000 });
++    assert.equal(await getOidcLogoutUrl('test'), undefined);
++  });
++
++  for (const endpoint of [
++    '/relative/logout',
++    'http://example.com/logout',
++    'javascript:alert(1)',
++    'https://user:password@example.com/logout',
++  ]) {
++    it(`rejects unsafe endpoint ${endpoint}`, async () => {
++      fetchMock.get(discoveryUrl, {
++        ...metadata,
++        end_session_endpoint: endpoint,
++      });
++      assert.equal(await getOidcLogoutUrl('test'), undefined);
++    });
++  }
++
++  it('supports HTTP endpoints only with the explicit insecure-development flag', async () => {
++    process.env.OIDC_ALLOW_INSECURE = 'true';
++    fetchMock.get(discoveryUrl, {
++      ...metadata,
++      end_session_endpoint: 'http://example.com/logout',
++    });
++    assert.equal(await getOidcLogoutUrl('test'), 'http://example.com/logout');
++  });
++});
+diff --git a/server/lib/oidcLogout.ts b/server/lib/oidcLogout.ts
+new file mode 100644
+index 0000000000..83341b0101
+--- /dev/null
++++ b/server/lib/oidcLogout.ts
+@@ -0,0 +1,49 @@ export async function getOidcLogoutUrl(
++import { getSettings } from '@server/lib/settings';
++import logger from '@server/logger';
++import * as openIdClient from 'openid-client';
++
++export async function getOidcLogoutUrl(
++  providerSlug?: string
++): Promise<string | undefined> {
++  const provider = getSettings().oidc.providers.find(
++    (provider) => provider.slug === providerSlug
++  );
++  if (!provider || provider.logoutMode !== 'provider') {
++    return undefined;
++  }
++
++  try {
++    const allowInsecure = process.env.OIDC_ALLOW_INSECURE === 'true';
++    const config = await openIdClient.discovery(
++      new URL(provider.issuerUrl),
++      provider.clientId,
++      provider.clientSecret,
++      undefined,
++      {
++        timeout: 3,
++        execute: allowInsecure ? [openIdClient.allowInsecureRequests] : [],
++      }
++    );
++    const endpoint = config.serverMetadata().end_session_endpoint;
++    if (!endpoint) {
++      return undefined;
++    }
++    const url = new URL(endpoint);
++    if (
++      (url.protocol !== 'https:' &&
++        !(allowInsecure && url.protocol === 'http:')) ||
++      url.username ||
++      url.password
++    ) {
++      throw new Error('Invalid end-session endpoint');
++    }
++    // Leave the provider's logout choices visible; do not force global logout.
++    return url.href;
++  } catch {
++    logger.warn('OIDC provider logout unavailable; local logout completed', {
++      label: 'Auth',
++      provider: provider.slug,
++    });
++    return undefined;
++  }
++}
+diff --git a/server/lib/settings/declarative.test.ts b/server/lib/settings/declarative.test.ts
+index 17216af295..99449c8324 100644
+--- a/server/lib/settings/declarative.test.ts
++++ b/server/lib/settings/declarative.test.ts
+@@ -94,6 +94,7 @@ export function fixture() {
+       config.settings.oidc?.providers?.[0]?.clientSecret,
+       'oidc-secret'
+     );
++    assert.equal(config.settings.oidc?.providers?.[0]?.logoutMode, 'local');
+     assert.equal(config.settings.radarr?.[0]?.apiKey, 'radarr-secret');
+     assert.equal(config.settings.radarr?.[0]?.minimumAvailability, 'released');
+     assert.equal(
+@@ -112,6 +113,14 @@ export function fixture() {
+     );
+   });
+ 
++  it('accepts opt-in OIDC provider logout', async () => {
++    const data = fixture();
++    Object.assign(data.settings.oidc.providers[0], { logoutMode: 'provider' });
++    await fs.writeFile(filename, JSON.stringify(data));
++    const config = await loadDeclarativeConfig(filename);
++    assert.equal(config.settings.oidc?.providers?.[0]?.logoutMode, 'provider');
++  });
++
+   for (const [name, mutate] of Object.entries<
+     (data: ReturnType<typeof fixture>) => void
+   >({
+@@ -130,6 +139,9 @@ export function fixture() {
+         'permissionsClaim'
+       );
+     },
++    'invalid logout mode': (data) => {
++      Object.assign(data.settings.oidc.providers[0], { logoutMode: 'global' });
++    },
+     'unconfigured owner provider': (data) => {
+       data.owner.provider = 'other';
+     },
+diff --git a/server/lib/settings/declarative.ts b/server/lib/settings/declarative.ts
+index c62d440b21..e7ae38d3dc 100644
+--- a/server/lib/settings/declarative.ts
++++ b/server/lib/settings/declarative.ts
+@@ -40,6 +40,7 @@
+     permissionsClaim: z.string().min(1),
+     scopes: z.string().default('openid profile email'),
+     newUserLogin: z.boolean().default(true),
++    logoutMode: z.enum(['local', 'provider']).default('local'),
+   })
+   .strict();
+ const dvr = z
+diff --git a/server/lib/settings/index.ts b/server/lib/settings/index.ts
+index e573190bf8..99df35ea3e 100644
+--- a/server/lib/settings/index.ts
++++ b/server/lib/settings/index.ts
+@@ -74,6 +74,7 @@
+   permissionsClaim?: string;
+   scopes?: string;
+   newUserLogin?: boolean;
++  logoutMode?: 'local' | 'provider';
+ };
+ 
+ export type PublicOidcProvider = Pick<OidcProvider, 'slug' | 'name' | 'logo'>;
+diff --git a/server/routes/auth.test.ts b/server/routes/auth.test.ts
+index 311366d7d1..b229fcc04d 100644
+--- a/server/routes/auth.test.ts
++++ b/server/routes/auth.test.ts
+@@ -765,6 +765,8 @@ function configureJellyfin() {
+ 
+     assert.strictEqual(res.status, 200);
+     assert.strictEqual(res.body.status, 'ok');
++    assert.match(res.get('Set-Cookie')?.join(';') ?? '', /connect\.sid=;/);
++    assert.strictEqual(res.body.redirectUrl, undefined);
+   });
+ 
+   it('destroys session and returns 200 when logged in', async () => {
+@@ -962,12 +964,18 @@ async function getResetGuid(email: string): Promise<string> {
+     email: 'demo@seerr.dev',
+   };
+ 
+-  function buildMockWellKnown(options?: { supportsPKCE?: boolean }) {
++  function buildMockWellKnown(options?: {
++    supportsPKCE?: boolean;
++    endSessionEndpoint?: string;
++  }) {
+     return {
+       issuer: 'https://example.com',
+       authorization_endpoint: 'https://example.com/oauth/authorize',
+       token_endpoint: 'https://example.com/oauth/token',
+       userinfo_endpoint: 'https://example.com/userinfo',
++      ...(options?.endSessionEndpoint
++        ? { end_session_endpoint: options.endSessionEndpoint }
++        : {}),
+       jwks_uri: 'https://example.com/.well-known/jwks.json',
+       response_types_supported: [
+         'code',
+@@ -991,8 +999,8 @@ function buildMockWellKnown(options?: {
+   /**
+    * Performs the login + callback flow and returns the callback response.
+    */
+-  async function performOidcCallback() {
+-    const loginResponse = await request(app)
++  async function performOidcCallback(agent = request.agent(app)) {
++    const loginResponse = await agent
+       .get('/auth/oidc/login/test')
+       .set('Accept', 'application/json');
+ 
+@@ -1009,7 +1017,7 @@ async function performOidcCallback(agent = request.agent(app)) {
+     callbackUrl.searchParams.set('code', '123456');
+     if (state) callbackUrl.searchParams.set('state', state);
+ 
+-    const response = await request(app)
++    const response = await agent
+       .post('/auth/oidc/callback/test')
+       .set('Accept', 'application/json')
+       .set('Cookie', cookieHeader)
+@@ -1064,6 +1072,7 @@ signIdToken = (claims?: Record<string, unknown>) =>
+ 
+   async function setupFetchMock(options?: {
+     supportsPKCE?: boolean;
++    endSessionEndpoint?: string;
+     userinfoResponse?: Record<string, unknown>;
+     idTokenClaims?: Record<string, unknown>;
+   }) {
+@@ -1089,6 +1098,110 @@ async function setupFetchMock(options?: {
+     fetchMock.route('https://example.com/userinfo', userinfo);
+   }
+ 
++  describe('provider logout', () => {
++    const endSessionEndpoint = 'https://example.com/end-session/';
++
++    beforeEach(async () => {
++      await setupFetchMock({ endSessionEndpoint });
++    });
++
++    afterEach(() => {
++      fetchMock.hardReset();
++    });
++
++    it('defaults to local logout for OIDC sessions', async () => {
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      const response = await agent.post('/auth/logout');
++      assert.deepEqual(response.body, { status: 'ok' });
++      assert.equal((await agent.get('/auth/me')).status, 403);
++    });
++
++    it('returns the authenticating provider endpoint after destroying the session', async () => {
++      getSettings().oidc.providers[0].logoutMode = 'provider';
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      // Another configured provider must not determine this session's logout.
++      getSettings().oidc.providers.unshift({
++        ...getSettings().oidc.providers[0],
++        slug: 'other',
++        issuerUrl: 'https://other.example.com',
++      });
++      const response = await agent
++        .post('/auth/logout')
++        .send({ redirectUrl: 'https://untrusted.example.com' });
++      assert.equal(response.status, 200);
++      assert.deepEqual(response.body, {
++        status: 'ok',
++        redirectUrl: endSessionEndpoint,
++      });
++      assert.match(
++        response.get('Set-Cookie')?.join(';') ?? '',
++        /connect\.sid=;/
++      );
++      assert.equal((await agent.get('/auth/me')).status, 403);
++    });
++
++    it('does not infer a logout provider from a newly linked account', async () => {
++      getSettings().oidc.providers[0].logoutMode = 'provider';
++      const agent = await authenticatedAgent('admin@seerr.dev', 'test1234');
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      assert.deepEqual((await agent.post('/auth/logout')).body, {
++        status: 'ok',
++      });
++    });
++
++    it('clears provider provenance when a local login replaces an OIDC login', async () => {
++      getSettings().oidc.providers[0].logoutMode = 'provider';
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      assert.equal(
++        (
++          await agent
++            .post('/auth/local')
++            .send({ email: 'admin@seerr.dev', password: 'test1234' })
++        ).status,
++        200
++      );
++      assert.deepEqual((await agent.post('/auth/logout')).body, {
++        status: 'ok',
++      });
++    });
++
++    it('falls back to local logout if the provider was removed', async () => {
++      getSettings().oidc.providers[0].logoutMode = 'provider';
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      getSettings().oidc.providers = [];
++      assert.deepEqual((await agent.post('/auth/logout')).body, {
++        status: 'ok',
++      });
++      assert.equal((await agent.get('/auth/me')).status, 403);
++    });
++
++    it('does not redirect or report success if session destruction fails', async () => {
++      getSettings().oidc.providers[0].logoutMode = 'provider';
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      const destroy = mock.method(
++        session.Session.prototype,
++        'destroy',
++        function (this: session.Session, callback?: (error?: Error) => void) {
++          callback?.(new Error('Session store unavailable'));
++          return this;
++        }
++      );
++      try {
++        const response = await agent.post('/auth/logout');
++        assert.equal(response.status, 500);
++        assert.equal(response.body.redirectUrl, undefined);
++        assert.equal((await agent.get('/auth/me')).status, 200);
++      } finally {
++        destroy.mock.restore();
++      }
++    });
++  });
++
+   describe('without PKCE support (uses state)', function () {
+     before(async () => {
+       await setupFetchMock({ supportsPKCE: false });
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index 0eecabe29f..bc89415a3b 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -7,6 +7,7 @@
+ import { LinkedAccount } from '@server/entity/LinkedAccount';
+ import { User } from '@server/entity/User';
+ import { startJobs } from '@server/job/schedule';
++import { getOidcLogoutUrl } from '@server/lib/oidcLogout';
+ import { Permission, permissionsFromClaim } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+ import logger from '@server/logger';
+@@ -241,6 +242,7 @@
+     // Set logged in session
+     if (req.session) {
+       req.session.userId = user.id;
++      delete req.session.oidcProviderSlug;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -543,6 +545,7 @@ function getUserAvatarUrl(user: User): string {
+     // Set logged in session
+     if (req.session) {
+       req.session.userId = user?.id;
++      delete req.session.oidcProviderSlug;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -851,6 +854,7 @@ function getUserAvatarUrl(user: User): string {
+       // Set session
+       if (req.session) {
+         req.session.userId = user.id;
++        delete req.session.oidcProviderSlug;
+       }
+ 
+       return res.status(200).json(user?.filter() ?? {});
+@@ -903,6 +907,7 @@ function getUserAvatarUrl(user: User): string {
+     // Set logged in session
+     if (user && req.session) {
+       req.session.userId = user.id;
++      delete req.session.oidcProviderSlug;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -1316,6 +1321,7 @@ function getUserAvatarUrl(user: User): string {
+     // Set logged in session and return
+     if (req.session) {
+       req.session.userId = user.id;
++      req.session.oidcProviderSlug = provider.slug;
+     }
+ 
+     // Success!
+@@ -1326,16 +1332,14 @@ function getUserAvatarUrl(user: User): string {
+ authRoutes.post('/logout', async (req, res, next) => {
+   try {
+     const userId = req.session?.userId;
+-    if (!userId) {
+-      return res.status(200).json({ status: 'ok' });
+-    }
+-
++    const providerSlug = req.session?.oidcProviderSlug;
++    const sessionCookie = req.session?.cookie;
+     const settings = getSettings();
+     const isJellyfinOrEmby =
+       settings.main.mediaServerType === MediaServerType.JELLYFIN ||
+       settings.main.mediaServerType === MediaServerType.EMBY;
+ 
+-    if (isJellyfinOrEmby) {
++    if (userId && isJellyfinOrEmby) {
+       const user = await getRepository(User)
+         .createQueryBuilder('user')
+         .addSelect(['user.jellyfinUserId', 'user.jellyfinDeviceId'])
+@@ -1375,21 +1379,33 @@ function getUserAvatarUrl(user: User): string {
+       }
+     }
+ 
+-    req.session?.destroy((err: Error | null) => {
+-      if (err) {
+-        logger.error('Failed to destroy session', {
+-          label: 'Auth',
+-          error: err.message,
+-          userId,
+-        });
+-        return next({ status: 500, message: 'Failed to destroy session.' });
++    await new Promise<void>((resolve, reject) => {
++      if (!req.session) {
++        resolve();
++        return;
+       }
+-      logger.debug('Successfully logged out user', {
+-        label: 'Auth',
+-        userId,
++      req.session.destroy((err: Error | null) => {
++        if (err) {
++          reject(err);
++        } else {
++          resolve();
++        }
+       });
+-      res.status(200).json({ status: 'ok' });
+-    });
++    });
++    res.clearCookie('connect.sid', {
++      path: sessionCookie?.path ?? '/',
++      domain: sessionCookie?.domain,
++    });
++    logger.debug('Successfully logged out user', {
++      label: 'Auth',
++      userId,
++    });
++    const redirectUrl = userId
++      ? await getOidcLogoutUrl(providerSlug)
++      : undefined;
++    return res
++      .status(200)
++      .json({ status: 'ok', ...(redirectUrl && { redirectUrl }) });
+   } catch (error) {
+     logger.error('Error during logout process', {
+       label: 'Auth',
+diff --git a/server/types/express-session.d.ts b/server/types/express-session.d.ts
+index c4842b096e..32d7ee23ba 100644
+--- a/server/types/express-session.d.ts
++++ b/server/types/express-session.d.ts
+@@ -5,5 +5,6 @@
+ declare module 'express-session' {
+   interface SessionData {
+     userId: number;
++    oidcProviderSlug?: string;
+   }
+ }
+diff --git a/src/components/Layout/UserDropdown/index.tsx b/src/components/Layout/UserDropdown/index.tsx
+index 4b2a7a3042..6cc2a11268 100644
+--- a/src/components/Layout/UserDropdown/index.tsx
++++ b/src/components/Layout/UserDropdown/index.tsx
+@@ -49,7 +49,7 @@
+ 
+ const UserDropdown = () => {
+   const intl = useIntl();
+-  const { user, revalidate, hasPermission } = useUser();
++  const { user, hasPermission } = useUser();
+ 
+   const logout = async () => {
+     const cleanUpPushSubscription = async () => {
+@@ -87,7 +87,8 @@
+     const response = await axios.post('/api/v1/auth/logout');
+ 
+     if (response.data?.status === 'ok') {
+-      revalidate();
++      // A hard navigation drops client caches without racing a login redirect.
++      window.location.assign(response.data.redirectUrl ?? '/login');
+     }
+   };
+ 

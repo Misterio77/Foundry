@@ -1,0 +1,1216 @@
+diff --git a/DECLARATIVE.md b/DECLARATIVE.md
+index 7120d7c92d..6d29e02481 100644
+--- a/DECLARATIVE.md
++++ b/DECLARATIVE.md
+@@ -33,7 +33,8 @@ ## Example
+           "scopes": "openid profile email seerr_permissions",
+           "permissionsClaim": "seerr_permissions",
+           "newUserLogin": true,
+-          "logoutMode": "provider"
++          "logoutMode": "provider",
++          "backchannelLogout": true
+         }
+       ]
+     },
+@@ -142,6 +143,12 @@ ## Ownership and bootstrap
+ User preferences and request management remain available. Operational settings
+ POST endpoints (including manual job triggers) are also disabled for now.
+ 
++## OIDC login links
++
++`/login?provider=authentik` automatically starts login for the configured provider
++slug. Plain `/login` remains manual. Authorization code/error callbacks are
++processed instead of auto-launching again; failed callbacks return to `/login`.
++
+ ## OIDC logout
+ 
+ Each provider accepts `logoutMode`: `"local"` (the default) or `"provider"`.
+@@ -157,7 +164,49 @@ ## OIDC logout
+ logout. Local/Plex/Jellyfin logins always log out locally. Discovery failures,
+ a missing endpoint, or a removed provider fall back to local logout; discovery
+ has a three-second timeout. Local session destruction failures remain errors.
+-This is browser-initiated logout, not back-channel or global session revocation.
++This setting controls browser-initiated logout, independently of back-channel
++logout below.
++
++### Provider-initiated back-channel logout
++
++Set `backchannelLogout: true` on a provider and register this URL at the IdP:
++
++```
++https://requests.example.com/api/v1/auth/oidc/backchannel/authentik
++```
++
++Replace the hostname and provider slug for your installation. In Authentik,
++select **Back-channel** as the provider's logout method and set its logout URI
++to that URL. The endpoint accepts form-encoded `logout_token` POSTs without
++browser cookies or CSRF tokens; the signed JWT authenticates the request.
++
++Tokens are verified against the configured issuer's discovered signing keys,
++audience, signature algorithm, expiration, issuance time (at most five minutes
++old, with five seconds of clock tolerance), logout event, and required claims.
++A nonce is forbidden. Encrypted logout tokens are not supported. Discovery and
++JWKS retrieval each have a three-second timeout. No raw tokens are logged.
++
++New OIDC sessions remember the verified ID token's issuer, client ID, subject,
++issuance time, and optional `sid`. Persistent database revocation markers are
++checked before authenticating every session-backed API request, and before
++completing an OIDC callback. A `sid` logout targets that IdP session; when both
++`sid` and `sub` are supplied, both must match. A subject-only logout revokes all
++of that subject's sessions whose ID tokens were issued at or before the event.
++Freshly issued tokens in the same second are conservatively rejected too.
++Markers survive process restarts and session-save races. Repeated events are
++idempotent, and older events cannot move a revocation timestamp backwards.
++
++Old sessions without this metadata cannot be correlated safely: users must sign
++in again, or operators must explicitly clear existing Seerr sessions at rollout.
++Local sessions and API-key authentication are not revoked by OIDC logout.
++The SQLite and PostgreSQL migrations add the revocation table; do not remove
++its rows while corresponding sessions or in-flight login tokens could exist.
++
++This still depends on the IdP delivering an event. In particular, Authentik may
++only dispatch logout against unexpired provider tokens: test fresh sessions,
++sessions older than the access-token lifetime, and restart behavior in your
++actual deployment. Account disabling and group changes are not continuously
++polled, and browser UI updates wait until its next API request.
+ 
+ ## State and migration
+ 
+@@ -186,7 +235,8 @@ ## Authorization limitations
+ 
+ This is login-time synchronization, **not continuous IdP authorization**. Removing
+ an IdP group or disabling an IdP account does not revoke an existing Seerr
+-session. Access-token expiration at the IdP does not bound Seerr sessions. Session
+-revalidation/revocation is a separate concern and must be implemented before
+-claiming immediate IdP-driven revocation. The application API key remains a
+-trusted administrative credential.
++session unless the IdP also delivers a matching back-channel logout event.
++Access-token expiration at the IdP does not bound Seerr sessions. Back-channel
++logout enforces received logout events, not arbitrary policy changes or events
++that the IdP fails to deliver. The application API key remains a trusted
++administrative credential.
+diff --git a/package.json b/package.json
+index 598254db7f..83d97bb0fe 100644
+--- a/package.json
++++ b/package.json
+@@ -66,6 +66,7 @@
+     "http-proxy-agent": "^7.0.2",
+     "https-proxy-agent": "^7.0.6",
+     "humanize-duration": "^3.33.2",
++    "jose": "^6.1.3",
+     "js-yaml": "^4.1.1",
+     "lodash": "4.18.1",
+     "lru-cache": "11.2.1",
+@@ -167,7 +168,6 @@
+     "globals": "^17.5.0",
+     "husky": "9.1.7",
+     "jiti": "^2.6.1",
+-    "jose": "^6.1.3",
+     "lint-staged": "16.4.0",
+     "nodemon": "3.1.14",
+     "postcss": "^8.5.9",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 441146de93..0475b7fba7 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -113,6 +113,9 @@
+       ip-address:
+         specifier: ^10.2.0
+         version: 10.2.0
++      jose:
++        specifier: ^6.1.3
++        version: 6.2.3
+       js-yaml:
+         specifier: ^4.1.1
+         version: 4.1.1
+@@ -408,9 +411,6 @@
+       jiti:
+         specifier: ^2.6.1
+         version: 2.6.1
+-      jose:
+-        specifier: ^6.1.3
+-        version: 6.2.3
+       lint-staged:
+         specifier: 16.4.0
+         version: 16.4.0
+diff --git a/seerr-api.yml b/seerr-api.yml
+index ce42bc3c11..7965aaf789 100644
+--- a/seerr-api.yml
++++ b/seerr-api.yml
+@@ -4347,6 +4347,37 @@
+                   error:
+                     type: string
+                     example: 'OIDC_AUTHORIZATION_FAILED'
++  /auth/oidc/backchannel/{slug}:
++    post:
++      summary: Receive a signed OIDC back-channel logout token
++      description: Public server-to-server endpoint, independent of browser sessions and CSRF cookies. Requires backchannelLogout enabled on the provider and a valid signed logout token. Successful requests persist revocation markers checked on subsequent authenticated requests.
++      security: []
++      tags:
++        - auth
++      parameters:
++        - in: path
++          name: slug
++          required: true
++          schema:
++            type: string
++      requestBody:
++        required: true
++        content:
++          application/x-www-form-urlencoded:
++            schema:
++              type: object
++              required:
++                - logout_token
++              properties:
++                logout_token:
++                  type: string
++      responses:
++        '200':
++          description: Logout recorded, including already-logged-out sessions
++        '400':
++          description: Invalid logout request or token, or disabled provider
++        '503':
++          description: Revocation storage temporarily unavailable
+   /auth/logout:
+     post:
+       summary: Sign out and clear session cookie
+diff --git a/server/datasource.ts b/server/datasource.ts
+index ed7b0b6a8e..ffc41b898d 100644
+--- a/server/datasource.ts
++++ b/server/datasource.ts
+@@ -5,6 +5,7 @@
+ import { LinkedAccount } from '@server/entity/LinkedAccount';
+ import Media from '@server/entity/Media';
+ import { MediaRequest } from '@server/entity/MediaRequest';
++import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
+ import OverrideRule from '@server/entity/OverrideRule';
+ import Season from '@server/entity/Season';
+ import SeasonRequest from '@server/entity/SeasonRequest';
+@@ -34,6 +35,7 @@
+   Media,
+   MediaRequest,
+   OverrideRule,
++  OidcSessionRevocation,
+   Season,
+   SeasonRequest,
+   Session,
+diff --git a/server/entity/OidcSessionRevocation.test.ts b/server/entity/OidcSessionRevocation.test.ts
+new file mode 100644
+index 0000000000..bbab6615cc
+--- /dev/null
++++ b/server/entity/OidcSessionRevocation.test.ts
+@@ -0,0 +1,95 @@
++import globalSource from '@server/datasource';
++import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
++import {
++  isOidcSessionRevoked,
++  recordOidcLogout,
++} from '@server/lib/oidcBackchannel';
++import { AddOidcSessionRevocation1793904000000 as PostgresMigration } from '@server/migration/postgres/1793904000000-AddOidcSessionRevocation';
++import { AddOidcSessionRevocation1793904000000 } from '@server/migration/sqlite/1793904000000-AddOidcSessionRevocation';
++import assert from 'node:assert/strict';
++import { it, mock } from 'node:test';
++import { DataSource } from 'typeorm';
++
++it(
++  'migrates PostgreSQL revocation storage and keeps replays monotonic',
++  { skip: !process.env.TEST_POSTGRES_SOCKET },
++  async () => {
++    const connection = await new DataSource({
++      type: 'postgres',
++      host: process.env.TEST_POSTGRES_SOCKET,
++      port: 55439,
++      username: process.env.USER,
++      database: 'postgres',
++      entities: [OidcSessionRevocation],
++    }).initialize();
++    const runner = connection.createQueryRunner();
++    const migration = new PostgresMigration();
++    const repository = mock.method(
++      globalSource,
++      'getRepository',
++      connection.getRepository.bind(connection)
++    );
++    try {
++      await migration.up(runner);
++      const info = {
++        providerSlug: 'test',
++        issuer: 'https://issuer.example',
++        clientId: 'test',
++        subject: 'test',
++        sid: 'sid',
++        issuedAt: 100,
++      };
++      assert.equal(await isOidcSessionRevoked(info), false);
++      await recordOidcLogout({ ...info, issuedAt: 200 });
++      await recordOidcLogout({ ...info, issuedAt: 150 });
++      assert.equal(await isOidcSessionRevoked(info), true);
++      assert.equal(
++        (await connection.getRepository(OidcSessionRevocation).find())[0]
++          .issuedAt,
++        200
++      );
++      await migration.down(runner);
++      assert.equal(await runner.hasTable('oidc_session_revocation'), false);
++    } finally {
++      repository.mock.restore();
++      await runner.release();
++      await connection.destroy();
++    }
++  }
++);
++
++it('migrates SQLite revocation storage up/down without changing existing sessions', async () => {
++  const connection = await new DataSource({
++    type: 'sqlite',
++    database: ':memory:',
++    entities: [OidcSessionRevocation],
++  }).initialize();
++  const runner = connection.createQueryRunner();
++  const migration = new AddOidcSessionRevocation1793904000000();
++  try {
++    await runner.query(
++      'CREATE TABLE session (id varchar PRIMARY KEY, json text)'
++    );
++    await runner.query("INSERT INTO session VALUES ('existing', '{}')");
++    await migration.up(runner);
++    const repository = connection.getRepository(OidcSessionRevocation);
++    await repository.save({ id: 'a'.repeat(64), issuedAt: 1793904000 });
++    assert.equal(
++      (await repository.findOneByOrFail({ id: 'a'.repeat(64) })).issuedAt,
++      1793904000
++    );
++    assert.equal(
++      (await runner.query('SELECT count(*) AS count FROM session'))[0].count,
++      1
++    );
++    await migration.down(runner);
++    assert.equal(await runner.hasTable('oidc_session_revocation'), false);
++    assert.equal(
++      (await runner.query('SELECT count(*) AS count FROM session'))[0].count,
++      1
++    );
++  } finally {
++    await runner.release();
++    await connection.destroy();
++  }
++});
+diff --git a/server/entity/OidcSessionRevocation.ts b/server/entity/OidcSessionRevocation.ts
+new file mode 100644
+index 0000000000..451db06da8
+--- /dev/null
++++ b/server/entity/OidcSessionRevocation.ts
+@@ -0,0 +1,15 @@ export class OidcSessionRevocation {
++import { Column, Entity, PrimaryColumn } from 'typeorm';
++
++@Entity()
++export class OidcSessionRevocation {
++  @PrimaryColumn('varchar', { length: 64 })
++  public id: string;
++
++  @Column('bigint', {
++    transformer: {
++      to: (value: number) => value,
++      from: (value: string | number) => Number(value),
++    },
++  })
++  public issuedAt: number;
++}
+diff --git a/server/index.ts b/server/index.ts
+index 10e31dd224..7af13b91f2 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -25,6 +25,7 @@
+ import routes from '@server/routes';
+ import avatarproxy from '@server/routes/avatarproxy';
+ import imageproxy from '@server/routes/imageproxy';
++import oidcBackchannelRoutes from '@server/routes/oidcBackchannel';
+ import { appDataPermissions } from '@server/utils/appDataVolume';
+ import { getAppVersion } from '@server/utils/appVersion';
+ import createCustomProxyAgent, {
+@@ -175,6 +176,8 @@
+       server.enable('trust proxy');
+     }
+     server.use(cookieParser(settings.sessionSecret));
++    // Signed server-to-server messages have no browser session or CSRF token.
++    server.use('/api/v1/auth/oidc/backchannel', oidcBackchannelRoutes);
+     server.use(express.json());
+     server.use(express.urlencoded({ extended: true }));
+     server.use((req, _res, next) => {
+diff --git a/server/lib/oidcBackchannel.ts b/server/lib/oidcBackchannel.ts
+new file mode 100644
+index 0000000000..b64dbaccd9
+--- /dev/null
++++ b/server/lib/oidcBackchannel.ts
+@@ -0,0 +1,164 @@ function key(
++import { getRepository } from '@server/datasource';
++import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
++import type { OidcProvider } from '@server/lib/settings';
++import { createRemoteJWKSet, jwtVerify } from 'jose';
++import { createHash } from 'node:crypto';
++import * as openIdClient from 'openid-client';
++import { In } from 'typeorm';
++
++export interface OidcSessionInfo {
++  providerSlug: string;
++  issuer: string;
++  clientId: string;
++  subject: string;
++  sid?: string;
++  issuedAt: number;
++}
++
++interface LogoutEvent extends Omit<OidcSessionInfo, 'subject'> {
++  subject?: string;
++}
++
++const eventName = 'http://schemas.openid.net/event/backchannel-logout';
++const keySets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
++const algorithms = [
++  'RS256',
++  'RS384',
++  'RS512',
++  'PS256',
++  'PS384',
++  'PS512',
++  'ES256',
++  'ES384',
++  'ES512',
++  'EdDSA',
++];
++
++function key(
++  context: Pick<OidcSessionInfo, 'providerSlug' | 'issuer' | 'clientId'>,
++  kind: string,
++  ...values: string[]
++): string {
++  return createHash('sha256')
++    .update(
++      JSON.stringify([
++        context.providerSlug,
++        context.issuer,
++        context.clientId,
++        kind,
++        ...values,
++      ])
++    )
++    .digest('hex');
++}
++
++export async function validateLogoutToken(
++  provider: OidcProvider,
++  token: string
++): Promise<LogoutEvent> {
++  const allowInsecure = process.env.OIDC_ALLOW_INSECURE === 'true';
++  const config = await openIdClient.discovery(
++    new URL(provider.issuerUrl),
++    provider.clientId,
++    provider.clientSecret,
++    undefined,
++    {
++      timeout: 3,
++      execute: allowInsecure ? [openIdClient.allowInsecureRequests] : [],
++    }
++  );
++  const metadata = config.serverMetadata();
++  const jwksUrl = new URL(metadata.jwks_uri!);
++  if (
++    (jwksUrl.protocol !== 'https:' &&
++      !(allowInsecure && jwksUrl.protocol === 'http:')) ||
++    jwksUrl.username ||
++    jwksUrl.password
++  ) {
++    throw new Error('Invalid JWKS endpoint');
++  }
++  let keys = keySets.get(jwksUrl.href);
++  if (!keys) {
++    keys = createRemoteJWKSet(jwksUrl, {
++      timeoutDuration: 3000,
++      cacheMaxAge: 300000,
++    });
++    keySets.set(jwksUrl.href, keys);
++  }
++  const { payload } = await jwtVerify(token, keys, {
++    issuer: metadata.issuer,
++    audience: provider.clientId,
++    algorithms: algorithms.filter((alg) =>
++      metadata.id_token_signing_alg_values_supported?.includes(alg)
++    ),
++    requiredClaims: ['iss', 'aud', 'iat', 'exp', 'jti', 'events'],
++    maxTokenAge: 300,
++    clockTolerance: 5,
++  });
++  const events = payload.events;
++  const logout =
++    events && typeof events === 'object' && !Array.isArray(events)
++      ? (events as Record<string, unknown>)[eventName]
++      : undefined;
++  const nonempty = (value: unknown): value is string =>
++    typeof value === 'string' && value.length > 0;
++  if (
++    !logout ||
++    typeof logout !== 'object' ||
++    Array.isArray(logout) ||
++    'nonce' in payload ||
++    !nonempty(payload.jti) ||
++    !Number.isSafeInteger(payload.iat) ||
++    payload.iat! < 0 ||
++    (payload.sub !== undefined && !nonempty(payload.sub)) ||
++    (payload.sid !== undefined && !nonempty(payload.sid)) ||
++    (!nonempty(payload.sub) && !nonempty(payload.sid))
++  ) {
++    throw new Error('Invalid logout claims');
++  }
++  return {
++    providerSlug: provider.slug,
++    issuer: metadata.issuer,
++    clientId: provider.clientId,
++    subject: payload.sub,
++    sid: payload.sid as string | undefined,
++    issuedAt: payload.iat!,
++  };
++}
++
++export async function recordOidcLogout(event: LogoutEvent): Promise<void> {
++  const id = event.sid
++    ? event.subject
++      ? key(event, 'sid-sub', event.sid, event.subject)
++      : key(event, 'sid', event.sid)
++    : key(event, 'sub', event.subject!);
++  // Monotonic, idempotent markers make replay harmless and survive session-save races.
++  await getRepository(OidcSessionRevocation)
++    .createQueryBuilder('oidc_session_revocation')
++    .insert()
++    .values({ id, issuedAt: event.issuedAt })
++    .onConflict(
++      `("id") DO UPDATE SET "issuedAt" = CASE WHEN "oidc_session_revocation"."issuedAt" < EXCLUDED."issuedAt" THEN EXCLUDED."issuedAt" ELSE "oidc_session_revocation"."issuedAt" END`
++    )
++    .execute();
++}
++
++export async function isOidcSessionRevoked(
++  info?: OidcSessionInfo
++): Promise<boolean> {
++  if (!info) return false;
++  const subjectKey = key(info, 'sub', info.subject);
++  const ids = [subjectKey];
++  if (info.sid) {
++    ids.push(
++      key(info, 'sid', info.sid),
++      key(info, 'sid-sub', info.sid, info.subject)
++    );
++  }
++  const records = await getRepository(OidcSessionRevocation).findBy({
++    id: In(ids),
++  });
++  return records.some(
++    (record) => record.id !== subjectKey || info.issuedAt <= record.issuedAt
++  );
++}
+diff --git a/server/lib/settings/declarative.test.ts b/server/lib/settings/declarative.test.ts
+index 99449c8324..2cd1276655 100644
+--- a/server/lib/settings/declarative.test.ts
++++ b/server/lib/settings/declarative.test.ts
+@@ -95,6 +95,10 @@ export function fixture() {
+       'oidc-secret'
+     );
+     assert.equal(config.settings.oidc?.providers?.[0]?.logoutMode, 'local');
++    assert.equal(
++      config.settings.oidc?.providers?.[0]?.backchannelLogout,
++      false
++    );
+     assert.equal(config.settings.radarr?.[0]?.apiKey, 'radarr-secret');
+     assert.equal(config.settings.radarr?.[0]?.minimumAvailability, 'released');
+     assert.equal(
+@@ -115,10 +119,14 @@ export function fixture() {
+ 
+   it('accepts opt-in OIDC provider logout', async () => {
+     const data = fixture();
+-    Object.assign(data.settings.oidc.providers[0], { logoutMode: 'provider' });
++    Object.assign(data.settings.oidc.providers[0], {
++      logoutMode: 'provider',
++      backchannelLogout: true,
++    });
+     await fs.writeFile(filename, JSON.stringify(data));
+     const config = await loadDeclarativeConfig(filename);
+     assert.equal(config.settings.oidc?.providers?.[0]?.logoutMode, 'provider');
++    assert.equal(config.settings.oidc?.providers?.[0]?.backchannelLogout, true);
+   });
+ 
+   for (const [name, mutate] of Object.entries<
+@@ -139,6 +147,11 @@ export function fixture() {
+         'permissionsClaim'
+       );
+     },
++    'invalid back-channel setting': (data) => {
++      Object.assign(data.settings.oidc.providers[0], {
++        backchannelLogout: 'true',
++      });
++    },
+     'invalid logout mode': (data) => {
+       Object.assign(data.settings.oidc.providers[0], { logoutMode: 'global' });
+     },
+diff --git a/server/lib/settings/declarative.ts b/server/lib/settings/declarative.ts
+index e7ae38d3dc..c3ecad2cdd 100644
+--- a/server/lib/settings/declarative.ts
++++ b/server/lib/settings/declarative.ts
+@@ -41,6 +41,7 @@
+     scopes: z.string().default('openid profile email'),
+     newUserLogin: z.boolean().default(true),
+     logoutMode: z.enum(['local', 'provider']).default('local'),
++    backchannelLogout: z.boolean().default(false),
+   })
+   .strict();
+ const dvr = z
+diff --git a/server/lib/settings/index.ts b/server/lib/settings/index.ts
+index 99df35ea3e..311242bcfe 100644
+--- a/server/lib/settings/index.ts
++++ b/server/lib/settings/index.ts
+@@ -75,6 +75,7 @@
+   scopes?: string;
+   newUserLogin?: boolean;
+   logoutMode?: 'local' | 'provider';
++  backchannelLogout?: boolean;
+ };
+ 
+ export type PublicOidcProvider = Pick<OidcProvider, 'slug' | 'name' | 'logo'>;
+diff --git a/server/middleware/auth.ts b/server/middleware/auth.ts
+index 326d460d8b..b516da0a39 100644
+--- a/server/middleware/auth.ts
++++ b/server/middleware/auth.ts
+@@ -1,5 +1,6 @@
+ import { getRepository } from '@server/datasource';
+ import { User } from '@server/entity/User';
++import { isOidcSessionRevoked } from '@server/lib/oidcBackchannel';
+ import type {
+   Permission,
+   PermissionCheckOptions,
+@@ -22,6 +23,16 @@
+ 
+     user = await userRepository.findOne({ where: { id: userId } });
+   } else if (req.session?.userId) {
++    try {
++      if (await isOidcSessionRevoked(req.session.oidcSession)) {
++        req.locale = settings.main.locale;
++        req.session.destroy((error) => next(error));
++        return;
++      }
++    } catch (error) {
++      next(error);
++      return;
++    }
+     const userRepository = getRepository(User);
+ 
+     user = await userRepository.findOne({
+diff --git a/server/migration/postgres/1793904000000-AddOidcSessionRevocation.ts b/server/migration/postgres/1793904000000-AddOidcSessionRevocation.ts
+new file mode 100644
+index 0000000000..63bd9db5fe
+--- /dev/null
++++ b/server/migration/postgres/1793904000000-AddOidcSessionRevocation.ts
+@@ -0,0 +1,19 @@ export class AddOidcSessionRevocation1793904000000 implements MigrationInterface
++import { Table, type MigrationInterface, type QueryRunner } from 'typeorm';
++
++export class AddOidcSessionRevocation1793904000000 implements MigrationInterface {
++  public async up(queryRunner: QueryRunner): Promise<void> {
++    await queryRunner.createTable(
++      new Table({
++        name: 'oidc_session_revocation',
++        columns: [
++          { name: 'id', type: 'varchar', length: '64', isPrimary: true },
++          { name: 'issuedAt', type: 'bigint' },
++        ],
++      })
++    );
++  }
++
++  public async down(queryRunner: QueryRunner): Promise<void> {
++    await queryRunner.dropTable('oidc_session_revocation');
++  }
++}
+diff --git a/server/migration/sqlite/1793904000000-AddOidcSessionRevocation.ts b/server/migration/sqlite/1793904000000-AddOidcSessionRevocation.ts
+new file mode 100644
+index 0000000000..63bd9db5fe
+--- /dev/null
++++ b/server/migration/sqlite/1793904000000-AddOidcSessionRevocation.ts
+@@ -0,0 +1,19 @@ export class AddOidcSessionRevocation1793904000000 implements MigrationInterface
++import { Table, type MigrationInterface, type QueryRunner } from 'typeorm';
++
++export class AddOidcSessionRevocation1793904000000 implements MigrationInterface {
++  public async up(queryRunner: QueryRunner): Promise<void> {
++    await queryRunner.createTable(
++      new Table({
++        name: 'oidc_session_revocation',
++        columns: [
++          { name: 'id', type: 'varchar', length: '64', isPrimary: true },
++          { name: 'issuedAt', type: 'bigint' },
++        ],
++      })
++    );
++  }
++
++  public async down(queryRunner: QueryRunner): Promise<void> {
++    await queryRunner.dropTable('oidc_session_revocation');
++  }
++}
+diff --git a/server/routes/auth.test.ts b/server/routes/auth.test.ts
+index b229fcc04d..b349bf1104 100644
+--- a/server/routes/auth.test.ts
++++ b/server/routes/auth.test.ts
+@@ -18,6 +18,7 @@
+ import { User } from '@server/entity/User';
+ import PreparedEmail from '@server/lib/email';
+ import ImageProxy from '@server/lib/imageproxy';
++import { recordOidcLogout } from '@server/lib/oidcBackchannel';
+ import { Permission } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+ import { checkUser } from '@server/middleware/auth';
+@@ -956,6 +957,7 @@ async function getResetGuid(email: string): Promise<string> {
+   const DEFAULT_CLAIMS = {
+     sub: 'new-user-sub',
+     email: 'newuser@example.com',
++    sid: 'test-sso-session',
+   };
+ 
+   // Claims for existing seeded user (demo@seerr.dev)
+@@ -1109,6 +1111,22 @@ async function setupFetchMock(options?: {
+       fetchMock.hardReset();
+     });
+ 
++    it('correlates verified login claims and rejects a callback racing a logout', async () => {
++      const agent = request.agent(app);
++      assert.equal((await performOidcCallback(agent)).status, 204);
++      assert.equal((await agent.get('/auth/me')).status, 200);
++      await recordOidcLogout({
++        providerSlug: 'test',
++        issuer: 'https://example.com',
++        clientId: 'jellyseerr',
++        subject: 'new-user-sub',
++        sid: 'test-sso-session',
++        issuedAt: Math.floor(Date.now() / 1000),
++      });
++      assert.equal((await agent.get('/auth/me')).status, 403);
++      assert.equal((await performOidcCallback()).status, 403);
++    });
++
+     it('defaults to local logout for OIDC sessions', async () => {
+       const agent = request.agent(app);
+       assert.equal((await performOidcCallback(agent)).status, 204);
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index bc89415a3b..bbb6188d31 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -7,6 +7,10 @@
+ import { LinkedAccount } from '@server/entity/LinkedAccount';
+ import { User } from '@server/entity/User';
+ import { startJobs } from '@server/job/schedule';
++import {
++  isOidcSessionRevoked,
++  type OidcSessionInfo,
++} from '@server/lib/oidcBackchannel';
+ import { getOidcLogoutUrl } from '@server/lib/oidcLogout';
+ import { Permission, permissionsFromClaim } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+@@ -243,6 +247,7 @@
+     if (req.session) {
+       req.session.userId = user.id;
+       delete req.session.oidcProviderSlug;
++      delete req.session.oidcSession;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -546,6 +551,7 @@ function getUserAvatarUrl(user: User): string {
+     if (req.session) {
+       req.session.userId = user?.id;
+       delete req.session.oidcProviderSlug;
++      delete req.session.oidcSession;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -855,6 +861,7 @@ function getUserAvatarUrl(user: User): string {
+       if (req.session) {
+         req.session.userId = user.id;
+         delete req.session.oidcProviderSlug;
++        delete req.session.oidcSession;
+       }
+ 
+       return res.status(200).json(user?.filter() ?? {});
+@@ -908,6 +915,7 @@ function getUserAvatarUrl(user: User): string {
+     if (user && req.session) {
+       req.session.userId = user.id;
+       delete req.session.oidcProviderSlug;
++      delete req.session.oidcSession;
+     }
+ 
+     return res.status(200).json(user?.filter() ?? {});
+@@ -1194,6 +1202,18 @@ function getUserAvatarUrl(user: User): string {
+       }
+     }
+ 
++    const oidcSession: OidcSessionInfo = {
++      providerSlug: provider.slug,
++      issuer: claims.iss,
++      clientId: provider.clientId,
++      subject: claims.sub,
++      sid: typeof claims.sid === 'string' ? claims.sid : undefined,
++      issuedAt: claims.iat,
++    };
++    if (await isOidcSessionRevoked(oidcSession)) {
++      return next({ status: 403, error: ApiErrorCode.Unauthorized });
++    }
++
+     // Map identifier to linked account
+     const userRepository = getRepository(User);
+     const linkedAccountsRepository = getRepository(LinkedAccount);
+@@ -1322,6 +1342,7 @@ function getUserAvatarUrl(user: User): string {
+     if (req.session) {
+       req.session.userId = user.id;
+       req.session.oidcProviderSlug = provider.slug;
++      req.session.oidcSession = oidcSession;
+     }
+ 
+     // Success!
+diff --git a/server/routes/oidcBackchannel.test.ts b/server/routes/oidcBackchannel.test.ts
+new file mode 100644
+index 0000000000..623386fa41
+--- /dev/null
++++ b/server/routes/oidcBackchannel.test.ts
+@@ -0,0 +1,371 @@ function createApp(info?: OidcSessionInfo) {
++import csurf from '@dr.pogodin/csurf';
++import { getRepository } from '@server/datasource';
++import { OidcSessionRevocation } from '@server/entity/OidcSessionRevocation';
++import { Session } from '@server/entity/Session';
++import {
++  isOidcSessionRevoked,
++  recordOidcLogout,
++  type OidcSessionInfo,
++} from '@server/lib/oidcBackchannel';
++import { getSettings } from '@server/lib/settings';
++import { checkUser, isAuthenticated } from '@server/middleware/auth';
++import oidcBackchannelRoutes from '@server/routes/oidcBackchannel';
++import { setupTestDb } from '@server/test/db';
++import { TypeormStore } from 'connect-typeorm/out';
++import cookieParser from 'cookie-parser';
++import express from 'express';
++import session from 'express-session';
++import fetchMock from 'fetch-mock';
++import { SignJWT, exportJWK, generateKeyPair } from 'jose';
++import assert from 'node:assert/strict';
++import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
++import request from 'supertest';
++
++const issuer = 'https://backchannel.example.com';
++const eventName = 'http://schemas.openid.net/event/backchannel-logout';
++const now = () => Math.floor(Date.now() / 1000);
++const identity = (
++  overrides: Partial<OidcSessionInfo> = {}
++): OidcSessionInfo => ({
++  providerSlug: 'test',
++  issuer,
++  clientId: 'seerr',
++  subject: 'friend-sub',
++  sid: 'sid-a',
++  issuedAt: now() - 60,
++  ...overrides,
++});
++
++function createApp(info?: OidcSessionInfo) {
++  const app = express();
++  app.use(cookieParser('secret'));
++  app.use('/backchannel', oidcBackchannelRoutes);
++  app.use(
++    session({
++      secret: 'secret',
++      resave: false,
++      saveUninitialized: false,
++      store: new TypeormStore().connect(getRepository(Session)),
++    })
++  );
++  app.get('/test/login', (req, res) => {
++    req.session.userId = 1;
++    req.session.oidcSession = info;
++    res.status(204).end();
++  });
++  app.use(csurf({ cookie: true }));
++  app.use(checkUser);
++  app.get('/me', isAuthenticated(), (_req, res) => res.status(200).end());
++  app.post('/protected', (_req, res) => res.status(200).end());
++  app.use(
++    (
++      error: { status?: number; statusCode?: number },
++      _req: express.Request,
++      res: express.Response,
++      // Express requires all four arguments to recognize an error handler.
++      // eslint-disable-next-line @typescript-eslint/no-unused-vars
++      _next: express.NextFunction
++    ) => {
++      res.status(error.status ?? error.statusCode ?? 500).end();
++    }
++  );
++  return app;
++}
++
++setupTestDb();
++
++describe('OIDC back-channel logout', () => {
++  let privateKey: Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
++  let jwk: object;
++  const sign = async (overrides: Record<string, unknown> = {}) =>
++    new SignJWT({
++      iss: issuer,
++      aud: 'seerr',
++      iat: now(),
++      exp: now() + 120,
++      jti: 'logout-event',
++      sub: 'friend-sub',
++      sid: 'sid-a',
++      events: { [eventName]: {} },
++      ...overrides,
++    })
++      .setProtectedHeader({
++        alg: 'RS256',
++        kid: 'logout-test',
++        typ: 'logout+jwt',
++      })
++      .sign(privateKey);
++
++  before(async () => {
++    const pair = await generateKeyPair('RS256');
++    privateKey = pair.privateKey;
++    jwk = {
++      ...(await exportJWK(pair.publicKey)),
++      kid: 'logout-test',
++      alg: 'RS256',
++    };
++  });
++
++  beforeEach(() => {
++    getSettings().load({
++      oidc: {
++        providers: [
++          {
++            slug: 'test',
++            name: 'Test',
++            issuerUrl: issuer,
++            clientId: 'seerr',
++            clientSecret: 'secret',
++            backchannelLogout: true,
++          },
++        ],
++      },
++    });
++    fetchMock.mockGlobal();
++    fetchMock.get(`${issuer}/.well-known/openid-configuration`, {
++      issuer,
++      jwks_uri: `${issuer}/jwks`,
++      authorization_endpoint: `${issuer}/authorize`,
++      token_endpoint: `${issuer}/token`,
++      response_types_supported: ['code'],
++      subject_types_supported: ['public'],
++      id_token_signing_alg_values_supported: ['RS256'],
++    });
++    fetchMock.get(`${issuer}/jwks`, { keys: [jwk] });
++  });
++
++  afterEach(() => {
++    fetchMock.hardReset();
++    getSettings().reset();
++  });
++
++  it('accepts signed form POSTs without cookies or CSRF and revokes only the matching sid', async () => {
++    const app = createApp(identity());
++    const target = request.agent(app);
++    await target.get('/test/login');
++    const other = request.agent(createApp(identity({ sid: 'sid-b' })));
++    await other.get('/test/login');
++    assert.equal((await target.get('/me')).status, 200);
++    assert.equal((await target.post('/protected')).status, 403);
++    const response = await request(app)
++      .post('/backchannel/test')
++      .type('form')
++      .send({ logout_token: await sign() });
++    assert.equal(response.status, 200);
++    assert.equal(response.get('Cache-Control'), 'no-store');
++    assert.equal(response.get('Set-Cookie'), undefined);
++    assert.equal((await target.get('/me')).status, 403);
++    assert.equal((await other.get('/me')).status, 200);
++  });
++
++  it('supports sid-only events and leaves local sessions alone', async () => {
++    const app = createApp(identity());
++    const target = request.agent(app);
++    await target.get('/test/login');
++    const local = request.agent(createApp());
++    await local.get('/test/login');
++    assert.equal(
++      (
++        await request(app)
++          .post('/backchannel/test')
++          .type('form')
++          .send({ logout_token: await sign({ sub: undefined }) })
++      ).status,
++      200
++    );
++    assert.equal((await target.get('/me')).status, 403);
++    assert.equal((await local.get('/me')).status, 200);
++  });
++
++  it('requires both subject and sid to match when both are supplied', async () => {
++    await recordOidcLogout({ ...identity(), subject: 'other-sub' });
++    assert.equal(await isOidcSessionRevoked(identity()), false);
++  });
++
++  it('subject logout revokes all older sessions but not future logins or other identities', async () => {
++    const event = { ...identity(), sid: undefined, issuedAt: now() - 10 };
++    await recordOidcLogout(event);
++    assert.equal(await isOidcSessionRevoked(identity()), true);
++    assert.equal(await isOidcSessionRevoked(identity({ sid: 'sid-b' })), true);
++    assert.equal(
++      await isOidcSessionRevoked(identity({ issuedAt: now() })),
++      false
++    );
++    assert.equal(
++      await isOidcSessionRevoked(identity({ subject: 'other' })),
++      false
++    );
++    assert.equal(
++      await isOidcSessionRevoked(identity({ providerSlug: 'other' })),
++      false
++    );
++    assert.equal(
++      await isOidcSessionRevoked(
++        identity({ issuer: 'https://other.example.com' })
++      ),
++      false
++    );
++    assert.equal(
++      await isOidcSessionRevoked(identity({ clientId: 'other' })),
++      false
++    );
++    await recordOidcLogout({ ...event, issuedAt: now() - 100 });
++    assert.equal(await isOidcSessionRevoked(identity()), true);
++  });
++
++  it('persists revocation across new app instances and a stale session write', async () => {
++    const app = createApp(identity());
++    const agent = request.agent(app);
++    const login = await agent.get('/test/login');
++    const cookie = login
++      .get('Set-Cookie')!
++      .map((value) => value.split(';')[0])
++      .join('; ');
++    const saved = await getRepository(Session).findOneByOrFail({});
++    const token = await sign();
++    for (let i = 0; i < 2; i++) {
++      assert.equal(
++        (
++          await request(app)
++            .post('/backchannel/test')
++            .type('form')
++            .send({ logout_token: token })
++        ).status,
++        200
++      );
++    }
++    assert.equal(await getRepository(OidcSessionRevocation).count(), 1);
++    assert.equal((await agent.get('/me')).status, 403);
++    await getRepository(Session).delete(saved.id);
++    await getRepository(Session).save(saved);
++    assert.equal(
++      (await request(createApp(identity())).get('/me').set('Cookie', cookie))
++        .status,
++      403
++    );
++    assert.equal(await isOidcSessionRevoked(identity()), true);
++  });
++
++  for (const [name, overrides] of Object.entries({
++    'wrong issuer': { iss: 'https://other.example.com' },
++    'wrong audience': { aud: 'other' },
++    'expired token': { exp: now() - 60 },
++    'stale event': { iat: now() - 600 },
++    'future event': { iat: now() + 60 },
++    'missing expiry': { exp: undefined },
++    'missing jti': { jti: undefined },
++    'missing event': { events: {} },
++    'invalid event': { events: { [eventName]: [] } },
++    nonce: { nonce: 'forbidden' },
++    'missing identity': { sid: undefined, sub: undefined },
++    'empty sid': { sid: '' },
++    'invalid subject': { sub: 123 },
++  })) {
++    it(`rejects ${name} without recording revocation`, async () => {
++      const response = await request(createApp())
++        .post('/backchannel/test')
++        .type('form')
++        .send({ logout_token: await sign(overrides) });
++      assert.equal(response.status, 400);
++      assert.equal(await getRepository(OidcSessionRevocation).count(), 0);
++    });
++  }
++
++  it('fails closed when revocation storage is unavailable', async () => {
++    const repository = getRepository(OidcSessionRevocation);
++    const storage = mock.method(repository, 'createQueryBuilder', () => {
++      throw new Error('Database unavailable');
++    });
++    try {
++      const response = await request(createApp())
++        .post('/backchannel/test')
++        .type('form')
++        .send({ logout_token: await sign() });
++      assert.equal(response.status, 503);
++    } finally {
++      storage.mock.restore();
++    }
++    assert.equal(await repository.count(), 0);
++  });
++
++  it('rejects unsupported signature algorithms', async () => {
++    const token = await new SignJWT({
++      iss: issuer,
++      aud: 'seerr',
++      iat: now(),
++      exp: now() + 120,
++      jti: 'event',
++      sub: 'friend-sub',
++      events: { [eventName]: {} },
++    })
++      .setProtectedHeader({ alg: 'HS256' })
++      .sign(
++        new TextEncoder().encode('client-secret-must-not-authenticate-logout')
++      );
++    assert.equal(
++      (
++        await request(createApp())
++          .post('/backchannel/test')
++          .type('form')
++          .send({ logout_token: token })
++      ).status,
++      400
++    );
++    assert.equal(await getRepository(OidcSessionRevocation).count(), 0);
++  });
++
++  it('rejects missing tokens and unknown providers', async () => {
++    const app = createApp();
++    assert.equal(
++      (await request(app).post('/backchannel/test').type('form').send({}))
++        .status,
++      400
++    );
++    assert.equal(
++      (
++        await request(app)
++          .post('/backchannel/unknown')
++          .type('form')
++          .send({ logout_token: await sign() })
++      ).status,
++      400
++    );
++    assert.equal(await getRepository(OidcSessionRevocation).count(), 0);
++  });
++
++  it('rejects invalid signatures, duplicate token fields, and disabled providers', async () => {
++    const app = createApp();
++    const token = await sign();
++    const parts = token.split('.');
++    parts[2] = (parts[2][0] === 'A' ? 'B' : 'A') + parts[2].slice(1);
++    assert.equal(
++      (
++        await request(app)
++          .post('/backchannel/test')
++          .type('form')
++          .send({ logout_token: parts.join('.') })
++      ).status,
++      400
++    );
++    assert.equal(
++      (
++        await request(app)
++          .post('/backchannel/test')
++          .type('form')
++          .send({ logout_token: [token, token] })
++      ).status,
++      400
++    );
++    getSettings().oidc.providers[0].backchannelLogout = false;
++    assert.equal(
++      (
++        await request(app)
++          .post('/backchannel/test')
++          .type('form')
++          .send({ logout_token: token })
++      ).status,
++      400
++    );
++    assert.equal(await getRepository(OidcSessionRevocation).count(), 0);
++  });
++});
+diff --git a/server/routes/oidcBackchannel.ts b/server/routes/oidcBackchannel.ts
+new file mode 100644
+index 0000000000..8084b9aac8
+--- /dev/null
++++ b/server/routes/oidcBackchannel.ts
+@@ -0,0 +1,45 @@
++import {
++  recordOidcLogout,
++  validateLogoutToken,
++} from '@server/lib/oidcBackchannel';
++import { getSettings } from '@server/lib/settings';
++import logger from '@server/logger';
++import express, { Router } from 'express';
++
++const router = Router();
++router.use((_req, res, next) => {
++  res.setHeader('Cache-Control', 'no-store');
++  next();
++});
++router.use(express.urlencoded({ extended: false, limit: '16kb' }));
++router.post('/:slug', async (req, res) => {
++  const provider = getSettings().oidc.providers.find(
++    (p) => p.slug === req.params.slug
++  );
++  const token: unknown = req.body?.logout_token;
++  if (!provider?.backchannelLogout || typeof token !== 'string' || !token) {
++    return res.status(400).json({ error: 'invalid_request' });
++  }
++  let event;
++  try {
++    event = await validateLogoutToken(provider, token);
++  } catch {
++    logger.warn('Rejected OIDC back-channel logout token', {
++      label: 'Auth',
++      provider: provider.slug,
++    });
++    return res.status(400).json({ error: 'invalid_request' });
++  }
++  try {
++    await recordOidcLogout(event);
++    return res.status(200).end();
++  } catch {
++    logger.error('Failed to persist OIDC session revocation', {
++      label: 'Auth',
++      provider: provider.slug,
++    });
++    return res.status(503).json({ error: 'temporarily_unavailable' });
++  }
++});
++
++export default router;
+diff --git a/server/types/express-session.d.ts b/server/types/express-session.d.ts
+index 32d7ee23ba..b4047e8984 100644
+--- a/server/types/express-session.d.ts
++++ b/server/types/express-session.d.ts
+@@ -1,3 +1,4 @@
++import type { OidcSessionInfo } from '@server/lib/oidcBackchannel';
+ import 'express-session';
+ 
+ // Declaration merging to apply our own types to SessionData
+@@ -6,5 +7,6 @@
+   interface SessionData {
+     userId: number;
+     oidcProviderSlug?: string;
++    oidcSession?: OidcSessionInfo;
+   }
+ }
