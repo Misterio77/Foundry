@@ -123,6 +123,15 @@ flat DLL/metadata layout. Full web/host builds remain for CI. After deploying Me
 actual Gablogin/MFA round-trip, explicit approval, expired-code retry and native
 app handoff with a real requesting device.
 
+## Login-page first paint
+
+The customized Web login bundle hides local-password controls and the user
+picker in its own stylesheet, rather than waiting for branding CSS. It also skips
+the public-user request and card rendering. This prevents a transient user-picker
+flash while branding loads; it does not change account visibility policies or
+restrict the server's public-user API. Branding CSS retains the same hide rules
+as a fallback for older/cached clients.
+
 ## OIDC page language
 
 The plugin's standalone approval and authentication callback pages select the

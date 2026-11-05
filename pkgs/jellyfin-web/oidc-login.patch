@@ -1,0 +1,117 @@
+--- a/src/apps/legacy/controllers/session/login/index.js
++++ b/src/apps/legacy/controllers/session/login/index.js
+@@ -10,7 +10,6 @@
+ import loading from 'components/loading/loading';
+ import layoutManager from 'components/layoutManager';
+ import libraryMenu from 'scripts/libraryMenu';
+-import browser from 'scripts/browser';
+ import globalize from 'lib/globalize';
+ import 'components/cardbuilder/card.scss';
+ import 'elements/emby-checkbox/emby-checkbox';
+@@ -18,7 +17,6 @@
+ import toast from 'components/toast/toast';
+ import dialogHelper from 'components/dialogHelper/dialogHelper';
+ import baseAlert from 'components/alert';
+-import { getDefaultBackgroundClass } from 'components/cardbuilder/utils/builder';
+ import quickConnectQrHtml from 'scripts/foundryQuickConnect';
+ 
+ import './login.scss';
+@@ -28,8 +26,6 @@
+     // eslint-disable-next-line @typescript-eslint/naming-convention, sonarjs/regex-complexity -- DOMPurify config option; customizes its default regex
+     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|callto|cid|xmpp|matrix|tg|whatsapp|signal|ircs?):|[^a-z]|[a-z+.-]+(?:[^-a-z+.:]|$))/i
+ });
+-
+-const enableFocusTransform = !browser.slow && !browser.edge;
+ 
+ function authenticateUserByName(page, apiClient, url, username, password) {
+     loading.show();
+@@ -143,55 +139,6 @@
+     }
+ }
+ 
+-function loadUserList(context, apiClient, users) {
+-    let html = '';
+-
+-    for (const user of users) {
+-        // TODO move card creation code to Card component
+-        let cssClass = 'card squareCard scalableCard squareCard-scalable';
+-
+-        if (layoutManager.tv) {
+-            cssClass += ' show-focus';
+-
+-            if (enableFocusTransform) {
+-                cssClass += ' show-animation';
+-            }
+-        }
+-
+-        const cardBoxCssClass = 'cardBox cardBox-bottompadded';
+-        html += '<button type="button" class="' + cssClass + '">';
+-        html += '<div class="' + cardBoxCssClass + '">';
+-        html += '<div class="cardScalable">';
+-        html += '<div class="cardPadder cardPadder-square"></div>';
+-        html += `<div class="cardContent" data-haspw="${user.HasPassword}" data-username="${user.Name}" data-userid="${user.Id}">`;
+-        let imgUrl;
+-
+-        if (user.PrimaryImageTag) {
+-            imgUrl = apiClient.getUserImageUrl(user.Id, {
+-                width: 300,
+-                tag: user.PrimaryImageTag,
+-                type: 'Primary'
+-            });
+-
+-            html += '<div class="cardImageContainer coveredImage" style="background-image:url(\'' + imgUrl + "');\"></div>";
+-        } else {
+-            html += `<div class="cardImage flex align-items-center justify-content-center ${getDefaultBackgroundClass()}">`;
+-            html += '<span class="material-icons cardImageIcon person" aria-hidden="true"></span>';
+-            html += '</div>';
+-        }
+-
+-        html += '</div>';
+-        html += '</div>';
+-        html += '<div class="cardFooter visualCardBox-cardFooter">';
+-        html += '<div class="cardText singleCardText cardTextCentered">' + user.Name + '</div>';
+-        html += '</div>';
+-        html += '</div>';
+-        html += '</button>';
+-    }
+-
+-    context.querySelector('#divUsers').innerHTML = html;
+-}
+-
+ export default function (view, params) {
+     function getApiClient() {
+         const serverId = params.serverid;
+@@ -289,17 +236,8 @@
+                 console.debug('Failed to get QuickConnect status');
+             });
+ 
+-        apiClient.getPublicUsers().then(function (users) {
+-            if (users.length) {
+-                showVisualForm();
+-                loadUserList(view, apiClient, users);
+-            } else {
+-                view.querySelector('#txtManualName').value = '';
+-                showManualForm(view, false, false);
+-            }
+-        }).catch().then(function () {
+-            loading.hide();
+-        });
++        loading.hide();
++
+         apiClient.getJSON(apiClient.getUrl('Branding/Configuration')).then(function (options) {
+             const loginDisclaimer = view.querySelector('.loginDisclaimer');
+ 
+--- a/src/apps/legacy/controllers/session/login/login.scss
++++ b/src/apps/legacy/controllers/session/login/login.scss
+@@ -1,3 +1,11 @@
++// Branding CSS loads asynchronously, after the login view can already paint.
++#loginPage .manualLoginForm,
++#loginPage .visualLoginForm,
++#loginPage .btnManual,
++#loginPage .readOnlyContent .btnForgotPassword {
++    display: none !important;
++}
++
+ .loginDisclaimerContainer {
+     display: flex;
+     margin-top: 2em;
