@@ -35,7 +35,7 @@
 +        "authorize": "Authorize",
 +        "codeLabel": "Quick Connect code",
 +        "authorizing": "Authorizing...",
-+        "approved": "Approved! Return to your device - it should sign in shortly.",
++        "approved": "Approved! Your device should sign in shortly. You can close this tab.",
 +        "error": "Error "
 +    },
 +    "pt-BR": {
@@ -45,7 +45,7 @@
 +        "authorize": "Autorizar",
 +        "codeLabel": "Código do dispositivo",
 +        "authorizing": "Autorizando…",
-+        "approved": "Autorizado! Volte ao seu dispositivo — ele deve entrar em instantes.",
++        "approved": "Autorizado! Seu dispositivo deve entrar em instantes. Você pode fechar esta aba.",
 +        "error": "Erro "
 +    }
 +}
