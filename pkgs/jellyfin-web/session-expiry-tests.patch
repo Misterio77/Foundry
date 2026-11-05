@@ -1,0 +1,87 @@
+--- /dev/null
++++ b/src/utils/sessionExpiry.test.js
+@@ -0,0 +1,84 @@
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++
++import Events from 'utils/events';
++import { watchSessionExpiry } from './sessionExpiry';
++
++vi.mock('utils/events', () => ({ default: { on: vi.fn() } }));
++
++describe('session expiry', () => {
++    let apiClient;
++    let isCurrent;
++    let onExpired;
++    let legacyFailure;
++    let sdkFailure;
++    let sdkSuccess;
++
++    beforeEach(() => {
++        vi.clearAllMocks();
++        apiClient = {
++            accessToken: vi.fn(() => 'token'),
++            getCurrentUserId: vi.fn(() => 'user'),
++            _sdk: {
++                axiosInstance: {
++                    interceptors: { response: { use: vi.fn() } }
++                }
++            }
++        };
++        isCurrent = vi.fn(() => true);
++        onExpired = vi.fn();
++        watchSessionExpiry(apiClient, isCurrent, onExpired);
++        legacyFailure = Events.on.mock.calls[0][2];
++        [sdkSuccess, sdkFailure] = apiClient._sdk.axiosInstance.interceptors.response.use.mock.calls[0];
++    });
++
++    it('handles an authenticated legacy 401', () => {
++        expect(Events.on).toHaveBeenCalledWith(apiClient, 'requestfail', expect.any(Function));
++        legacyFailure({}, { status: 401 });
++        expect(onExpired).toHaveBeenCalledOnce();
++    });
++
++    it('preserves SDK errors while handling expiry', async () => {
++        const error = { response: { status: 401 } };
++        await expect(sdkFailure(error)).rejects.toBe(error);
++        expect(onExpired).toHaveBeenCalledOnce();
++    });
++
++    it('coalesces concurrent failures and cleanup 401s across both clients', async () => {
++        legacyFailure({}, { status: 401 });
++        await expect(sdkFailure({ response: { status: 401 } })).rejects.toBeDefined();
++        legacyFailure({}, { status: 401 });
++        expect(onExpired).toHaveBeenCalledOnce();
++    });
++
++    it.each([403, 404, 500, undefined])('ignores status %s', async status => {
++        legacyFailure({}, { status });
++        await expect(sdkFailure({ response: { status } })).rejects.toBeDefined();
++        expect(onExpired).not.toHaveBeenCalled();
++    });
++
++    it('ignores network failures and passes successful responses through', async () => {
++        const error = new Error('offline');
++        await expect(sdkFailure(error)).rejects.toBe(error);
++        const response = { status: 200 };
++        expect(sdkSuccess(response)).toBe(response);
++        expect(onExpired).not.toHaveBeenCalled();
++    });
++
++    it('ignores failed sign-in attempts without a session', () => {
++        apiClient.accessToken.mockReturnValue(null);
++        legacyFailure({}, { status: 401 });
++        apiClient.accessToken.mockReturnValue('token');
++        apiClient.getCurrentUserId.mockReturnValue(null);
++        legacyFailure({}, { status: 401 });
++        expect(onExpired).not.toHaveBeenCalled();
++    });
++
++    it('ignores failures from a different server without consuming the handler', () => {
++        isCurrent.mockReturnValue(false);
++        legacyFailure({}, { status: 401 });
++        expect(onExpired).not.toHaveBeenCalled();
++        isCurrent.mockReturnValue(true);
++        legacyFailure({}, { status: 401 });
++        expect(onExpired).toHaveBeenCalledOnce();
++    });
++});

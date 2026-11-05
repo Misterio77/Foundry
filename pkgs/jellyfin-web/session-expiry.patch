@@ -1,0 +1,89 @@
+--- a/src/utils/sessionExpiry.js
++++ b/src/utils/sessionExpiry.js
+@@ -0,0 +1,27 @@
++import Events from 'utils/events';
++
++export function watchSessionExpiry(apiClient, isCurrent, onExpired) {
++    let expired = false;
++
++    const onFailure = status => {
++        if (status !== 401 || expired || !isCurrent()
++            || !apiClient.accessToken() || !apiClient.getCurrentUserId()) {
++            return;
++        }
++
++        expired = true;
++        onExpired();
++    };
++
++    Events.on(apiClient, 'requestfail', (_event, response) => {
++        onFailure(response.status);
++    });
++
++    apiClient._sdk.axiosInstance.interceptors.response.use(
++        response => response,
++        error => {
++            onFailure(error.response?.status);
++            return Promise.reject(error);
++        }
++    );
++}
+--- a/src/lib/jellyfin-apiclient/ServerConnections.js
++++ b/src/lib/jellyfin-apiclient/ServerConnections.js
+@@ -7,6 +7,7 @@
+ import Dashboard from 'utils/dashboard';
+ import Events from 'utils/events';
+ import { createApiClient } from 'utils/jellyfin-apiclient/createApiClient';
++import { watchSessionExpiry } from 'utils/sessionExpiry';
+ 
+ import ConnectionManager from './connectionManager';
+ 
+@@ -56,6 +57,13 @@
+             // Calling getApi will ensure apiClient._sdk is initialized.
+             this.getApi(apiClient.serverId());
+             apiClient.subscribe = apiClient._sdk.subscribe.bind(apiClient._sdk);
++            watchSessionExpiry(
++                apiClient,
++                () => this.currentApiClient() === apiClient,
++                () => {
++                    Dashboard.logout(true).catch(error => console.error('Session cleanup failed', error));
++                }
++            );
+         });
+     }
+ 
+--- a/src/utils/dashboard.js
++++ b/src/utils/dashboard.js
+@@ -101,16 +101,30 @@
+     ServerConnections.setLocalApiClient(apiClient);
+ }
+ 
+-export function logout() {
+-    return ServerConnections.logout().then(function () {
++let logoutPromise;
++
++export function logout(sessionExpired = false) {
++    // Logout requests can themselves return 401; share cleanup across all failures.
++    if (logoutPromise) return logoutPromise;
++
++    logoutPromise = Promise.resolve().then(() => ServerConnections.logout()).then(function () {
+         // Clear the query cache
+         queryClient.clear();
+         // Reset cached views
+         viewContainer.reset();
+ 
++        if (sessionExpired === true) {
++            // Reload to discard pending views and in-memory user state.
++            window.history.replaceState(null, '', new URL('#/login', window.location.href).href);
++            window.location.reload();
++            return;
++        }
++
+         // Keep Authentik's provider logout choices visible after local cleanup.
+         window.location.assign('https://auth.m7.rs/application/o/jellyfin/end-session/');
+     });
++
++    return logoutPromise;
+ }
+ 
+ export function getPluginUrl(name) {
