@@ -8,14 +8,6 @@
   jf = config.services.jellyfin;
   port = 8096;
   pluginDir = "${jf.dataDir}/plugins/Foundry-OIDC";
-  prepare = pkgs.runCommand "jellyfin-prepare.py" {nativeBuildInputs = [pkgs.python3];} ''
-    cp ${./prepare.py} prepare.py
-    cp ${./test_prepare.py} test_prepare.py
-    cp ${./login.html} login.html
-    cp ${./login.css} login.css
-    python3 -B test_prepare.py
-    cp prepare.py "$out"
-  '';
   pluginConfig = pkgs.replaceVars ./oidc.xml.in {
     clientSecretFile = config.sops.secrets.authentik-jellyfin-client-secret.path;
   };
@@ -86,7 +78,7 @@ in {
       unitConfig.ConditionPathIsMountPoint = "/srv/media";
       serviceConfig.UMask = lib.mkForce "0027";
       preStart = lib.mkAfter ''
-        ${pkgs.python3}/bin/python3 ${prepare} ${lib.escapeShellArgs [jf.dataDir jf.configDir "${./login.html}" "${./login.css}"]}
+        ${pkgs.python3}/bin/python3 ${./prepare.py} ${lib.escapeShellArgs [jf.dataDir jf.configDir "${./login.html}" "${./login.css}"]}
         install -d -m 750 ${lib.escapeShellArg pluginDir} ${lib.escapeShellArg "${jf.dataDir}/plugins/configurations"}
         install -m 640 ${pkgs.jellyfin-oidc}/*.dll ${pkgs.jellyfin-oidc}/meta.json ${lib.escapeShellArg pluginDir}/
         install -m 640 ${pluginConfig} ${lib.escapeShellArg "${jf.dataDir}/plugins/configurations/Jellyfin.Plugin.OIDC.xml"}

@@ -14,14 +14,7 @@ buildDotnetModule rec {
     tag = "v${version}";
     hash = "sha256-gY4i4e/LAZil0wz6z4IJxv9v5ndG5AahiXfhomC11G8=";
   };
-  patches = [./device-code.patch];
-  postPatch = ''
-    substituteInPlace Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs \
-      --replace-fail 'public class OidcControllerTests' 'public partial class OidcControllerTests'
-    substituteInPlace Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerCallbackTests.cs \
-      --replace-fail 'public class OidcControllerCallbackTests' 'public partial class OidcControllerCallbackTests'
-    cp ${./DeviceCodeTests.cs} Jellyfin.Plugin.OIDC.Tests/Api/DeviceCodeTests.cs
-  '';
+  patches = [./device-code.patch ./device-code-tests.patch];
 
   projectFile = "Jellyfin.Plugin.OIDC/Jellyfin.Plugin.OIDC.csproj";
   testProjectFile = "Jellyfin.Plugin.OIDC.Tests/Jellyfin.Plugin.OIDC.Tests.csproj";

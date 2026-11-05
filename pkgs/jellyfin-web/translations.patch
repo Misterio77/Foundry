@@ -1,0 +1,38 @@
+--- a/src/strings/en-us.json
++++ b/src/strings/en-us.json
+@@ -154,7 +154,7 @@
+     "ButtonTogglePlaylist": "Playlist",
+     "ButtonTrailer": "Trailer",
+     "ButtonUninstall": "Uninstall",
+-    "ButtonUseQuickConnect": "Use Quick Connect",
++    "ButtonUseQuickConnect": "Entrar com outro dispositivo",
+     "ButtonWebsite": "Website",
+     "Bwdif": "Bob Weaver DeInterlacing Filter (BWDIF)",
+     "CancelRecording": "Cancel recording",
+@@ -1486,7 +1486,7 @@
+     "Quality": "Quality",
+     "QuickConnect": "Quick Connect",
+     "QuickConnectActivationSuccessful": "Successfully activated",
+-    "QuickConnectAuthorizeCode": "Enter code {0} to login",
++    "QuickConnectAuthorizeCode": "Ou visite https://media.m7.rs/connect e digite {0}",
+     "QuickConnectAuthorizeFail": "Unknown Quick Connect code",
+     "QuickConnectAuthorizeSuccess": "You have successfully authenticated your device!",
+     "QuickConnectDeactivated": "Quick Connect was deactivated before the login request could be approved",
+--- a/src/strings/pt-br.json
++++ b/src/strings/pt-br.json
+@@ -1201,13 +1201,13 @@
+     "QuickConnectDeactivated": "O Quick Connect foi desativado antes que a solicitação de login fosse aprovada",
+     "QuickConnectAuthorizeFail": "Código Quick Connect desconhecido",
+     "QuickConnectAuthorizeSuccess": "Você autorizou o dispositivo com sucesso!",
+-    "QuickConnectAuthorizeCode": "Inserir código {0} para entrar",
++    "QuickConnectAuthorizeCode": "Ou visite https://media.m7.rs/connect e digite {0}",
+     "QuickConnectActivationSuccessful": "Ativado com sucesso",
+     "QuickConnect": "Conexão rápida",
+     "PosterCard": "Poster Cartão",
+     "LabelCurrentStatus": "Status atual",
+     "EnableQuickConnect": "Habilitar Quick Connect nesse servidor",
+-    "ButtonUseQuickConnect": "Usar Quick Connect",
++    "ButtonUseQuickConnect": "Entrar com outro dispositivo",
+     "ButtonActivate": "Ativar",
+     "Authorize": "Autorizar",
+     "LabelTonemappingDesat": "Dessaturação do Mapeamento de tom",

@@ -107,15 +107,19 @@ existing polling secret is used only by the normal device polling/login flow,
 never passed to the QR renderer. Invalid codes produce no QR. The generated SVG
 includes a white background and four-module quiet zone for scanning in dark mode.
 
-Fourteen QR helper tests pass, and decoding a rendered test QR recovered exactly
-`https://media.m7.rs/connect?user_code=012345`. The helper tests also run before
-the web production build in CI. The full patched web bundle and real-device scan
-still need CI/deployment verification; this does not alter native client screens.
+QR helper coverage now lives in a patched upstream Vitest test file and runs
+with the full Web suite through `npm test` in the package's check phase. The
+plugin's device-code cases are patched directly into its existing xUnit test
+classes and run through the normal .NET check phase. Neither package copies in
+standalone test sources or uses a separate test runner. The regex/VM logout
+harness and host-only Python tests were dropped; the runtime identity-map guard
+is unchanged. These reorganized suites still need the aarch64 CI build.
 
-The patched plugin built and all 589 tests passed, including URL validation,
-leading zeroes, optional manual entry, OIDC round-trip and callback-tampering
-cases. The package retains the existing flat DLL/metadata layout. Full web/host
-builds remain for CI. After deploying Merope, verify the `/connect` redirect,
+Before the test reorganization, the plugin built with all 589 tests passing,
+including URL validation, leading zeroes, optional manual entry, OIDC round-trip
+and callback-tampering cases. A rendered test QR decoded to exactly
+`https://media.m7.rs/connect?user_code=012345`. The package retains the existing
+flat DLL/metadata layout. Full web/host builds remain for CI. After deploying Merope, verify the `/connect` redirect,
 actual Gablogin/MFA round-trip, explicit approval, expired-code retry and native
 app handoff with a real requesting device.
 

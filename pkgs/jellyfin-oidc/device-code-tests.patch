@@ -1,0 +1,89 @@
+--- a/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
+@@ -1441,4 +1441,36 @@
+         Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
+         Assert.NotNull(stateManager.PeekAuthorizedSession(token!));
+     }
++
++    [Theory]
++    [InlineData("000000", true)]
++    [InlineData("012345", true)]
++    [InlineData("999999", true)]
++    [InlineData(null, false)]
++    [InlineData("", false)]
++    [InlineData("12345", false)]
++    [InlineData("1234567", false)]
++    [InlineData("123 45", false)]
++    [InlineData(" 123456", false)]
++    [InlineData("123456\n", false)]
++    [InlineData("１２３４５６", false)]
++    [InlineData("١٢٣٤٥٦", false)]
++    [InlineData("<img/>", false)]
++    public void QuickConnectCode_RequiresSixAsciiDigits(string? code, bool valid)
++        => Assert.Equal(valid, OidcController.IsValidQuickConnectCode(code));
++
++    [Theory]
++    [InlineData("?user_code=")]
++    [InlineData("?user_code=12345")]
++    [InlineData("?user_code=1234567")]
++    [InlineData("?user_code=012345&user_code=654321")]
++    [InlineData("?user_code=%3Cimg%2F%3E")]
++    [InlineData("?user_code=%20123456")]
++    public async Task QuickConnectStart_RejectsInvalidOrRepeatedCode(string query)
++    {
++        var controller = MakeController();
++        controller.Request.QueryString = new QueryString(query);
++        Assert.IsType<BadRequestObjectResult>(await controller.QuickConnectStart("p1"));
++        Assert.Empty(controller.Response.Headers);
++    }
+ }
+--- a/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerCallbackTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerCallbackTests.cs
+@@ -2,6 +2,7 @@
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Security.Claims;
++using System.Text.Json;
+ using System.Text.RegularExpressions;
+ using System.Threading.Tasks;
+ using Jellyfin.Plugin.OIDC.Api;
+@@ -391,4 +392,39 @@
+         Assert.True(match.Success, "callback HTML did not carry a session token");
+         return match.Groups[1].Value;
+     }
++
++    [Theory]
++    [InlineData(null)]
++    [InlineData("012345")]
++    [InlineData("999999")]
++    public async Task QuickConnectCode_SurvivesOidcAndCannotBeChangedAtCallback(string? userCode)
++    {
++        var key = OidcTestTokens.CreateSigningKey();
++        var nonce = "";
++        var handler = RoutingHttpMessageHandler.ForFlow(
++            () => OidcTestTokens.DiscoveryJson(Authority),
++            () => OidcTestTokens.TokenResponseJson(
++                OidcTestTokens.IdToken(key, Authority, ClientId, nonce, groups: ["staff"])),
++            () => OidcTestTokens.JwksJson(key));
++        var (controller, stateManager) = Build(handler, Provider());
++        controller.Request.QueryString = userCode == null
++            ? QueryString.Empty
++            : new QueryString("?user_code=" + userCode);
++
++        var redirect = Assert.IsType<RedirectResult>(await controller.QuickConnectStart(ProviderId));
++        Assert.DoesNotContain("user_code", redirect.Url);
++        var query = System.Web.HttpUtility.ParseQueryString(new Uri(redirect.Url).Query);
++        nonce = query["nonce"]!;
++        var state = query["state"]!;
++        controller.Request.Headers["Cookie"] = controller.Response.Headers["Set-Cookie"].ToString().Split(';')[0];
++        controller.Request.QueryString = new QueryString("?user_code=654321");
++
++        var content = Assert.IsType<ContentResult>(await controller.Callback(ProviderId, "auth-code", state));
++        var match = Regex.Match(content.Content!, "<script type=\"application/json\" id=\"oidc-data\">(.*?)</script>", RegexOptions.Singleline);
++        Assert.True(match.Success);
++        using var data = JsonDocument.Parse(match.Groups[1].Value);
++        Assert.Equal(userCode, data.RootElement.GetProperty("userCode").GetString());
++        Assert.Contains("codeInput.value = data.userCode || '';", content.Content);
++        Assert.NotNull(stateManager.PeekAuthorizedSession(ExtractToken(content.Content!)));
++    }
+ }
