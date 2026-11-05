@@ -3,12 +3,13 @@ import { test } from 'node:test';
 import quickConnectQrHtml from './quick-connect-qr.mjs';
 
 for (const code of ['000000', '012345', '999999']) {
-    test('encodes a public approval link for ' + code, () => {
+    test('renders an unlinked approval QR for ' + code, () => {
         const html = quickConnectQrHtml(code);
         const url = 'https://media.m7.rs/connect?user_code=' + code;
-        assert.equal((html.match(/href="([^"]+)"/g) || []).length, 1);
-        assert.ok(html.includes('href="' + url + '"'));
-        assert.ok(!html.includes('>' + url + '</a>'));
+        assert.ok(html.includes('<div class="foundry-quick-connect-qr">'));
+        assert.ok(!html.includes('<a '));
+        assert.ok(!html.includes(url));
+        assert.ok(html.includes('<div class="foundry-quick-connect-instructions">Ou visite https://media.m7.rs/connect</div>'));
         assert.ok(!html.includes('Escaneie'));
         assert.ok(!html.includes('<p>'));
         assert.ok(html.includes('<svg'));

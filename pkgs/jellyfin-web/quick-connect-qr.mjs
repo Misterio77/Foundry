@@ -16,7 +16,7 @@ export default function quickConnectQrHtml(code) {
             scalable: true,
             title: 'Autorizar o dispositivo com o código ' + code
         });
-        return '<a class="foundry-quick-connect-qr" href="' + url + '" target="_blank" rel="noopener noreferrer">' + svg + '</a>';
+        return '<div class="foundry-quick-connect-qr">' + svg + '</div><div class="foundry-quick-connect-instructions">Ou visite https://media.m7.rs/connect</div>';
     } catch (error) {
         console.warn('Unable to generate device approval QR', error);
         return '';

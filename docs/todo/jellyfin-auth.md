@@ -96,10 +96,12 @@ English catalog; other locales are unchanged. A web rebuild produces new asset
 content hashes. This affects browsers and clients using the server's web UI,
 not Findroid's native interface or clients bundling their own web assets.
 
-The server-served web client's device-code dialog includes a locally generated,
-clickable QR carrying the public code. Beneath it, a single fallback instruction
-reads **Ou visite https://media.m7.rs/connect e digite {code}**; there is no
-separate caption or visible approval URL containing the code. The QR library is
+The server-served web client's device-code dialog includes a locally generated
+QR carrying the public code. It is intentionally not clickable, so opening the
+approval flow on the requesting device cannot interrupt its Quick Connect poller.
+A plain-text instruction below it says **Ou visite https://media.m7.rs/connect**;
+the client's original code prompt remains below it, preserving its code entry
+instructions without displaying the full code-bearing approval URL. The QR library is
 hash-pinned and bundled at build time; no external image-generation service receives the URL or code. The
 existing polling secret is used only by the normal device polling/login flow,
 never passed to the QR renderer. Invalid codes produce no QR. The generated SVG
