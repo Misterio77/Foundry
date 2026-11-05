@@ -24,11 +24,8 @@ Before enforcing:
 - Give machine learning a separate system user/group. It currently shares the
   server's `immich` identity. Let systemd migrate ownership of its cache, and
   verify model loading. It does not need the media tree, PostgreSQL or Redis.
-- Give the public proxy a dedicated static system identity. Its current dynamic
-  UID is unsuitable for a persistent UID-based ruleset unless a static user is
-  explicitly reserved. Keep its existing sandbox protections when changing this.
 - Resolve usernames to UIDs at rule installation; never hard-code allocated UIDs.
-  Ensure filtering is installed before starting all three services, including
+  Ensure filtering is installed before starting both services, including
   during boot and ruleset reloads. Fail closed if identity lookup fails.
 - Cover both IPv4 and IPv6 using an `inet` table. Inspect how NixOS installs and
   reloads its current firewall before choosing the rule integration point.
@@ -37,20 +34,19 @@ Before enforcing:
 
 | Source | Permit new connections to | Purpose |
 | --- | --- | --- |
-| nginx | Immich backend and public proxy on loopback | Existing ingress, unchanged |
+| nginx | Immich backend on loopback, TCP 2283 | Web, mobile and native shared-link ingress |
 | Immich server | ML listener on loopback, TCP 3003 | Face recognition, search, OCR |
 | Immich server | Authentik's selected addresses, TCP 443 | Discovery, JWKS, token exchange, userinfo |
 | Immich server | Selected DNS resolver, UDP/TCP 53, if needed | Name resolution |
-| Public proxy | Immich backend on loopback, TCP 2283 | Shared-link requests |
 | ML | Approved HTTPS download destinations or a controlled egress proxy | Model downloads |
-| All three | Replies to permitted incoming/established connections | Responses, including uploads and websockets |
+| Both services | Replies to permitted incoming/established connections | Responses, including uploads and websockets |
 
 PostgreSQL and Redis use filesystem Unix sockets, not TCP; preserve the server's
 existing access. Do not allow arbitrary loopback traffic just to accommodate them.
 DNS may use the host's nscd Unix socket; verify the actual resolver path before
 adding an unnecessary network exception.
 
-For all three identities, deny everything not expressly allowed. In particular,
+For both identities, deny everything not expressly allowed. In particular,
 there must be no blanket loopback, LAN, tailnet, IPv6 link-local or public HTTPS
 exception. Blocking private IPv4 ranges alone would leave public-addressed
 internal services and IPv6 reachable. Established-flow handling must not leave

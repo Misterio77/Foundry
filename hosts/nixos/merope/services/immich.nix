@@ -44,10 +44,6 @@ in {
       };
     };
   };
-  services.immich-public-proxy = {
-    enable = true;
-    immichUrl = "http://localhost:${toString config.services.immich.port}";
-  };
 
   services.nginx.virtualHosts."photos.m7.rs" = {
     forceSSL = true;
@@ -65,10 +61,6 @@ in {
           proxy_send_timeout 600s;
           send_timeout 600s;
         '';
-      };
-      "/share" = {
-        extraConfig = "allow all;";
-        proxyPass = "http://localhost:${toString config.services.immich-public-proxy.port}";
       };
     };
   };
@@ -106,17 +98,6 @@ in {
         isolatedFilesystem
         // {
           CacheDirectoryMode = "0700";
-          InaccessiblePaths =
-            isolatedFilesystem.InaccessiblePaths
-            ++ [
-              "-/run/immich"
-              "-/run/postgresql"
-              "-/run/redis-immich"
-            ];
-        };
-      immich-public-proxy.serviceConfig =
-        isolatedFilesystem
-        // {
           InaccessiblePaths =
             isolatedFilesystem.InaccessiblePaths
             ++ [
