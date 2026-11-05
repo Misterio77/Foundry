@@ -1,18 +1,41 @@
 {
-  fetchzip,
+  buildDotnetModule,
+  dotnetCorePackages,
+  fetchFromGitHub,
   lib,
 }:
-fetchzip rec {
+buildDotnetModule rec {
   pname = "jellyfin-oidc";
   version = "2.1.0.1";
-  url = "https://github.com/aussierk/jellyfin-plugin-oidc/releases/download/v${version}/oidc-rbac.zip";
-  hash = "sha256-EZ16RNEIzDgUCSH1GnDzYiWLUeHLhQyrhJygLXZjvTM=";
-  stripRoot = false;
+
+  src = fetchFromGitHub {
+    owner = "aussierk";
+    repo = "jellyfin-plugin-oidc";
+    tag = "v${version}";
+    hash = "sha256-gY4i4e/LAZil0wz6z4IJxv9v5ndG5AahiXfhomC11G8=";
+  };
+  patches = [./device-code.patch];
+  postPatch = ''
+    substituteInPlace Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs \
+      --replace-fail 'public class OidcControllerTests' 'public partial class OidcControllerTests'
+    substituteInPlace Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerCallbackTests.cs \
+      --replace-fail 'public class OidcControllerCallbackTests' 'public partial class OidcControllerCallbackTests'
+    cp ${./DeviceCodeTests.cs} Jellyfin.Plugin.OIDC.Tests/Api/DeviceCodeTests.cs
+  '';
+
+  projectFile = "Jellyfin.Plugin.OIDC/Jellyfin.Plugin.OIDC.csproj";
+  testProjectFile = "Jellyfin.Plugin.OIDC.Tests/Jellyfin.Plugin.OIDC.Tests.csproj";
+  nugetDeps = ./deps.json;
+  dotnet-sdk = dotnetCorePackages.sdk_10_0;
+  dotnet-runtime = dotnetCorePackages.aspnetcore_10_0;
+  doCheck = true;
+  executables = [];
+  installPath = builtins.placeholder "out";
+
   meta = {
-    description = "Jellyfin OIDC authentication plugin with stable identity mappings";
+    description = "Jellyfin OIDC authentication plugin with device-code approval links";
     homepage = "https://github.com/aussierk/jellyfin-plugin-oidc";
     license = lib.licenses.gpl3Plus;
-    sourceProvenance = [lib.sourceTypes.binaryBytecode];
-    platforms = lib.platforms.all;
+    platforms = lib.platforms.linux;
   };
 }

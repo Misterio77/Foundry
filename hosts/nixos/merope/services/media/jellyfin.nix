@@ -13,10 +13,10 @@
       + ''
         substituteInPlace src/strings/en-us.json \
           --replace-fail '"ButtonUseQuickConnect": "Use Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
-          --replace-fail '"QuickConnectAuthorizeCode": "Enter code {0} to login"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/quickconnect em outro dispositivo e digite o código {0}"'
+          --replace-fail '"QuickConnectAuthorizeCode": "Enter code {0} to login"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/connect em outro dispositivo e digite o código {0}"'
         substituteInPlace src/strings/pt-br.json \
           --replace-fail '"ButtonUseQuickConnect": "Usar Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
-          --replace-fail '"QuickConnectAuthorizeCode": "Inserir código {0} para entrar"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/quickconnect em outro dispositivo e digite o código {0}"'
+          --replace-fail '"QuickConnectAuthorizeCode": "Inserir código {0} para entrar"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/connect em outro dispositivo e digite o código {0}"'
       '';
   });
   pluginDir = "${jf.dataDir}/plugins/Foundry-OIDC";
@@ -84,7 +84,7 @@ in {
             proxy_set_header X-Forwarded-Host $host;
           '';
         };
-        locations."= /quickconnect".return = "302 /sso/OIDC/QuickConnect/authentik";
+        locations."= /connect".return = "302 /sso/OIDC/QuickConnect/authentik$is_args$args";
         # ASP.NET routes are case-insensitive; cover /Metrics too.
         locations."~* ^/metrics(?:/|$)" = {
           proxyPass = "http://localhost:${toString port}";

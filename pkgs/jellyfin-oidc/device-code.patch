@@ -1,0 +1,113 @@
+--- a/Jellyfin.Plugin.OIDC/Services/StateManager.cs
++++ b/Jellyfin.Plugin.OIDC/Services/StateManager.cs
+@@ -19,6 +19,8 @@
+ 
+     /// When true, the callback drives Quick Connect instead of a web-client localStorage login.
+     public bool QuickConnect { get; init; }
++
++    public string? QuickConnectCode { get; init; }
+ 
+     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+ }
+--- a/Jellyfin.Plugin.OIDC/Api/OidcController.cs
++++ b/Jellyfin.Plugin.OIDC/Api/OidcController.cs
+@@ -80,10 +80,19 @@
+     [RateLimit("oidc-start", maxRequests: 20, windowSeconds: 60)]
+     public Task<ActionResult> QuickConnectStart(string providerId)
+     {
+-        return BeginAuthorizeAsync(providerId, quickConnect: true);
+-    }
+-
+-    private async Task<ActionResult> BeginAuthorizeAsync(string providerId, bool quickConnect)
++        var codes = Request.Query["user_code"];
++        if (codes.Count > 0 && (codes.Count != 1 || !IsValidQuickConnectCode(codes[0])))
++        {
++            return Task.FromResult<ActionResult>(BadRequest("user_code must be exactly six ASCII digits"));
++        }
++
++        return BeginAuthorizeAsync(providerId, quickConnect: true, userCode: codes.Count == 1 ? codes[0] : null);
++    }
++
++    internal static bool IsValidQuickConnectCode(string? code)
++        => code is { Length: 6 } && code.All(c => c >= '0' && c <= '9');
++
++    private async Task<ActionResult> BeginAuthorizeAsync(string providerId, bool quickConnect, string? userCode = null)
+     {
+         var provider = GetProvider(providerId);
+         if (provider == null)
+@@ -117,7 +126,8 @@
+             CodeVerifier = codeVerifier,
+             RedirectUri = redirectUri,
+             CsrfToken = csrfToken,
+-            QuickConnect = quickConnect
++            QuickConnect = quickConnect,
++            QuickConnectCode = userCode
+         };
+ 
+         var stateKey = _stateManager.StoreState(state);
+@@ -212,7 +222,7 @@
+ 
+         return Content(
+             outcome.QuickConnect
+-                ? BuildQuickConnectHtml(outcome.SessionToken!, providerId, cspNonce)
++                ? BuildQuickConnectHtml(outcome.SessionToken!, providerId, cspNonce, oidcState.QuickConnectCode)
+                 : BuildCallbackHtml(outcome.SessionToken!, providerId, cspNonce),
+             "text/html");
+     }
+@@ -778,14 +788,15 @@
+     /// one-time <paramref name="sessionToken"/>. Markup lives in
+     /// <c>Configuration/QuickConnectPage.html</c>; inputs travel as a JSON data island.
+     /// </summary>
+-    private static string BuildQuickConnectHtml(string sessionToken, string providerId, string cspNonce)
++    private static string BuildQuickConnectHtml(string sessionToken, string providerId, string cspNonce, string? userCode)
+         => EmbeddedPage.Render("QuickConnectPage.html", new Dictionary<string, string>
+         {
+             ["__CSP_NONCE__"] = cspNonce,
+             ["__DATA_JSON__"] = SerializePageData(new
+             {
+                 token = sessionToken,
+-                providerId
++                providerId,
++                userCode
+             })
+         });
+ 
+--- a/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
++++ b/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
+@@ -41,6 +41,7 @@
+     const button = document.getElementById('submit');
+     const msg = document.getElementById('msg');
+ 
++    codeInput.value = data.userCode || '';
+     codeInput.focus();
+ 
+     function submit() {
+--- a/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
+@@ -1052,7 +1052,7 @@
+     [Fact]
+     public void BuildQuickConnectHtml_ResolvesAuthorizeEndpointRelativeToCallbackUrl()
+     {
+-        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", "keycloak", "nonce123"])!;
++        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", "keycloak", "nonce123", null])!;
+ 
+         Assert.Contains("id=\"code\"", html);
+         Assert.DoesNotContain("window.location.pathname.replace", html);
+@@ -1066,7 +1066,7 @@
+     {
+         const string hostileProviderId = "kc</script><script>alert(1)</script>";
+ 
+-        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", hostileProviderId, "nonce123"])!;
++        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", hostileProviderId, "nonce123", null])!;
+ 
+         Assert.DoesNotContain("<script>alert(1)</script>", html);
+         Assert.Contains(System.Text.Json.JsonSerializer.Serialize(hostileProviderId), html);
+@@ -1075,7 +1075,7 @@
+     [Fact]
+     public void BuildQuickConnectHtml_IncludesNonceOnScriptAndStyleTags()
+     {
+-        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", "keycloak", "abc123=="])!;
++        var html = (string)_buildQuickConnectHtml.Invoke(null, ["token123", "keycloak", "abc123==", null])!;
+ 
+         Assert.Contains("<script nonce=\"abc123==\">", html);
+         Assert.Contains("<style nonce=\"abc123==\">", html);

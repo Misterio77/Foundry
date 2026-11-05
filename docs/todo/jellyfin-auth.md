@@ -39,9 +39,10 @@ idempotent branding updates that preserve existing HTML/CSS.
 
 ## Security and authorization decisions
 
-- Pin the reviewed `aussierk/jellyfin-plugin-oidc` 2.1.0.1 release ZIP by hash.
-  This does not establish that its DLLs reproduce from reviewed source. The
-  running Jellyfin version is 12.4.0.
+- Build `aussierk/jellyfin-plugin-oidc` 2.1.0.1 from hash-pinned source with
+  locked NuGet dependencies and the local device-code patch. This replaces the
+  previously pinned release ZIP; no binary equivalence to that ZIP is claimed.
+  The running Jellyfin version is 12.4.0.
 - Use Authentik's hashed user ID as `sub`, asymmetric signing, authorization code
   with plugin-managed PKCE, an exact callback and pinned discovery endpoints.
   Both the Authentik application and plugin require `jellyfin-access`.
@@ -64,16 +65,42 @@ idempotent branding updates that preserve existing HTML/CSS.
 ## Device sign-in instructions
 
 The server-served web client labels Quick Connect as **Entrar com outro
-dispositivo** and tells users to visit `https://media.m7.rs/quickconnect` and
-enter their displayed code. That URL redirects to the plugin's OIDC-aware device
-approval flow: authenticate with Gablogin, then explicitly approve the code.
-The two strings are customized in Brazilian Portuguese and the default English
-catalog; other locale catalogs are unchanged. Rebuilding the web client gives
-the changed assets new content hashes rather than patching cached bundles.
+dispositivo** and tells users to visit `https://media.m7.rs/connect` and enter
+their displayed code. The shortcut replaces `/quickconnect` and redirects to
+`/sso/OIDC/QuickConnect/authentik`, preserving the query string. Authenticate
+with Gablogin, then explicitly approve the code.
 
-This affects browsers and clients using the server's web UI, not Findroid's
-native interface or clients bundling their own web assets. It does not add QR
-codes or automatically carry a device code through OIDC.
+The locally patched plugin also accepts an optional `user_code` query parameter:
+
+```
+https://media.m7.rs/connect?user_code=012345
+```
+
+This is suitable for a QR containing the approval URL and public device code,
+**never** the device's polling secret or a Jellyfin/OIDC token. Only one value
+of exactly six ASCII digits is accepted; empty, repeated, oversized and malformed
+values return HTTP 400 before starting OIDC. Leading zeroes survive. Omitting
+`user_code` retains manual entry.
+
+The code travels in browser-bound server-side OIDC state, not the IdP request or
+callback URL. The approval page prefills it from a safely serialized JSON data
+island and still requires an explicit **Authorize** click. A callback query
+parameter cannot substitute a different code. Existing CSRF, nonce, PKCE,
+admission checks and state expiry remain in place. An expired or incorrect device
+code can be edited and retried using the existing approval form.
+
+The two web-client strings are customized in Brazilian Portuguese and the default
+English catalog; other locales are unchanged. A web rebuild produces new asset
+content hashes. This affects browsers and clients using the server's web UI,
+not Findroid's native interface or clients bundling their own web assets. No
+client-side QR display has been added yet.
+
+The patched plugin built and all 589 tests passed, including URL validation,
+leading zeroes, optional manual entry, OIDC round-trip and callback-tampering
+cases. The package retains the existing flat DLL/metadata layout. Full web/host
+builds remain for CI. After deploying Merope, verify the `/connect` redirect,
+actual Gablogin/MFA round-trip, explicit approval, expired-code retry and native
+app handoff with a real requesting device.
 
 ## Logout and revocation
 
