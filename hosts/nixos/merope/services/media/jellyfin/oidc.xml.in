@@ -23,7 +23,7 @@
       <PinnedUserInfoEndpoint>https://auth.m7.rs/application/o/userinfo/</PinnedUserInfoEndpoint>
     </OidcProviderConfig>
   </Providers>
-  <AutoCreateUsers>false</AutoCreateUsers>
+  <AutoCreateUsers>true</AutoCreateUsers>
   <MigrateLocalUsers>false</MigrateLocalUsers>
   <LinkExistingUsersByEmail>false</LinkExistingUsersByEmail>
   <AllowedGroups><string>jellyfin-access</string></AllowedGroups>

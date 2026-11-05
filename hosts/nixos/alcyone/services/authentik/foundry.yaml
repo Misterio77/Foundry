@@ -31,6 +31,76 @@ entries:
       identifiers:
         name: System - OAuth2 Provider - Scopes
 
+  # Only apps that require email use this authorization flow.
+  - model: authentik_flows.flow
+    id: email-required-authorization
+    identifiers:
+      slug: foundry-provider-authorization-email-required
+    attrs:
+      designation: authorization
+      name: Acessar aplicativo com e-mail
+      title: Adicione seu e-mail para acessar %(app)s
+      authentication: require_authenticated
+  - model: authentik_policies_expression.expressionpolicy
+    id: missing-email
+    identifiers:
+      name: foundry-missing-email
+    attrs:
+      expression: |
+        return not bool((request.user.email or "").strip())
+  - model: authentik_stages_prompt.prompt
+    id: required-email-field
+    identifiers:
+      name: foundry-required-email
+    attrs:
+      field_key: email
+      label: E-mail
+      type: email
+      required: true
+      placeholder: voce@exemplo.com
+      order: 0
+  - model: authentik_stages_prompt.promptstage
+    id: required-email-prompt
+    identifiers:
+      name: foundry-required-email-prompt
+    attrs:
+      fields:
+        - !KeyOf required-email-field
+  - model: authentik_stages_user_write.userwritestage
+    id: required-email-write
+    identifiers:
+      name: foundry-required-email-write
+    attrs:
+      user_creation_mode: never_create
+  - model: authentik_flows.flowstagebinding
+    id: required-email-prompt-binding
+    identifiers:
+      target: !KeyOf email-required-authorization
+      stage: !KeyOf required-email-prompt
+      order: 10
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf missing-email
+      target: !KeyOf required-email-prompt-binding
+      order: 0
+  - model: authentik_flows.flowstagebinding
+    id: required-email-write-binding
+    identifiers:
+      target: !KeyOf email-required-authorization
+      stage: !KeyOf required-email-write
+      order: 20
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: false
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf missing-email
+      target: !KeyOf required-email-write-binding
+      order: 0
+
   - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
     identifiers:
       name: default-authentication-mfa-validation
