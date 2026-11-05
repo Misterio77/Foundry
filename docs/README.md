@@ -1,0 +1,9 @@
+# Operations and proposals
+
+- [Authentik / Gablogin](authentik.md): access, application behavior and recovery.
+- [Backups](backups.md): declared coverage, restore evidence and gaps.
+- [Atelier publishing](todo/atelier-publishing.md): unimplemented artifact boundary.
+
+Keep operational constraints and unresolved decisions here. Implementation details
+belong in code; completed-work narratives belong in version history. Configured
+behavior is not proof of deployment or a successful live test.
