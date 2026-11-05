@@ -1,0 +1,173 @@
+diff --git a/server/lib/settings/index.ts b/server/lib/settings/index.ts
+--- a/server/lib/settings/index.ts
++++ b/server/lib/settings/index.ts
+@@ -69,6 +69,7 @@
+   clientSecret: string;
+   logo?: string;
+   requiredClaims?: string;
++  permissionsClaim?: string;
+   scopes?: string;
+   newUserLogin?: boolean;
+ };
+diff --git a/server/lib/permissions.ts b/server/lib/permissions.ts
+--- a/server/lib/permissions.ts
++++ b/server/lib/permissions.ts
+@@ -30,6 +30,23 @@
+   MANAGE_BLOCKLIST = 268435456,
+   VIEW_BLOCKLIST = 1073741824,
+ }
++
++export const permissionsFromClaim = (claim: unknown): number => {
++  if (!Array.isArray(claim)) {
++    throw new Error('Permissions claim must be an array of permission names');
++  }
++
++  return claim.reduce((permissions: number, name: unknown) => {
++    if (
++      typeof name !== 'string' ||
++      !Object.prototype.hasOwnProperty.call(Permission, name) ||
++      typeof Permission[name as keyof typeof Permission] !== 'number'
++    ) {
++      throw new Error('Unknown permission in OIDC claim');
++    }
++    return permissions | Permission[name as keyof typeof Permission];
++  }, Permission.NONE);
++};
+ 
+ export interface PermissionCheckOptions {
+   type: 'and' | 'or';
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -7,7 +7,7 @@
+ import { LinkedAccount } from '@server/entity/LinkedAccount';
+ import { User } from '@server/entity/User';
+ import { startJobs } from '@server/job/schedule';
+-import { Permission } from '@server/lib/permissions';
++import { Permission, permissionsFromClaim } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+ import logger from '@server/logger';
+ import { isAuthenticated } from '@server/middleware/auth';
+@@ -24,6 +24,20 @@
+ import { z } from 'zod';
+ 
+ const authRoutes = Router();
++
++authRoutes.use((req, res, next) => {
++  const managed = getSettings().oidc.providers.some((p) => p.permissionsClaim);
++  const alternateLogin = /^\/(?:local|plex|jellyfin)(?:\/|$)/i.test(
++    req.path
++  );
++  if (managed && alternateLogin) {
++    return next({
++      status: 403,
++      error: ApiErrorCode.Unauthorized,
++    });
++  }
++  return next();
++});
+ 
+ export const quickConnectSecret = z.object({
+   secret: z
+@@ -1157,6 +1167,20 @@
+       });
+     }
+ 
++    let oidcPermissions: number | undefined;
++    if (provider.permissionsClaim) {
++      try {
++        oidcPermissions = permissionsFromClaim(
++          fullUserInfo[provider.permissionsClaim]
++        );
++      } catch {
++        return next({
++          status: 403,
++          error: ApiErrorCode.Unauthorized,
++        });
++      }
++    }
++
+     // Map identifier to linked account
+     const userRepository = getRepository(User);
+     const linkedAccountsRepository = getRepository(LinkedAccount);
+@@ -1201,6 +1225,11 @@
+         await linkedAccountsRepository.save(newLinkedAccount);
+       }
+ 
++      if (oidcPermissions !== undefined) {
++        req.user.permissions = oidcPermissions;
++        await userRepository.save(req.user);
++      }
++
+       return res.sendStatus(204);
+     }
+ 
+@@ -1233,7 +1262,7 @@
+         avatar: avatar,
+         username: fullUserInfo.preferred_username,
+         email: normalizedEmail,
+-        permissions: settings.main.defaultPermissions,
++        permissions: oidcPermissions ?? settings.main.defaultPermissions,
+         plexToken: '',
+         userType: UserType.LOCAL,
+       });
+@@ -1261,6 +1290,11 @@
+           ? ApiErrorCode.OidcMissingEmail
+           : ApiErrorCode.Unauthorized,
+       });
++    }
++
++    if (oidcPermissions !== undefined) {
++      user.permissions = oidcPermissions;
++      await userRepository.save(user);
+     }
+ 
+     // Set logged in session and return
+diff --git a/server/routes/user/index.ts b/server/routes/user/index.ts
+--- a/server/routes/user/index.ts
++++ b/server/routes/user/index.ts
+@@ -514,6 +514,13 @@
+   { ids: string[]; permissions: number }
+ >('/', isAuthenticated(Permission.MANAGE_USERS), async (req, res, next) => {
+   try {
++    if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++      return next({
++        status: 403,
++        message: 'Permissions are managed by the identity provider',
++      });
++    }
++
+     const isOwner = req.user?.id === 1;
+ 
+     if (!canMakePermissionsChange(req.body.permissions, req.user)) {
+@@ -553,6 +560,13 @@
+   isAuthenticated(Permission.MANAGE_USERS),
+   async (req, res, next) => {
+     try {
++      if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++        return next({
++          status: 403,
++          message: 'Permissions are managed by the identity provider',
++        });
++      }
++
+       const userRepository = getRepository(User);
+ 
+       const user = await userRepository.findOneOrFail({
+diff --git a/server/routes/user/usersettings.ts b/server/routes/user/usersettings.ts
+--- a/server/routes/user/usersettings.ts
++++ b/server/routes/user/usersettings.ts
+@@ -838,6 +838,13 @@
+   '/permissions',
+   isAuthenticated(Permission.MANAGE_USERS),
+   async (req, res, next) => {
++    if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++      return next({
++        status: 403,
++        message: 'Permissions are managed by the identity provider',
++      });
++    }
++
+     const userRepository = getRepository(User);
+ 
+     try {

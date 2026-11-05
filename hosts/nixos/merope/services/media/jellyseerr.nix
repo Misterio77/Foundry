@@ -17,7 +17,26 @@
     serviceConfig.LoadCredential = ["oidc-secret:${config.sops.secrets.authentik-seerr-client-secret.path}"];
     preStart = ''
       umask 077
-      ${pkgs.python3}/bin/python ${./seerr-prepare.py} ${config.services.seerr.configDir}
+      settings=${config.services.seerr.configDir}/settings.json
+      mkdir -p "$(dirname "$settings")"
+      test -e "$settings" || printf '{}' > "$settings"
+      ${pkgs.jq}/bin/jq --rawfile secret "$CREDENTIALS_DIRECTORY/oidc-secret" '
+        .main.applicationUrl = "https://requests.m7.rs"
+        | .main.oidcLogin = true
+        | .main.localLogin = false
+        | .main.mediaServerLogin = false
+        | .oidc.providers = [{
+            slug: "authentik",
+            name: "Gablogin",
+            issuerUrl: "https://auth.m7.rs/application/o/seerr/",
+            clientId: "seerr",
+            clientSecret: ($secret | rtrimstr("\n")),
+            scopes: "openid profile email seerr_permissions",
+            permissionsClaim: "seerr_permissions",
+            newUserLogin: true
+          }]
+      ' "$settings" > "$settings.tmp"
+      mv "$settings.tmp" "$settings";
     '';
   };
 

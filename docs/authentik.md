@@ -67,11 +67,26 @@ intentionally ephemeral; dashboards, data sources and alert rules are provisione
 
 **Seerr:** experimental native OIDC pinned to
 [PR #2715](https://github.com/seerr-team/seerr/pull/2715), revision `2e523125`.
-Only `users`/`admins` may authenticate, but Seerr permissions remain local:
-new accounts receive Seerr's default permissions, not Authentik-derived admin
-status. Existing users must sign in using their old method and link Gablogin
-under **Profile → Settings → Linked Accounts** before using OIDC login. Matching
-email addresses are not automatically linked. Existing login methods stay enabled.
+Only `users`/`admins` may authenticate. A local patch replaces permissions from
+`seerr_permissions` on each OIDC login (and account linking), including for the
+owner account. `admins` defaults to `[ADMIN]`; `users` defaults to `[REQUEST]`.
+A per-user Authentik `seerr_permissions` attribute **replaces** that default:
+
+```yaml
+seerr_permissions:
+  - REQUEST
+  - AUTO_APPROVE
+  - VIEW_ISSUES
+  - CREATE_ISSUES
+```
+
+Use Seerr's uppercase
+[permission names](https://github.com/seerr-team/seerr/blob/2e523125e8e7262af44309c70db20fe2d7ca28a3/server/lib/permissions.ts).
+`[]` grants no permissions; missing/malformed claims and unknown names reject
+login rather than preserving stale grants. Request quotas are unchanged. Local
+permission-edit endpoints are disabled; password, media-server and Quick Connect
+login are disabled. Permissions refresh on login, not continuously; revoke
+existing Seerr sessions/API keys separately when immediate removal is needed.
 
 ### Seerr preview rollout
 
@@ -79,25 +94,18 @@ email addresses are not automatically linked. Existing login methods stay enable
    the **same** `authentik-seerr-client-secret` value using `sops` to both
    `hosts/nixos/alcyone/secrets.yaml` and `hosts/nixos/merope/secrets.yaml`.
    Do not deploy until both encrypted files contain the key.
-2. Build through CI or natively on Merope (`aarch64-linux`); do not emulate the
-   application build on an x86 workstation. Deploy Alcyone's provider first,
-   then Merope's client. The pre-start script requires an initialized
-   `settings.json` and patches only OIDC settings and the public application URL.
-3. Before the first preview start, the stopped service's config directory is
-   copied once to `/var/lib/private/jellyseerr/config.pre-oidc` (also persisted).
-   Copy that snapshot off-host before treating rollback as tested. It contains
-   credentials; keep it private. Later starts never overwrite it.
-4. Link an existing administrator account first, then verify a fresh OIDC login,
-   ordinary user access, new-account permissions and rejection without shared
-   group membership. Login is at `https://requests.m7.rs/login`.
-
-To roll back, stop Seerr and deploy a configuration using the release package
-**without** the OIDC pre-start script (prevent it starting during restoration).
-Keep the migrated config separately, then restore the whole `config.pre-oidc`
-snapshot to `config` with ownership/modes preserved before starting the release.
-Restoring just `settings.json` does not undo database migrations; requests and
-other changes made since the snapshot will be lost. A Nix generation rollback
-alone is insufficient. Do not remove the snapshot until the preview is accepted.
+2. Before switching the client to OIDC-only, existing users must link Gablogin
+   under **Profile → Settings → Linked Accounts** using their old login method.
+   Matching emails are deliberately not auto-linked. Alternatively, start fresh
+   and reconfigure Seerr's media-server/Sonarr/Radarr connections; Seerr state is
+   disposable, and requester history is retained by Sonarr/Radarr tags.
+3. Build through CI or natively on Merope (`aarch64-linux`). Deploy Alcyone's
+   provider first, then Merope's client. Startup merges managed login settings
+   into `settings.json`, preserving other settings. It does not back up or
+   migrate state. A release rollback may require starting with fresh Seerr state.
+4. Verify admin/user permissions, an explicit override, demotion, rejected local
+   permission edits, and rejection without shared group membership. Login is at
+   `https://requests.m7.rs/login`.
 
 ## Revocation
 

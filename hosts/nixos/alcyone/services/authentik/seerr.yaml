@@ -7,6 +7,18 @@ entries:
       identifiers:
         name: Foundry - private identity pilot
 
+  - model: authentik_providers_oauth2.scopemapping
+    id: seerr-permissions
+    identifiers:
+      name: foundry-seerr-permissions
+    attrs:
+      scope_name: seerr_permissions
+      description: Seerr permissions managed by Gablogin
+      expression: |
+        groups = set(request.user.groups.values_list("name", flat=True))
+        defaults = ["ADMIN"] if "admins" in groups else ["REQUEST"] if "users" in groups else []
+        return {"seerr_permissions": request.user.attributes.get("seerr_permissions", defaults)}
+
   - model: authentik_providers_oauth2.oauth2provider
     id: seerr-provider
     identifiers:
@@ -33,6 +45,7 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !KeyOf seerr-permissions
 
   - model: authentik_core.application
     id: seerr
