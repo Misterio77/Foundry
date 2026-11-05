@@ -46,6 +46,8 @@ allows audio transcoding and disables video transcoding for everyone. New
 accounts can be created; automatic username migration and email linking are off.
 Existing subject-to-user bindings remain authoritative. The startup guard
 rejects local authentication providers and missing/conflicting identity maps.
+Gravatar pictures sync on OAuth login, replacing existing Jellyfin profile images;
+missing pictures leave the existing image alone.
 
 The web client uses same-tab Gablogin, hides password controls, and returns to
 login on authenticated 401s. Explicit logout clears local state before opening
@@ -56,8 +58,8 @@ the public six-digit code; approval remains explicit and the tab can then close.
 **Immich:** OAuth-only, auto-launch and auto-registration enabled. Existing
 accounts can link by matching email on first OAuth login: verify the intended
 email/identity before admission. Admin status syncs from `immich_role`; quota
-claims are not sent, so quotas are unchanged. Browser/mobile access remains
-tailnet-only, except the existing public `/share` proxy.
+syncs from the user's `immich_quota` attribute (GiB, default 8; -1 unlimited).
+Browser/mobile access remains tailnet-only, except the public `/share` proxy.
 
 **Grafana:** OAuth-only with strict role mapping and no email-based linking or
 server-admin assignment. Anonymous tailnet viewing remains enabled. State is

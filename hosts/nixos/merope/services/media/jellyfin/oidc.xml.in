@@ -10,7 +10,7 @@
       <Scopes>openid profile email jellyfin_roles</Scopes>
       <RoleClaim>roles</RoleClaim>
       <UsernameClaim>preferred_username</UsernameClaim>
-      <SyncProfileImage>false</SyncProfileImage>
+      <SyncProfileImage>true</SyncProfileImage>
       <SyncDisplayName>false</SyncDisplayName>
       <TrustedForEmailLinking>false</TrustedForEmailLinking>
       <StrictAccessTokenValidation>true</StrictAccessTokenValidation>

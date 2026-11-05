@@ -94,7 +94,7 @@ in {
         use_ssl = true;
         from = "Gablogin <auth@m7.rs>";
       };
-      avatars = "initials";
+      avatars = "gravatar,initials";
       storage.file.path = "/var/lib/authentik/data";
       listen = {
         http = ["127.0.0.1:9000"];
