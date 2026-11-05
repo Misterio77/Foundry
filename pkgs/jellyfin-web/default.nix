@@ -8,7 +8,7 @@
   };
 in
   jellyfin-web.overrideAttrs (old: {
-    patches = (old.patches or []) ++ [./quick-connect-qr.patch];
+    patches = (old.patches or []) ++ [./quick-connect-qr.patch ./logout.patch];
     postPatch =
       (old.postPatch or "")
       + ''
@@ -29,5 +29,6 @@ in
         cp ${./quick-connect-qr.test.mjs} "$TMPDIR/foundry-qr-tests/quick-connect-qr.test.mjs"
         cp ${qrGenerator}/qrcode.js "$TMPDIR/foundry-qr-tests/qrcode.cjs"
         node --test "$TMPDIR/foundry-qr-tests/quick-connect-qr.test.mjs"
+        JELLYFIN_DASHBOARD_SOURCE="$PWD/src/utils/dashboard.js" node --test ${./logout.test.mjs}
       '';
   })

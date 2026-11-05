@@ -1,0 +1,23 @@
+--- a/src/utils/dashboard.js
++++ b/src/utils/dashboard.js
+@@ -102,17 +102,14 @@
+ }
+ 
+ export function logout() {
+-    ServerConnections.logout().then(function () {
++    return ServerConnections.logout().then(function () {
+         // Clear the query cache
+         queryClient.clear();
+         // Reset cached views
+         viewContainer.reset();
+ 
+-        if (appHost.supports(AppFeature.MultiServer)) {
+-            selectServer();
+-        } else {
+-            navigate('login');
+-        }
++        // Keep Authentik's provider logout choices visible after local cleanup.
++        window.location.assign('https://auth.m7.rs/application/o/jellyfin/end-session/');
+     });
+ }
+ 

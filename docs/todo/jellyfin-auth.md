@@ -126,12 +126,21 @@ endpoint, `https://media.m7.rs/sso/OIDC/BackchannelLogout/authentik`, using
 `logout_method: backchannel`. Deploy Alcyone to apply it; changing this Blueprint
 alone does not modify the running provider. No custom revocation bridge is used.
 
-Jellyfin's own Logout currently ends its local session but leaves Gablogin signed
-in, as confirmed by the operator. The plugin has no RP-initiated logout endpoint
-or web Logout-button integration. Its session-ended consumer only prunes tracking.
-A future browser integration must finish Jellyfin logout before navigating to
-`https://auth.m7.rs/application/o/jellyfin/end-session/`; a redirect returned to
-an API fetch is not enough. This button change is not implemented here.
+The customized Web client's Logout buttons use the existing Jellyfin logout
+routine and clear the query cache and cached views before navigating the whole
+page to `https://auth.m7.rs/application/o/jellyfin/end-session/`. No automatic
+post-logout redirect is requested: Authentik's provider invalidation page retains
+its choices to return to the overview or sign out of Gablogin. This does not force
+a global IdP logout merely because the user signed out of Jellyfin. No ID token
+or Jellyfin token is placed in the navigation URL.
+
+The plugin has no RP-initiated logout endpoint; its session-ended consumer only
+prunes tracking. This change is Web client navigation, not an API redirect or a
+native client logout override. Android WebView/native-shell handoff still needs
+real-device verification. After deployment, check that both Web logout controls
+reach the provider page, the old Jellyfin token is rejected, and the overview and
+Gablogin sign-out choices work. Test an expired IdP session and an IdP outage too:
+when Authentik is unreachable, Jellyfin's local logout still runs first.
 
 Native back-channel support is not a reliable general revocation guarantee yet:
 
@@ -161,12 +170,11 @@ user, preserving the second session as a scoping control:
    widening. Test Quick Connect separately. These are deliberate logout tests:
    use sessions whose revocation is acceptable, not other users' active devices.
 
-The updated Blueprint package built successfully, and the live plugin endpoint
-returned HTTP 400 for both missing and malformed logout tokens. Those negative
-checks do not exercise a valid signed logout or prove session revocation. Do not
-claim the acceptance matrix passed until tested against the deployed provider.
-Token-expiry and restart behavior above are source-reviewed limitations, not
-live-test results.
+The operator has confirmed that live revocation works. Earlier negative checks
+also returned HTTP 400 for missing and malformed logout tokens. This does not
+establish that every case in the acceptance matrix passed: token-expiry, restart
+and session-scoping behavior above remain source-reviewed limitations unless
+explicitly tested.
 
 Upstream references: [plugin architecture](https://github.com/aussierk/jellyfin-plugin-oidc/blob/v2.1.0.1/ARCHITECTURE.md),
 [plugin limitations](https://github.com/aussierk/jellyfin-plugin-oidc/blob/v2.1.0.1/SECURITY.md),
