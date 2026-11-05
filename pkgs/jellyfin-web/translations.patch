@@ -5,19 +5,10 @@
      "ButtonTrailer": "Trailer",
      "ButtonUninstall": "Uninstall",
 -    "ButtonUseQuickConnect": "Use Quick Connect",
-+    "ButtonUseQuickConnect": "Entrar com outro dispositivo",
++    "ButtonUseQuickConnect": "Sign in with another device",
      "ButtonWebsite": "Website",
      "Bwdif": "Bob Weaver DeInterlacing Filter (BWDIF)",
      "CancelRecording": "Cancel recording",
-@@ -1486,7 +1486,7 @@
-     "Quality": "Quality",
-     "QuickConnect": "Quick Connect",
-     "QuickConnectActivationSuccessful": "Successfully activated",
--    "QuickConnectAuthorizeCode": "Enter code {0} to login",
-+    "QuickConnectAuthorizeCode": "Digite {0} para entrar",
-     "QuickConnectAuthorizeFail": "Unknown Quick Connect code",
-     "QuickConnectAuthorizeSuccess": "You have successfully authenticated your device!",
-     "QuickConnectDeactivated": "Quick Connect was deactivated before the login request could be approved",
 --- a/src/strings/pt-br.json
 +++ b/src/strings/pt-br.json
 @@ -1201,13 +1201,13 @@
