@@ -22,9 +22,6 @@
 
     calibre-web = {
       enable = true;
-      package = pkgs.calibre-web.overridePythonAttrs (old: {
-        dependencies = old.dependencies ++ old.optional-dependencies.ldap;
-      });
       options.calibreLibrary = lib.head config.services.calibre-server.libraries;
     };
 

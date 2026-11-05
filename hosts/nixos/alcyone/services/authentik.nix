@@ -48,8 +48,6 @@
     cp ${./authentik/foundry.yaml} "$out/foundry.yaml"
     cp ${./authentik/grafana.yaml} "$out/grafana.yaml"
     cp ${./authentik/immich.yaml} "$out/immich.yaml"
-    cp ${./authentik/calibre-web.yaml} "$out/calibre-web.yaml"
-    cp ${./authentik/merope-ldap.yaml} "$out/merope-ldap.yaml"
     cp ${./authentik/recovery.yaml} "$out/recovery.yaml"
     cp ${./authentik/jellyfin.yaml} "$out/jellyfin.yaml"
   '';
