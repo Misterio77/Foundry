@@ -44,7 +44,7 @@
       <EnableLibraryAccessManagement>false</EnableLibraryAccessManagement>
       <ManageLoginButtonBranding>false</ManageLoginButtonBranding>
       <HideManualLogin>true</HideManualLogin>
-      <LoginTitle>Entrar no Jellyfin</LoginTitle>
+      <LoginTitle />
       <ServerBaseUrl>https://media.m7.rs</ServerBaseUrl>
     </PluginConfiguration>
   '';
@@ -153,10 +153,26 @@ in {
         branding = Path(${builtins.toJSON "${jf.configDir}/branding.xml"})
         tree = ET.parse(branding) if branding.exists() else ET.ElementTree(ET.Element("BrandingOptions"))
         blocks = {
-            "LoginDisclaimer": '<div class="readOnlyContent"><h1 class="sectionTitle">Entrar no Jellyfin</h1><a class="raised button-submit block emby-button" href="/sso/OIDC/Start/authentik">Entrar com Gablogin</a></div>',
-            "CustomCss": """.disclaimerContainer { display: block; }
+            "LoginDisclaimer": '<div class="foundry-oidc-login"><a class="raised button-submit block emby-button" href="/sso/OIDC/Start/authentik">Entrar com Gablogin</a></div>',
+            "CustomCss": """#loginPage .loginDisclaimerContainer { display: block; margin-top: .5em; }
+        #loginPage .loginDisclaimer { width: 100%; margin: 0; }
+        #loginPage .btnQuick,
+        #loginPage .foundry-oidc-login .emby-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            width: 100%;
+            min-height: 3.25em;
+            margin: .25em 0;
+            padding: .9em 1em;
+            font-size: inherit;
+            font-weight: 600;
+            line-height: 1.35;
+        }
         #loginPage .manualLoginForm,
         #loginPage .visualLoginForm,
+        #loginPage .btnManual,
         #loginPage .readOnlyContent .btnForgotPassword { display: none; }""",
         }
         changed = False
