@@ -91,7 +91,7 @@ entries:
     attrs:
       name: Seerr
       provider: !KeyOf seerr-provider
-      meta_launch_url: https://requests.m7.rs/login
+      meta_launch_url: https://requests.m7.rs/login?provider=authentik
       policy_engine_mode: any
   - model: authentik_policies.policybinding
     identifiers:
