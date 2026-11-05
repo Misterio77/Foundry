@@ -1,6 +1,6 @@
 --- a/src/apps/legacy/controllers/session/login/index.js
 +++ b/src/apps/legacy/controllers/session/login/index.js
-@@ -305,6 +305,11 @@
+@@ -305,9 +305,14 @@
              // eslint-disable-next-line sonarjs/disabled-auto-escaping
              loginDisclaimer.innerHTML = domPurify.sanitize(markdownIt({ html: true }).render(options.LoginDisclaimer || ''));
  
@@ -11,7 +11,11 @@
 +
              for (const elem of loginDisclaimer.querySelectorAll('a')) {
                  elem.rel = 'noopener noreferrer';
-                 elem.target = '_blank';
+-                elem.target = '_blank';
++                elem.target = elem === gablogin ? '_self' : '_blank';
+                 elem.classList.add('button-link');
+                 elem.setAttribute('is', 'emby-linkbutton');
+ 
 --- a/src/strings/en-us.json
 +++ b/src/strings/en-us.json
 @@ -143,6 +143,7 @@
