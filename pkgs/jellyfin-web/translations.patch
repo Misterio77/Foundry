@@ -9,6 +9,17 @@
      "ButtonWebsite": "Website",
      "Bwdif": "Bob Weaver DeInterlacing Filter (BWDIF)",
      "CancelRecording": "Cancel recording",
+--- a/src/strings/en-gb.json
++++ b/src/strings/en-gb.json
+@@ -1247,7 +1247,7 @@
+     "KnownProxiesHelp": "Comma separated list of IP addresses or hostnames of known proxies used when connecting to your Jellyfin instance. This is required to make proper use of 'X-Forwarded-For' headers. Requires a reboot after saving.",
+     "Other": "Other",
+     "EnableQuickConnect": "Enable Quick Connect on this server",
+-    "ButtonUseQuickConnect": "Use Quick Connect",
++    "ButtonUseQuickConnect": "Sign in with another device",
+     "ButtonActivate": "Activate",
+     "Authorize": "Authorise",
+     "EnableAutoCast": "Set as default",
 --- a/src/strings/pt-br.json
 +++ b/src/strings/pt-br.json
 @@ -1201,13 +1201,13 @@
@@ -27,3 +38,18 @@
      "ButtonActivate": "Ativar",
      "Authorize": "Autorizar",
      "LabelTonemappingDesat": "Dessaturação do Mapeamento de tom",
+--- /dev/null
++++ b/src/scripts/foundryTranslations.test.js
+@@ -0,0 +1,12 @@
++import { expect, it } from 'vitest';
++import enUS from '../strings/en-us.json';
++import enGB from '../strings/en-gb.json';
++import ptBR from '../strings/pt-br.json';
++
++it.each([
++    ['en-us', enUS, 'Sign in with another device'],
++    ['en-gb', enGB, 'Sign in with another device'],
++    ['pt-br', ptBR, 'Entrar com outro dispositivo']
++])('uses the custom Quick Connect label in %s', (_locale, dictionary, expected) => {
++    expect(dictionary.ButtonUseQuickConnect).toBe(expected);
++});
