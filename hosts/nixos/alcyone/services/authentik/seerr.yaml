@@ -1,0 +1,57 @@
+version: 1
+metadata:
+  name: Foundry - Seerr
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - private identity pilot
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: seerr-provider
+    identifiers:
+      name: Seerr
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, foundry-provider-authorization-email-required]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: seerr
+      client_secret: !Env AUTHENTIK_SEERR_CLIENT_SECRET
+      grant_types:
+        - authorization_code
+      redirect_uris:
+        - matching_mode: strict
+          url: https://requests.m7.rs/login
+          redirect_uri_type: authorization
+        - matching_mode: strict
+          url: https://requests.m7.rs/profile/settings/linked-accounts
+          redirect_uri_type: authorization
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      access_token_validity: minutes=10
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    id: seerr
+    identifiers:
+      slug: seerr
+    attrs:
+      name: Seerr
+      provider: !KeyOf seerr-provider
+      meta_launch_url: https://requests.m7.rs/login
+      policy_engine_mode: any
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf seerr
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, users]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf seerr
+      order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, admins]]

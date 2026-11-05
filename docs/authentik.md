@@ -5,7 +5,8 @@ Describes the checked-in configuration, not deployment status. Sources:
 [Blueprints](../hosts/nixos/alcyone/services/authentik/),
 [Jellyfin](../hosts/nixos/merope/services/media/jellyfin/),
 [Immich](../hosts/nixos/merope/services/immich.nix),
-[Grafana](../hosts/nixos/alcyone/services/grafana/default.nix).
+[Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),
+[Seerr](../hosts/nixos/merope/services/media/jellyseerr.nix).
 
 ## Access
 
@@ -61,6 +62,40 @@ tailnet-only, except the existing public `/share` proxy.
 **Grafana:** OAuth-only with strict role mapping and no email-based linking or
 server-admin assignment. Anonymous tailnet viewing remains enabled. State is
 intentionally ephemeral; dashboards, data sources and alert rules are provisioned.
+
+**Seerr:** experimental native OIDC pinned to
+[PR #2715](https://github.com/seerr-team/seerr/pull/2715), revision `2e523125`.
+Only `users`/`admins` may authenticate, but Seerr permissions remain local:
+new accounts receive Seerr's default permissions, not Authentik-derived admin
+status. Existing users must sign in using their old method and link Gablogin
+under **Profile → Settings → Linked Accounts** before using OIDC login. Matching
+email addresses are not automatically linked. Existing login methods stay enabled.
+
+### Seerr preview rollout
+
+1. Generate a client secret locally (for example, `openssl rand -hex 32`). Add
+   the **same** `authentik-seerr-client-secret` value using `sops` to both
+   `hosts/nixos/alcyone/secrets.yaml` and `hosts/nixos/merope/secrets.yaml`.
+   Do not deploy until both encrypted files contain the key.
+2. Build through CI or natively on Merope (`aarch64-linux`); do not emulate the
+   application build on an x86 workstation. Deploy Alcyone's provider first,
+   then Merope's client. The pre-start script requires an initialized
+   `settings.json` and patches only OIDC settings and the public application URL.
+3. Before the first preview start, the stopped service's config directory is
+   copied once to `/var/lib/private/jellyseerr/config.pre-oidc` (also persisted).
+   Copy that snapshot off-host before treating rollback as tested. It contains
+   credentials; keep it private. Later starts never overwrite it.
+4. Link an existing administrator account first, then verify a fresh OIDC login,
+   ordinary user access, new-account permissions and rejection without shared
+   group membership. Login is at `https://requests.m7.rs/login`.
+
+To roll back, stop Seerr and deploy a configuration using the release package
+**without** the OIDC pre-start script (prevent it starting during restoration).
+Keep the migrated config separately, then restore the whole `config.pre-oidc`
+snapshot to `config` with ownership/modes preserved before starting the release.
+Restoring just `settings.json` does not undo database migrations; requests and
+other changes made since the snapshot will be lost. A Nix generation rollback
+alone is insufficient. Do not remove the snapshot until the preview is accepted.
 
 ## Revocation
 
