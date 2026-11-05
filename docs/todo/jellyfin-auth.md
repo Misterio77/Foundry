@@ -61,6 +61,59 @@ idempotent branding updates that preserve existing HTML/CSS.
   Quick Connect. A fully automatic redirect from the web client's login route
   is not implemented; it is a browser-side hash route, not an nginx location.
 
+## Logout and revocation
+
+The Authentik Blueprint configures the plugin's native signed back-channel
+endpoint, `https://media.m7.rs/sso/OIDC/BackchannelLogout/authentik`, using
+`logout_method: backchannel`. Deploy Alcyone to apply it; changing this Blueprint
+alone does not modify the running provider. No custom revocation bridge is used.
+
+Jellyfin's own Logout currently ends its local session but leaves Gablogin signed
+in, as confirmed by the operator. The plugin has no RP-initiated logout endpoint
+or web Logout-button integration. Its session-ended consumer only prunes tracking.
+A future browser integration must finish Jellyfin logout before navigating to
+`https://auth.m7.rs/application/o/jellyfin/end-session/`; a redirect returned to
+an API fetch is not enough. This button change is not implemented here.
+
+Native back-channel support is not a reliable general revocation guarantee yet:
+
+- Authentik 2026.8.5 selects **unexpired access tokens** when dispatching logout on
+  session deletion. Jellyfin's ten-minute token is not refreshed by the plugin;
+  after expiry, the session-deletion path can send no notification at all. Merely
+  extending token validity would mask this lifecycle problem, not solve it.
+- The plugin tracks browser sessions in memory. After restart, its persisted
+  identity-map fallback can revoke **all** of a user's Jellyfin tokens instead of
+  just the originating IdP session. A `sid`-only notification for an older session
+  may instead match nothing and return 200. Quick Connect also lacks the browser
+  session's in-memory correlation, so do not assume device-scoped revocation.
+- Removing an admission group is not itself a logout notification. Existing
+  Jellyfin sessions and API keys remain independent of the IdP access-token TTL.
+
+After deployment, test with two independent IdP/browser sessions for the same
+user, preserving the second session as a scoping control:
+
+1. Within ten minutes of fresh OIDC login, delete only the first Authentik session.
+   Confirm delivery in Authentik's worker logs and `decision=backchannel-logout`
+   with a nonzero revocation count in Jellyfin's logs. Check an authenticated API
+   request from the first browser is denied; a cached page or HTTP 200 callback
+   alone does not prove revocation. The second browser should retain access.
+2. Repeat with a fresh login allowed to age beyond ten minutes without another
+   OIDC login. Record whether any notification is sent and whether access survives.
+3. Repeat after a Jellyfin restart, checking both browsers to expose any fallback
+   widening. Test Quick Connect separately. These are deliberate logout tests:
+   use sessions whose revocation is acceptable, not other users' active devices.
+
+The updated Blueprint package built successfully, and the live plugin endpoint
+returned HTTP 400 for both missing and malformed logout tokens. Those negative
+checks do not exercise a valid signed logout or prove session revocation. Do not
+claim the acceptance matrix passed until tested against the deployed provider.
+Token-expiry and restart behavior above are source-reviewed limitations, not
+live-test results.
+
+Upstream references: [plugin architecture](https://github.com/aussierk/jellyfin-plugin-oidc/blob/v2.1.0.1/ARCHITECTURE.md),
+[plugin limitations](https://github.com/aussierk/jellyfin-plugin-oidc/blob/v2.1.0.1/SECURITY.md),
+and [Authentik session-deletion signal](https://github.com/goauthentik/authentik/blob/version/2026.8.5/authentik/providers/oauth2/signals.py).
+
 ## Remaining acceptance checks
 
 1. Sign in using **akadmin** through Gablogin and verify the original Jellyfin
@@ -68,10 +121,10 @@ idempotent branding updates that preserve existing HTML/CSS.
 2. Deploy the final Merope configuration. In a clean browser session, verify only
    Gablogin/Quick Connect remain as login choices, and the old admin password
    cannot authenticate through the API or a native client.
-3. Test Quick Connect/TV playback, logout and an IdP outage. Authentik group
-   removal does not promise immediate revocation of existing Jellyfin sessions;
-   disable the Jellyfin account and revoke sessions when immediate removal is
-   required. Confirm normal backups include the new complete identity map.
+3. Deploy Alcyone's back-channel configuration and run the logout/revocation
+   matrix above. Test Quick Connect/TV playback and an IdP outage. For immediate
+   removal, disable the Jellyfin account and revoke its sessions explicitly.
+   Confirm normal backups include the new complete identity map.
 
 ## Recovery without a local administrator
 
