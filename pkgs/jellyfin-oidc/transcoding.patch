@@ -1,0 +1,251 @@
+--- a/Jellyfin.Plugin.OIDC/Configuration/PluginConfiguration.cs
++++ b/Jellyfin.Plugin.OIDC/Configuration/PluginConfiguration.cs
+@@ -215,6 +215,11 @@
+ 
+     public bool EnableTranscoding { get; set; } = true;
+ 
++    /// Null preserves the legacy EnableTranscoding setting for this media type.
++    public bool? EnableAudioTranscoding { get; set; }
++
++    public bool? EnableVideoTranscoding { get; set; }
++
+     public bool EnableContentDeletion { get; set; }
+ 
+     public bool EnableCollectionManagement { get; set; }
+--- a/Jellyfin.Plugin.OIDC/Services/RbacService.cs
++++ b/Jellyfin.Plugin.OIDC/Services/RbacService.cs
+@@ -117,8 +117,8 @@
+         policy.IsAdministrator = merged.IsAdmin;
+         policy.EnableMediaPlayback = merged.EnableMediaPlayback;
+         policy.EnableRemoteAccess = merged.EnableRemoteAccess;
+-        policy.EnableAudioPlaybackTranscoding = merged.EnableTranscoding;
+-        policy.EnableVideoPlaybackTranscoding = merged.EnableTranscoding;
++        policy.EnableAudioPlaybackTranscoding = merged.EnableAudioTranscoding ?? merged.EnableTranscoding;
++        policy.EnableVideoPlaybackTranscoding = merged.EnableVideoTranscoding ?? merged.EnableTranscoding;
+         policy.EnableLiveTvAccess = merged.EnableLiveTv;
+         policy.EnableLiveTvManagement = merged.EnableLiveTvManagement;
+         policy.EnableContentDeletion = merged.EnableContentDeletion;
+@@ -257,7 +257,8 @@
+             EnableLiveTvManagement = mappings.Any(m => m.EnableLiveTvManagement),
+             EnableMediaPlayback = mappings.Any(m => m.EnableMediaPlayback),
+             EnableRemoteAccess = mappings.Any(m => m.EnableRemoteAccess),
+-            EnableTranscoding = mappings.Any(m => m.EnableTranscoding),
++            EnableAudioTranscoding = mappings.Any(m => m.EnableAudioTranscoding ?? m.EnableTranscoding),
++            EnableVideoTranscoding = mappings.Any(m => m.EnableVideoTranscoding ?? m.EnableTranscoding),
+             EnableContentDeletion = mappings.Any(m => m.EnableContentDeletion),
+             EnableCollectionManagement = mappings.Any(m => m.EnableCollectionManagement),
+             EnableSubtitleManagement = mappings.Any(m => m.EnableSubtitleManagement),
+--- a/Jellyfin.Plugin.OIDC/Configuration/src/roles.js
++++ b/Jellyfin.Plugin.OIDC/Configuration/src/roles.js
+@@ -114,7 +114,8 @@
+                 el('div', { class: 'oidc-checkbox-row oidc-mt-xs' }, chk('role_admin_' + idx, STRINGS.role.administrator, m.IsAdmin)) +
+                 permGroup(STRINGS.role.playbackGroup,
+                     chk('role_playback_' + idx, STRINGS.role.playbackGroup, m.EnableMediaPlayback !== false) +
+-                    chk('role_transcode_' + idx, STRINGS.role.transcoding, m.EnableTranscoding !== false) +
++                    chk('role_audio_transcode_' + idx, STRINGS.role.audioTranscoding, (m.EnableAudioTranscoding ?? m.EnableTranscoding) !== false) +
++                    chk('role_video_transcode_' + idx, STRINGS.role.videoTranscoding, (m.EnableVideoTranscoding ?? m.EnableTranscoding) !== false) +
+                     chk('role_remote_' + idx, STRINGS.role.remoteAccess, m.EnableRemoteAccess !== false)) +
+                 permGroup(STRINGS.role.liveTvGroup,
+                     chk('role_livetv_' + idx, STRINGS.role.liveTvAccess, m.EnableLiveTv) +
+@@ -163,7 +164,8 @@
+             EnableLiveTvManagement: gchk(view, 'role_livetvmgmt_' + idx),
+             EnableMediaPlayback: gchk(view, 'role_playback_' + idx),
+             EnableRemoteAccess: gchk(view, 'role_remote_' + idx),
+-            EnableTranscoding: gchk(view, 'role_transcode_' + idx),
++            EnableAudioTranscoding: gchk(view, 'role_audio_transcode_' + idx),
++            EnableVideoTranscoding: gchk(view, 'role_video_transcode_' + idx),
+             EnableContentDeletion: gchk(view, 'role_delete_' + idx),
+             EnableCollectionManagement: gchk(view, 'role_collections_' + idx),
+             EnableSubtitleManagement: gchk(view, 'role_subtitles_' + idx),
+--- a/Jellyfin.Plugin.OIDC/Configuration/src/strings.js
++++ b/Jellyfin.Plugin.OIDC/Configuration/src/strings.js
+@@ -174,7 +174,8 @@
+         permissionsNote: 'Multiple matching roles combine permissions; the strictest parental rating wins.',
+         administrator: 'Administrator',
+         playbackGroup: 'Playback',
+-        transcoding: 'Transcoding',
++        audioTranscoding: 'Audio transcoding',
++        videoTranscoding: 'Video transcoding',
+         remoteAccess: 'Remote Access',
+         liveTvGroup: 'Live TV',
+         liveTvAccess: 'Access',
+--- a/Jellyfin.Plugin.OIDC/Configuration/oidcrbac.js
++++ b/Jellyfin.Plugin.OIDC/Configuration/oidcrbac.js
+@@ -162,7 +162,8 @@
+     permissionsNote: "Multiple matching roles combine permissions; the strictest parental rating wins.",
+     administrator: "Administrator",
+     playbackGroup: "Playback",
+-    transcoding: "Transcoding",
++    audioTranscoding: "Audio transcoding",
++    videoTranscoding: "Video transcoding",
+     remoteAccess: "Remote Access",
+     liveTvGroup: "Live TV",
+     liveTvAccess: "Access",
+@@ -846,7 +847,7 @@
+       { class: "oidc-field full oidc-mt-sm" },
+       el("label", null, STRINGS.role.permissionsLabel + el("span", { class: "fieldDescription" }, STRINGS.role.permissionsHint)) + el("p", { class: "fieldDescription oidc-hint-tight" }, STRINGS.role.permissionsNote) + el("div", { class: "oidc-checkbox-row oidc-mt-xs" }, chk("role_admin_" + idx, STRINGS.role.administrator, m.IsAdmin)) + permGroup(
+         STRINGS.role.playbackGroup,
+-        chk("role_playback_" + idx, STRINGS.role.playbackGroup, m.EnableMediaPlayback !== false) + chk("role_transcode_" + idx, STRINGS.role.transcoding, m.EnableTranscoding !== false) + chk("role_remote_" + idx, STRINGS.role.remoteAccess, m.EnableRemoteAccess !== false)
++        chk("role_playback_" + idx, STRINGS.role.playbackGroup, m.EnableMediaPlayback !== false) + chk("role_audio_transcode_" + idx, STRINGS.role.audioTranscoding, (m.EnableAudioTranscoding ?? m.EnableTranscoding) !== false) + chk("role_video_transcode_" + idx, STRINGS.role.videoTranscoding, (m.EnableVideoTranscoding ?? m.EnableTranscoding) !== false) + chk("role_remote_" + idx, STRINGS.role.remoteAccess, m.EnableRemoteAccess !== false)
+       ) + permGroup(
+         STRINGS.role.liveTvGroup,
+         chk("role_livetv_" + idx, STRINGS.role.liveTvAccess, m.EnableLiveTv) + chk("role_livetvmgmt_" + idx, STRINGS.role.liveTvRecordingManagement, m.EnableLiveTvManagement)
+@@ -898,7 +899,8 @@
+       EnableLiveTvManagement: gchk(view, "role_livetvmgmt_" + idx),
+       EnableMediaPlayback: gchk(view, "role_playback_" + idx),
+       EnableRemoteAccess: gchk(view, "role_remote_" + idx),
+-      EnableTranscoding: gchk(view, "role_transcode_" + idx),
++      EnableAudioTranscoding: gchk(view, "role_audio_transcode_" + idx),
++      EnableVideoTranscoding: gchk(view, "role_video_transcode_" + idx),
+       EnableContentDeletion: gchk(view, "role_delete_" + idx),
+       EnableCollectionManagement: gchk(view, "role_collections_" + idx),
+       EnableSubtitleManagement: gchk(view, "role_subtitles_" + idx),
+--- a/CONFIGURATION.md
++++ b/CONFIGURATION.md
+@@ -107,7 +107,15 @@
+ **Example - Standard user:**
+ - Role Name: `jellyfin-users`
+ - Libraries: select specific libraries
+-- Playback, Remote Access, Transcoding: checked
++- Playback, Remote Access, Audio transcoding, Video transcoding: checked
++
++Audio and video transcoding can be controlled independently with
++`EnableAudioTranscoding` and `EnableVideoTranscoding` in each role mapping.
++If either setting is omitted or null, it inherits the legacy `EnableTranscoding`
++value (default: true). Explicit per-media settings override that legacy value.
++Permissions are still unioned across matching roles: any role allowing a media
++transcode enables it. Saving mappings in the admin page writes both settings
++explicitly.
+ 
+ **Example - Kids:**
+ - Role Name: `jellyfin-kids`
+--- a/Jellyfin.Plugin.OIDC.Tests/Services/RbacServiceTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Services/RbacServiceTests.cs
+@@ -96,6 +96,96 @@
+ 
+         await userManager.Received(1)
+             .UpdatePolicyAsync(userId, Arg.Is<UserPolicy>(p => p.EnableMediaPlayback));
++    }
++
++    [Theory]
++    [InlineData(true, null, null, true, true)]
++    [InlineData(false, null, null, false, false)]
++    [InlineData(true, true, false, true, false)]
++    [InlineData(false, true, false, true, false)]
++    [InlineData(true, false, true, false, true)]
++    [InlineData(false, false, true, false, true)]
++    [InlineData(true, null, false, true, false)]
++    [InlineData(false, true, null, true, false)]
++    public async Task Transcoding_PerMediaOverridesLegacy(
++        bool legacy, bool? audio, bool? video, bool expectedAudio, bool expectedVideo)
++    {
++        var userId = Guid.NewGuid();
++        var userManager = Substitute.For<IUserManager>();
++        userManager.GetUserById(userId).Returns(MakeUser());
++        userManager.UpdatePolicyAsync(Arg.Any<Guid>(), Arg.Any<UserPolicy>()).Returns(Task.CompletedTask);
++        _fixture.SetConfiguration(new PluginConfiguration
++        {
++            RoleMappings = [new RoleMapping
++            {
++                RoleName = "users", EnableTranscoding = legacy,
++                EnableAudioTranscoding = audio, EnableVideoTranscoding = video
++            }]
++        });
++
++        await MakeService(userManager, Substitute.For<ILibraryManager>())
++            .ApplyRoleMappingsAsync(userId, ["users"], "authentik");
++
++        await userManager.Received(1).UpdatePolicyAsync(userId, Arg.Is<UserPolicy>(p =>
++            p.EnableAudioPlaybackTranscoding == expectedAudio &&
++            p.EnableVideoPlaybackTranscoding == expectedVideo));
++    }
++
++    [Theory]
++    [InlineData(false, false)]
++    [InlineData(true, true)]
++    [InlineData(null, true)]
++    public async Task Transcoding_ResolvesFallbackBeforeUnion(bool? otherVideo, bool expectedVideo)
++    {
++        var userId = Guid.NewGuid();
++        var userManager = Substitute.For<IUserManager>();
++        userManager.GetUserById(userId).Returns(MakeUser());
++        userManager.UpdatePolicyAsync(Arg.Any<Guid>(), Arg.Any<UserPolicy>()).Returns(Task.CompletedTask);
++        _fixture.SetConfiguration(new PluginConfiguration
++        {
++            RoleMappings =
++            [
++                new RoleMapping
++                {
++                    RoleName = "users", EnableTranscoding = false,
++                    EnableAudioTranscoding = true, EnableVideoTranscoding = false
++                },
++                new RoleMapping
++                {
++                    RoleName = "admins", EnableTranscoding = true,
++                    EnableAudioTranscoding = false, EnableVideoTranscoding = otherVideo
++                }
++            ]
++        });
++
++        await MakeService(userManager, Substitute.For<ILibraryManager>())
++            .ApplyRoleMappingsAsync(userId, ["users", "admins"], "authentik");
++
++        await userManager.Received(1).UpdatePolicyAsync(userId, Arg.Is<UserPolicy>(p =>
++            p.EnableAudioPlaybackTranscoding && p.EnableVideoPlaybackTranscoding == expectedVideo));
++    }
++
++    [Theory]
++    [InlineData(true)]
++    [InlineData(false)]
++    public void Transcoding_LegacyXmlAndExplicitOverridesRoundTrip(bool legacy)
++    {
++        var serializer = new System.Xml.Serialization.XmlSerializer(typeof(RoleMapping));
++        using var reader = new StringReader(
++            $"<RoleMapping><EnableTranscoding>{legacy.ToString().ToLowerInvariant()}</EnableTranscoding></RoleMapping>");
++        var mapping = Assert.IsType<RoleMapping>(serializer.Deserialize(reader));
++        Assert.Equal(legacy, mapping.EnableTranscoding);
++        Assert.Null(mapping.EnableAudioTranscoding);
++        Assert.Null(mapping.EnableVideoTranscoding);
++        mapping.EnableAudioTranscoding = true;
++        mapping.EnableVideoTranscoding = false;
++        using var writer = new StringWriter();
++        serializer.Serialize(writer, mapping);
++        using var roundTripReader = new StringReader(writer.ToString());
++        var roundTrip = Assert.IsType<RoleMapping>(serializer.Deserialize(roundTripReader));
++        Assert.Equal(legacy, roundTrip.EnableTranscoding);
++        Assert.True(roundTrip.EnableAudioTranscoding);
++        Assert.False(roundTrip.EnableVideoTranscoding);
+     }
+ 
+     // ── provider filter ────────────────────────────────────────────────────────
+--- a/Jellyfin.Plugin.OIDC/Configuration/src/oidcrbac.test.js
++++ b/Jellyfin.Plugin.OIDC/Configuration/src/oidcrbac.test.js
+@@ -454,6 +454,28 @@
+ });
+ 
+ describe('renderRoleMappings / collectRoleMappings', () => {
++    it.each([
++        [{}, true, true],
++        [{ EnableTranscoding: false }, false, false],
++        [{ EnableTranscoding: true, EnableAudioTranscoding: null, EnableVideoTranscoding: null }, true, true],
++        [{ EnableTranscoding: true, EnableAudioTranscoding: true, EnableVideoTranscoding: false }, true, false],
++        [{ EnableTranscoding: false, EnableAudioTranscoding: true, EnableVideoTranscoding: false }, true, false]
++    ])('round-trips independent transcoding settings for %j', (settings, audio, video) => {
++        __setTestState({ cfg: { RoleMappings: [{ RoleName: 'users', ...settings }], Providers: [] } });
++        const view = makeView('<div id="roleMappingList"></div><select id="defaultRoleName"></select>');
++        renderRoleMappings(view);
++        expect(view.querySelector('#role_audio_transcode_0').checked).toBe(audio);
++        expect(view.querySelector('#role_video_transcode_0').checked).toBe(video);
++        expect(collectRoleMappings(view)[0]).toMatchObject({
++            EnableAudioTranscoding: audio, EnableVideoTranscoding: video
++        });
++        view.querySelector('#role_audio_transcode_0').checked = !audio;
++        view.querySelector('#role_video_transcode_0').checked = !video;
++        expect(collectRoleMappings(view)[0]).toMatchObject({
++            EnableAudioTranscoding: !audio, EnableVideoTranscoding: !video
++        });
++    });
++
+     it('shows the empty-state message and fills the fallback-role select from cfg when there are no mappings', () => {
+         __setTestState({ cfg: { RoleMappings: [], Providers: [], DefaultRoleName: '' } });
+         const view = makeView('<div id="roleMappingList"></div><select id="defaultRoleName"></select>');

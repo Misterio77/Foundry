@@ -14,7 +14,7 @@ buildDotnetModule rec {
     tag = "v${version}";
     hash = "sha256-gY4i4e/LAZil0wz6z4IJxv9v5ndG5AahiXfhomC11G8=";
   };
-  patches = [./device-code.patch ./device-code-tests.patch ./localization.patch];
+  patches = [./device-code.patch ./device-code-tests.patch ./localization.patch ./transcoding.patch];
 
   projectFile = "Jellyfin.Plugin.OIDC/Jellyfin.Plugin.OIDC.csproj";
   testProjectFile = "Jellyfin.Plugin.OIDC.Tests/Jellyfin.Plugin.OIDC.Tests.csproj";
