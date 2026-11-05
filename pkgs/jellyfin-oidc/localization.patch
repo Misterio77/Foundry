@@ -1,0 +1,221 @@
+--- a/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
++++ b/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
+@@ -1,9 +1,9 @@
+ <!DOCTYPE html>
+-<html>
++<html lang="en">
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+-<title>Quick Connect</title>
++<title data-i18n="title">Quick Connect</title>
+ <style nonce="__CSP_NONCE__">
+     body { font-family: system-ui, -apple-system, sans-serif; background: #101010; color: #eee;
+            display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+@@ -24,23 +24,58 @@
+ </head>
+ <body>
+ <div class="card">
+-    <h2>Quick Connect</h2>
+-    <p>Enter the code shown on your device to finish signing in.</p>
++    <h2 data-i18n="heading">Quick Connect</h2>
++    <p data-i18n="description">Enter the code shown on your device to finish signing in.</p>
+     <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off"
+            placeholder="000000" aria-label="Quick Connect code">
+-    <button id="submit">Authorize</button>
++    <button id="submit" data-i18n="authorize">Authorize</button>
+     <div id="msg"></div>
+ </div>
++<script type="application/json" id="oidc-messages">
++{
++    "en": {
++        "title": "Quick Connect",
++        "heading": "Quick Connect",
++        "description": "Enter the code shown on your device to finish signing in.",
++        "authorize": "Authorize",
++        "codeLabel": "Quick Connect code",
++        "authorizing": "Authorizing...",
++        "approved": "Approved! Return to your device - it should sign in shortly.",
++        "error": "Error "
++    },
++    "pt-BR": {
++        "title": "Autorizar dispositivo",
++        "heading": "Autorizar dispositivo",
++        "description": "Digite o código exibido no seu dispositivo para concluir a entrada.",
++        "authorize": "Autorizar",
++        "codeLabel": "Código do dispositivo",
++        "authorizing": "Autorizando…",
++        "approved": "Autorizado! Volte ao seu dispositivo — ele deve entrar em instantes.",
++        "error": "Erro "
++    }
++}
++</script>
+ <script type="application/json" id="oidc-data">__DATA_JSON__</script>
+ <script nonce="__CSP_NONCE__">
+ (function() {
+     const data = JSON.parse(document.getElementById('oidc-data').textContent);
++    const preferredLanguages = navigator.languages && navigator.languages.length
++        ? navigator.languages : [navigator.language || 'en'];
++    const language = preferredLanguages.find(value => /^(en|pt)(-|$)/i.test(value)) || 'en';
++    const locale = language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en';
++    const messages = JSON.parse(document.getElementById('oidc-messages').textContent)[locale];
++    document.documentElement.lang = locale;
++    for (const element of document.querySelectorAll('[data-i18n]')) {
++        element.textContent = messages[element.dataset.i18n];
++    }
++
+     // Served at .../sso/OIDC/Callback/{id}; resolve the sibling authorize endpoint relative to it.
+     const authorizeUrl = new URL('../QuickConnect/Authorize/' + encodeURIComponent(data.providerId), window.location.href);
+     const codeInput = document.getElementById('code');
+     const button = document.getElementById('submit');
+     const msg = document.getElementById('msg');
+ 
++    codeInput.setAttribute('aria-label', messages.codeLabel);
+     codeInput.value = data.userCode || '';
+     codeInput.focus();
+ 
+@@ -49,7 +84,7 @@
+         if (!code) { return; }
+         button.disabled = true;
+         msg.className = '';
+-        msg.textContent = 'Authorizing...';
++        msg.textContent = messages.authorizing;
+ 
+         fetch(authorizeUrl, {
+             method: 'POST',
+@@ -58,12 +93,12 @@
+         })
+         .then(function(r) {
+             return r.text().then(function(body) {
+-                if (!r.ok) { throw new Error(body || ('Error ' + r.status)); }
++                if (!r.ok) { throw new Error(body || (messages.error + r.status)); }
+             });
+         })
+         .then(function() {
+             msg.className = 'ok';
+-            msg.textContent = 'Approved! Return to your device - it should sign in shortly.';
++            msg.textContent = messages.approved;
+             codeInput.disabled = true;
+             button.disabled = true;
+         })
+--- a/Jellyfin.Plugin.OIDC/Configuration/CallbackPage.html
++++ b/Jellyfin.Plugin.OIDC/Configuration/CallbackPage.html
+@@ -1,9 +1,9 @@
+ <!DOCTYPE html>
+-<html>
++<html lang="en">
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+-<title>Authenticating...</title>
++<title data-i18n="title">Authenticating...</title>
+ <style nonce="__CSP_NONCE__">
+     :root { color-scheme: dark; }
+     body { font-family: system-ui, -apple-system, sans-serif; background: #101010; color: #eee;
+@@ -21,13 +21,43 @@
+ <body>
+ <main class="card">
+     <div class="spinner" aria-hidden="true"></div>
+-    <h2>Completing authentication…</h2>
+-    <p id="status" role="status">Please wait…</p>
++    <h2 data-i18n="heading">Completing authentication…</h2>
++    <p id="status" role="status" data-i18n="waiting">Please wait…</p>
+ </main>
++<script type="application/json" id="oidc-messages">
++{
++    "en": {
++        "title": "Authenticating...",
++        "heading": "Completing authentication…",
++        "waiting": "Please wait…",
++        "success": "Success! Redirecting...",
++        "error": "Error: ",
++        "authFailed": "Auth failed: "
++    },
++    "pt-BR": {
++        "title": "Autenticando...",
++        "heading": "Concluindo autenticação…",
++        "waiting": "Aguarde…",
++        "success": "Pronto! Redirecionando...",
++        "error": "Erro: ",
++        "authFailed": "Falha na autenticação: "
++    }
++}
++</script>
+ <script type="application/json" id="oidc-data">__DATA_JSON__</script>
+ <script nonce="__CSP_NONCE__">
+ (function() {
+     const data = JSON.parse(document.getElementById('oidc-data').textContent);
++    const preferredLanguages = navigator.languages && navigator.languages.length
++        ? navigator.languages : [navigator.language || 'en'];
++    const language = preferredLanguages.find(value => /^(en|pt)(-|$)/i.test(value)) || 'en';
++    const locale = language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en';
++    const messages = JSON.parse(document.getElementById('oidc-messages').textContent)[locale];
++    document.documentElement.lang = locale;
++    for (const element of document.querySelectorAll('[data-i18n]')) {
++        element.textContent = messages[element.dataset.i18n];
++    }
++
+ 
+     // The page is served at .../sso/OIDC/Callback/{id}; resolve the sibling Auth endpoint and
+     // the Jellyfin app root relative to it, so the base path (Networking > Base URL) and the
+@@ -50,7 +80,7 @@
+         })
+     })
+     .then(function(r) {
+-        if (!r.ok) throw new Error('Auth failed: ' + r.status);
++        if (!r.ok) throw new Error(messages.authFailed + r.status);
+         return r.json();
+     })
+     .then(function(auth) {
+@@ -65,11 +95,11 @@
+         };
+         localStorage.setItem(data.credentialsKey, JSON.stringify(credentials));
+ 
+-        document.getElementById('status').textContent = 'Success! Redirecting...';
++        document.getElementById('status').textContent = messages.success;
+         window.location.href = appRoot.href;
+     })
+     .catch(function(err) {
+-        document.getElementById('status').textContent = 'Error: ' + err.message;
++        document.getElementById('status').textContent = messages.error + err.message;
+     });
+ })();
+ </script>
+--- a/Jellyfin.Plugin.OIDC.Tests/Services/EmbeddedPageTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Services/EmbeddedPageTests.cs
+@@ -1,5 +1,7 @@
+ using System;
+ using System.Collections.Generic;
++using System.Text.Json;
++using System.Text.RegularExpressions;
+ using Jellyfin.Plugin.OIDC.Services;
+ using Xunit;
+ 
+@@ -80,4 +82,27 @@
+         Assert.Contains("{\"token\":\"__CSP_NONCE__\"}", html);
+         Assert.Contains("<style nonce=\"realnonce\">", html);
+     }
++
++    [Theory]
++    [InlineData("QuickConnectPage.html")]
++    [InlineData("CallbackPage.html")]
++    public void Render_LocalizedPagesHaveMatchingNonemptyEnglishAndPortugueseMessages(string page)
++    {
++        var html = EmbeddedPage.Render(page, CallbackValues);
++        var match = Regex.Match(html, "<script type=\"application/json\" id=\"oidc-messages\">(.*?)</script>", RegexOptions.Singleline);
++        Assert.True(match.Success);
++        using var document = JsonDocument.Parse(match.Groups[1].Value);
++        var english = document.RootElement.GetProperty("en");
++        var portuguese = document.RootElement.GetProperty("pt-BR");
++        foreach (var message in english.EnumerateObject())
++        {
++            Assert.False(string.IsNullOrWhiteSpace(message.Value.GetString()));
++            Assert.False(string.IsNullOrWhiteSpace(portuguese.GetProperty(message.Name).GetString()));
++        }
++        foreach (var message in portuguese.EnumerateObject())
++        {
++            Assert.True(english.TryGetProperty(message.Name, out _));
++        }
++    }
++
+ }

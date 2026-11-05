@@ -123,6 +123,17 @@ flat DLL/metadata layout. Full web/host builds remain for CI. After deploying Me
 actual Gablogin/MFA round-trip, explicit approval, expired-code retry and native
 app handoff with a real requesting device.
 
+## OIDC page language
+
+The plugin's standalone approval and authentication callback pages select the
+first supported language from the browser's preferences: English or Portuguese
+(including `pt-BR` and `pt-PT`), with English as fallback. This is independent of
+the language selected inside Jellyfin Web. Labels, accessible input text,
+approval progress/success and callback status are localized; raw server error
+diagnostics are preserved. Device-code prefill still requires explicit approval.
+The translation dictionaries are covered by the plugin's upstream xUnit suite;
+the new patch still needs CI and live browser verification.
+
 ## Logout and revocation
 
 The Authentik Blueprint configures the plugin's native signed back-channel
