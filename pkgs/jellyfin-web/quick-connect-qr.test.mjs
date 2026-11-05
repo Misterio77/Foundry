@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import quickConnectQrHtml from './jellyfin-quick-connect-qr.mjs';
+import quickConnectQrHtml from './quick-connect-qr.mjs';
 
 for (const code of ['000000', '012345', '999999']) {
     test('encodes a public approval link for ' + code, () => {

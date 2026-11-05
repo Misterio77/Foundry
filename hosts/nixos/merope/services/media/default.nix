@@ -1,6 +1,6 @@
 {
   imports = [
-    ./jellyfin.nix
+    ./jellyfin
     ./lidarr.nix
     ./readarr.nix
     ./calibre-web.nix

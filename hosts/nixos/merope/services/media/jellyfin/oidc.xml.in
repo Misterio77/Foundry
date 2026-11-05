@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PluginConfiguration>
+  <Providers>
+    <OidcProviderConfig>
+      <ProviderId>authentik</ProviderId>
+      <DisplayName>Gablogin</DisplayName>
+      <Authority>https://auth.m7.rs/application/o/jellyfin/</Authority>
+      <ClientId>jellyfin</ClientId>
+      <ClientSecretFile>@clientSecretFile@</ClientSecretFile>
+      <Scopes>openid profile email</Scopes>
+      <RoleClaim>groups</RoleClaim>
+      <UsernameClaim>preferred_username</UsernameClaim>
+      <SyncProfileImage>false</SyncProfileImage>
+      <SyncDisplayName>false</SyncDisplayName>
+      <TrustedForEmailLinking>false</TrustedForEmailLinking>
+      <StrictAccessTokenValidation>true</StrictAccessTokenValidation>
+      <Enabled>true</Enabled>
+      <PinnedAuthority>https://auth.m7.rs/application/o/jellyfin/</PinnedAuthority>
+      <PinnedIssuer>https://auth.m7.rs/application/o/jellyfin/</PinnedIssuer>
+      <PinnedAuthorizeEndpoint>https://auth.m7.rs/application/o/authorize/</PinnedAuthorizeEndpoint>
+      <PinnedTokenEndpoint>https://auth.m7.rs/application/o/token/</PinnedTokenEndpoint>
+      <PinnedJwksUri>https://auth.m7.rs/application/o/jellyfin/jwks/</PinnedJwksUri>
+      <PinnedUserInfoEndpoint>https://auth.m7.rs/application/o/userinfo/</PinnedUserInfoEndpoint>
+    </OidcProviderConfig>
+  </Providers>
+  <AutoCreateUsers>false</AutoCreateUsers>
+  <MigrateLocalUsers>false</MigrateLocalUsers>
+  <LinkExistingUsersByEmail>false</LinkExistingUsersByEmail>
+  <AllowedGroups><string>jellyfin-access</string></AllowedGroups>
+  <DefaultRoleName />
+  <!-- Keep existing per-user permissions, including library restrictions and administrator status. -->
+  <ManageUserPolicy>false</ManageUserPolicy>
+  <EnableLibraryAccessManagement>false</EnableLibraryAccessManagement>
+  <ManageLoginButtonBranding>false</ManageLoginButtonBranding>
+  <HideManualLogin>true</HideManualLogin>
+  <LoginTitle />
+  <ServerBaseUrl>https://media.m7.rs</ServerBaseUrl>
+</PluginConfiguration>

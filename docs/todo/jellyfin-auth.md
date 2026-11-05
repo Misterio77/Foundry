@@ -1,7 +1,9 @@
 # Jellyfin → Gablogin
 
 Jellyfin-side implementation lives in
-`hosts/nixos/merope/services/media/jellyfin.nix`; the Authentik provider is in
+`hosts/nixos/merope/services/media/jellyfin/default.nix`, with startup validation
+and branding assets alongside it. The customized web client is packaged under
+`pkgs/jellyfin-web/`; the Authentik provider is in
 `hosts/nixos/alcyone/services/authentik/jellyfin.yaml`. No extra Jellyfin feature
 options or staging switches are used.
 
@@ -97,8 +99,8 @@ not Findroid's native interface or clients bundling their own web assets.
 The server-served web client's device-code dialog includes a locally generated,
 clickable QR carrying the public code. Beneath it, a single fallback instruction
 reads **Ou visite https://media.m7.rs/connect e digite {code}**; there is no
-separate caption or visible approval URL containing the code. The QR library is hash-pinned and bundled at
-build time; no external image-generation service receives the URL or code. The
+separate caption or visible approval URL containing the code. The QR library is
+hash-pinned and bundled at build time; no external image-generation service receives the URL or code. The
 existing polling secret is used only by the normal device polling/login flow,
 never passed to the QR renderer. Invalid codes produce no QR. The generated SVG
 includes a white background and four-module quiet zone for scanning in dark mode.

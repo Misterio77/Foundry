@@ -1,0 +1,20 @@
+#loginPage .loginDisclaimerContainer { display: block; margin-top: .5em; }
+#loginPage .loginDisclaimer { width: 100%; margin: 0; }
+#loginPage .btnQuick,
+#loginPage .foundry-oidc-login .emby-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3.25em;
+  margin: .25em 0;
+  padding: .9em 1em;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+}
+#loginPage .manualLoginForm,
+#loginPage .visualLoginForm,
+#loginPage .btnManual,
+#loginPage .readOnlyContent .btnForgotPassword { display: none; }

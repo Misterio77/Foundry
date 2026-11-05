@@ -11,6 +11,7 @@ in {
   codex-imagegen-cli = pkgs.callPackage ./codex-imagegen-cli {};
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   jellyfin-oidc = pkgs.callPackage ./jellyfin-oidc {};
+  jellyfin-web-foundry = pkgs.callPackage ./jellyfin-web {};
   hax = pkgs.callPackage ./hax {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};
   materia-theme = pkgs.callPackage ./materia-theme {};
