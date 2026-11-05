@@ -2,6 +2,7 @@
 
 - [Authentik / Gablogin](authentik.md): access, application behavior and recovery.
 - [Backups](backups.md): declared coverage, restore evidence and gaps.
+- [Immich egress](todo/immich-egress.md): proposed lateral-movement containment.
 - [Atelier publishing](todo/atelier-publishing.md): unimplemented artifact boundary.
 
 Keep operational constraints and unresolved decisions here. Implementation details

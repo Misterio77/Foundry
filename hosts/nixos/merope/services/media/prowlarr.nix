@@ -39,12 +39,21 @@
   };
 
   # Disable DynamicUser
-  systemd.services.prowlarr.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User = lib.mkForce "prowlarr";
-    Group = lib.mkForce "prowlarr";
-    CPUWeight = 50;
-    IOWeight = 50;
+  systemd.services.prowlarr = {
+    preStart = ''
+      if [ -f /var/lib/prowlarr/config.xml ]; then
+        chmod 0600 /var/lib/prowlarr/config.xml
+      fi
+    '';
+    serviceConfig = {
+      DynamicUser = lib.mkForce false;
+      User = lib.mkForce "prowlarr";
+      Group = lib.mkForce "prowlarr";
+      StateDirectoryMode = "0700";
+      UMask = "0077";
+      CPUWeight = 50;
+      IOWeight = 50;
+    };
   };
   users = {
     users.prowlarr = {

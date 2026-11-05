@@ -1,4 +1,19 @@
-{config, ...}: {
+{config, ...}: let
+  isolatedFilesystem = {
+    ProtectSystem = "strict";
+    # Managed state/cache directories are automatically bound back into these views.
+    TemporaryFileSystem = ["/var/lib:ro" "/var/cache:ro" "/srv:ro"];
+    InaccessiblePaths = [
+      "/persist"
+      "-/run/secrets"
+      "-/run/secrets.d"
+      "-/run/user"
+      "-/run/podman"
+      "-/run/ssh-unix-local"
+      "/nix/var/nix/daemon-socket"
+    ];
+  };
+in {
   sops.secrets.authentik-immich-client-secret = {
     sopsFile = ../secrets.yaml;
     restartUnits = ["immich-server.service"];
@@ -73,10 +88,43 @@
   */
 
   systemd = {
-    services.immich-server = {
-      bindsTo = ["srv-media.mount"];
-      after = ["srv-media.mount"];
-      unitConfig.ConditionPathIsMountPoint = "/srv/media";
+    services = {
+      immich-server = {
+        bindsTo = ["srv-media.mount"];
+        after = ["srv-media.mount"];
+        unitConfig.ConditionPathIsMountPoint = "/srv/media";
+        serviceConfig =
+          isolatedFilesystem
+          // {
+            BindPaths = [config.services.immich.mediaLocation];
+            ReadWritePaths = [config.services.immich.mediaLocation];
+            StateDirectoryMode = "0700";
+            RuntimeDirectoryMode = "0700";
+          };
+      };
+      immich-machine-learning.serviceConfig =
+        isolatedFilesystem
+        // {
+          CacheDirectoryMode = "0700";
+          InaccessiblePaths =
+            isolatedFilesystem.InaccessiblePaths
+            ++ [
+              "-/run/immich"
+              "-/run/postgresql"
+              "-/run/redis-immich"
+            ];
+        };
+      immich-public-proxy.serviceConfig =
+        isolatedFilesystem
+        // {
+          InaccessiblePaths =
+            isolatedFilesystem.InaccessiblePaths
+            ++ [
+              "-/run/immich"
+              "-/run/postgresql"
+              "-/run/redis-immich"
+            ];
+        };
     };
 
     tmpfiles.settings.srv-media-photos."/srv/media/photos".d = {
