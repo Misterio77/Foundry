@@ -48,13 +48,16 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
  import { getSettings } from '@server/lib/settings';
  import logger from '@server/logger';
  import { isAuthenticated } from '@server/middleware/auth';
-@@ -24,6 +24,20 @@
+@@ -24,6 +24,23 @@
  import { z } from 'zod';
  
  const authRoutes = Router();
 +
 +authRoutes.use((req, res, next) => {
-+  const managed = getSettings().oidc.providers.some((p) => p.permissionsClaim);
++  const settings = getSettings();
++  const managed =
++    settings.main.oidcLogin &&
++    settings.oidc.providers.some((p) => p.permissionsClaim);
 +  const alternateLogin = /^\/(?:local|plex|jellyfin)(?:\/|$)/i.test(
 +    req.path
 +  );
@@ -69,7 +72,7 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
  
  export const quickConnectSecret = z.object({
    secret: z
-@@ -1157,6 +1167,20 @@
+@@ -1157,6 +1170,20 @@
        });
      }
  
@@ -90,7 +93,7 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
      // Map identifier to linked account
      const userRepository = getRepository(User);
      const linkedAccountsRepository = getRepository(LinkedAccount);
-@@ -1201,6 +1225,11 @@
+@@ -1201,6 +1228,11 @@
          await linkedAccountsRepository.save(newLinkedAccount);
        }
  
@@ -102,7 +105,7 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
        return res.sendStatus(204);
      }
  
-@@ -1233,7 +1262,7 @@
+@@ -1233,7 +1265,7 @@
          avatar: avatar,
          username: fullUserInfo.preferred_username,
          email: normalizedEmail,
@@ -111,7 +114,7 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
          plexToken: '',
          userType: UserType.LOCAL,
        });
-@@ -1261,6 +1290,11 @@
+@@ -1261,6 +1293,11 @@
            ? ApiErrorCode.OidcMissingEmail
            : ApiErrorCode.Unauthorized,
        });
@@ -126,11 +129,14 @@ diff --git a/server/routes/auth.ts b/server/routes/auth.ts
 diff --git a/server/routes/user/index.ts b/server/routes/user/index.ts
 --- a/server/routes/user/index.ts
 +++ b/server/routes/user/index.ts
-@@ -514,6 +514,13 @@
+@@ -514,6 +514,16 @@
    { ids: string[]; permissions: number }
  >('/', isAuthenticated(Permission.MANAGE_USERS), async (req, res, next) => {
    try {
-+    if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++    if (
++      getSettings().main.oidcLogin &&
++      getSettings().oidc.providers.some((p) => p.permissionsClaim)
++    ) {
 +      return next({
 +        status: 403,
 +        message: 'Permissions are managed by the identity provider',
@@ -140,11 +146,14 @@ diff --git a/server/routes/user/index.ts b/server/routes/user/index.ts
      const isOwner = req.user?.id === 1;
  
      if (!canMakePermissionsChange(req.body.permissions, req.user)) {
-@@ -553,6 +560,13 @@
+@@ -553,6 +563,16 @@
    isAuthenticated(Permission.MANAGE_USERS),
    async (req, res, next) => {
      try {
-+      if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++      if (
++        getSettings().main.oidcLogin &&
++        getSettings().oidc.providers.some((p) => p.permissionsClaim)
++      ) {
 +        return next({
 +          status: 403,
 +          message: 'Permissions are managed by the identity provider',
@@ -157,11 +166,14 @@ diff --git a/server/routes/user/index.ts b/server/routes/user/index.ts
 diff --git a/server/routes/user/usersettings.ts b/server/routes/user/usersettings.ts
 --- a/server/routes/user/usersettings.ts
 +++ b/server/routes/user/usersettings.ts
-@@ -838,6 +838,13 @@
+@@ -838,6 +838,16 @@
    '/permissions',
    isAuthenticated(Permission.MANAGE_USERS),
    async (req, res, next) => {
-+    if (getSettings().oidc.providers.some((p) => p.permissionsClaim)) {
++    if (
++      getSettings().main.oidcLogin &&
++      getSettings().oidc.providers.some((p) => p.permissionsClaim)
++    ) {
 +      return next({
 +        status: 403,
 +        message: 'Permissions are managed by the identity provider',
