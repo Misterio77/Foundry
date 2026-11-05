@@ -24,8 +24,10 @@
         roleClaim = "immich_role";
         storageQuotaClaim = "immich_quota";
         signingAlgorithm = "RS256";
-        buttonText = "Sign in with Authentik";
+        buttonText = "Entrar com Gablogin";
         autoLaunch = true;
+        # Good to keep an eye in https://github.com/immich-app/immich/discussions/32542
+        accountManagementUrl = "https://auth.m7.rs/if/user/#/settings";
         autoRegister = true;
         mobileOverrideEnabled = false;
       };
