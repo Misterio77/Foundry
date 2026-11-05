@@ -92,8 +92,21 @@ code can be edited and retried using the existing approval form.
 The two web-client strings are customized in Brazilian Portuguese and the default
 English catalog; other locales are unchanged. A web rebuild produces new asset
 content hashes. This affects browsers and clients using the server's web UI,
-not Findroid's native interface or clients bundling their own web assets. No
-client-side QR display has been added yet.
+not Findroid's native interface or clients bundling their own web assets.
+
+The server-served web client's device-code dialog includes a locally generated,
+clickable QR carrying the public code. Beneath it, a single fallback instruction
+reads **Ou visite https://media.m7.rs/connect e digite {code}**; there is no
+separate caption or visible approval URL containing the code. The QR library is hash-pinned and bundled at
+build time; no external image-generation service receives the URL or code. The
+existing polling secret is used only by the normal device polling/login flow,
+never passed to the QR renderer. Invalid codes produce no QR. The generated SVG
+includes a white background and four-module quiet zone for scanning in dark mode.
+
+Fourteen QR helper tests pass, and decoding a rendered test QR recovered exactly
+`https://media.m7.rs/connect?user_code=012345`. The helper tests also run before
+the web production build in CI. The full patched web bundle and real-device scan
+still need CI/deployment verification; this does not alter native client screens.
 
 The patched plugin built and all 589 tests passed, including URL validation,
 leading zeroes, optional manual entry, OIDC round-trip and callback-tampering

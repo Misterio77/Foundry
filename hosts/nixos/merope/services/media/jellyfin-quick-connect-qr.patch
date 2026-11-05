@@ -1,0 +1,38 @@
+--- a/src/apps/legacy/controllers/session/login/index.js
++++ b/src/apps/legacy/controllers/session/login/index.js
+@@ -19,6 +19,7 @@
+ import dialogHelper from 'components/dialogHelper/dialogHelper';
+ import baseAlert from 'components/alert';
+ import { getDefaultBackgroundClass } from 'components/cardbuilder/utils/builder';
++import quickConnectQrHtml from 'scripts/foundryQuickConnect';
+ 
+ import './login.scss';
+ 
+@@ -67,7 +68,7 @@
+                 id: 'quickConnectAlert'
+             },
+             title: globalize.translate('QuickConnect'),
+-            text: globalize.translate('QuickConnectAuthorizeCode', json.Code)
++            html: quickConnectQrHtml(json.Code) + globalize.translate('QuickConnectAuthorizeCode', json.Code)
+         });
+ 
+         const connectUrl = apiClient.getUrl('/QuickConnect/Connect?Secret=' + json.Secret);
+--- a/src/apps/legacy/controllers/session/login/login.scss
++++ b/src/apps/legacy/controllers/session/login/login.scss
+@@ -24,3 +24,16 @@
+         width: fit-content;
+     }
+ }
++
++.foundry-quick-connect-qr {
++    display: block;
++    width: 16em;
++    max-width: 100%;
++    margin: 1em auto;
++}
++
++.foundry-quick-connect-qr svg {
++    display: block;
++    width: 100%;
++    height: auto;
++}

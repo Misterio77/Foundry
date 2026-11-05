@@ -7,16 +7,32 @@
 }: let
   jf = config.services.jellyfin;
   port = 8096;
+  qrGenerator = pkgs.fetchzip {
+    url = "https://registry.npmjs.org/qrcode-generator/-/qrcode-generator-1.4.4.tgz";
+    hash = "sha256-ONLzg6Cc3zn2OFivSurZAbxQOQbtdtZdk/EtaJwLr84=";
+  };
   web = pkgs.jellyfin-web.overrideAttrs (old: {
+    patches = (old.patches or []) ++ [./jellyfin-quick-connect-qr.patch];
     postPatch =
       (old.postPatch or "")
       + ''
+        cp ${qrGenerator}/qrcode.js src/scripts/qrcode.cjs
+        cp ${./jellyfin-quick-connect-qr.mjs} src/scripts/foundryQuickConnect.js
         substituteInPlace src/strings/en-us.json \
           --replace-fail '"ButtonUseQuickConnect": "Use Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
-          --replace-fail '"QuickConnectAuthorizeCode": "Enter code {0} to login"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/connect em outro dispositivo e digite o código {0}"'
+          --replace-fail '"QuickConnectAuthorizeCode": "Enter code {0} to login"' '"QuickConnectAuthorizeCode": "Ou visite https://media.m7.rs/connect e digite {0}"'
         substituteInPlace src/strings/pt-br.json \
           --replace-fail '"ButtonUseQuickConnect": "Usar Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
-          --replace-fail '"QuickConnectAuthorizeCode": "Inserir código {0} para entrar"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/connect em outro dispositivo e digite o código {0}"'
+          --replace-fail '"QuickConnectAuthorizeCode": "Inserir código {0} para entrar"' '"QuickConnectAuthorizeCode": "Ou visite https://media.m7.rs/connect e digite {0}"'
+      '';
+    preBuild =
+      (old.preBuild or "")
+      + ''
+        mkdir -p "$TMPDIR/foundry-qr-tests"
+        cp ${./jellyfin-quick-connect-qr.mjs} "$TMPDIR/foundry-qr-tests/jellyfin-quick-connect-qr.mjs"
+        cp ${./jellyfin-quick-connect-qr.test.mjs} "$TMPDIR/foundry-qr-tests/jellyfin-quick-connect-qr.test.mjs"
+        cp ${qrGenerator}/qrcode.js "$TMPDIR/foundry-qr-tests/qrcode.cjs"
+        node --test "$TMPDIR/foundry-qr-tests/jellyfin-quick-connect-qr.test.mjs"
       '';
   });
   pluginDir = "${jf.dataDir}/plugins/Foundry-OIDC";
