@@ -61,6 +61,20 @@ idempotent branding updates that preserve existing HTML/CSS.
   Quick Connect. A fully automatic redirect from the web client's login route
   is not implemented; it is a browser-side hash route, not an nginx location.
 
+## Device sign-in instructions
+
+The server-served web client labels Quick Connect as **Entrar com outro
+dispositivo** and tells users to visit `https://media.m7.rs/quickconnect` and
+enter their displayed code. That URL redirects to the plugin's OIDC-aware device
+approval flow: authenticate with Gablogin, then explicitly approve the code.
+The two strings are customized in Brazilian Portuguese and the default English
+catalog; other locale catalogs are unchanged. Rebuilding the web client gives
+the changed assets new content hashes rather than patching cached bundles.
+
+This affects browsers and clients using the server's web UI, not Findroid's
+native interface or clients bundling their own web assets. It does not add QR
+codes or automatically carry a device code through OIDC.
+
 ## Logout and revocation
 
 The Authentik Blueprint configures the plugin's native signed back-channel

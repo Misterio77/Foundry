@@ -7,6 +7,18 @@
 }: let
   jf = config.services.jellyfin;
   port = 8096;
+  web = pkgs.jellyfin-web.overrideAttrs (old: {
+    postPatch =
+      (old.postPatch or "")
+      + ''
+        substituteInPlace src/strings/en-us.json \
+          --replace-fail '"ButtonUseQuickConnect": "Use Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
+          --replace-fail '"QuickConnectAuthorizeCode": "Enter code {0} to login"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/quickconnect em outro dispositivo e digite o código {0}"'
+        substituteInPlace src/strings/pt-br.json \
+          --replace-fail '"ButtonUseQuickConnect": "Usar Quick Connect"' '"ButtonUseQuickConnect": "Entrar com outro dispositivo"' \
+          --replace-fail '"QuickConnectAuthorizeCode": "Inserir código {0} para entrar"' '"QuickConnectAuthorizeCode": "Visite https://media.m7.rs/quickconnect em outro dispositivo e digite o código {0}"'
+      '';
+  });
   pluginDir = "${jf.dataDir}/plugins/Foundry-OIDC";
   pluginConfig = pkgs.writeText "Jellyfin.Plugin.OIDC.xml" ''
     <?xml version="1.0" encoding="utf-8"?>
@@ -52,7 +64,10 @@ in {
   # https://jellyfin.org/docs/general/post-install/networking/
   # TODO: https://github.com/Sveske-Juice/declarative-jellyfin
   services = {
-    jellyfin.enable = true;
+    jellyfin = {
+      enable = true;
+      package = pkgs.jellyfin.override {jellyfin-web = web;};
+    };
     nginx.virtualHosts = {
       "media.m7.rs" = {
         forceSSL = true;
@@ -69,6 +84,7 @@ in {
             proxy_set_header X-Forwarded-Host $host;
           '';
         };
+        locations."= /quickconnect".return = "302 /sso/OIDC/QuickConnect/authentik";
         # ASP.NET routes are case-insensitive; cover /Metrics too.
         locations."~* ^/metrics(?:/|$)" = {
           proxyPass = "http://localhost:${toString port}";
