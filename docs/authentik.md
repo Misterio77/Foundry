@@ -54,11 +54,32 @@ Authentik's application logout page. Native clients use Quick Connect:
 `https://media.m7.rs/connect`, optionally `?user_code=012345`. QR codes carry only
 the public six-digit code; approval remains explicit and the tab can then close.
 
+The patched plugin records each Jellyfin token's root OIDC identity, including
+Quick Connect approvals made from the native menu or `/connect`. Devices approved
+by a Quick Connect device inherit the same root. A delivered session-scoped
+back-channel logout revokes that root and its descendants, not independent
+logins. Token hashes, identity metadata and logout markers are persisted in
+`plugins/configurations/Jellyfin.Plugin.OIDC.SessionLineage.json` (mode `0600`);
+raw bearer tokens are not stored. Session inactivity does not remove lineage;
+cleanup verifies that the token itself is gone. Failed deletions retain their
+records and return an error so Authentik can retry, including partial failures.
+
+For the initial lineage rollout, revoke pre-existing Jellyfin devices explicitly
+and sign in again with OIDC before approving new devices. Old approval ancestry
+cannot be reconstructed; untracked sessions cannot approve more devices. There
+is no longer a restart fallback that logs out the entire account. A missing
+lineage match logs a migration warning instead. Corrupt state stops startup;
+failed writes reject the login/approval rather than issuing an untracked token.
+The tracking cap rejects new logins rather than evicting live revocation data.
+Verify the three-session revocation case, a chained approval, an independent
+OIDC login, a Jellyfin restart and an aged Authentik session after deployment.
+
 **Immich:** OAuth-only, auto-launch and auto-registration enabled. Existing
 accounts can link by matching email on first OAuth login: verify the intended
 email/identity before admission. Admin status syncs from `immich_role`; quota
 syncs from the user's `immich_quota` attribute (GiB, default 8; -1 unlimited).
-Browser/mobile access remains tailnet-only, except the public `/share` proxy.
+Browser/mobile access is public with native shared links; the separate public-share
+proxy has been removed.
 
 **Grafana:** OAuth-only with strict role mapping and no email-based linking or
 server-admin assignment. Anonymous tailnet viewing remains enabled. State is
@@ -129,9 +150,9 @@ blanket revocation guarantee. With the pinned Authentik and application patches:
 - Authentik session deletion dispatches against unexpired access tokens;
   Jellyfin's and Seerr's unrefreshed ten-minute tokens can age out of notification
   delivery.
-- Jellyfin's session correlation is in memory. Restart fallback can widen
-  revocation to all of a user's tokens; Quick Connect is not reliably scoped
-  to the originating browser session.
+- Jellyfin persists token-to-OIDC lineage and cascades delivered logout to Quick
+  Connect descendants, preserving independent logins across restarts. Pre-lineage
+  devices require explicit revocation and a fresh login; see the rollout above.
 - Seerr's correlation and revocation markers survive restarts, but only sessions
   created after the back-channel patch carry the required identity metadata.
 - Grafana sessions can survive IdP group/session changes.
@@ -152,7 +173,8 @@ IdP. Runtime secrets come from SOPS; never put them in Nix/store files or docs.
   key independently: changing it or normalizing it to a different value is not
   a formatting fix. Nix rollback does not undo DB migrations or Blueprint changes.
 - **Jellyfin:** restore `data/jellyfin.db` and
-  `plugins/configurations/Jellyfin.Plugin.OIDC.UserProviderMap.json` together
+  `plugins/configurations/Jellyfin.Plugin.OIDC.UserProviderMap.json` and
+  `plugins/configurations/Jellyfin.Plugin.OIDC.SessionLineage.json` together
   under `/var/lib/jellyfin`. Migration backups were placed under
   `/persist/var/backup/jellyfin-oidc/`. No local-password administrator remains.
   Local recovery requires deliberately relaxing the startup guard and changing

@@ -1,0 +1,1263 @@
+--- a/Jellyfin.Plugin.OIDC/Services/StateManager.cs
++++ b/Jellyfin.Plugin.OIDC/Services/StateManager.cs
+@@ -58,16 +58,11 @@
+     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+ }
+ 
+-/// 
+-/// A minted session correlated to its OIDC identity for back-channel logout targeting.
+-/// In-memory only, so a Jellyfin restart drops every entry here. That's fine for a bare
+-/// <c>sub</c> logout (resolved straight from <see cref="Configuration.PluginConfiguration.UserProviderMap"/>,
+-/// which is persisted), but a <c>sid</c>-only <c>logout_token</c> has no <c>sub</c> to fall
+-/// back to - see <see cref="Configuration.UserProviderEntry.LogoutSid"/>, which is what
+-/// actually keeps a sid-scoped logout resolvable across a restart, independently of this table.
+-/// 
++/// A minted token and its root OIDC identity, persisted for selective back-channel logout.
++/// Quick Connect descendants inherit the root identity, not a new independent session.
+ public sealed class TrackedSession
+ {
++    public string TokenHash { get; init; } = string.Empty;
+     public required string ProviderId { get; init; }
+     public required string Issuer { get; init; }
+     public required string Subject { get; init; }
+@@ -80,12 +75,11 @@
+     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+ }
+ 
+-public sealed class StateManager : IHostedService, IDisposable
++public sealed partial class StateManager : IHostedService, IDisposable
+ {
+     internal static readonly TimeSpan StateExpiry = TimeSpan.FromMinutes(10);
+     private static readonly TimeSpan SessionExpiry = TimeSpan.FromMinutes(5);
+     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(2);
+-    private static readonly TimeSpan TrackedSessionMaxAge = TimeSpan.FromDays(90);
+ 
+     // Hard caps prevent unbounded memory growth from unauthenticated flood attacks.
+     private const int MaxPendingStates = 500;
+@@ -191,16 +185,45 @@
+ 
+     public void TrackSession(TrackedSession session)
+     {
+-        if (_trackedSessions.Count >= MaxTrackedSessions)
++        lock (_trackingSync)
+         {
+-            SampledEviction.EvictSampled(_trackedSessions, s => s.CreatedAt);
+-        }
++            if (IsRevoked(session.Issuer, session.Subject, session.Sid, session.CreatedAt))
++            {
++                throw new InvalidOperationException("The authorizing OIDC session has been revoked");
++            }
++
++            var key = TrackingKey(session);
++            if (_trackedSessions.Count >= MaxTrackedSessions && !_trackedSessions.ContainsKey(key))
++            {
++                throw new InvalidOperationException("OIDC session tracking is full; refusing an untracked login");
++            }
+ 
+-        _trackedSessions[session.SessionId] = session;
++            _trackedSessions.TryGetValue(key, out var previous);
++            _trackedSessions[key] = session;
++            try
++            {
++                SaveTracking();
++            }
++            catch
++            {
++                if (previous != null) _trackedSessions[key] = previous;
++                else _trackedSessions.TryRemove(key, out _);
++                throw;
++            }
++        }
+     }
+ 
+-    // Callers pass whichever id might be the key (session id, or the device-id fallback); a miss is a no-op.
+-    public void UntrackBySessionId(string sessionId) => _trackedSessions.TryRemove(sessionId, out _);
++    public void UntrackBySessionId(string sessionId)
++    {
++        lock (_trackingSync)
++        {
++            if (_trackedSessions.TryRemove(sessionId, out var previous))
++            {
++                try { SaveTracking(); }
++                catch { _trackedSessions[sessionId] = previous; throw; }
++            }
++        }
++    }
+ 
+     // Self-enforcing precedence (sid, when present, wins outright) rather than relying on every
+     // caller to null out sub whenever sid is set - a caller passing both would otherwise silently
+@@ -267,6 +290,7 @@
+     private void Cleanup(object? state)
+     {
+         var now = DateTimeOffset.UtcNow;
++        PruneInactiveTokens();
+ 
+         foreach (var (key, oidcState) in _pendingStates)
+         {
+@@ -284,14 +308,6 @@
+             }
+         }
+ 
+-        foreach (var (key, tracked) in _trackedSessions)
+-        {
+-            if (now - tracked.CreatedAt > TrackedSessionMaxAge)
+-            {
+-                _trackedSessions.TryRemove(key, out _);
+-            }
+-        }
+-
+         foreach (var (jti, forgetAfter) in _seenJti)
+         {
+             if (now > forgetAfter)
+--- a/Jellyfin.Plugin.OIDC/Services/ServiceRegistrator.cs
++++ b/Jellyfin.Plugin.OIDC/Services/ServiceRegistrator.cs
+@@ -5,6 +5,9 @@
+ using MediaBrowser.Controller.Events;
+ using MediaBrowser.Controller.Events.Session;
+ using MediaBrowser.Controller.Plugins;
++using MediaBrowser.Controller.Devices;
++using MediaBrowser.Controller.QuickConnect;
++using Microsoft.AspNetCore.Http;
+ using Microsoft.Extensions.DependencyInjection;
+ 
+ namespace Jellyfin.Plugin.OIDC.Services;
+@@ -15,6 +18,15 @@
+     {
+         serviceCollection.AddSingleton<IAuthenticationProvider, Auth.OidcAuthProvider>();
+         serviceCollection.AddSingleton<StateManager>();
++        serviceCollection.AddHttpContextAccessor();
++        var quickConnect = serviceCollection.Last(d => d.ServiceType == typeof(IQuickConnect));
++        serviceCollection.Remove(quickConnect);
++        serviceCollection.AddSingleton<IQuickConnect>(sp => new LinkedQuickConnect(
++            (IQuickConnect)(quickConnect.ImplementationInstance
++                ?? quickConnect.ImplementationFactory?.Invoke(sp)
++                ?? ActivatorUtilities.CreateInstance(sp, quickConnect.ImplementationType!)),
++            sp.GetRequiredService<StateManager>(), sp.GetRequiredService<IDeviceManager>(),
++            sp.GetRequiredService<IHttpContextAccessor>()));
+         serviceCollection.AddHostedService(sp => sp.GetRequiredService<StateManager>());
+ 
+         // Own JSON file, not plugin config; hosted so it migrates legacy in-config rows and flushes on shutdown.
+@@ -31,7 +43,7 @@
+         serviceCollection.AddScoped<RbacService>();
+         serviceCollection.AddScoped<ProfileImageService>();
+         serviceCollection.AddScoped<UserSyncService>();
+-        serviceCollection.AddScoped<IEventConsumer<SessionEndedEventArgs>, OidcSessionEndedConsumer>();
++        // SessionEnded also fires on inactivity; it is not proof that a token was revoked.
+         serviceCollection.AddScoped<IEventConsumer<UserDeletedEventArgs>, OidcUserDeletedConsumer>();
+     }
+ }
+--- /dev/null
++++ b/Jellyfin.Plugin.OIDC/Services/SessionLineage.cs
+@@ -0,0 +1,133 @@
++using System.Security.Cryptography;
++using System.Text;
++using System.Text.Json;
++using System.Text.Json.Serialization;
++using Jellyfin.Data.Queries;
++using MediaBrowser.Controller.Devices;
++using MediaBrowser.Common.Configuration;
++using Microsoft.Extensions.Logging;
++
++namespace Jellyfin.Plugin.OIDC.Services;
++
++public sealed partial class StateManager
++{
++    private readonly object _trackingSync = new();
++    private readonly List<LogoutMarker> _logoutMarkers = [];
++    private string? _trackingPath;
++    private readonly IDeviceManager? _lineageDevices;
++
++    // Serializes token minting with logout, including Quick Connect's otherwise-public polling.
++    public SemaphoreSlim SessionMutation { get; } = new(1, 1);
++
++    public StateManager(ILogger<StateManager> logger, IApplicationPaths paths, IDeviceManager devices)
++        : this(logger, Path.Combine(paths.PluginConfigurationsPath, "Jellyfin.Plugin.OIDC.SessionLineage.json"))
++    {
++        _lineageDevices = devices;
++    }
++
++    internal StateManager(ILogger<StateManager> logger, string trackingPath) : this(logger)
++    {
++        _trackingPath = trackingPath;
++        if (File.Exists(trackingPath))
++        {
++            // Corrupt lineage must stop startup, not silently become an empty revocation table.
++            var snapshot = JsonSerializer.Deserialize<TrackingSnapshot>(File.ReadAllText(trackingPath))
++                ?? throw new InvalidDataException("Empty OIDC session lineage");
++            if (snapshot.Version != 1) throw new InvalidDataException("Unsupported OIDC session lineage version");
++            foreach (var session in snapshot.Sessions) _trackedSessions[TrackingKey(session)] = session;
++            _logoutMarkers.AddRange(snapshot.Logouts);
++        }
++    }
++
++    public static string HashToken(string token)
++        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
++
++    public TrackedSession? FindForToken(Guid userId, string token)
++    {
++        return _trackedSessions.TryGetValue(HashToken(token), out var session) && session.UserId == userId
++            ? session : null;
++    }
++
++    private static string TrackingKey(TrackedSession session)
++        => session.TokenHash.Length > 0 ? session.TokenHash : session.SessionId;
++
++    public void UntrackSession(TrackedSession session) => UntrackBySessionId(TrackingKey(session));
++
++    private void PruneInactiveTokens()
++    {
++        if (_lineageDevices == null) return;
++        foreach (var session in _trackedSessions.Values.Where(s => s.TokenHash.Length > 0))
++        {
++            try
++            {
++                var devices = _lineageDevices.GetDevices(new DeviceQuery { UserId = session.UserId, DeviceId = session.DeviceId });
++                if (!devices.Items.Any(d => HashToken(d.AccessToken) == session.TokenHash))
++                    UntrackSession(session);
++            }
++            catch (Exception ex)
++            {
++                _logger.LogWarning(ex, "Could not check OIDC token liveness; retaining its lineage");
++            }
++        }
++    }
++
++    public bool IsRevoked(string issuer, string subject, string? sid, DateTimeOffset createdAt)
++    {
++        lock (_trackingSync)
++        {
++            return _logoutMarkers.Any(m => m.Issuer == issuer &&
++                (!string.IsNullOrEmpty(m.Sid)
++                    ? m.Sid == sid
++                    : m.Subject == subject && createdAt <= m.CreatedAt));
++        }
++    }
++
++    public DateTimeOffset RecordLogout(string issuer, string? subject, string? sid, string? eventId = null)
++    {
++        lock (_trackingSync)
++        {
++            if (string.IsNullOrEmpty(subject) && string.IsNullOrEmpty(sid))
++                throw new ArgumentException("Logout must identify a subject or session");
++            var existing = _logoutMarkers.FirstOrDefault(m => m.Issuer == issuer &&
++                (!string.IsNullOrEmpty(sid) ? m.Sid == sid : eventId != null && m.EventId == eventId));
++            if (existing != null) return existing.CreatedAt;
++            var marker = new LogoutMarker(issuer, subject, sid, DateTimeOffset.UtcNow, eventId);
++            _logoutMarkers.Add(marker);
++            try { SaveTracking(); }
++            catch { _logoutMarkers.Remove(marker); throw; }
++            return marker.CreatedAt;
++        }
++    }
++
++    private void SaveTracking()
++    {
++        if (_trackingPath == null) return;
++        Directory.CreateDirectory(Path.GetDirectoryName(_trackingPath)!);
++        var temporaryPath = _trackingPath + ".tmp";
++        var data = JsonSerializer.SerializeToUtf8Bytes(new TrackingSnapshot
++        {
++            Sessions = _trackedSessions.Values.ToList(),
++            Logouts = _logoutMarkers.ToList()
++        });
++        using (var file = new FileStream(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None))
++        {
++            if (!OperatingSystem.IsWindows())
++                File.SetUnixFileMode(temporaryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
++            file.Write(data);
++            file.Flush(flushToDisk: true);
++        }
++        File.Move(temporaryPath, _trackingPath, overwrite: true);
++    }
++
++    private sealed class TrackingSnapshot
++    {
++        [JsonRequired]
++        public int Version { get; init; } = 1;
++        [JsonRequired]
++        public List<TrackedSession> Sessions { get; init; } = [];
++        [JsonRequired]
++        public List<LogoutMarker> Logouts { get; init; } = [];
++    }
++
++    private sealed record LogoutMarker(string Issuer, string? Subject, string? Sid, DateTimeOffset CreatedAt, string? EventId);
++}
+--- /dev/null
++++ b/Jellyfin.Plugin.OIDC/Services/LinkedQuickConnect.cs
+@@ -0,0 +1,129 @@
++using System.Collections.Concurrent;
++using Jellyfin.Data.Queries;
++using MediaBrowser.Controller.Authentication;
++using MediaBrowser.Controller.Devices;
++using MediaBrowser.Controller.Net;
++using MediaBrowser.Controller.QuickConnect;
++using MediaBrowser.Controller.Session;
++using MediaBrowser.Model.QuickConnect;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.DependencyInjection;
++
++namespace Jellyfin.Plugin.OIDC.Services;
++
++public sealed class LinkedQuickConnect(
++    IQuickConnect inner,
++    StateManager state,
++    IDeviceManager devices,
++    IHttpContextAccessor context) : IQuickConnect
++{
++    private readonly ConcurrentDictionary<string, QuickConnectResult> _pending = new();
++
++    public bool IsEnabled => inner.IsEnabled;
++
++    public QuickConnectResult TryConnect(AuthorizationInfo authorizationInfo)
++    {
++        foreach (var entry in _pending)
++        {
++            if (entry.Value.DateAdded < DateTime.UtcNow.AddMinutes(-10))
++                _pending.TryRemove(entry.Key, out _);
++        }
++        if (_pending.Count >= 500) throw new AuthenticationException("Too many pending Quick Connect requests");
++        var result = inner.TryConnect(authorizationInfo);
++        _pending[result.Code] = result;
++        return result;
++    }
++
++    public QuickConnectResult CheckRequestStatus(string secret) => inner.CheckRequestStatus(secret);
++
++    public AuthenticationResult GetAuthorizedRequest(string secret)
++    {
++        var result = inner.GetAuthorizedRequest(secret);
++        state.SessionMutation.Wait();
++        try
++        {
++            var userId = result.SessionInfo?.UserId ?? Guid.Empty;
++            var tracked = state.FindForToken(userId, result.AccessToken);
++            if (tracked == null || state.IsRevoked(tracked.Issuer, tracked.Subject, tracked.Sid, tracked.CreatedAt))
++                throw new AuthenticationException("Quick Connect authorization is no longer valid");
++            return result;
++        }
++        finally { state.SessionMutation.Release(); }
++    }
++
++    public Task<bool> AuthorizeRequest(Guid userId, string code)
++        => AuthorizeAsync(userId, code, null);
++
++    public Task<bool> AuthorizeOidcRequest(Guid userId, string code, AuthorizedSession session)
++    {
++        if (string.IsNullOrEmpty(session.Subject) || string.IsNullOrEmpty(session.Issuer))
++            throw new AuthenticationException("OIDC identity is required for Quick Connect");
++        return AuthorizeAsync(userId, code, new TrackedSession
++        {
++            ProviderId = session.ProviderId,
++            Issuer = session.Issuer,
++            Subject = session.Subject,
++            Sid = session.Sid,
++            UserId = userId,
++            DeviceId = string.Empty,
++            SessionId = string.Empty,
++            CreatedAt = session.CreatedAt
++        });
++    }
++
++    private async Task<bool> AuthorizeAsync(Guid userId, string code, TrackedSession? parent)
++    {
++        await state.SessionMutation.WaitAsync().ConfigureAwait(false);
++        try
++        {
++            if (parent == null)
++            {
++                var http = context.HttpContext ?? throw new AuthenticationException("An approving session is required");
++                var auth = await http.RequestServices.GetRequiredService<IAuthorizationContext>()
++                    .GetAuthorizationInfo(http).ConfigureAwait(false);
++                if (!auth.IsAuthenticated || auth.IsApiKey || string.IsNullOrEmpty(auth.Token))
++                    throw new AuthenticationException("An approving user token is required");
++
++                // DeviceId in a request header is caller-controlled; resolve the actual token instead.
++                var device = devices.GetDevices(new DeviceQuery { AccessToken = auth.Token }).Items.FirstOrDefault();
++                if (device == null || device.UserId != userId)
++                    throw new AuthenticationException("The approving session is no longer valid");
++                parent = state.FindForToken(userId, auth.Token)
++                    ?? throw new AuthenticationException("Sign in with OIDC again before authorizing devices");
++            }
++
++            if (parent.UserId != userId || state.IsRevoked(parent.Issuer, parent.Subject, parent.Sid, parent.CreatedAt))
++                throw new AuthenticationException("The authorizing OIDC session has been revoked");
++            if (!_pending.TryGetValue(code, out var pending))
++                throw new AuthenticationException("Unknown or expired Quick Connect code");
++            if (!await inner.AuthorizeRequest(userId, code).ConfigureAwait(false)) return false;
++
++            var result = inner.GetAuthorizedRequest(pending.Secret);
++            try
++            {
++                state.TrackSession(new TrackedSession
++                {
++                    ProviderId = parent.ProviderId,
++                    Issuer = parent.Issuer,
++                    Subject = parent.Subject,
++                    Sid = parent.Sid,
++                    UserId = userId,
++                    DeviceId = pending.DeviceId,
++                    SessionId = result.SessionInfo?.Id ?? pending.DeviceId,
++                    TokenHash = StateManager.HashToken(result.AccessToken),
++                    CreatedAt = parent.CreatedAt
++                });
++            }
++            catch
++            {
++                // Never expose a token whose lineage could not be durably recorded.
++                foreach (var device in devices.GetDevices(new DeviceQuery { AccessToken = result.AccessToken }).Items)
++                    await devices.DeleteDevice(device).ConfigureAwait(false);
++                throw;
++            }
++            _pending.TryRemove(code, out _);
++            return true;
++        }
++        finally { state.SessionMutation.Release(); }
++    }
++}
+--- a/Jellyfin.Plugin.OIDC/Api/OidcController.cs
++++ b/Jellyfin.Plugin.OIDC/Api/OidcController.cs
+@@ -268,14 +268,28 @@
+                 RemoteEndPoint = HttpContext.Connection.RemoteIpAddress?.ToString()
+             };
+ 
+-            var authResult = await _sessionManager.AuthenticateDirect(authRequest).ConfigureAwait(false);
+-
+-            TrackMintedSession(session, authRequest.DeviceId!, authResult.SessionInfo?.Id, userId);
+-            _logger.LogInformation(
+-                "OIDC audit: decision=login provider={Provider} subject={Subject} user={User} device={Device}",
+-                session.ProviderId, ClaimParser.RedactSubject(session.Subject), session.Username, authRequest.DeviceId);
+-
+-            return Ok(authResult);
++            await _stateManager.SessionMutation.WaitAsync().ConfigureAwait(false);
++            try
++            {
++                if (_stateManager.IsRevoked(session.Issuer ?? string.Empty, session.Subject ?? string.Empty, session.Sid, session.CreatedAt))
++                    return Unauthorized("The authorizing OIDC session has been revoked");
++                var authResult = await _sessionManager.AuthenticateDirect(authRequest).ConfigureAwait(false);
++                try
++                {
++                    TrackMintedSession(session, authRequest.DeviceId!, authResult.SessionInfo?.Id, userId, authResult.AccessToken);
++                }
++                catch
++                {
++                    foreach (var device in _deviceManager.GetDevices(new DeviceQuery { AccessToken = authResult.AccessToken }).Items)
++                        await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
++                    throw;
++                }
++                _logger.LogInformation(
++                    "OIDC audit: decision=login provider={Provider} subject={Subject} user={User} device={Device}",
++                    session.ProviderId, ClaimParser.RedactSubject(session.Subject), session.Username, authRequest.DeviceId);
++                return Ok(authResult);
++            }
++            finally { _stateManager.SessionMutation.Release(); }
+         }
+         catch (InvalidOperationException ex)
+         {
+@@ -357,7 +371,9 @@
+ 
+         try
+         {
+-            var authorized = await _quickConnect.AuthorizeRequest(userId, code).ConfigureAwait(false);
++            var authorized = _quickConnect is LinkedQuickConnect linked
++                ? await linked.AuthorizeOidcRequest(userId, code, session).ConfigureAwait(false)
++                : await _quickConnect.AuthorizeRequest(userId, code).ConfigureAwait(false);
+             if (!authorized)
+             {
+                 return BadRequest("Quick Connect authorization was rejected.");
+@@ -388,7 +404,7 @@
+         return Ok(new { success = true });
+     }
+ 
+-    /// OIDC Back-Channel Logout 1.0: a valid <c>logout_token</c> revokes by <c>sid</c> (one device) or <c>sub</c> (all of the user's).
++    /// A sid-scoped logout revokes its root and descendants; a sub-only logout covers the user's existing roots.
+     [HttpPost("BackchannelLogout/{providerId}")]
+     [Consumes("application/x-www-form-urlencoded")]
+     [RateLimit("oidc-callback", maxRequests: 10, windowSeconds: 60)]
+@@ -447,52 +463,49 @@
+ 
+         var issuer = disco.Issuer ?? provider.Authority;
+ 
+-        // FindTracked self-enforces sid-over-sub precedence - a sid-scoped logout never widens to
+-        // every session sharing the subject, even though both are passed through unmodified here.
+-        var tracked = _stateManager.FindTracked(issuer, sub, sid);
+-        var (revokedDevices, deviceRevocationErrored) = await RevokeTrackedDevicesAsync(tracked).ConfigureAwait(false);
+-
+-        // A tracked-but-deviceless session (e.g. the device row was already removed) must NOT fall
+-        // through to the mapped-user fallback below - widening to every session for the user would
+-        // violate the sid-scoping guarantee above.
+-        var fallback = tracked.Count == 0
+-            ? await RevokeViaMappedUserAsync(providerId, sub, sid, token, provider).ConfigureAwait(false)
+-            : LogoutFallbackOutcome.NotAttempted;
++        await _stateManager.SessionMutation.WaitAsync().ConfigureAwait(false);
++        try
++        {
++            var logoutAt = _stateManager.RecordLogout(issuer, sub, sid, StateManager.HashToken(logoutToken!));
++            // FindTracked self-enforces sid-over-sub precedence - a sid-scoped logout never widens to
++            // every session sharing the subject, even though both are passed through unmodified here.
++            var tracked = _stateManager.FindTracked(issuer, sub, sid)
++                .Where(s => !string.IsNullOrEmpty(sid) || s.CreatedAt <= logoutAt).ToList();
++            var (revokedDevices, deviceRevocationErrored) = await RevokeTrackedDevicesAsync(tracked).ConfigureAwait(false);
++
++            if (deviceRevocationErrored)
++            {
++                // Partial failures must be retryable too; successful deletions are already untracked.
++                _stateManager.UnregisterJti(jti);
++                _logger.LogError(
++                    "OIDC back-channel logout for {Provider} did not revoke every matching token (sub={Subject} sid={Sid}); "
++                    + "returning 503 so the IdP retries.",
++                    providerId, ClaimParser.RedactSubject(sub), sid);
++                return StatusCode(503, new { error = "temporarily_unavailable" });
++            }
++
++            if (tracked.Count == 0)
++            {
++                _logger.LogWarning("OIDC logout matched no durable lineage; legacy devices require explicit revocation");
++            }
+ 
+-        var revoked = revokedDevices > 0 || fallback == LogoutFallbackOutcome.Revoked;
+-        var errored = deviceRevocationErrored || fallback == LogoutFallbackOutcome.Errored;
++            _logger.LogInformation(
++                "OIDC audit: decision=backchannel-logout provider={Provider} subject={Subject} sid={Sid} revoked={Revoked}",
++                providerId, ClaimParser.RedactSubject(sub), sid,
++                revokedDevices);
+ 
+-        if (!revoked && errored)
++            return Ok();
++        }
++        catch (Exception ex) when (ex is not OperationCanceledException)
+         {
+-            // We matched a session but every revocation attempt errored. Free the jti so the IdP's
+-            // retry of this same logout_token isn't rejected as a replay, and signal a retry.
+             _stateManager.UnregisterJti(jti);
+-            _logger.LogError(
+-                "OIDC back-channel logout for {Provider} matched a session but revoked nothing (sub={Subject} sid={Sid}); "
+-                + "returning 503 so the IdP retries.",
+-                providerId, ClaimParser.RedactSubject(sub), sid);
++            _logger.LogError(ex, "OIDC logout could not persist or revoke session lineage");
+             return StatusCode(503, new { error = "temporarily_unavailable" });
+         }
+-
+-        if (!revoked && !errored && fallback == LogoutFallbackOutcome.NoMatch)
+-        {
+-            _logger.LogWarning(
+-                "OIDC back-channel logout for {Provider} matched no session (sub={Subject} sid={Sid}); nothing "
+-                + "was revoked. State may have been lost across a restart, or the account predates subject-keyed "
+-                + "identity and hasn't logged in since - the IdP still gets a 200 per spec.",
+-                providerId, ClaimParser.RedactSubject(sub), sid);
+-        }
+-
+-        _logger.LogInformation(
+-            "OIDC audit: decision=backchannel-logout provider={Provider} subject={Subject} sid={Sid} revoked={Revoked}",
+-            providerId, ClaimParser.RedactSubject(sub), sid,
+-            fallback == LogoutFallbackOutcome.Revoked ? "all" : revokedDevices.ToString(System.Globalization.CultureInfo.InvariantCulture));
+-
+-        return Ok();
++        finally { _stateManager.SessionMutation.Release(); }
+     }
+ 
+-    /// Deletes every device behind each tracked session, untracking it either way; returns how many
+-    /// devices were revoked and whether any deletion attempt errored.
++    /// Failed deletions retain their lineage so the IdP can retry without losing descendants.
+     private async Task<(int RevokedDevices, bool Errored)> RevokeTrackedDevicesAsync(IReadOnlyList<TrackedSession> tracked)
+     {
+         var revokedDevices = 0;
+@@ -502,11 +515,12 @@
+             try
+             {
+                 var devices = _deviceManager.GetDevices(new DeviceQuery { UserId = t.UserId, DeviceId = t.DeviceId });
+-                foreach (var device in devices.Items)
++                foreach (var device in devices.Items.Where(d => t.TokenHash.Length == 0 || StateManager.HashToken(d.AccessToken) == t.TokenHash))
+                 {
+                     await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
+                     revokedDevices++;
+                 }
++                _stateManager.UntrackSession(t);
+             }
+             catch (Exception ex) when (ex is not OperationCanceledException)
+             {
+@@ -514,62 +528,11 @@
+                 _logger.LogWarning(ex, "OIDC back-channel logout: failed to delete device {Device}", t.DeviceId);
+             }
+ 
+-            _stateManager.UntrackBySessionId(t.SessionId);
+         }
+ 
+         return (revokedDevices, errored);
+     }
+ 
+-    private enum LogoutFallbackOutcome { NotAttempted, Revoked, NoMatch, Errored }
+-
+-    /// Only reached when nothing was tracked in memory (Quick Connect session, or state lost on
+-    /// restart): resolves the logout token to a mapped user and revokes every one of their sessions.
+-    private async Task<LogoutFallbackOutcome> RevokeViaMappedUserAsync(
+-        string providerId, string sub, string? sid, JwtSecurityToken token, OidcProviderConfig provider)
+-    {
+-        var username = ClaimParser.ExtractClaim(token, provider.UsernameClaim);
+-        var entry = _mapStore.ResolveForLogout(providerId, sub, sid, username);
+-        if (entry == null)
+-        {
+-            return LogoutFallbackOutcome.NoMatch;
+-        }
+-
+-        // A fully-legacy row stores no UserId - fall back to the live session.
+-        var userId = Guid.TryParse(entry.UserId, out var parsed)
+-            ? parsed
+-            : _sessionManager.Sessions
+-                .FirstOrDefault(s => string.Equals(s.UserName, entry.Username, StringComparison.OrdinalIgnoreCase))
+-                ?.UserId ?? Guid.Empty;
+-        if (userId == Guid.Empty)
+-        {
+-            return LogoutFallbackOutcome.NoMatch;
+-        }
+-
+-        if (!string.IsNullOrEmpty(sid))
+-        {
+-            // UserProviderMapStore rows carry no DeviceId, and ISessionManager.RevokeUserTokens has
+-            // no sid/device-scoped overload - so this sid-scoped logout_token, having matched no
+-            // in-memory TrackedSession (restart, or a session older than this plugin version), is
+-            // about to revoke every session for the user rather than just the one the IdP named.
+-            _logger.LogWarning(
+-                "OIDC back-channel logout for {Provider} (sid={Sid}) matched no in-memory session; "
+-                + "falling back to revoking every session for user {UserId}, wider than the sid-scoped "
+-                + "request. See SECURITY.md for this known limitation.",
+-                providerId, sid, userId);
+-        }
+-
+-        try
+-        {
+-            await _sessionManager.RevokeUserTokens(userId, string.Empty).ConfigureAwait(false);
+-            return LogoutFallbackOutcome.Revoked;
+-        }
+-        catch (Exception ex) when (ex is not OperationCanceledException)
+-        {
+-            _logger.LogError(ex, "OIDC back-channel logout: failed to revoke tokens for user {UserId}", userId);
+-            return LogoutFallbackOutcome.Errored;
+-        }
+-    }
+-
+     [HttpGet("Providers")]
+     [RateLimit("oidc-providers", maxRequests: 60, windowSeconds: 60)]
+     public ActionResult GetProviders()
+@@ -596,11 +559,11 @@
+         => OidcPlugin.CurrentConfig.FindProvider(providerId) is { Enabled: true } p ? p : null;
+ 
+     /// Correlates a new session with its OIDC identity so a later back-channel logout can target it.
+-    private void TrackMintedSession(AuthorizedSession session, string deviceId, string? sessionId, Guid userId)
++    private void TrackMintedSession(AuthorizedSession session, string deviceId, string? sessionId, Guid userId, string token)
+     {
+         if (string.IsNullOrEmpty(session.Subject) || string.IsNullOrEmpty(session.Issuer))
+         {
+-            return;
++            throw new InvalidOperationException("OIDC identity is required for session tracking");
+         }
+ 
+         _stateManager.TrackSession(new TrackedSession
+@@ -611,11 +574,12 @@
+             Sid = session.Sid,
+             UserId = userId,
+             DeviceId = deviceId,
+-            SessionId = sessionId ?? deviceId
++            SessionId = sessionId ?? deviceId,
++            TokenHash = StateManager.HashToken(token),
++            CreatedAt = session.CreatedAt
+         });
+ 
+-        // Persist the sid on the map row so a post-restart sid-only back-channel logout still resolves
+-        // the user. Debounced in the store, so sid rotation every login doesn't mean a write every login.
++        // Retain the legacy map field for downgrade compatibility; logout uses durable token lineage.
+         if (!string.IsNullOrEmpty(session.Sid) && !string.IsNullOrEmpty(session.Subject))
+         {
+             _mapStore.SetLogoutSid(session.ProviderId, session.Subject, session.Sid);
+--- /dev/null
++++ b/Jellyfin.Plugin.OIDC.Tests/Services/SessionLineageTests.cs
+@@ -0,0 +1,341 @@
++using System.Reflection;
++using Jellyfin.Data.Queries;
++using Jellyfin.Database.Implementations.Entities.Security;
++using Jellyfin.Plugin.OIDC.Services;
++using MediaBrowser.Common.Configuration;
++using MediaBrowser.Controller;
++using MediaBrowser.Controller.Authentication;
++using MediaBrowser.Controller.Devices;
++using MediaBrowser.Controller.Net;
++using MediaBrowser.Controller.QuickConnect;
++using MediaBrowser.Controller.Session;
++using MediaBrowser.Model.Querying;
++using MediaBrowser.Model.QuickConnect;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Logging.Abstractions;
++using NSubstitute;
++using Xunit;
++
++namespace Jellyfin.Plugin.OIDC.Tests.Services;
++
++public sealed class SessionLineageTests : IDisposable
++{
++    private readonly string _directory = Path.Combine(Path.GetTempPath(), "oidc-lineage-" + Guid.NewGuid());
++    private readonly Guid _user = Guid.NewGuid();
++    private readonly IDeviceManager _devices = Substitute.For<IDeviceManager>();
++    private readonly List<Device> _tokens = [];
++    private readonly HttpContextAccessor _context = new();
++    private readonly IAuthorizationContext _authorization = Substitute.For<IAuthorizationContext>();
++    private readonly IQuickConnect _inner = Substitute.For<IQuickConnect>();
++    private string _approver = "parent-token";
++
++    public SessionLineageTests()
++    {
++        var services = new ServiceCollection().AddSingleton(_authorization).BuildServiceProvider();
++        _context.HttpContext = new DefaultHttpContext { RequestServices = services };
++        _authorization.GetAuthorizationInfo(Arg.Any<HttpContext>()).Returns(_ => new AuthorizationInfo
++        {
++            IsAuthenticated = true,
++            Token = _approver,
++            DeviceId = "spoofed-header"
++        });
++        _devices.GetDevices(Arg.Any<DeviceQuery>()).Returns(c =>
++        {
++            var q = c.Arg<DeviceQuery>();
++            return new QueryResult<Device>
++            {
++                Items = _tokens.Where(d => (q.AccessToken == null || d.AccessToken == q.AccessToken)
++                    && (q.UserId == null || d.UserId == q.UserId)
++                    && (q.DeviceId == null || d.DeviceId == q.DeviceId)).ToArray()
++            };
++        });
++        _devices.DeleteDevice(Arg.Any<Device>()).Returns(c => { _tokens.Remove(c.Arg<Device>()); return Task.CompletedTask; });
++        _inner.IsEnabled.Returns(true);
++    }
++
++    private StateManager Open() => new(NullLogger<StateManager>.Instance, Path.Combine(_directory, "lineage.json"));
++
++    private TrackedSession Root(string sid = "sid-a", string token = "parent-token", string device = "parent") => new()
++    {
++        ProviderId = "authentik",
++        Issuer = "https://auth.example/",
++        Subject = "test",
++        Sid = sid,
++        UserId = _user,
++        DeviceId = device,
++        SessionId = device,
++        TokenHash = StateManager.HashToken(token)
++    };
++
++    private Device Device(string token, string device) => new(_user, "test", "1", "test", device) { AccessToken = token };
++
++    private void Pending(string code, string token, string device)
++    {
++        var pending = new QuickConnectResult("secret-" + code, code, DateTime.UtcNow, device, "test", "test", "1");
++        _inner.TryConnect(Arg.Is<AuthorizationInfo>(a => a.DeviceId == device)).Returns(pending);
++        _inner.AuthorizeRequest(_user, code).Returns(_ =>
++        {
++            _tokens.Add(Device(token, device));
++            pending.Authenticated = true;
++            return Task.FromResult(true);
++        });
++        _inner.GetAuthorizedRequest(pending.Secret).Returns(new AuthenticationResult
++        {
++            AccessToken = token,
++            SessionInfo = new MediaBrowser.Model.Dto.SessionInfoDto { Id = device, UserId = _user }
++        });
++    }
++
++    [Fact]
++    public async Task NativeApprovals_InheritRootAcrossChainsAndRestarts_IgnoreSpoofedDeviceId()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        state.TrackSession(Root("sid-b", "independent-token", "independent"));
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        Assert.True(await linked.AuthorizeRequest(_user, "111111"));
++        Assert.Equal("child-token", linked.GetAuthorizedRequest("secret-111111").AccessToken);
++
++        using var restarted = Open();
++        _approver = "child-token";
++        Pending("222222", "grandchild-token", "grandchild");
++        var afterRestart = new LinkedQuickConnect(_inner, restarted, _devices, _context);
++        afterRestart.TryConnect(new AuthorizationInfo { DeviceId = "grandchild" });
++        Assert.True(await afterRestart.AuthorizeRequest(_user, "222222"));
++        Assert.Equal(3, restarted.FindTracked("https://auth.example/", "test", "sid-a").Count);
++        Assert.Single(restarted.FindTracked("https://auth.example/", "test", "sid-b"));
++        Assert.DoesNotContain("parent-token", File.ReadAllText(Path.Combine(_directory, "lineage.json")));
++        Assert.DoesNotContain("child-token", File.ReadAllText(Path.Combine(_directory, "lineage.json")));
++    }
++
++    [Fact]
++    public async Task OidcApproval_InheritsIdentityWithoutAnApprovingJellyfinToken()
++    {
++        using var state = Open();
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, new HttpContextAccessor());
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        Assert.True(await linked.AuthorizeOidcRequest(_user, "111111", new AuthorizedSession
++        {
++            ProviderId = "authentik",
++            Issuer = "https://auth.example/",
++            Subject = "test",
++            Sid = "sid-a",
++            Username = "test",
++            Roles = []
++        }));
++        Assert.Single(state.FindTracked("https://auth.example/", "test", "sid-a"));
++    }
++
++    [Fact]
++    public async Task RevokedParent_CannotApproveOrReleaseAlreadyMintedToken_AfterRestart()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        Assert.True(await linked.AuthorizeRequest(_user, "111111"));
++        state.RecordLogout("https://auth.example/", "test", "sid-a");
++        Assert.Throws<AuthenticationException>(() => linked.GetAuthorizedRequest("secret-111111"));
++
++        using var restarted = Open();
++        Pending("222222", "next-token", "next");
++        var afterRestart = new LinkedQuickConnect(_inner, restarted, _devices, _context);
++        afterRestart.TryConnect(new AuthorizationInfo { DeviceId = "next" });
++        await Assert.ThrowsAsync<AuthenticationException>(() => afterRestart.AuthorizeRequest(_user, "222222"));
++        await _inner.DidNotReceive().AuthorizeRequest(_user, "222222");
++    }
++
++    [Fact]
++    public async Task ApprovalWaitsForLogoutGate_ThenRejectsRevokedParent()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        await state.SessionMutation.WaitAsync();
++        var approval = linked.AuthorizeRequest(_user, "111111");
++        Assert.False(approval.IsCompleted);
++        state.RecordLogout("https://auth.example/", "test", "sid-a");
++        state.SessionMutation.Release();
++        await Assert.ThrowsAsync<AuthenticationException>(() => approval);
++        await _inner.DidNotReceive().AuthorizeRequest(_user, "111111");
++    }
++
++    [Fact]
++    public async Task LogoutWaitsForApprovalAndSeesTheNewDescendant()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "child-token", "child");
++        var mintStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
++        var continueMint = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
++        _inner.AuthorizeRequest(_user, "111111").Returns(_ =>
++        {
++            mintStarted.SetResult();
++            return continueMint.Task;
++        });
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        var approval = linked.AuthorizeRequest(_user, "111111");
++        await mintStarted.Task;
++        var logoutGate = state.SessionMutation.WaitAsync();
++        Assert.False(logoutGate.IsCompleted);
++        continueMint.SetResult(true);
++        Assert.True(await approval);
++        await logoutGate;
++        try
++        {
++            Assert.Equal(2, state.FindTracked("https://auth.example/", "test", "sid-a").Count);
++            state.RecordLogout("https://auth.example/", "test", "sid-a");
++        }
++        finally { state.SessionMutation.Release(); }
++        Assert.Throws<AuthenticationException>(() => linked.GetAuthorizedRequest("secret-111111"));
++    }
++
++    [Fact]
++    public async Task UntrackedOrDifferentUserCannotApprove()
++    {
++        using var state = Open();
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        await Assert.ThrowsAsync<AuthenticationException>(() => linked.AuthorizeRequest(_user, "111111"));
++        state.TrackSession(Root());
++        await Assert.ThrowsAsync<AuthenticationException>(() => linked.AuthorizeRequest(Guid.NewGuid(), "111111"));
++        await _inner.DidNotReceive().AuthorizeRequest(Arg.Any<Guid>(), Arg.Any<string>());
++    }
++
++    [Fact]
++    public void OldSessionsDoNotSilentlyLoseLineage()
++    {
++        using var state = Open();
++        var old = Root();
++        state.TrackSession(new TrackedSession
++        {
++            ProviderId = old.ProviderId,
++            Issuer = old.Issuer,
++            Subject = old.Subject,
++            Sid = old.Sid,
++            UserId = old.UserId,
++            DeviceId = old.DeviceId,
++            SessionId = old.SessionId,
++            CreatedAt = DateTimeOffset.UtcNow.AddDays(-120)
++        });
++        typeof(StateManager).GetMethod("Cleanup", BindingFlags.NonPublic | BindingFlags.Instance)!
++            .Invoke(state, [null]);
++        using var restarted = Open();
++        Assert.Single(restarted.FindTracked(old.Issuer, old.Subject, old.Sid));
++    }
++
++    [Theory]
++    [InlineData("broken json")]
++    [InlineData("{}")]
++    public void CorruptLineageFailsClosed(string content)
++    {
++        Directory.CreateDirectory(_directory);
++        File.WriteAllText(Path.Combine(_directory, "lineage.json"), content);
++        Assert.Throws<System.Text.Json.JsonException>(() => Open());
++    }
++
++    [Fact]
++    public void PluginRegistrationDecoratesNativeQuickConnectAndUsesDurableState()
++    {
++        var paths = Substitute.For<IApplicationPaths>();
++        paths.PluginConfigurationsPath.Returns(_directory);
++        var registrations = new ServiceCollection();
++        registrations.AddLogging();
++        registrations.AddSingleton(_inner);
++        registrations.AddSingleton(_devices);
++        registrations.AddSingleton(paths);
++        new ServiceRegistrator().RegisterServices(registrations, Substitute.For<IServerApplicationHost>());
++        using var provider = registrations.BuildServiceProvider();
++        Assert.IsType<LinkedQuickConnect>(provider.GetRequiredService<IQuickConnect>());
++        var state = provider.GetRequiredService<StateManager>();
++        state.TrackSession(Root());
++        Assert.True(File.Exists(Path.Combine(_directory, "Jellyfin.Plugin.OIDC.SessionLineage.json")));
++        Assert.DoesNotContain(registrations, d => d.ImplementationType == typeof(OidcSessionEndedConsumer));
++    }
++
++    [Fact]
++    public async Task FailedPersistenceRollsBackMintedChildAndPreventsPollingItsToken()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        _tokens.Add(Device("parent-token", "parent"));
++        var path = Path.Combine(_directory, "lineage.json");
++        File.Delete(path);
++        Directory.CreateDirectory(path);
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        await Assert.ThrowsAnyAsync<IOException>(() => linked.AuthorizeRequest(_user, "111111"));
++        Assert.Null(state.FindForToken(_user, "child-token"));
++        Assert.DoesNotContain(_tokens, d => d.AccessToken == "child-token");
++        Assert.Throws<AuthenticationException>(() => linked.GetAuthorizedRequest("secret-111111"));
++    }
++
++    [Fact]
++    public void InactivityCleanupKeepsLiveTokensAndTheirDescendants()
++    {
++        var paths = Substitute.For<IApplicationPaths>();
++        paths.PluginConfigurationsPath.Returns(_directory);
++        using var state = new StateManager(NullLogger<StateManager>.Instance, paths, _devices);
++        state.TrackSession(Root());
++        state.TrackSession(Root("sid-a", "child-token", "child"));
++        _tokens.Add(Device("child-token", "child"));
++        typeof(StateManager).GetMethod("Cleanup", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(state, [null]);
++        Assert.Null(state.FindForToken(_user, "parent-token"));
++        Assert.NotNull(state.FindForToken(_user, "child-token"));
++        using var restarted = new StateManager(NullLogger<StateManager>.Instance,
++            Path.Combine(_directory, "Jellyfin.Plugin.OIDC.SessionLineage.json"));
++        Assert.Single(restarted.FindTracked("https://auth.example/", "test", "sid-a"));
++    }
++
++    [Fact]
++    public void SharedSessionIdsCannotOverwriteAnotherTokensLineage()
++    {
++        using var state = Open();
++        state.TrackSession(Root());
++        state.TrackSession(Root("sid-b", "other-token"));
++        Assert.Equal("sid-a", state.FindForToken(_user, "parent-token")!.Sid);
++        Assert.Equal("sid-b", state.FindForToken(_user, "other-token")!.Sid);
++    }
++
++    [Fact]
++    public void RetriedSubjectLogoutDoesNotMoveItsCutoffPastFreshLogins()
++    {
++        using var state = Open();
++        var cutoff = state.RecordLogout("https://auth.example/", "test", null, "event-a");
++        using var restarted = Open();
++        Assert.Equal(cutoff, restarted.RecordLogout("https://auth.example/", "test", null, "event-a"));
++        Assert.False(restarted.IsRevoked("https://auth.example/", "test", "fresh-sid", cutoff.AddTicks(1)));
++    }
++
++    [Fact]
++    public void SubjectLogoutPermitsFreshLogin_ButSidLogoutCannotBeReused()
++    {
++        using var state = Open();
++        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
++        state.RecordLogout("https://auth.example/", "test", null);
++        Assert.True(state.IsRevoked("https://auth.example/", "test", "old", before));
++        Assert.False(state.IsRevoked("https://auth.example/", "test", "new", DateTimeOffset.UtcNow.AddSeconds(1)));
++        state.RecordLogout("https://auth.example/", "test", "sid-a");
++        Assert.True(state.IsRevoked("https://auth.example/", "test", "sid-a", DateTimeOffset.UtcNow.AddDays(1)));
++    }
++
++    public void Dispose()
++    {
++        if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
++    }
++}
+--- /dev/null
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcLineageTests.cs
+@@ -0,0 +1,119 @@
++using System.Security.Claims;
++using Jellyfin.Data.Queries;
++using Jellyfin.Database.Implementations.Entities.Security;
++using Jellyfin.Plugin.OIDC.Configuration;
++using Jellyfin.Plugin.OIDC.Services;
++using Jellyfin.Plugin.OIDC.Tests.Fixtures;
++using MediaBrowser.Controller.Devices;
++using MediaBrowser.Controller.Session;
++using MediaBrowser.Model.Querying;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.Extensions.Logging.Abstractions;
++using NSubstitute;
++using Xunit;
++
++namespace Jellyfin.Plugin.OIDC.Tests.Api;
++
++public partial class OidcControllerTests
++{
++    [Theory]
++    [InlineData(false, false)]
++    [InlineData(true, false)]
++    [InlineData(true, true)]
++    public async Task BackchannelLogout_RevokesRootAndDescendantsOnly_PersistsAndRetries(bool restart, bool partialFailure)
++    {
++        const string authority = "https://203.0.113.10";
++        var directory = Path.Combine(Path.GetTempPath(), "oidc-revoke-" + Guid.NewGuid());
++        var path = Path.Combine(directory, "lineage.json");
++        try
++        {
++            var user = Guid.NewGuid();
++            var devices = new List<Device>();
++            var state = new StateManager(NullLogger<StateManager>.Instance, path);
++            foreach (var (device, sid) in new[] { ("parent", "sid-a"), ("child", "sid-a"), ("grandchild", "sid-a"), ("independent", "sid-b") })
++            {
++                var token = device + "-token";
++                devices.Add(new Device(user, "test", "1", "test", device) { AccessToken = token });
++                state.TrackSession(new TrackedSession
++                {
++                    ProviderId = "keycloak",
++                    Issuer = authority,
++                    Subject = "test",
++                    Sid = sid,
++                    UserId = user,
++                    DeviceId = device,
++                    SessionId = device,
++                    TokenHash = StateManager.HashToken(token)
++                });
++            }
++            // A different token on the same device must not be swept up by DeviceId alone.
++            devices.Add(new Device(user, "test", "1", "test", "parent") { AccessToken = "unrelated-token" });
++            if (restart)
++            {
++                state.Dispose();
++                state = new StateManager(NullLogger<StateManager>.Instance, path);
++            }
++            using var ownedState = state;
++            var manager = Substitute.For<IDeviceManager>();
++            manager.GetDevices(Arg.Any<DeviceQuery>()).Returns(c =>
++            {
++                var q = c.Arg<DeviceQuery>();
++                return new QueryResult<Device> { Items = devices.Where(d => d.UserId == q.UserId && d.DeviceId == q.DeviceId).ToArray() };
++            });
++            var failOnce = partialFailure;
++            manager.DeleteDevice(Arg.Any<Device>()).Returns(c =>
++            {
++                var device = c.Arg<Device>();
++                if (failOnce && device.DeviceId == "child")
++                {
++                    failOnce = false;
++                    return Task.FromException(new IOException("transient deletion failure"));
++                }
++                devices.Remove(device);
++                return Task.CompletedTask;
++            });
++            var key = OidcTestTokens.CreateSigningKey();
++            var provider = new OidcProviderConfig
++            {
++                ProviderId = "keycloak",
++                Authority = authority,
++                ClientId = "test-client",
++                Enabled = true,
++                PinnedAuthority = authority,
++                PinnedIssuer = authority,
++                PinnedTokenEndpoint = authority + "/token",
++                PinnedJwksUri = authority + "/jwks",
++                PinnedAuthorizeEndpoint = authority + "/authorize",
++                PinnedUserInfoEndpoint = string.Empty
++            };
++            _fixture.SetConfiguration(new PluginConfiguration { Providers = [provider] });
++            var handler = RoutingHttpMessageHandler.ForFlow(
++                discovery: () => OidcTestTokens.DiscoveryJson(authority), token: () => "{}",
++                jwks: () => OidcTestTokens.JwksJson(key));
++            var sessions = Substitute.For<ISessionManager>();
++            var controller = MakeController(stateManager: state, deviceManager: manager,
++                sessionManager: sessions, httpHandler: handler);
++            var logout = OidcTestTokens.SignRs256(key, authority, provider.ClientId,
++                [EventsClaim, new Claim("sub", "test"), new Claim("sid", "sid-a"), new Claim("jti", "logout-a")]);
++            var result = await controller.BackchannelLogout("keycloak", logout);
++            if (partialFailure)
++            {
++                Assert.Equal(503, Assert.IsType<ObjectResult>(result).StatusCode);
++                Assert.Single(state.FindTracked(authority, "test", "sid-a"));
++                result = await controller.BackchannelLogout("keycloak", logout);
++            }
++            Assert.IsType<OkResult>(result);
++            Assert.Equal(new[] { "independent-token", "unrelated-token" }, devices.Select(d => d.AccessToken).Order().ToArray());
++            Assert.Empty(state.FindTracked(authority, "test", "sid-a"));
++            Assert.Single(state.FindTracked(authority, "test", "sid-b"));
++            using var finalRestart = new StateManager(NullLogger<StateManager>.Instance, path);
++            Assert.True(finalRestart.IsRevoked(authority, "test", "sid-a", DateTimeOffset.UtcNow));
++            Assert.Single(finalRestart.FindTracked(authority, "test", "sid-b"));
++            await sessions.DidNotReceive().RevokeUserTokens(Arg.Any<Guid>(), Arg.Any<string>());
++        }
++        finally
++        {
++            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
++        }
++    }
++}
+--- a/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
+@@ -34,7 +34,7 @@
+ namespace Jellyfin.Plugin.OIDC.Tests.Api;
+ 
+ [Xunit.Collection("OidcPlugin")]
+-public class OidcControllerTests
++public partial class OidcControllerTests
+ {
+     private readonly PluginTestFixture _fixture;
+ 
+@@ -47,7 +47,8 @@
+         IQuickConnect? quickConnect = null,
+         HttpMessageHandler? httpHandler = null,
+         Microsoft.Extensions.Logging.ILogger<OidcController>? logger = null,
+-        ISessionManager? sessionManager = null)
++        ISessionManager? sessionManager = null,
++        IDeviceManager? deviceManager = null)
+     {
+         stateManager ??= new StateManager(NullLogger<StateManager>.Instance);
+         userManager ??= Substitute.For<IUserManager>();
+@@ -83,7 +84,7 @@
+             appHost.GetSmartApiUrl(Arg.Any<HttpRequest>()).Returns("https://jellyfin.test");
+         }
+ 
+-        var deviceManager = Substitute.For<IDeviceManager>();
++        deviceManager ??= Substitute.For<IDeviceManager>();
+ 
+         var controller = new OidcController(
+             stateManager, userSyncService, _fixture.MapStore, sessionManager, deviceManager, quickConnect,
+@@ -530,7 +531,8 @@
+             token: () => "{}",
+             jwks: () => OidcTestTokens.JwksJson(key));
+         var logger = new CollectingLogger<OidcController>();
+-        var controller = MakeController(httpHandler: handler, logger: logger);
++        var sessions = Substitute.For<ISessionManager>();
++        var controller = MakeController(httpHandler: handler, logger: logger, sessionManager: sessions);
+ 
+         var claims = new List<Claim> { EventsClaim };
+         if (sub != null)
+@@ -546,41 +548,43 @@
+         var logoutToken = OidcTestTokens.SignRs256(key, authority, provider.ClientId, claims);
+ 
+         var result = await controller.BackchannelLogout("keycloak", logoutToken);
++        await sessions.DidNotReceive().RevokeUserTokens(Arg.Any<Guid>(), Arg.Any<string>());
+         return (result, logger);
+     }
+ 
+     [Fact]
+-    public async Task BackchannelLogout_SidScopedFallbackToMappedUser_LogsOverRevokeWarning()
++    public async Task BackchannelLogout_LegacySidWithoutLineage_RequiresExplicitRevocation()
+     {
+-        // No in-memory TrackedSession (restart, or pre-dates this plugin version): the fallback
+-        // must still warn that it's revoking every session for the user, wider than this sid.
+         var (result, logger) = await RunFallbackRevokeAsync(
+             sub: null, sid: "sid-1",
+             mapEntry: new UserProviderEntry
+             {
+-                ProviderId = "keycloak", Subject = "sub-1", Username = "alice",
+-                UserId = Guid.NewGuid().ToString(), LogoutSid = "sid-1"
++                ProviderId = "keycloak",
++                Subject = "sub-1",
++                Username = "alice",
++                UserId = Guid.NewGuid().ToString(),
++                LogoutSid = "sid-1"
+             });
+ 
+         Assert.IsType<OkResult>(result);
+-        Assert.True(logger.Any(LogLevel.Warning, "wider than the sid-scoped request"));
++        Assert.True(logger.Any(LogLevel.Warning, "legacy devices require explicit revocation"));
+     }
+ 
+     [Fact]
+-    public async Task BackchannelLogout_SubOnlyFallbackToMappedUser_DoesNotLogOverRevokeWarning()
++    public async Task BackchannelLogout_LegacySubjectWithoutLineage_DoesNotGuessTokenOwnership()
+     {
+-        // A sub-only logout_token was never scoped to a single session in the first place, so
+-        // revoking every session for the user is exactly the requested scope - no warning.
+         var (result, logger) = await RunFallbackRevokeAsync(
+             sub: "sub-1", sid: null,
+             mapEntry: new UserProviderEntry
+             {
+-                ProviderId = "keycloak", Subject = "sub-1", Username = "alice",
++                ProviderId = "keycloak",
++                Subject = "sub-1",
++                Username = "alice",
+                 UserId = Guid.NewGuid().ToString()
+             });
+ 
+         Assert.IsType<OkResult>(result);
+-        Assert.False(logger.Any(LogLevel.Warning, "wider than the sid-scoped request"));
++        Assert.True(logger.Any(LogLevel.Warning, "legacy devices require explicit revocation"));
+     }
+ 
+     // ── BackchannelLogout: logout_token claim rules (spec §2.4) ───────────────
+@@ -1128,7 +1132,7 @@
+         AuthenticationRequest? captured = null;
+         var sessionManager = Substitute.For<ISessionManager>();
+         sessionManager.AuthenticateDirect(Arg.Do<AuthenticationRequest>(r => captured = r))
+-            .Returns(Task.FromResult(new AuthenticationResult()));
++            .Returns(Task.FromResult(new AuthenticationResult { AccessToken = "test-token" }));
+ 
+         var controller = MakeController(stateManager: stateManager, userManager: userManager, sessionManager: sessionManager);
+         controller.HttpContext.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.50");
+@@ -1143,13 +1147,15 @@
+ 
+     private static AuthorizedSession MakeQcSession(
+         string username = "alice", string providerId = "keycloak", string? pictureUrl = null) => new()
+-    {
+-        ProviderId = providerId,
+-        Username = username,
+-        DisplayName = username,
+-        PictureUrl = pictureUrl,
+-        Roles = []
+-    };
++        {
++            ProviderId = providerId,
++            Username = username,
++            DisplayName = username,
++            PictureUrl = pictureUrl,
++            Subject = "test-subject",
++            Issuer = "https://idp.example/",
++            Roles = []
++        };
+ 
+     private const string OidcAuthProviderId = "Jellyfin.Plugin.OIDC.Auth.OidcAuthProvider";
+ 
