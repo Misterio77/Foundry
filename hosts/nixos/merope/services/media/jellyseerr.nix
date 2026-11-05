@@ -2,9 +2,7 @@
   config,
   pkgs,
   ...
-}: let
-  credential = name: {file = "/run/credentials/seerr.service/${name}";};
-in {
+}: {
   services.seerr = {
     enable = true;
     package = pkgs.seerr-oidc;
@@ -16,12 +14,6 @@ in {
         email = "akadmin@m7.rs";
         username = "akadmin";
       };
-      credentials = {
-        oidc = config.sops.secrets.authentik-seerr-client-secret.path;
-        jellyfin = config.sops.secrets.jellyfin-key.path;
-        radarr = config.sops.secrets.radarr-key.path;
-        sonarr = config.sops.secrets.sonarr-key.path;
-      };
       settings = {
         main.applicationUrl = "https://requests.m7.rs";
         oidc.providers = [
@@ -30,7 +22,7 @@ in {
             name = "Gablogin";
             issuerUrl = "https://auth.m7.rs/application/o/seerr/";
             clientId = "seerr";
-            clientSecret = credential "oidc";
+            clientSecret.file = config.sops.secrets.authentik-seerr-client-secret.path;
             scopes = "openid profile email seerr_permissions";
             permissionsClaim = "seerr_permissions";
             newUserLogin = true;
@@ -44,7 +36,7 @@ in {
           port = 443;
           useSsl = true;
           serverId = "5c9da3c6fa2e4ec580b6b6dc42b666d8";
-          apiKey = credential "jellyfin";
+          apiKey.file = config.sops.secrets.jellyfin-key.path;
           libraries = [
             {
               id = "f137a2dd21bbc1b99aa5c0f6bf02a805";
@@ -66,7 +58,7 @@ in {
             name = "Radarr";
             hostname = "localhost";
             port = config.services.radarr.settings.server.port;
-            apiKey = credential "radarr";
+            apiKey.file = config.sops.secrets.radarr-key.path;
             activeProfileId = 11;
             activeProfileName = "HD Bluray + WEB";
             activeDirectory = "/srv/media/movies";
@@ -79,7 +71,7 @@ in {
             name = "Sonarr";
             hostname = "localhost";
             port = config.services.sonarr.settings.server.port;
-            apiKey = credential "sonarr";
+            apiKey.file = config.sops.secrets.sonarr-key.path;
             activeProfileId = 7;
             activeProfileName = "WEB-1080p";
             activeDirectory = "/srv/media/tv";
