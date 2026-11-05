@@ -7,8 +7,8 @@
       <Authority>https://auth.m7.rs/application/o/jellyfin/</Authority>
       <ClientId>jellyfin</ClientId>
       <ClientSecretFile>@clientSecretFile@</ClientSecretFile>
-      <Scopes>openid profile email</Scopes>
-      <RoleClaim>groups</RoleClaim>
+      <Scopes>openid profile email jellyfin_roles</Scopes>
+      <RoleClaim>roles</RoleClaim>
       <UsernameClaim>preferred_username</UsernameClaim>
       <SyncProfileImage>false</SyncProfileImage>
       <SyncDisplayName>false</SyncDisplayName>
@@ -26,11 +26,31 @@
   <AutoCreateUsers>true</AutoCreateUsers>
   <MigrateLocalUsers>false</MigrateLocalUsers>
   <LinkExistingUsersByEmail>false</LinkExistingUsersByEmail>
-  <AllowedGroups><string>jellyfin-access</string></AllowedGroups>
+  <AllowedGroups>
+    <string>jellyfin-users</string>
+    <string>jellyfin-admins</string>
+  </AllowedGroups>
+  <RoleMappings>
+    <RoleMapping>
+      <RoleName>jellyfin-users</RoleName>
+      <ProviderFilter>authentik</ProviderFilter>
+      <IsAdmin>false</IsAdmin>
+      <EnableAllLibraries>true</EnableAllLibraries>
+      <EnableAudioTranscoding>true</EnableAudioTranscoding>
+      <EnableVideoTranscoding>false</EnableVideoTranscoding>
+    </RoleMapping>
+    <RoleMapping>
+      <RoleName>jellyfin-admins</RoleName>
+      <ProviderFilter>authentik</ProviderFilter>
+      <IsAdmin>true</IsAdmin>
+      <EnableAllLibraries>true</EnableAllLibraries>
+      <EnableAudioTranscoding>true</EnableAudioTranscoding>
+      <EnableVideoTranscoding>false</EnableVideoTranscoding>
+    </RoleMapping>
+  </RoleMappings>
   <DefaultRoleName />
-  <!-- Keep existing per-user permissions, including library restrictions and administrator status. -->
-  <ManageUserPolicy>false</ManageUserPolicy>
-  <EnableLibraryAccessManagement>false</EnableLibraryAccessManagement>
+  <ManageUserPolicy>true</ManageUserPolicy>
+  <EnableLibraryAccessManagement>true</EnableLibraryAccessManagement>
   <ManageLoginButtonBranding>false</ManageLoginButtonBranding>
   <HideManualLogin>true</HideManualLogin>
   <LoginTitle />

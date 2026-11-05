@@ -7,12 +7,21 @@ entries:
       identifiers:
         name: Foundry - private identity pilot
 
-  - model: authentik_core.group
-    id: jellyfin-access
+  - model: authentik_providers_oauth2.scopemapping
+    id: jellyfin-roles
     identifiers:
-      name: jellyfin-access
+      name: foundry-jellyfin-roles
     attrs:
-      is_superuser: false
+      scope_name: jellyfin_roles
+      description: Jellyfin application roles
+      expression: |
+        groups = set(request.user.groups.values_list("name", flat=True))
+        roles = []
+        if groups & {"users", "admins"}:
+            roles.append("jellyfin-users")
+        if "admins" in groups:
+            roles.append("jellyfin-admins")
+        return {"roles": roles}
 
   - model: authentik_providers_oauth2.oauth2provider
     id: jellyfin-provider
@@ -42,6 +51,7 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !KeyOf jellyfin-roles
 
   - model: authentik_core.application
     id: jellyfin
@@ -55,5 +65,12 @@ entries:
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf jellyfin
-      group: !KeyOf jellyfin-access
       order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, users]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf jellyfin
+      order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, admins]]

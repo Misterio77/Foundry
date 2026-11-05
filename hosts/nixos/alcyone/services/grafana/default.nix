@@ -44,14 +44,14 @@
           allow_sign_up = true;
           client_id = "grafana";
           client_secret = "$__file{${config.sops.secrets.authentik-grafana-client-secret.path}}";
-          scopes = "openid profile email offline_access";
+          scopes = "openid profile email offline_access grafana_roles";
           auth_url = "https://auth.m7.rs/application/o/authorize/";
           token_url = "https://auth.m7.rs/application/o/token/";
           api_url = "https://auth.m7.rs/application/o/userinfo/";
           use_pkce = true;
           use_refresh_token = true;
           login_attribute_path = "preferred_username";
-          role_attribute_path = "contains(groups[*], 'grafana-admins') && 'Admin' || contains(groups[*], 'grafana-users') && 'Viewer'";
+          role_attribute_path = "grafana_role";
           role_attribute_strict = true;
           allow_assign_grafana_admin = false;
         };

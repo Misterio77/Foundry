@@ -20,7 +20,8 @@
         issuerUrl = "https://auth.m7.rs/application/o/immich/";
         clientId = "immich";
         clientSecret._secret = config.sops.secrets.authentik-immich-client-secret.path;
-        scope = "openid email profile";
+        scope = "openid email profile immich_roles";
+        roleClaim = "immich_role";
         signingAlgorithm = "RS256";
         buttonText = "Sign in with Authentik";
         autoLaunch = true;

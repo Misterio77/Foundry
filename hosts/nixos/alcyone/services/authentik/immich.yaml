@@ -7,12 +7,20 @@ entries:
       identifiers:
         name: Foundry - private identity pilot
 
-  - model: authentik_core.group
-    id: immich-users
+  - model: authentik_providers_oauth2.scopemapping
+    id: immich-roles
     identifiers:
-      name: immich-users
+      name: foundry-immich-roles
     attrs:
-      is_superuser: false
+      scope_name: immich_roles
+      description: Immich application role
+      expression: |
+        groups = set(request.user.groups.values_list("name", flat=True))
+        if "admins" in groups:
+            return {"immich_role": "admin"}
+        if "users" in groups:
+            return {"immich_role": "user"}
+        return {}
 
   - model: authentik_providers_oauth2.oauth2provider
     id: immich-provider
@@ -45,6 +53,7 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !KeyOf immich-roles
 
   - model: authentik_core.application
     id: immich
@@ -58,5 +67,12 @@ entries:
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf immich
-      group: !KeyOf immich-users
       order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, users]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf immich
+      order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, admins]]

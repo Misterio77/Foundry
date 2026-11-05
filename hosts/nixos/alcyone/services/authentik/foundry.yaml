@@ -31,6 +31,17 @@ entries:
       identifiers:
         name: System - OAuth2 Provider - Scopes
 
+  - model: authentik_core.group
+    identifiers:
+      name: users
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: admins
+    attrs:
+      is_superuser: false
+
   # Only apps that require email use this authorization flow.
   - model: authentik_flows.flow
     id: email-required-authorization
