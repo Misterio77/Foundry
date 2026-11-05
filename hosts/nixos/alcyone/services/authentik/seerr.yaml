@@ -17,7 +17,7 @@ entries:
       expression: |
         avatar = request.user.avatar
         # Authentik's default image is relative; OIDC pictures must be absolute.
-        picture = request.build_absolute_uri(avatar) if avatar and not avatar.startswith("data:") else None
+        picture = http_request.build_absolute_uri(avatar) if avatar and not avatar.startswith("data:") else None
         return delete_none_values({
             "name": request.user.name,
             "given_name": ak_obj_attr(request.user, "given_name", "name"),
