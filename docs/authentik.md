@@ -1,8 +1,7 @@
 # Gablogin / Authentik
 
 Describes the checked-in configuration, not deployment status. Sources:
-[service](../hosts/nixos/alcyone/services/authentik.nix),
-[Blueprints](../hosts/nixos/alcyone/services/authentik/),
+[Authentik](../hosts/nixos/alcyone/services/authentik/),
 [Jellyfin](../hosts/nixos/merope/services/media/jellyfin/),
 [Immich](../hosts/nixos/merope/services/immich.nix),
 [Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),

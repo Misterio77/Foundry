@@ -4,7 +4,7 @@
     ../../common/optional/mysql.nix
     ../../common/optional/postgres.nix
 
-    ./authentik.nix
+    ./authentik
     ./backups-jobs.nix
     ./grafana
     ./files-server.nix
