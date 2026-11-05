@@ -35,8 +35,7 @@
         </OidcProviderConfig>
       </Providers>
       <AutoCreateUsers>false</AutoCreateUsers>
-      <!-- Only for the operator-approved initial username migration; disable after cutover. -->
-      <MigrateLocalUsers>true</MigrateLocalUsers>
+      <MigrateLocalUsers>false</MigrateLocalUsers>
       <LinkExistingUsersByEmail>false</LinkExistingUsersByEmail>
       <AllowedGroups><string>jellyfin-access</string></AllowedGroups>
       <DefaultRoleName />
@@ -44,7 +43,7 @@
       <ManageUserPolicy>false</ManageUserPolicy>
       <EnableLibraryAccessManagement>false</EnableLibraryAccessManagement>
       <ManageLoginButtonBranding>false</ManageLoginButtonBranding>
-      <HideManualLogin>false</HideManualLogin>
+      <HideManualLogin>true</HideManualLogin>
       <LoginTitle>Entrar no Jellyfin</LoginTitle>
       <ServerBaseUrl>https://media.m7.rs</ServerBaseUrl>
     </PluginConfiguration>
@@ -125,10 +124,12 @@ in {
         db = root / "data/jellyfin.db"
         mapping = root / "plugins/configurations/Jellyfin.Plugin.OIDC.UserProviderMap.json"
         with sqlite3.connect(db.as_uri() + "?mode=ro", uri=True) as connection:
-            users = connection.execute(
-                "SELECT Id FROM Users WHERE AuthenticationProviderId = ?",
-                ("Jellyfin.Plugin.OIDC.Auth.OidcAuthProvider",),
-            ).fetchall()
+            provider = "Jellyfin.Plugin.OIDC.Auth.OidcAuthProvider"
+            if connection.execute(
+                "SELECT 1 FROM Users WHERE AuthenticationProviderId IS NOT ? LIMIT 1", (provider,)
+            ).fetchone():
+                raise SystemExit("Local authentication account found; explicitly bind it before starting Jellyfin")
+            users = connection.execute("SELECT Id FROM Users").fetchall()
         entries = json.loads(mapping.read_text()) if mapping.exists() else []
         if not isinstance(entries, list):
             raise SystemExit("OIDC identity map must be an array; restore it before starting Jellyfin")
@@ -152,8 +153,11 @@ in {
         branding = Path(${builtins.toJSON "${jf.configDir}/branding.xml"})
         tree = ET.parse(branding) if branding.exists() else ET.ElementTree(ET.Element("BrandingOptions"))
         blocks = {
-            "LoginDisclaimer": '<a class="raised block emby-button" href="/sso/OIDC/Start/authentik">Entrar com Gablogin</a>',
-            "CustomCss": ".disclaimerContainer { display: block; }",
+            "LoginDisclaimer": '<div class="readOnlyContent"><h1 class="sectionTitle">Entrar no Jellyfin</h1><a class="raised button-submit block emby-button" href="/sso/OIDC/Start/authentik">Entrar com Gablogin</a></div>',
+            "CustomCss": """.disclaimerContainer { display: block; }
+        #loginPage .manualLoginForm,
+        #loginPage .visualLoginForm,
+        #loginPage .readOnlyContent .btnForgotPassword { display: none; }""",
         }
         changed = False
         for tag, block in blocks.items():
