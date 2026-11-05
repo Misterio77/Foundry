@@ -1,0 +1,34 @@
+--- a/src/apps/legacy/controllers/session/login/index.js
++++ b/src/apps/legacy/controllers/session/login/index.js
+@@ -305,6 +305,11 @@
+             // eslint-disable-next-line sonarjs/disabled-auto-escaping
+             loginDisclaimer.innerHTML = domPurify.sanitize(markdownIt({ html: true }).render(options.LoginDisclaimer || ''));
+ 
++            const gablogin = loginDisclaimer.querySelector('.foundry-oidc-login a');
++            if (gablogin) {
++                gablogin.textContent = globalize.translate('ButtonSignInWithGablogin');
++            }
++
+             for (const elem of loginDisclaimer.querySelectorAll('a')) {
+                 elem.rel = 'noopener noreferrer';
+                 elem.target = '_blank';
+--- a/src/strings/en-us.json
++++ b/src/strings/en-us.json
+@@ -143,6 +143,7 @@
+     "ButtonSend": "Send",
+     "ButtonShutdown": "Shutdown",
+     "ButtonSignIn": "Sign In",
++    "ButtonSignInWithGablogin": "Sign in with Gablogin",
+     "ButtonSignOut": "Sign Out",
+     "ButtonExitApp": "Exit Application",
+     "ButtonSpace": "Space",
+--- a/src/strings/pt-br.json
++++ b/src/strings/pt-br.json
+@@ -80,6 +80,7 @@
+     "ButtonSend": "Enviar",
+     "ButtonShutdown": "Desligar",
+     "ButtonSignIn": "Entrar",
++    "ButtonSignInWithGablogin": "Entrar com Gablogin",
+     "ButtonSignOut": "Sair",
+     "ButtonStart": "Iniciar",
+     "ButtonStop": "Parar",

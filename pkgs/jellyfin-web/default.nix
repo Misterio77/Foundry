@@ -10,7 +10,7 @@ in
   jellyfin-web.overrideAttrs (old: {
     patches =
       (old.patches or [])
-      ++ [./quick-connect-qr.patch ./quick-connect-helper.patch ./translations.patch ./logout.patch];
+      ++ [./quick-connect-qr.patch ./quick-connect-helper.patch ./translations.patch ./gablogin-label.patch ./logout.patch];
     postPatch =
       (old.postPatch or "")
       + ''
