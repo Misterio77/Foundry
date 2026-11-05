@@ -1,0 +1,1803 @@
+diff --git a/DECLARATIVE.md b/DECLARATIVE.md
+new file mode 100644
+index 0000000000..54a1f4bea0
+--- /dev/null
++++ b/DECLARATIVE.md
+@@ -0,0 +1,174 @@ # Declarative Jellyfin + OIDC mode
++# Declarative Jellyfin + OIDC mode
++
++Set `SEERR_CONFIG_FILE` to an operator-owned JSON file and restart Seerr. This
++mode is deliberately opinionated: Jellyfin, OIDC-only authentication, and
++permissions supplied by every OIDC provider. The configuration file is the
++source of truth, not a seed for mutable settings.
++
++## Example
++
++```json
++{
++  "version": 1,
++  "owner": {
++    "provider": "authentik",
++    "subject": "the-exact-oidc-sub-of-the-owner",
++    "email": "owner@example.com",
++    "username": "owner"
++  },
++  "settings": {
++    "main": {
++      "applicationUrl": "https://requests.example.com",
++      "applicationTitle": "Requests",
++      "locale": "pt-BR"
++    },
++    "oidc": {
++      "providers": [
++        {
++          "slug": "authentik",
++          "name": "SSO",
++          "issuerUrl": "https://auth.example.com/application/o/seerr/",
++          "clientId": "seerr",
++          "clientSecret": { "file": "/run/credentials/seerr.service/oidc" },
++          "scopes": "openid profile email seerr_permissions",
++          "permissionsClaim": "seerr_permissions",
++          "newUserLogin": true
++        }
++      ]
++    },
++    "jellyfin": {
++      "name": "Jellyfin",
++      "ip": "localhost",
++      "port": 8096,
++      "serverId": "your-jellyfin-server-id",
++      "apiKey": { "file": "/run/credentials/seerr.service/jellyfin" },
++      "externalHostname": "https://jellyfin.example.com",
++      "libraries": [
++        { "id": "your-movies-library-id", "name": "Movies", "enabled": true, "type": "movie" },
++        { "id": "your-tv-library-id", "name": "TV", "enabled": true, "type": "show" }
++      ]
++    },
++    "radarr": [
++      {
++        "id": 1,
++        "name": "Radarr",
++        "hostname": "localhost",
++        "port": 7878,
++        "apiKey": { "file": "/run/credentials/seerr.service/radarr" },
++        "activeProfileId": 1,
++        "activeProfileName": "HD",
++        "activeDirectory": "/media/movies",
++        "isDefault": true
++      }
++    ],
++    "sonarr": [
++      {
++        "id": 1,
++        "name": "Sonarr",
++        "hostname": "localhost",
++        "port": 8989,
++        "apiKey": { "file": "/run/credentials/seerr.service/sonarr" },
++        "activeProfileId": 1,
++        "activeProfileName": "HD",
++        "activeDirectory": "/media/tv",
++        "isDefault": true
++      }
++    ]
++  }
++}
++```
++
++Secret paths may be absolute or relative to the configuration file. Exactly one
++trailing LF (or CRLF) is removed. Missing/empty secret files fail startup. Inline
++secret strings are supported but should not be put in a public repository or
++Nix store. Configuration errors never echo supplied input values.
++
++Connection IDs, library IDs, quality-profile IDs and directory paths are explicit;
++no first-match discovery or accidental reassignment of existing requests. Arrays
++replace defaults, and duplicate IDs or multiple defaults for one resolution are
++rejected. Both normal and 4K connections are supported. Sonarr's anime overrides
++and Radarr's minimum-availability setting use their existing setting names.
++
++The accepted keys are defined in `server/lib/settings/declarative.ts`. Unknown
++keys and wrong types fail startup. Network and metadata preferences can also be
++configured. `settings.notifications.agents` accepts the existing notification
++agent names and options; credential fields accept either strings or `{ "file":
++"/path/to/credential" }`. For example:
++
++```json
++{
++  "notifications": {
++    "agents": {
++      "email": {
++        "enabled": true,
++        "options": {
++          "smtpHost": "mail.example.com",
++          "smtpPort": 465,
++          "secure": true,
++          "authUser": "requests@example.com",
++          "authPass": { "file": "/run/credentials/seerr.service/smtp" }
++        }
++      }
++    }
++  },
++  "jobs": {
++    "radarr-scan": { "schedule": "0 15 4 * * *" }
++  }
++}
++```
++
++These keys go inside `settings`. Job names and cron schedules are validated;
++omitted jobs keep their defaults. Omitted notifications remain disabled. Plex
++and Emby are not supported in declarative mode.
++
++## Ownership and bootstrap
++
++The owner is **not** selected by first login or by email matching. On an empty
++database startup creates user 1, with administrator permissions, and links the
++specified `(provider, subject)` identity. On an existing database the operator's
++configuration explicitly provisions that same user 1. If that identity already
++belongs to another user, or user 1 has another subject at that provider, startup
++fails transactionally. Changing a pinned identity requires an explicit database
++migration, not an edit that silently transfers ownership.
++
++Supply the actual OIDC `sub`, not a username or email address. The provider slug
++and issuer must stay stable. The owner should receive `ADMIN` from the IdP:
++permissions are synchronized from claims at login, including for the owner.
++
++The setup wizard is bypassed. Configuration mutation APIs and account-linking
++mutation APIs return 403, including requests from administrators. The server
++settings screens show a configuration-managed notice instead of editable forms.
++User preferences and request management remain available. Operational settings
++POST endpoints (including manual job triggers) are also disabled for now.
++
++## State and migration
++
++The database remains writable and persistent. Requests, users, identities,
++preferences, media metadata and sessions are not configuration.
++
++`CONFIG_DIRECTORY/declarative-state.json` stores only generated application
++identity: client ID, session secret, VAPID keys and Seerr's API key. Writes are
++atomic and mode 0600. Connection credentials are resolved in memory and are not
++written to this file. Configuration is loaded after defaults; legacy connection
++settings cannot override it.
++
++When first enabling this mode, existing generated identity is imported from
++`settings.json` if no declarative state exists, preserving sessions and application
++identity. The legacy file is left untouched; it may contain old connection
++credentials. Back it up securely and remove it after migration if desired. A
++corrupt state file is an error, not a reason to generate a new session secret.
++Disabling declarative mode returns to the legacy settings file; this is not an
++automatic reverse migration.
++
++## Authorization limitations
++
++Permission names are validated against Seerr's permission enum. Invalid/missing
++claims reject login; an empty array grants no permissions. Alternate login paths
++are disabled when permissions are managed.
++
++This is login-time synchronization, **not continuous IdP authorization**. Removing
++an IdP group or disabling an IdP account does not revoke an existing Seerr
++session. Access-token expiration at the IdP does not bound Seerr sessions. Session
++revalidation/revocation is a separate concern and must be implemented before
++claiming immediate IdP-driven revocation. The application API key remains a
++trusted administrative credential.
+diff --git a/seerr-api.yml b/seerr-api.yml
+index 7581aa588e..1e27b58517 100644
+--- a/seerr-api.yml
++++ b/seerr-api.yml
+@@ -256,6 +256,9 @@
+         versionCheck:
+           type: boolean
+           example: false
++        declarative:
++          type: boolean
++          description: Whether server configuration is externally managed and read-only
+         openIdProviders:
+           type: array
+           items:
+diff --git a/server/index.ts b/server/index.ts
+index fb376bf627..10e31dd224 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -19,6 +19,7 @@
+ import WebPushAgent from '@server/lib/notifications/agents/webpush';
+ import checkOverseerrMerge from '@server/lib/overseerrMerge';
+ import { getSettings } from '@server/lib/settings';
++import { bootstrapDeclarativeOwner } from '@server/lib/settings/bootstrap';
+ import logger from '@server/logger';
+ import clearCookies from '@server/middleware/clearcookies';
+ import routes from '@server/routes';
+@@ -84,6 +85,8 @@
+ 
+     // Load Settings
+     const settings = await getSettings().load();
++    if (settings.declarative)
++      await bootstrapDeclarativeOwner(settings.declarative.owner);
+     restartFlag.initializeSettings(settings);
+ 
+     initI18n();
+diff --git a/server/interfaces/api/settingsInterfaces.ts b/server/interfaces/api/settingsInterfaces.ts
+index c2a61db057..d80c2cd385 100644
+--- a/server/interfaces/api/settingsInterfaces.ts
++++ b/server/interfaces/api/settingsInterfaces.ts
+@@ -53,6 +53,7 @@
+   versionCheck: boolean;
+   plexClientIdentifier: string;
+   openIdProviders: PublicOidcProvider[];
++  declarative: boolean;
+ }
+ 
+ export interface CacheItem {
+diff --git a/server/lib/permissions.test.ts b/server/lib/permissions.test.ts
+new file mode 100644
+index 0000000000..e3d171f677
+--- /dev/null
++++ b/server/lib/permissions.test.ts
+@@ -0,0 +1,31 @@
++import { Permission, permissionsFromClaim } from '@server/lib/permissions';
++import assert from 'node:assert/strict';
++import { describe, it } from 'node:test';
++
++describe('permissionsFromClaim', () => {
++  it('combines named permissions, tolerating duplicates', () => {
++    assert.equal(
++      permissionsFromClaim(['REQUEST', 'MANAGE_USERS', 'REQUEST']),
++      Permission.REQUEST | Permission.MANAGE_USERS
++    );
++    assert.equal(permissionsFromClaim(['ADMIN']), Permission.ADMIN);
++    assert.equal(permissionsFromClaim([]), Permission.NONE);
++  });
++  for (const value of [
++    undefined,
++    null,
++    'ADMIN',
++    2,
++    {},
++    ['unknown'],
++    [2],
++    ['2'],
++    ['__proto__'],
++    ['constructor'],
++    ['REQUEST', 'typo'],
++  ]) {
++    it(`rejects invalid claim ${JSON.stringify(value)}`, () => {
++      assert.throws(() => permissionsFromClaim(value));
++    });
++  }
++});
+diff --git a/server/lib/permissions.ts b/server/lib/permissions.ts
+index edc9f7e183..af102ad0ca 100644
+--- a/server/lib/permissions.ts
++++ b/server/lib/permissions.ts
+@@ -31,6 +31,23 @@
+   VIEW_BLOCKLIST = 1073741824,
+ }
+ 
++export const permissionsFromClaim = (claim: unknown): number => {
++  if (!Array.isArray(claim)) {
++    throw new Error('Permissions claim must be an array of permission names');
++  }
++
++  return claim.reduce((permissions: number, name: unknown) => {
++    if (
++      typeof name !== 'string' ||
++      !Object.prototype.hasOwnProperty.call(Permission, name) ||
++      typeof Permission[name as keyof typeof Permission] !== 'number'
++    ) {
++      throw new Error('Unknown permission in OIDC claim');
++    }
++    return permissions | Permission[name as keyof typeof Permission];
++  }, Permission.NONE);
++};
++
+ export interface PermissionCheckOptions {
+   type: 'and' | 'or';
+ }
+diff --git a/server/lib/settings/bootstrap.test.ts b/server/lib/settings/bootstrap.test.ts
+new file mode 100644
+index 0000000000..27aa5dd3cc
+--- /dev/null
++++ b/server/lib/settings/bootstrap.test.ts
+@@ -0,0 +1,79 @@
++import dataSource, { getRepository } from '@server/datasource';
++import { LinkedAccount } from '@server/entity/LinkedAccount';
++import { User } from '@server/entity/User';
++import { Permission } from '@server/lib/permissions';
++import { bootstrapDeclarativeOwner } from '@server/lib/settings/bootstrap';
++import { setupTestDb } from '@server/test/db';
++import assert from 'node:assert/strict';
++import { describe, it } from 'node:test';
++
++setupTestDb();
++const owner = {
++  provider: 'authentik',
++  subject: 'owner-sub',
++  email: 'owner@example.com',
++  username: 'owner',
++};
++
++describe('declarative owner bootstrap', () => {
++  it('creates owner 1 and a pinned identity on an empty database, idempotently', async () => {
++    await dataSource.dropDatabase();
++    await dataSource.synchronize();
++    await bootstrapDeclarativeOwner(owner);
++    await bootstrapDeclarativeOwner(owner);
++    const user = await getRepository(User).findOneOrFail({
++      where: { id: 1 },
++      relations: { linkedAccounts: true },
++    });
++    assert.equal(user.email, owner.email);
++    assert.equal(user.permissions, Permission.ADMIN);
++    assert.equal(user.linkedAccounts.length, 1);
++    assert.equal(user.linkedAccounts[0].sub, owner.subject);
++  });
++
++  it('explicitly provisions the existing owner rather than matching by email', async () => {
++    await bootstrapDeclarativeOwner(owner);
++    assert.equal(
++      (await getRepository(User).findOneOrFail({ where: { id: 1 } })).email,
++      owner.email
++    );
++    assert.equal(await getRepository(User).count(), 2);
++  });
++
++  it('rejects an identity already belonging to someone else', async () => {
++    const other = await getRepository(User).findOneOrFail({ where: { id: 2 } });
++    await getRepository(LinkedAccount).save(
++      new LinkedAccount({
++        user: other,
++        provider: owner.provider,
++        sub: owner.subject,
++        username: 'other',
++      })
++    );
++    await assert.rejects(bootstrapDeclarativeOwner(owner), /different user/);
++    assert.equal(
++      (await getRepository(User).findOneOrFail({ where: { id: 1 } })).email,
++      'admin@seerr.dev'
++    );
++  });
++
++  it('rejects replacing the pinned owner identity', async () => {
++    await bootstrapDeclarativeOwner(owner);
++    await assert.rejects(
++      bootstrapDeclarativeOwner({ ...owner, subject: 'replacement' }),
++      /different identity/
++    );
++    assert.equal(await getRepository(LinkedAccount).count(), 1);
++  });
++
++  it('rolls back when the configured email belongs to another user', async () => {
++    await assert.rejects(
++      bootstrapDeclarativeOwner({ ...owner, email: 'demo@seerr.dev' })
++    );
++    assert.equal(
++      (await getRepository(User).findOneOrFail({ where: { id: 1 } })).email,
++      'admin@seerr.dev'
++    );
++    assert.equal(await getRepository(LinkedAccount).count(), 0);
++  });
++});
+diff --git a/server/lib/settings/bootstrap.ts b/server/lib/settings/bootstrap.ts
+new file mode 100644
+index 0000000000..6d9b857d0b
+--- /dev/null
++++ b/server/lib/settings/bootstrap.ts
+@@ -0,0 +1,63 @@ export async function bootstrapDeclarativeOwner(
++import { UserType } from '@server/constants/user';
++import dataSource from '@server/datasource';
++import { LinkedAccount } from '@server/entity/LinkedAccount';
++import { User } from '@server/entity/User';
++import { Permission } from '@server/lib/permissions';
++import type { DeclarativeOwner } from '@server/lib/settings/declarative';
++
++export async function bootstrapDeclarativeOwner(
++  owner: DeclarativeOwner
++): Promise<void> {
++  await dataSource.transaction(async (manager) => {
++    const users = manager.getRepository(User);
++    const links = manager.getRepository(LinkedAccount);
++    let user = await users.findOne({
++      where: { id: 1 },
++      relations: { linkedAccounts: true },
++    });
++    const identity = await links.findOne({
++      where: { provider: owner.provider, sub: owner.subject },
++      relations: { user: true },
++    });
++    if (identity && identity.user.id !== 1)
++      throw new Error('Configured owner identity belongs to a different user');
++    if (!user) {
++      if (await users.count())
++        throw new Error(
++          'Cannot bootstrap owner into a database without user 1 that contains other users'
++        );
++      user = new User({
++        id: 1,
++        email: owner.email,
++        username: owner.username,
++        userType: UserType.LOCAL,
++        permissions: Permission.ADMIN,
++        avatar: '',
++        plexToken: '',
++      });
++    }
++    const ownerLinks = user.linkedAccounts ?? [];
++    if (
++      ownerLinks.some(
++        (link) => link.provider === owner.provider && link.sub !== owner.subject
++      )
++    ) {
++      throw new Error(
++        'Existing owner has a different identity for the configured provider'
++      );
++    }
++    user.email = owner.email;
++    user.username = owner.username;
++    user.permissions = Permission.ADMIN;
++    await users.save(user);
++    if (!identity)
++      await links.save(
++        new LinkedAccount({
++          user,
++          provider: owner.provider,
++          sub: owner.subject,
++          username: owner.username,
++        })
++      );
++  });
++}
+diff --git a/server/lib/settings/declarative.test.ts b/server/lib/settings/declarative.test.ts
+new file mode 100644
+index 0000000000..17216af295
+--- /dev/null
++++ b/server/lib/settings/declarative.test.ts
+@@ -0,0 +1,252 @@ export function fixture() {
++import { MediaServerType } from '@server/constants/server';
++import { Settings } from '@server/lib/settings';
++import { loadDeclarativeConfig } from '@server/lib/settings/declarative';
++import assert from 'node:assert/strict';
++import fs from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++import { afterEach, beforeEach, describe, it } from 'node:test';
++
++export function fixture() {
++  return {
++    version: 1,
++    owner: {
++      provider: 'authentik',
++      subject: 'owner-sub',
++      email: 'owner@example.com',
++      username: 'owner',
++    },
++    settings: {
++      main: { applicationUrl: 'https://requests.example.com' },
++      notifications: {
++        agents: {
++          email: {
++            enabled: true,
++            options: { smtpHost: 'localhost', authPass: { file: 'smtp.key' } },
++          },
++        },
++      },
++      jobs: { 'radarr-scan': { schedule: '0 15 4 * * *' } },
++      jellyfin: {
++        name: 'Jellyfin',
++        ip: 'localhost',
++        port: 8096,
++        serverId: 'server',
++        apiKey: { file: 'jellyfin.key' },
++        libraries: [
++          { id: 'movies', name: 'Movies', enabled: true, type: 'movie' },
++        ],
++      },
++      oidc: {
++        providers: [
++          {
++            slug: 'authentik',
++            name: 'SSO',
++            issuerUrl: 'https://auth.example.com/application/o/seerr/',
++            clientId: 'seerr',
++            clientSecret: { file: 'oidc.key' },
++            permissionsClaim: 'seerr_permissions',
++          },
++        ],
++      },
++      radarr: [
++        {
++          id: 1,
++          name: 'Radarr',
++          hostname: 'localhost',
++          port: 7878,
++          apiKey: { file: 'radarr.key' },
++          activeProfileId: 1,
++          activeProfileName: 'HD',
++          activeDirectory: '/movies',
++          isDefault: true,
++        },
++      ],
++    },
++  };
++}
++
++describe('declarative configuration', () => {
++  let directory: string;
++  let filename: string;
++  let settings: Settings;
++  beforeEach(async () => {
++    directory = await fs.mkdtemp(path.join(os.tmpdir(), 'seerr-declarative-'));
++    filename = path.join(directory, 'config.json');
++    await fs.writeFile(filename, JSON.stringify(fixture()));
++    await Promise.all(
++      ['jellyfin', 'oidc', 'radarr', 'smtp'].map((name) =>
++        fs.writeFile(path.join(directory, `${name}.key`), `${name}-secret\n`)
++      )
++    );
++    settings = new Settings(undefined, path.join(directory, 'settings.json'));
++    process.env.SEERR_CONFIG_FILE = filename;
++  });
++  afterEach(async () => {
++    delete process.env.SEERR_CONFIG_FILE;
++    await fs.rm(directory, { recursive: true, force: true });
++  });
++
++  it('resolves file-backed secrets and applies connection defaults', async () => {
++    const config = await loadDeclarativeConfig(filename);
++    assert.equal(config.settings.jellyfin?.apiKey, 'jellyfin-secret');
++    assert.equal(
++      config.settings.oidc?.providers?.[0]?.clientSecret,
++      'oidc-secret'
++    );
++    assert.equal(config.settings.radarr?.[0]?.apiKey, 'radarr-secret');
++    assert.equal(config.settings.radarr?.[0]?.minimumAvailability, 'released');
++    assert.equal(
++      config.settings.main?.mediaServerType,
++      MediaServerType.JELLYFIN
++    );
++    assert.equal(config.settings.main?.localLogin, false);
++    assert.equal(config.settings.public?.initialized, true);
++    assert.equal(
++      config.settings.notifications?.agents?.email?.options?.authPass,
++      'smtp-secret'
++    );
++    assert.equal(
++      config.settings.jobs?.['radarr-scan']?.schedule,
++      '0 15 4 * * *'
++    );
++  });
++
++  for (const [name, mutate] of Object.entries<
++    (data: ReturnType<typeof fixture>) => void
++  >({
++    'unknown fields': (data) => {
++      Object.assign(data.settings, { typo: true });
++    },
++    'unknown nested fields': (data) => {
++      Object.assign(data.settings.main, { typo: true });
++    },
++    'wrong types': (data) => {
++      Object.assign(data.settings.jellyfin, { port: '8096' });
++    },
++    'missing permissions policy': (data) => {
++      Reflect.deleteProperty(
++        data.settings.oidc.providers[0],
++        'permissionsClaim'
++      );
++    },
++    'unconfigured owner provider': (data) => {
++      data.owner.provider = 'other';
++    },
++    'duplicate providers': (data) => {
++      data.settings.oidc.providers.push(data.settings.oidc.providers[0]);
++    },
++    'duplicate connection ids': (data) => {
++      data.settings.radarr.push(data.settings.radarr[0]);
++    },
++    'multiple defaults': (data) => {
++      data.settings.radarr.push({ ...data.settings.radarr[0], id: 2 });
++    },
++    'mutable login flags': (data) => {
++      Object.assign(data.settings.main, { localLogin: true });
++    },
++    'unsupported versions': (data) => {
++      data.version = 2;
++    },
++    'unknown notification options': (data) => {
++      Object.assign(data.settings.notifications.agents.email.options, {
++        typo: true,
++      });
++    },
++    'unknown jobs': (data) => {
++      Object.assign(data.settings.jobs, {
++        imaginary: { schedule: '0 * * * *' },
++      });
++    },
++    'invalid schedules': (data) => {
++      data.settings.jobs['radarr-scan'].schedule = 'never gonna give you up';
++    },
++  })) {
++    it(`rejects ${name} without leaking input values`, async () => {
++      const data = fixture();
++      mutate(data);
++      await fs.writeFile(filename, JSON.stringify(data));
++      await assert.rejects(
++        loadDeclarativeConfig(filename),
++        /^Error: Invalid declarative configuration;/
++      );
++    });
++  }
++
++  it('fails closed on missing or empty secrets', async () => {
++    await fs.rm(path.join(directory, 'oidc.key'));
++    await assert.rejects(
++      loadDeclarativeConfig(filename),
++      /Unable to read.*secret/
++    );
++    await fs.writeFile(path.join(directory, 'oidc.key'), '\n');
++    await assert.rejects(loadDeclarativeConfig(filename), /Empty.*secret/);
++  });
++
++  it('persists only generated identity, not configuration or connection secrets', async () => {
++    await settings.load();
++    assert.equal(settings.public.initialized, true);
++    assert.equal(settings.fullPublicSettings.declarative, true);
++    const statePath = path.join(directory, 'declarative-state.json');
++    const state = JSON.parse(await fs.readFile(statePath, 'utf8'));
++    assert.deepEqual(Object.keys(state).sort(), [
++      'clientId',
++      'main',
++      'sessionSecret',
++      'vapidPrivate',
++      'vapidPublic',
++    ]);
++    assert.deepEqual(Object.keys(state.main), ['apiKey']);
++    assert.equal((await fs.stat(statePath)).mode & 0o777, 0o600);
++    assert.equal(
++      await fs.readFile(statePath, 'utf8').then((s) => s.includes('-secret')),
++      false
++    );
++    const sessionSecret = settings.sessionSecret;
++    const clientId = settings.clientId;
++    settings.main.applicationTitle = 'mutable drift';
++    await settings.save();
++    await settings.load();
++    assert.equal(settings.main.applicationTitle, 'Seerr');
++    assert.equal(settings.sessionSecret, sessionSecret);
++    assert.equal(settings.clientId, clientId);
++  });
++
++  it('imports only identity from legacy settings, without changing the legacy file', async () => {
++    const legacy = {
++      clientId: 'stable-id',
++      sessionSecret: 'stable-session',
++      main: {
++        apiKey: 'stable-api',
++        applicationTitle: 'stale',
++        localLogin: true,
++      },
++      jellyfin: { apiKey: 'old-secret' },
++    };
++    await fs.writeFile(
++      path.join(directory, 'settings.json'),
++      JSON.stringify(legacy)
++    );
++    await settings.load();
++    assert.equal(settings.clientId, 'stable-id');
++    assert.equal(settings.sessionSecret, 'stable-session');
++    assert.equal(settings.main.apiKey, 'stable-api');
++    assert.equal(settings.main.applicationTitle, 'Seerr');
++    assert.equal(settings.main.localLogin, false);
++    assert.equal(settings.jellyfin.apiKey, 'jellyfin-secret');
++    assert.deepEqual(
++      JSON.parse(
++        await fs.readFile(path.join(directory, 'settings.json'), 'utf8')
++      ),
++      legacy
++    );
++  });
++
++  it('does not silently replace corrupt runtime identity', async () => {
++    await fs.writeFile(path.join(directory, 'declarative-state.json'), '{');
++    await assert.rejects(
++      settings.load(),
++      /Unable to load declarative runtime state/
++    );
++  });
++});
+diff --git a/server/lib/settings/declarative.ts b/server/lib/settings/declarative.ts
+new file mode 100644
+index 0000000000..c62d440b21
+--- /dev/null
++++ b/server/lib/settings/declarative.ts
+@@ -0,0 +1,316 @@ export async function loadDeclarativeConfig(
++import { MediaServerType } from '@server/constants/server';
++import type { AllSettings, DeepPartial } from '@server/lib/settings';
++import {
++  jobsSchema,
++  localeSchema,
++  notificationsSchema,
++  secretValue,
++} from '@server/lib/settings/declarativeSchema';
++import fs from 'fs/promises';
++import path from 'path';
++import { z } from 'zod';
++
++const requiredSecret = secretValue.refine(
++  (value) => typeof value !== 'string' || value.length > 0
++);
++const port = z.number().int().min(1).max(65535);
++const quota = z
++  .object({
++    quotaLimit: z.number().int().nonnegative().optional(),
++    quotaDays: z.number().int().positive().optional(),
++  })
++  .strict();
++const library = z
++  .object({
++    id: z.string().min(1),
++    name: z.string(),
++    enabled: z.boolean(),
++    type: z.enum(['show', 'movie']),
++  })
++  .strict();
++const provider = z
++  .object({
++    slug: z.string().regex(/^[a-z0-9-]+$/),
++    name: z.string().min(1),
++    issuerUrl: z.url().startsWith('https://'),
++    clientId: z.string().min(1),
++    clientSecret: requiredSecret,
++    logo: z.string().optional(),
++    requiredClaims: z.string().optional(),
++    permissionsClaim: z.string().min(1),
++    scopes: z.string().default('openid profile email'),
++    newUserLogin: z.boolean().default(true),
++  })
++  .strict();
++const dvr = z
++  .object({
++    id: z.number().int().positive(),
++    name: z.string().min(1),
++    hostname: z.string().min(1),
++    port,
++    apiKey: requiredSecret,
++    useSsl: z.boolean().default(false),
++    baseUrl: z.string().optional(),
++    activeProfileId: z.number().int().positive(),
++    activeProfileName: z.string().min(1),
++    activeDirectory: z.string().min(1),
++    tags: z.array(z.number().int()).default([]),
++    is4k: z.boolean().default(false),
++    isDefault: z.boolean().default(false),
++    externalUrl: z.string().optional(),
++    syncEnabled: z.boolean().default(true),
++    preventSearch: z.boolean().default(false),
++    tagRequests: z.boolean().default(false),
++    overrideRule: z.array(z.number().int()).default([]),
++  })
++  .strict();
++const settingsSchema = z
++  .object({
++    main: z
++      .object({
++        applicationTitle: z.string(),
++        applicationUrl: z.url().startsWith('https://'),
++        cacheImages: z.boolean(),
++        defaultPermissions: z.number().int().nonnegative(),
++        defaultQuotas: z.object({ movie: quota, tv: quota }).strict(),
++        hideAvailable: z.boolean(),
++        hideBlocklisted: z.boolean(),
++        hideRequested: z.boolean(),
++        discoverRegion: z.string(),
++        streamingRegion: z.string(),
++        originalLanguage: z.string(),
++        blocklistRegion: z.string(),
++        blocklistLanguage: z.string(),
++        blocklistedTags: z.string(),
++        blocklistedTagsLimit: z.number().int().nonnegative(),
++        partialRequestsEnabled: z.boolean(),
++        enableSpecialEpisodes: z.boolean(),
++        locale: localeSchema,
++        youtubeUrl: z.string(),
++        versionCheck: z.boolean(),
++      })
++      .strict()
++      .partial()
++      .required({ applicationUrl: true }),
++    jellyfin: z
++      .object({
++        name: z.string().min(1),
++        ip: z.string().min(1),
++        port,
++        useSsl: z.boolean().default(false),
++        urlBase: z.string().default(''),
++        externalHostname: z.string().default(''),
++        jellyfinForgotPasswordUrl: z.string().default(''),
++        libraries: z.array(library),
++        serverId: z.string().min(1),
++        apiKey: requiredSecret,
++      })
++      .strict(),
++    oidc: z.object({ providers: z.array(provider).min(1) }).strict(),
++    radarr: z
++      .array(
++        dvr.extend({
++          minimumAvailability: z
++            .enum(['announced', 'inCinemas', 'released', 'preDB'])
++            .default('released'),
++        })
++      )
++      .default([]),
++    sonarr: z
++      .array(
++        dvr.extend({
++          seriesType: z
++            .enum(['standard', 'daily', 'anime'])
++            .default('standard'),
++          animeSeriesType: z
++            .enum(['standard', 'daily', 'anime'])
++            .default('anime'),
++          activeAnimeProfileId: z.number().int().positive().optional(),
++          activeAnimeProfileName: z.string().optional(),
++          activeAnimeDirectory: z.string().optional(),
++          activeAnimeLanguageProfileId: z.number().int().optional(),
++          activeLanguageProfileId: z.number().int().optional(),
++          animeTags: z.array(z.number().int()).optional(),
++          enableSeasonFolders: z.boolean().default(true),
++          monitorNewItems: z.enum(['all', 'none']).default('all'),
++        })
++      )
++      .default([]),
++    network: z
++      .object({
++        csrfProtection: z.boolean(),
++        forceIpv4First: z.boolean(),
++        trustProxy: z.boolean(),
++        apiRequestTimeout: z.number().int().positive(),
++        dnsCache: z
++          .object({
++            enabled: z.boolean(),
++            forceMinTtl: z.number().nonnegative().optional(),
++            forceMaxTtl: z.number().min(-1).optional(),
++          })
++          .strict(),
++        proxy: z
++          .object({
++            enabled: z.boolean(),
++            hostname: z.string(),
++            port,
++            useSsl: z.boolean(),
++            user: z.string(),
++            password: secretValue,
++            bypassFilter: z.string(),
++            bypassLocalAddresses: z.boolean(),
++          })
++          .strict(),
++      })
++      .strict()
++      .partial()
++      .optional(),
++    notifications: notificationsSchema.optional(),
++    jobs: jobsSchema.optional(),
++    metadataSettings: z
++      .object({ tv: z.enum(['tmdb', 'tvdb']), anime: z.enum(['tmdb', 'tvdb']) })
++      .strict()
++      .optional(),
++  })
++  .strict();
++
++const configSchema = z
++  .object({
++    version: z.literal(1),
++    owner: z
++      .object({
++        provider: z.string().min(1),
++        subject: z.string().min(1),
++        email: z.email(),
++        username: z.string().min(1),
++      })
++      .strict(),
++    settings: settingsSchema,
++  })
++  .strict()
++  .superRefine((config, ctx) => {
++    const providers = config.settings.oidc.providers;
++    if (!providers.some((p) => p.slug === config.owner.provider))
++      ctx.addIssue({
++        code: 'custom',
++        message: 'Owner provider is not configured',
++        path: ['owner', 'provider'],
++      });
++    for (const [name, entries] of [
++      ['providers', providers],
++      ['radarr', config.settings.radarr],
++      ['sonarr', config.settings.sonarr],
++    ] as const) {
++      const ids = entries.map((entry) =>
++        'slug' in entry ? entry.slug : entry.id
++      );
++      if (new Set(ids).size !== ids.length)
++        ctx.addIssue({
++          code: 'custom',
++          message: `Duplicate ${name} identifiers`,
++          path: ['settings', name],
++        });
++    }
++    for (const name of ['radarr', 'sonarr'] as const) {
++      for (const is4k of [false, true]) {
++        if (
++          config.settings[name].filter((s) => s.isDefault && s.is4k === is4k)
++            .length > 1
++        )
++          ctx.addIssue({
++            code: 'custom',
++            message: 'Multiple default servers for the same resolution',
++            path: ['settings', name],
++          });
++      }
++    }
++  });
++
++type ResolvedSecrets<T> = T extends { file: string }
++  ? string
++  : T extends object
++    ? { [K in keyof T]: ResolvedSecrets<T[K]> }
++    : T;
++
++export type DeclarativeOwner = z.infer<typeof configSchema>['owner'];
++export interface DeclarativeConfig {
++  owner: DeclarativeOwner;
++  settings: DeepPartial<AllSettings>;
++}
++
++export async function loadDeclarativeConfig(
++  filename: string
++): Promise<DeclarativeConfig> {
++  // Never include parser errors or input values: configuration may contain secrets.
++  let parsed: z.infer<typeof configSchema>;
++  try {
++    parsed = configSchema.parse(
++      JSON.parse(await fs.readFile(filename, 'utf8'))
++    );
++  } catch (error) {
++    const fields =
++      error instanceof z.ZodError
++        ? error.issues
++            .map(
++              (issue) => `${issue.path.join('.') || '<root>'} (${issue.code})`
++            )
++            .join(', ')
++        : 'invalid JSON or unreadable file';
++    throw new Error(`Invalid declarative configuration; ${fields}`);
++  }
++  const readSecret = async (
++    value: z.infer<typeof secretValue>
++  ): Promise<string> => {
++    if (typeof value === 'string') return value;
++    let content: string;
++    try {
++      content = await fs.readFile(
++        path.resolve(path.dirname(filename), value.file),
++        'utf8'
++      );
++    } catch {
++      throw new Error('Unable to read a declarative configuration secret file');
++    }
++    content = content.replace(/\r?\n$/, '');
++    if (!content) throw new Error('Empty declarative configuration secret');
++    return content;
++  };
++  const resolveSecrets = async (value: unknown): Promise<unknown> => {
++    if (Array.isArray(value)) return Promise.all(value.map(resolveSecrets));
++    if (value !== null && typeof value === 'object') {
++      if ('file' in value && typeof value.file === 'string')
++        return readSecret({ file: value.file });
++      return Object.fromEntries(
++        await Promise.all(
++          Object.entries(value).map(async ([key, item]) => [
++            key,
++            await resolveSecrets(item),
++          ])
++        )
++      );
++    }
++    return value;
++  };
++  const owner = parsed.owner;
++  const settings = (await resolveSecrets(parsed.settings)) as ResolvedSecrets<
++    typeof parsed.settings
++  >;
++  return {
++    owner,
++    settings: {
++      ...settings,
++      main: {
++        ...settings.main,
++        oidcLogin: true,
++        localLogin: false,
++        mediaServerLogin: false,
++        newPlexLogin: false,
++        mediaServerType: MediaServerType.JELLYFIN,
++      },
++      public: { initialized: true },
++      metadataSettings: settings.metadataSettings as
++        | AllSettings['metadataSettings']
++        | undefined,
++    },
++  };
++}
+diff --git a/server/lib/settings/declarativeSchema.ts b/server/lib/settings/declarativeSchema.ts
+new file mode 100644
+index 0000000000..998e120937
+--- /dev/null
++++ b/server/lib/settings/declarativeSchema.ts
+@@ -0,0 +1,154 @@
++import { availableLocales } from '@server/types/languages';
++import { Job } from 'node-schedule';
++import { z } from 'zod';
++
++export const secretValue = z.union([
++  z.string(),
++  z.object({ file: z.string().min(1) }).strict(),
++]);
++export const localeSchema = z.enum(availableLocales);
++const agent = z
++  .object({
++    enabled: z.boolean(),
++    embedPoster: z.boolean(),
++    types: z.number().int().nonnegative(),
++  })
++  .strict()
++  .partial();
++const options = <T extends z.ZodRawShape>(shape: T) =>
++  z.object(shape).strict().partial();
++
++export const notificationsSchema = z
++  .object({
++    agents: z
++      .object({
++        email: agent.extend({
++          options: options({
++            userEmailRequired: z.boolean(),
++            emailFrom: z.string(),
++            smtpHost: z.string(),
++            smtpPort: z.number().int().min(1).max(65535),
++            secure: z.boolean(),
++            ignoreTls: z.boolean(),
++            requireTls: z.boolean(),
++            authUser: z.string(),
++            authPass: secretValue,
++            allowSelfSigned: z.boolean(),
++            senderName: z.string(),
++            usePublicLogo: z.boolean(),
++            pgpPrivateKey: secretValue,
++            pgpPassword: secretValue,
++          }).optional(),
++        }),
++        discord: agent.extend({
++          options: options({
++            botUsername: z.string(),
++            botAvatarUrl: z.string(),
++            webhookUrl: secretValue,
++            webhookRoleId: z.string(),
++            webhookThreadId: z.string(),
++            enableMentions: z.boolean(),
++            locale: localeSchema,
++            useUserLocale: z.boolean(),
++          }).optional(),
++        }),
++        slack: agent.extend({
++          options: options({
++            webhookUrl: secretValue,
++            locale: localeSchema,
++          }).optional(),
++        }),
++        telegram: agent.extend({
++          options: options({
++            botUsername: z.string(),
++            botAPI: secretValue,
++            chatId: z.string(),
++            messageThreadId: z.string(),
++            sendSilently: z.boolean(),
++          }).optional(),
++        }),
++        pushbullet: agent.extend({
++          options: options({
++            accessToken: secretValue,
++            channelTag: z.string(),
++          }).optional(),
++        }),
++        pushover: agent.extend({
++          options: options({
++            accessToken: secretValue,
++            userToken: secretValue,
++            sound: z.string(),
++          }).optional(),
++        }),
++        webhook: agent.extend({
++          options: options({
++            webhookUrl: secretValue,
++            jsonPayload: z.string(),
++            authHeader: secretValue,
++            customHeaders: z.array(
++              z.object({ key: z.string(), value: secretValue }).strict()
++            ),
++            supportVariables: z.boolean(),
++          }).optional(),
++        }),
++        webpush: agent.extend({ options: z.object({}).strict().optional() }),
++        gotify: agent.extend({
++          options: options({
++            url: z.string(),
++            token: secretValue,
++            priority: z.number().int(),
++            locale: localeSchema,
++          }).optional(),
++        }),
++        ntfy: agent.extend({
++          options: options({
++            url: z.string(),
++            topic: z.string(),
++            tags: z.string(),
++            authMethodUsernamePassword: z.boolean(),
++            username: z.string(),
++            password: secretValue,
++            authMethodToken: z.boolean(),
++            token: secretValue,
++            priority: z.number().int(),
++            locale: localeSchema,
++          }).optional(),
++        }),
++      })
++      .strict()
++      .partial(),
++  })
++  .strict();
++
++const schedule = z
++  .string()
++  .min(1)
++  .refine((value) => {
++    // Use the scheduler's own parser and immediately discard its validation job.
++    const job = new Job(() => undefined);
++    try {
++      return job.schedule(value);
++    } catch {
++      return false;
++    } finally {
++      job.cancel();
++    }
++  });
++export const jobsSchema = z.partialRecord(
++  z.enum([
++    'plex-recently-added-scan',
++    'plex-full-scan',
++    'plex-watchlist-sync',
++    'plex-refresh-token',
++    'radarr-scan',
++    'sonarr-scan',
++    'download-sync',
++    'download-sync-reset',
++    'jellyfin-recently-added-scan',
++    'jellyfin-full-scan',
++    'image-cache-cleanup',
++    'availability-sync',
++    'process-blocklisted-tags',
++  ]),
++  z.object({ schedule }).strict()
++);
+diff --git a/server/lib/settings/index.ts b/server/lib/settings/index.ts
+index 4d20b82fd2..e573190bf8 100644
+--- a/server/lib/settings/index.ts
++++ b/server/lib/settings/index.ts
+@@ -1,5 +1,7 @@
+ import { MediaServerType } from '@server/constants/server';
+ import { Permission } from '@server/lib/permissions';
++import type { DeclarativeConfig } from '@server/lib/settings/declarative';
++import { loadDeclarativeConfig } from '@server/lib/settings/declarative';
+ import { runMigrations } from '@server/lib/settings/migrator';
+ import type { AvailableLocale } from '@server/types/languages';
+ import { randomBytes, randomUUID } from 'crypto';
+@@ -8,7 +10,7 @@
+ import path from 'path';
+ import webpush from 'web-push';
+ 
+-type DeepPartial<T> = {
++export type DeepPartial<T> = {
+   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+ };
+ 
+@@ -69,6 +71,7 @@
+   clientSecret: string;
+   logo?: string;
+   requiredClaims?: string;
++  permissionsClaim?: string;
+   scopes?: string;
+   newUserLogin?: boolean;
+ };
+@@ -244,6 +247,7 @@
+   versionCheck: boolean;
+   plexClientIdentifier: string;
+   openIdProviders: PublicOidcProvider[];
++  declarative: boolean;
+ }
+ 
+ export interface NotificationAgentConfig {
+@@ -423,11 +427,25 @@ export class Settings {
+   ? `${process.env.CONFIG_DIRECTORY}/settings.json`
+   : path.join(__dirname, '../../../config/settings.json');
+ 
+-class Settings {
++export class Settings {
+   private data: AllSettings;
+   private saveLock: Promise<void> = Promise.resolve();
+-
+-  constructor(initialSettings?: AllSettings) {
++  private declarativeConfig?: DeclarativeConfig;
++
++  get declarative(): DeclarativeConfig | undefined {
++    return this.declarativeConfig;
++  }
++
++  private get statePath(): string {
++    return this.declarativeConfig
++      ? path.join(path.dirname(this.settingsPath), 'declarative-state.json')
++      : this.settingsPath;
++  }
++
++  constructor(
++    initialSettings?: AllSettings,
++    private readonly settingsPath = SETTINGS_PATH
++  ) {
+     this.reset();
+     if (initialSettings) this.load(initialSettings);
+   }
+@@ -510,6 +528,7 @@ set public(data: PublicSettings) {
+   get fullPublicSettings(): FullPublicSettings {
+     return {
+       ...this.data.public,
++      declarative: !!this.declarativeConfig,
+       applicationTitle: this.data.main.applicationTitle,
+       applicationUrl: this.data.main.applicationUrl,
+       hideAvailable: this.data.main.hideAvailable,
+@@ -644,9 +663,54 @@ set migrations(data: string[]) {
+       return this;
+     }
+ 
++    if (process.env.SEERR_CONFIG_FILE) {
++      const declarativeConfig = await loadDeclarativeConfig(
++        process.env.SEERR_CONFIG_FILE
++      );
++      this.reset();
++      this.declarativeConfig = declarativeConfig;
++      let state: Record<string, unknown> = {};
++      try {
++        state = JSON.parse(await fs.readFile(this.statePath, 'utf8'));
++      } catch (error) {
++        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
++          throw new Error('Unable to load declarative runtime state');
++        }
++        // Preserve existing sessions and application identity on migration.
++        try {
++          state = JSON.parse(await fs.readFile(this.settingsPath, 'utf8'));
++        } catch (legacyError) {
++          if ((legacyError as NodeJS.ErrnoException).code !== 'ENOENT') {
++            throw new Error('Unable to migrate legacy settings identity');
++          }
++        }
++      }
++      for (const key of [
++        'clientId',
++        'sessionSecret',
++        'vapidPublic',
++        'vapidPrivate',
++      ] as const) {
++        const value = state[key];
++        if (value !== undefined) {
++          if (typeof value !== 'string')
++            throw new Error('Invalid declarative runtime identity');
++          this.data[key] = value;
++        }
++      }
++      const main = state.main as { apiKey?: unknown } | undefined;
++      if (main?.apiKey !== undefined) {
++        if (typeof main.apiKey !== 'string')
++          throw new Error('Invalid declarative runtime API key');
++        this.data.main.apiKey = main.apiKey;
++      }
++      this.data = mergeSettings(this.data, this.declarativeConfig.settings);
++    }
++
+     let data;
+     try {
+-      data = await fs.readFile(SETTINGS_PATH, 'utf-8');
++      if (!this.declarativeConfig)
++        data = await fs.readFile(this.settingsPath, 'utf-8');
+     } catch {
+       await this.save();
+     }
+@@ -654,7 +718,7 @@ set migrations(data: string[]) {
+     let change = false;
+     if (data && !raw) {
+       const parsedJson = JSON.parse(data);
+-      const migratedData = await runMigrations(parsedJson, SETTINGS_PATH);
++      const migratedData = await runMigrations(parsedJson, this.settingsPath);
+       const merged = mergeSettings(this.data, migratedData);
+ 
+       if (JSON.stringify(merged) !== JSON.stringify(migratedData)) {
+@@ -689,7 +753,7 @@ set migrations(data: string[]) {
+       this.data.vapidPublic = vapidKeys.publicKey;
+       change = true;
+     }
+-    if (change) {
++    if (change || this.declarativeConfig) {
+       await this.save();
+     }
+ 
+@@ -698,9 +762,22 @@ set migrations(data: string[]) {
+ 
+   public async save(): Promise<void> {
+     const savePromise = this.saveLock.then(async () => {
+-      const tmp = SETTINGS_PATH + '.tmp';
+-      await fs.writeFile(tmp, JSON.stringify(this.data, undefined, ' '));
+-      await fs.rename(tmp, SETTINGS_PATH);
++      const target = this.statePath;
++      const tmp = target + '.tmp';
++      const data = this.declarativeConfig
++        ? {
++            clientId: this.data.clientId,
++            sessionSecret: this.data.sessionSecret,
++            vapidPublic: this.data.vapidPublic,
++            vapidPrivate: this.data.vapidPrivate,
++            main: { apiKey: this.data.main.apiKey },
++          }
++        : this.data;
++      await fs.mkdir(path.dirname(target), { recursive: true });
++      await fs.writeFile(tmp, JSON.stringify(data, undefined, ' '), {
++        mode: 0o600,
++      });
++      await fs.rename(tmp, target);
+     });
+ 
+     this.saveLock = savePromise.catch(() => {
+@@ -711,6 +788,7 @@ set migrations(data: string[]) {
+   }
+ 
+   public reset() {
++    this.declarativeConfig = undefined;
+     this.data = {
+       clientId: randomUUID(),
+       sessionSecret: '',
+diff --git a/server/routes/auth.test.ts b/server/routes/auth.test.ts
+index 2ad0b6aa0b..311366d7d1 100644
+--- a/server/routes/auth.test.ts
++++ b/server/routes/auth.test.ts
+@@ -18,6 +18,7 @@
+ import { User } from '@server/entity/User';
+ import PreparedEmail from '@server/lib/email';
+ import ImageProxy from '@server/lib/imageproxy';
++import { Permission } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+ import { checkUser } from '@server/middleware/auth';
+ import { setupTestDb } from '@server/test/db';
+@@ -1278,6 +1279,84 @@ it('rejects new user when email is missing', async function () {
+     });
+   });
+ 
++  describe('managed permissions', () => {
++    beforeEach(() => {
++      getSettings().oidc.providers[0].permissionsClaim = 'seerr_permissions';
++    });
++    afterEach(() => fetchMock.hardReset());
++
++    it('sets new user permissions from validated claims', async () => {
++      await setupFetchMock({
++        userinfoResponse: {
++          ...DEFAULT_CLAIMS,
++          seerr_permissions: ['REQUEST', 'REQUEST_VIEW'],
++        },
++      });
++      const response = await performOidcCallback();
++      assert.equal(response.status, 204);
++      const user = await getRepository(User).findOneOrFail({
++        where: { email: DEFAULT_CLAIMS.email },
++      });
++      assert.equal(
++        user.permissions,
++        Permission.REQUEST | Permission.REQUEST_VIEW
++      );
++    });
++
++    it('fails closed on invalid permission claims', async () => {
++      await setupFetchMock({
++        userinfoResponse: { ...DEFAULT_CLAIMS, seerr_permissions: ['TYPO'] },
++      });
++      assert.equal((await performOidcCallback()).status, 403);
++      assert.equal(
++        await getRepository(User).count({
++          where: { email: DEFAULT_CLAIMS.email },
++        }),
++        0
++      );
++    });
++
++    it('revokes stored permissions on the next successful login', async () => {
++      const user = await getRepository(User).findOneOrFail({
++        where: { id: 2 },
++      });
++      user.permissions = Permission.ADMIN;
++      await getRepository(User).save(user);
++      await getRepository(LinkedAccount).save(
++        new LinkedAccount({
++          user,
++          provider: 'test',
++          sub: EXISTING_USER_CLAIMS.sub,
++          username: 'friend',
++        })
++      );
++      await setupFetchMock({
++        userinfoResponse: { ...EXISTING_USER_CLAIMS, seerr_permissions: [] },
++        idTokenClaims: EXISTING_USER_CLAIMS,
++      });
++      assert.equal((await performOidcCallback()).status, 204);
++      assert.equal(
++        (await getRepository(User).findOneOrFail({ where: { id: 2 } }))
++          .permissions,
++        Permission.NONE
++      );
++    });
++
++    it('blocks alternate authentication routes, including Quick Connect', async () => {
++      for (const endpoint of [
++        '/local',
++        '/plex',
++        '/jellyfin',
++        '/jellyfin/quickconnect/initiate',
++      ]) {
++        assert.equal(
++          (await request(app).post(`/auth${endpoint}`).send({})).status,
++          403
++        );
++      }
++    });
++  });
++
+   describe('error handling', function () {
+     it('returns Unauthorized when OIDC login is disabled', async function () {
+       const settings = getSettings();
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index 8ae454271b..0eecabe29f 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -7,7 +7,7 @@
+ import { LinkedAccount } from '@server/entity/LinkedAccount';
+ import { User } from '@server/entity/User';
+ import { startJobs } from '@server/job/schedule';
+-import { Permission } from '@server/lib/permissions';
++import { Permission, permissionsFromClaim } from '@server/lib/permissions';
+ import { getSettings } from '@server/lib/settings';
+ import logger from '@server/logger';
+ import { isAuthenticated } from '@server/middleware/auth';
+@@ -25,6 +25,21 @@
+ 
+ const authRoutes = Router();
+ 
++authRoutes.use((req, res, next) => {
++  const settings = getSettings();
++  const managed =
++    settings.main.oidcLogin &&
++    settings.oidc.providers.some((p) => p.permissionsClaim);
++  const alternateLogin = /^\/(?:local|plex|jellyfin)(?:\/|$)/i.test(req.path);
++  if (managed && alternateLogin) {
++    return next({
++      status: 403,
++      error: ApiErrorCode.Unauthorized,
++    });
++  }
++  return next();
++});
++
+ export const quickConnectSecret = z.object({
+   secret: z
+     .string()
+@@ -1016,6 +1031,9 @@ function getUserAvatarUrl(user: User): string {
+     next
+   ) => {
+     const settings = getSettings();
++    if (settings.declarative && req.user) {
++      return next({ status: 403, error: ApiErrorCode.Unauthorized });
++    }
+     const provider = settings.oidc.providers.find(
+       (p) => p.slug === req.params.slug
+     );
+@@ -1157,6 +1175,20 @@ function getUserAvatarUrl(user: User): string {
+       });
+     }
+ 
++    let oidcPermissions: number | undefined;
++    if (provider.permissionsClaim) {
++      try {
++        oidcPermissions = permissionsFromClaim(
++          fullUserInfo[provider.permissionsClaim]
++        );
++      } catch {
++        return next({
++          status: 403,
++          error: ApiErrorCode.Unauthorized,
++        });
++      }
++    }
++
+     // Map identifier to linked account
+     const userRepository = getRepository(User);
+     const linkedAccountsRepository = getRepository(LinkedAccount);
+@@ -1171,6 +1203,14 @@ function getUserAvatarUrl(user: User): string {
+       },
+     });
+     let user = linkedAccount?.user;
++    if (
++      settings.declarative &&
++      user?.id === 1 &&
++      (provider.slug !== settings.declarative.owner.provider ||
++        fullUserInfo.sub !== settings.declarative.owner.subject)
++    ) {
++      return next({ status: 403, error: ApiErrorCode.Unauthorized });
++    }
+ 
+     // If there is already a user logged in, handle account linking
+     if (req.user != null) {
+@@ -1201,6 +1241,11 @@ function getUserAvatarUrl(user: User): string {
+         await linkedAccountsRepository.save(newLinkedAccount);
+       }
+ 
++      if (oidcPermissions !== undefined) {
++        req.user.permissions = oidcPermissions;
++        await userRepository.save(req.user);
++      }
++
+       return res.sendStatus(204);
+     }
+ 
+@@ -1233,7 +1278,7 @@ function getUserAvatarUrl(user: User): string {
+         avatar: avatar,
+         username: fullUserInfo.preferred_username,
+         email: normalizedEmail,
+-        permissions: settings.main.defaultPermissions,
++        permissions: oidcPermissions ?? settings.main.defaultPermissions,
+         plexToken: '',
+         userType: UserType.LOCAL,
+       });
+@@ -1263,6 +1308,11 @@ function getUserAvatarUrl(user: User): string {
+       });
+     }
+ 
++    if (oidcPermissions !== undefined) {
++      user.permissions = oidcPermissions;
++      await userRepository.save(user);
++    }
++
+     // Set logged in session and return
+     if (req.session) {
+       req.session.userId = user.id;
+diff --git a/server/routes/declarative.test.ts b/server/routes/declarative.test.ts
+new file mode 100644
+index 0000000000..7fd0fa0f0e
+--- /dev/null
++++ b/server/routes/declarative.test.ts
+@@ -0,0 +1,68 @@
++import { User } from '@server/entity/User';
++import { getSettings } from '@server/lib/settings';
++import settingsRoutes from '@server/routes/settings';
++import userRoutes from '@server/routes/user';
++import express from 'express';
++import assert from 'node:assert/strict';
++import { afterEach, beforeEach, describe, it, mock } from 'node:test';
++import request from 'supertest';
++
++describe('declarative API policy', () => {
++  const app = express();
++  app.use(express.json());
++  app.use((req, _res, next) => {
++    req.user = new User({ id: 1, permissions: 2 });
++    next();
++  });
++  app.use('/settings', settingsRoutes);
++  app.use('/user', userRoutes);
++
++  beforeEach(() => {
++    mock.getter(getSettings(), 'declarative', () => ({
++      owner: {
++        provider: 'authentik',
++        subject: 'owner',
++        email: 'owner@example.com',
++        username: 'owner',
++      },
++      settings: {},
++    }));
++  });
++  afterEach(() => mock.restoreAll());
++
++  it('rejects configuration mutations before nested handlers execute', async () => {
++    for (const [method, endpoint] of [
++      ['post', '/settings/main'],
++      ['post', '/settings/network'],
++      ['post', '/settings/initialize'],
++      ['post', '/settings/main/regenerate'],
++      ['post', '/settings/radarr'],
++      ['put', '/settings/radarr/1'],
++      ['delete', '/settings/sonarr/1'],
++      ['post', '/settings/notifications/email'],
++      ['put', '/settings/jellyfin/library/movies'],
++    ] as const) {
++      const response = await request(app)[method](endpoint).send({});
++      assert.equal(response.status, 403, `${method} ${endpoint}`);
++    }
++  });
++
++  it('does not disable reading settings', async () => {
++    assert.equal((await request(app).get('/settings/main')).status, 200);
++  });
++
++  it('rejects alternate linking and unlinking identities', async () => {
++    for (const [method, endpoint] of [
++      ['post', '/linked-accounts/plex'],
++      ['post', '/linked-accounts/jellyfin'],
++      ['post', '/linked-accounts/jellyfin/quickconnect'],
++      ['delete', '/linked-accounts/1'],
++    ] as const) {
++      assert.equal(
++        (await request(app)[method](`/user/1/settings${endpoint}`).send({}))
++          .status,
++        403
++      );
++    }
++  });
++});
+diff --git a/server/routes/settings/index.ts b/server/routes/settings/index.ts
+index 44d72676c9..0b269d72a1 100644
+--- a/server/routes/settings/index.ts
++++ b/server/routes/settings/index.ts
+@@ -48,6 +48,18 @@
+ 
+ const settingsRoutes = Router();
+ 
++settingsRoutes.use((req, res, next) => {
++  if (
++    getSettings().declarative &&
++    !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
++  ) {
++    return res
++      .status(403)
++      .json({ message: 'Settings are managed by the server configuration' });
++  }
++  next();
++});
++
+ settingsRoutes.use('/notifications', notificationRoutes);
+ settingsRoutes.use('/radarr', radarrRoutes);
+ settingsRoutes.use('/sonarr', sonarrRoutes);
+diff --git a/server/routes/user/index.ts b/server/routes/user/index.ts
+index 7d6234d9bb..7c59b279a9 100644
+--- a/server/routes/user/index.ts
++++ b/server/routes/user/index.ts
+@@ -514,6 +514,16 @@
+   { ids: string[]; permissions: number }
+ >('/', isAuthenticated(Permission.MANAGE_USERS), async (req, res, next) => {
+   try {
++    if (
++      getSettings().main.oidcLogin &&
++      getSettings().oidc.providers.some((p) => p.permissionsClaim)
++    ) {
++      return next({
++        status: 403,
++        message: 'Permissions are managed by the identity provider',
++      });
++    }
++
+     const isOwner = req.user?.id === 1;
+ 
+     if (!canMakePermissionsChange(req.body.permissions, req.user)) {
+@@ -553,6 +563,16 @@
+   isAuthenticated(Permission.MANAGE_USERS),
+   async (req, res, next) => {
+     try {
++      if (
++        getSettings().main.oidcLogin &&
++        getSettings().oidc.providers.some((p) => p.permissionsClaim)
++      ) {
++        return next({
++          status: 403,
++          message: 'Permissions are managed by the identity provider',
++        });
++      }
++
+       const userRepository = getRepository(User);
+ 
+       const user = await userRepository.findOneOrFail({
+diff --git a/server/routes/user/usersettings.ts b/server/routes/user/usersettings.ts
+index 340d585636..b9479d5e25 100644
+--- a/server/routes/user/usersettings.ts
++++ b/server/routes/user/usersettings.ts
+@@ -31,6 +31,21 @@
+ 
+ const userSettingsRoutes = Router({ mergeParams: true });
+ 
++userSettingsRoutes.use((req, res, next) => {
++  if (
++    getSettings().declarative &&
++    req.path.startsWith('/linked-accounts') &&
++    !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
++  ) {
++    return res
++      .status(403)
++      .json({
++        message: 'Linked identities are managed by the server configuration',
++      });
++  }
++  next();
++});
++
+ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
+   '/main',
+   isOwnProfileOrAdmin(),
+@@ -838,6 +853,16 @@
+   '/permissions',
+   isAuthenticated(Permission.MANAGE_USERS),
+   async (req, res, next) => {
++    if (
++      getSettings().main.oidcLogin &&
++      getSettings().oidc.providers.some((p) => p.permissionsClaim)
++    ) {
++      return next({
++        status: 403,
++        message: 'Permissions are managed by the identity provider',
++      });
++    }
++
+     const userRepository = getRepository(User);
+ 
+     try {
+diff --git a/src/components/Layout/index.tsx b/src/components/Layout/index.tsx
+index 40c6df798b..9e0f3d93f2 100644
+--- a/src/components/Layout/index.tsx
++++ b/src/components/Layout/index.tsx
+@@ -127,7 +127,16 @@
+           <div className="mb-6">
+             <div className="max-w-8xl mx-auto px-4">
+               <UserWarnings />
+-              {children}
++              {currentSettings.declarative &&
++              (router.pathname === '/settings' ||
++                router.pathname.startsWith('/settings/')) ? (
++                <p className="mt-8 rounded-lg bg-gray-800 p-6 text-gray-200">
++                  Server settings are managed by the declarative configuration.
++                  Edit the configuration file and restart Seerr to make changes.
++                </p>
++              ) : (
++                children
++              )}
+             </div>
+           </div>
+         </main>
+diff --git a/src/context/SettingsContext.tsx b/src/context/SettingsContext.tsx
+index d24b280bda..0a202a83ce 100644
+--- a/src/context/SettingsContext.tsx
++++ b/src/context/SettingsContext.tsx
+@@ -35,6 +35,7 @@
+   versionCheck: true,
+   plexClientIdentifier: '',
+   openIdProviders: [],
++  declarative: false,
+ };
+ 
+ export const SettingsContext = React.createContext<SettingsContextProps>({
+diff --git a/src/pages/_app.tsx b/src/pages/_app.tsx
+index 7bfbe86aa6..6e335aef07 100644
+--- a/src/pages/_app.tsx
++++ b/src/pages/_app.tsx
+@@ -265,6 +265,7 @@ fetcher: (url) => axios.get(url).then((res) => res.data),
+     versionCheck: true,
+     plexClientIdentifier: '',
+     openIdProviders: [],
++    declarative: false,
+   };
+ 
+   if (ctx.res) {
