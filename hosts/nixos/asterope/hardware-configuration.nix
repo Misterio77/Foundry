@@ -40,6 +40,7 @@
           size = "100%";
           content = {
             type = "btrfs";
+            extraArgs = ["--label" "asterope"];
             postCreateHook = ''
               MNTPOINT=$(mktemp -d)
               mount -t btrfs "$device" "$MNTPOINT"
