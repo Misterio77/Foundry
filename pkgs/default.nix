@@ -12,6 +12,7 @@ in {
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   jellyfin-oidc = pkgs.callPackage ./jellyfin-oidc {};
   seerr-oidc = pkgs.callPackage ./seerr-oidc {};
+  robohash = pkgs.callPackage ./robohash {};
   jellyfin-web-foundry = pkgs.callPackage ./jellyfin-web {};
   hax = pkgs.callPackage ./hax {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};

@@ -5,6 +5,7 @@
     ../../common/optional/postgres.nix
 
     ./authentik
+    ./avatars.nix
     ./backups-jobs.nix
     ./grafana
     ./files-server.nix

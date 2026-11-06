@@ -1,0 +1,21 @@
+--- a/robohash/webfront.py
++++ b/robohash/webfront.py
+@@ -234,6 +234,9 @@
+     The ImageHandler is our tornado class for creating a robot.
+     called as Robohash.org/$1, where $1 becomes the seed string for the Robohash obj
+     """
++    def head(self, string=None):
++        return self.get(string)
++
+     def get(self, string: str = None):
+         """
+         Handle GET requests for robot images
+@@ -434,7 +437,7 @@
+         ], **settings)
+ 
+         http_server = tornado.httpserver.HTTPServer(application,xheaders=True)
+-        http_server.listen(options.port)
++        http_server.listen(options.port, address="127.0.0.1")
+ 
+         print(f"The Oven is warmed up - Time to make some Robots! Listening on port: {options.port}")
+         tornado.ioloop.IOLoop.instance().start()

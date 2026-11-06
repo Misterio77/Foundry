@@ -116,7 +116,7 @@ in {
         use_ssl = true;
         from = "Gablogin <auth@m7.rs>";
       };
-      avatars = "https://robohash.org/%(avatar_seed_hash)s.png?set=set4&size=200x200,initials";
+      avatars = "https://avatars.m7.rs/%(avatar_seed_hash)s.png,initials";
       storage.file.path = "/var/lib/authentik/data";
       listen = {
         http = ["127.0.0.1:9000"];
