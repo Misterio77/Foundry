@@ -64,6 +64,7 @@
             settings.allowDiscards = true;
             content = {
               type = "btrfs";
+              extraArgs = ["--label" "maia"];
               postCreateHook = ''
                 MNTPOINT=$(mktemp -d)
                 mount -t btrfs "$device" "$MNTPOINT"

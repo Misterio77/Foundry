@@ -29,6 +29,7 @@
             size = "100%-512M";
             content = {
               type = "btrfs";
+              extraArgs = ["--label" "merope"];
               postCreateHook = ''
                 MNTPOINT=$(mktemp -d)
                 mount -t btrfs "$device" "$MNTPOINT"
@@ -94,6 +95,7 @@
           size = "100%";
           content = {
             type = "btrfs";
+            extraArgs = ["--label" "media"];
             subvolumes = {
               "/media" = {
                 mountOptions = ["noatime"];
@@ -113,6 +115,7 @@
           size = "100%";
           content = {
             type = "btrfs";
+            extraArgs = ["--label" "backups"];
             subvolumes = {
               "/backups" = {
                 mountOptions = ["noatime" "nofail" "x-systemd.device-timeout=10s"];

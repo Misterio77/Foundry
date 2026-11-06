@@ -44,6 +44,7 @@
           size = "100%";
           content = {
             type = "btrfs";
+            extraArgs = ["--label" "taygeta"];
             postCreateHook = ''
               MNTPOINT=$(mktemp -d)
               mount -t btrfs "$device" "$MNTPOINT"

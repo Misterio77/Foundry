@@ -90,6 +90,7 @@
             };
             content = {
               type = "btrfs";
+              extraArgs = ["--label" "pleione"];
               postCreateHook = ''
                 MNTPOINT=$(mktemp -d)
                 mount -t btrfs "$device" "$MNTPOINT"

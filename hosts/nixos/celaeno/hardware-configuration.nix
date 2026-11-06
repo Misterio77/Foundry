@@ -53,6 +53,7 @@
           size = "100%";
           content = {
             type = "btrfs";
+            extraArgs = ["--label" "celaeno"];
             postCreateHook = ''
               MNTPOINT=$(mktemp -d)
               mount -t btrfs "$device" "$MNTPOINT"
