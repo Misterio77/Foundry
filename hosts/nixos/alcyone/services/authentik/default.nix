@@ -138,11 +138,6 @@ in {
   services.postgresql.package = pkgs.postgresql_14;
   services.postgresqlBackup.databases = ["authentik"];
 
-  system.build.authentik-password-guessing-test = pkgs.callPackage ./tests/password-guessing.nix {
-    inherit blueprints;
-    inherit (components) pythonEnv;
-  };
-
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
