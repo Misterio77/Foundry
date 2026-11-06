@@ -122,28 +122,6 @@ in {
     };
   };
 
-  # These tenant settings aren't exposed by the Blueprint serializer.
-  systemd.services.authentik-migrate.postStart = ''
-    ${components.manage}/bin/manage.py shell <<'PY'
-    from authentik.tenants.utils import get_current_tenant
-
-    tenant = get_current_tenant()
-    for field in ["default_user_change_username", "default_user_change_email"]:
-        if not getattr(tenant, field):
-            setattr(tenant, field, True)
-            tenant.save(update_fields=[field])
-    avatars = ${builtins.toJSON config.services.authentik.settings.avatars}
-    if tenant.avatars != avatars:
-        tenant.avatars = avatars
-        tenant.save(update_fields=["avatars"])
-    home = {"name": "Voltar ao início", "href": "https://auth.m7.rs/"}
-    links = [home] + [link for link in tenant.footer_links if link.get("href") != home["href"]]
-    if tenant.footer_links != links:
-        tenant.footer_links = links
-        tenant.save(update_fields=["footer_links"])
-    PY
-  '';
-
   # Importing the community module must not upgrade the shared database cluster.
   services.postgresql.package = pkgs.postgresql_14;
   services.postgresqlBackup.databases = ["authentik"];
