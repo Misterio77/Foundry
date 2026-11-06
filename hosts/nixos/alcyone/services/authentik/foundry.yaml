@@ -13,6 +13,10 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
+        name: Default - User settings flow
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
         name: Default - WebAuthn MFA setup flow
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
@@ -41,6 +45,33 @@ entries:
       name: admins
     attrs:
       is_superuser: false
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: unique-email
+    identifiers:
+      name: foundry-unique-email
+    attrs:
+      expression: |
+        from authentik.core.models import User
+
+        email = request.context.get("prompt_data", {}).get("email", "").strip()
+        if not email:
+            return True
+        users = User.objects.filter(email__iexact=email)
+        if request.user.pk:
+            users = users.exclude(pk=request.user.pk)
+        if users.exists():
+            ak_message("Este e-mail já está em uso por outra conta.")
+            return False
+        return True
+
+  - model: authentik_stages_prompt.promptstage
+    identifiers:
+      name: default-user-settings
+    attrs:
+      validation_policies:
+        - !Find [authentik_policies_expression.expressionpolicy, [name, default-user-settings-authorization]]
+        - !KeyOf unique-email
 
   # Only apps that require email use this authorization flow.
   - model: authentik_flows.flow
@@ -77,6 +108,8 @@ entries:
     attrs:
       fields:
         - !KeyOf required-email-field
+      validation_policies:
+        - !KeyOf unique-email
   - model: authentik_stages_user_write.userwritestage
     id: required-email-write
     identifiers:
