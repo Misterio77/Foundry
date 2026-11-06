@@ -174,8 +174,13 @@
           inherit inputs outputs;
         };
       };
-      # Reserved for the next host: asterope, turquoise (200°) in the even hue
-      # spread the other hosts follow. Use pkgs.wallpapers.castle-mountains.
+      # Mail canary (Vultr)
+      asterope = lib.nixosSystem {
+        modules = [./hosts/nixos/asterope];
+        specialArgs = {
+          inherit inputs outputs;
+        };
+      };
     };
 
     systemConfigs.electra = system-manager.lib.makeSystemConfig {
