@@ -1,7 +1,6 @@
 {
   config,
   inputs,
-  lib,
   pkgs,
   ...
 }: let
@@ -91,14 +90,7 @@ in {
   # https://github.com/goauthentik/authentik/issues/6798
   services.authentik = {
     enable = true;
-    authentikComponents =
-      ((inputs.authentik-nix.lib.mkAuthentikScope {inherit pkgs;}).overrideScope (_: prev: {
-        pythonOverlay = lib.composeExtensions prev.pythonOverlay (_: pythonPrev: {
-          authentik = pythonPrev.authentik.overrideAttrs (old: {
-            patches = (old.patches or []) ++ [./avatar-cache-url.patch];
-          });
-        });
-      })).authentikComponents;
+    authentikComponents = pkgs.authentikComponents;
     environmentFile = config.sops.templates.authentik-env.path;
     settings = {
       blueprints_dir = blueprints;

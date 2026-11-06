@@ -36,6 +36,15 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    authentikComponents =
+      ((inputs.authentik-nix.lib.mkAuthentikScope {pkgs = final;}).overrideScope (_: prev: {
+        pythonOverlay = final.lib.composeExtensions prev.pythonOverlay (_: pythonPrev: {
+          authentik = addPatches pythonPrev.authentik [
+            ./authentik-avatar-cache-url.patch
+          ];
+        });
+      })).authentikComponents;
+
     # Automatic sync passes no reference, so ffsubsync picks whichever embedded
     # subtitle track ends last -- won by the Signs & Songs track, whose trailing
     # title card outlasts the final line of dialogue. Skip the non-dialogue
