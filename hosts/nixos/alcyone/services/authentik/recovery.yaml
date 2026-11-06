@@ -48,7 +48,7 @@ entries:
       name: default-recovery-skip-if-restored
     attrs:
       expression: |
-        return bool(request.context.get('is_restored', True))
+        return not bool(request.context.get('is_restored', False))
 
   - model: authentik_flows.flowstagebinding
     id: identification-binding
