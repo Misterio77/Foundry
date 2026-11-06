@@ -95,6 +95,8 @@ in {
       blueprints_dir = blueprints;
       cert_discovery_dir = "${pkgs.emptyDirectory}";
       disable_startup_analytics = true;
+      default_user_change_username = true;
+      default_user_change_email = true;
       reputation.expiry = 900;
       email = {
         host = "mail.m7.rs";
@@ -126,6 +128,10 @@ in {
     from authentik.tenants.utils import get_current_tenant
 
     tenant = get_current_tenant()
+    for field in ["default_user_change_username", "default_user_change_email"]:
+        if not getattr(tenant, field):
+            setattr(tenant, field, True)
+            tenant.save(update_fields=[field])
     avatars = ${builtins.toJSON config.services.authentik.settings.avatars}
     if tenant.avatars != avatars:
         tenant.avatars = avatars
