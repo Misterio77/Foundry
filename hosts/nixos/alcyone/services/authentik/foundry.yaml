@@ -65,10 +65,36 @@ entries:
             return False
         return True
 
+  - model: authentik_stages_prompt.prompt
+    identifiers:
+      name: default-user-settings-field-email
+    attrs:
+      required: false
+  - model: authentik_stages_prompt.prompt
+    id: avatar-seed
+    identifiers:
+      name: foundry-user-settings-avatar-seed
+    attrs:
+      field_key: attributes.avatar_seed
+      label: Semente do avatar
+      type: text
+      required: true
+      placeholder: Escolha uma palavra para gerar seu gatinho
+      sub_text: Mude este valor para gerar outro gatinho. Não use senhas.
+      initial_value: |
+        return str(user.attributes.get("avatar_seed", user.pk))
+      initial_value_expression: true
+      order: 204
   - model: authentik_stages_prompt.promptstage
     identifiers:
       name: default-user-settings
     attrs:
+      fields:
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-username]]
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-name]]
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-email]]
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-locale]]
+        - !KeyOf avatar-seed
       validation_policies:
         - !Find [authentik_policies_expression.expressionpolicy, [name, default-user-settings-authorization]]
         - !KeyOf unique-email

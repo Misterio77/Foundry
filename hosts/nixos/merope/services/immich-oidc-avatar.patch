@@ -1,0 +1,72 @@
+--- a/server/src/services/auth.service.ts
++++ b/server/src/services/auth.service.ts
+@@ -374,7 +374,7 @@
+       });
+     }
+ 
+-    if (!user.profileImagePath && profile.picture) {
++    if (profile.picture) {
+       await this.syncProfilePicture(user, profile.picture);
+     }
+ 
+--- a/server/src/services/auth.service.spec.ts
++++ b/server/src/services/auth.service.spec.ts
+@@ -4,7 +4,7 @@
+ import { SALT_ROUNDS } from 'src/constants.js';
+ import { UserAdmin } from 'src/database.js';
+ import { AuthDto, SignUpDto } from 'src/dtos/auth.dto.js';
+-import { AuthType, Permission } from 'src/enum.js';
++import { AuthType, JobName, Permission } from 'src/enum.js';
+ import { AuthService } from 'src/services/auth.service.js';
+ import { ApiKeyFactory } from 'test/factories/api-key.factory.js';
+ import { AuthFactory } from 'test/factories/auth.factory.js';
+@@ -1056,8 +1056,8 @@
+       );
+     });
+ 
+-    it('should not update the user when thumbnail processing fails on the OAuth picture', async () => {
+-      const user = UserFactory.create({ oauthId: 'oauth-id' });
++    it('should keep the old picture when processing the OAuth picture fails', async () => {
++      const user = UserFactory.create({ oauthId: 'oauth-id', profileImagePath: 'existing.webp' });
+       const profile = OAuthProfileFactory.create({ picture: 'https://auth.immich.cloud/profiles/1.jpg' });
+ 
+       mocks.systemMetadata.get.mockResolvedValue(systemConfigStub.oauthEnabled);
+@@ -1079,8 +1079,10 @@
+       expect(mocks.job.queue).not.toHaveBeenCalled();
+     });
+ 
+-    it('should not sync the profile picture if the user already has one', async () => {
++    it('should replace an existing profile picture and delete the old file', async () => {
+       const oauthId = 'oauth-id';
++      const fileId = newUuid();
++      const pictureBytes = new Uint8Array([1, 2, 3, 4, 5]);
+       const user = UserFactory.create({ oauthId, profileImagePath: 'not-empty' });
+ 
+       mocks.systemMetadata.get.mockResolvedValue(systemConfigStub.oauthEnabled);
+@@ -1092,6 +1094,8 @@
+         }),
+       });
+       mocks.user.getByOAuthId.mockResolvedValue(user);
++      mocks.crypto.randomUUID.mockReturnValue(fileId);
++      mocks.oauth.getProfilePicture.mockResolvedValue(pictureBytes.buffer);
+       mocks.user.update.mockResolvedValue(user);
+       mocks.session.create.mockResolvedValue(SessionFactory.create());
+ 
+@@ -1101,8 +1105,15 @@
+         loginDetails,
+       );
+ 
+-      expect(mocks.user.update).not.toHaveBeenCalled();
+-      expect(mocks.oauth.getProfilePicture).not.toHaveBeenCalled();
++      expect(mocks.oauth.getProfilePicture).toHaveBeenCalledWith('https://auth.immich.cloud/profiles/1.jpg');
++      expect(mocks.user.update).toHaveBeenCalledWith(user.id, {
++        profileImagePath: expect.stringContaining(`/data/profile/${user.id}/${fileId}.webp`),
++        profileChangedAt: expect.any(Date),
++      });
++      expect(mocks.job.queue).toHaveBeenCalledWith({
++        name: JobName.FileDelete,
++        data: { files: [user.profileImagePath] },
++      });
+     });
+ 
+     it('should only allow "admin" and "user" for the role claim', async () => {

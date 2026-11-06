@@ -53,12 +53,29 @@ implicitly deleted from Authentik's database.
 
 ## Application behavior
 
+Avatars use Robohash kittens (`set4`) in Gablogin and the OIDC `picture` claim,
+without Gravatar lookups. The editable **Semente do avatar** profile field stores
+`attributes.avatar_seed`; its SHA-256 hash selects the kitten. Until customized,
+the seed defaults to the stable numeric account ID, not a name or email. Changing
+the seed rerolls the kitten; changing other profile fields does not. The seed is
+not a secret and only its hash is sent to Robohash. A small Authentik backend
+patch adds URL-escaped `%(avatar_seed)s` and SHA-256 `%(avatar_seed_hash)s`
+placeholders; the generator URL stays in Nix configuration. Avatar lookups cache
+by resolved URL so a seed change takes effect immediately. Local initials remain
+the outage fallback, but aren't shared over OIDC.
+A small Immich patch replaces the profile image on each OAuth login, including
+existing images, and deletes the old file after a successful replacement. A
+failed fetch or decode leaves the old image intact. Seerr also refreshes existing
+users' avatars from the picture claim, retaining the old avatar if it's absent.
+Rerolls reach Jellyfin, Immich and Seerr on their next OAuth login, not immediately
+in existing sessions. Grafana retains its independent Gravatar-based handling.
+
 **Jellyfin:** admits either role, manages all-library access and admin status,
 allows audio transcoding and disables video transcoding for everyone. New
 accounts can be created; automatic username migration and email linking are off.
 Existing subject-to-user bindings remain authoritative. The startup guard
 rejects local authentication providers and missing/conflicting identity maps.
-Gravatar pictures sync on OAuth login, replacing existing Jellyfin profile images;
+Gablogin pictures sync on OAuth login, replacing existing Jellyfin profile images;
 missing pictures leave the existing image alone.
 
 The web client uses same-tab Gablogin, hides password controls, and returns to

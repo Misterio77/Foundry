@@ -90,6 +90,18 @@ in {
   # https://github.com/goauthentik/authentik/issues/6798
   services.authentik = {
     enable = true;
+    authentikComponents =
+      ((inputs.authentik-nix.lib.mkAuthentikScope {inherit pkgs;}).overrideScope (
+        _: prev: {
+          authentikComponents =
+            prev.authentikComponents
+            // {
+              staticWorkdirDeps = prev.authentikComponents.staticWorkdirDeps.override {
+                patches = prev.patches ++ [./avatar-seed.patch];
+              };
+            };
+        }
+      )).authentikComponents;
     environmentFile = config.sops.templates.authentik-env.path;
     settings = {
       blueprints_dir = blueprints;
@@ -104,7 +116,7 @@ in {
         use_ssl = true;
         from = "Gablogin <auth@m7.rs>";
       };
-      avatars = "gravatar,initials";
+      avatars = "https://robohash.org/%(avatar_seed_hash)s.png?set=set4&size=200x200,initials";
       storage.file.path = "/var/lib/authentik/data";
       listen = {
         http = ["127.0.0.1:9000"];
@@ -120,12 +132,16 @@ in {
     };
   };
 
-  # Tenant footer settings aren't exposed by the Blueprint serializer.
+  # These tenant settings aren't exposed by the Blueprint serializer.
   systemd.services.authentik-migrate.postStart = ''
     ${components.manage}/bin/manage.py shell <<'PY'
     from authentik.tenants.utils import get_current_tenant
 
     tenant = get_current_tenant()
+    avatars = ${builtins.toJSON config.services.authentik.settings.avatars}
+    if tenant.avatars != avatars:
+        tenant.avatars = avatars
+        tenant.save(update_fields=["avatars"])
     home = {"name": "Voltar ao início", "href": "https://auth.m7.rs/"}
     links = [home] + [link for link in tenant.footer_links if link.get("href") != home["href"]]
     if tenant.footer_links != links:

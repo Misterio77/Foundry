@@ -1,0 +1,61 @@
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -1333,8 +1333,9 @@
+       });
+     }
+ 
+-    if (oidcPermissions !== undefined) {
+-      user.permissions = oidcPermissions;
++    if (oidcPermissions !== undefined || fullUserInfo.picture) {
++      user.permissions = oidcPermissions ?? user.permissions;
++      user.avatar = fullUserInfo.picture || user.avatar;
+       await userRepository.save(user);
+     }
+ 
+--- a/server/routes/auth.test.ts
++++ b/server/routes/auth.test.ts
+@@ -1513,6 +1513,44 @@
+       );
+     });
+ 
++    it('refreshes an existing avatar without managed permission claims', async () => {
++      getSettings().oidc.providers[0].permissionsClaim = undefined;
++      const repository = getRepository(User);
++      const user = await repository.findOneOrFail({ where: { id: 2 } });
++      user.avatar = 'https://example.com/old.png';
++      await repository.save(user);
++      await getRepository(LinkedAccount).save(
++        new LinkedAccount({
++          user,
++          provider: 'test',
++          sub: EXISTING_USER_CLAIMS.sub,
++          username: 'friend',
++        })
++      );
++      await setupFetchMock({
++        userinfoResponse: {
++          ...EXISTING_USER_CLAIMS,
++          picture: 'https://example.com/rerolled.png',
++        },
++        idTokenClaims: EXISTING_USER_CLAIMS,
++      });
++      assert.equal((await performOidcCallback()).status, 204);
++      assert.equal(
++        (await repository.findOneOrFail({ where: { id: 2 } })).avatar,
++        'https://example.com/rerolled.png'
++      );
++      fetchMock.hardReset();
++      await setupFetchMock({
++        userinfoResponse: EXISTING_USER_CLAIMS,
++        idTokenClaims: EXISTING_USER_CLAIMS,
++      });
++      assert.equal((await performOidcCallback()).status, 204);
++      assert.equal(
++        (await repository.findOneOrFail({ where: { id: 2 } })).avatar,
++        'https://example.com/rerolled.png'
++      );
++    });
++
+     it('blocks alternate authentication routes, including Quick Connect', async () => {
+       for (const endpoint of [
+         '/local',

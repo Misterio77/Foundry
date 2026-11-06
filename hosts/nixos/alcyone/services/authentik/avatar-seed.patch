@@ -1,0 +1,105 @@
+--- a/authentik/lib/avatars.py
++++ b/authentik/lib/avatars.py
+@@ -4,7 +4,7 @@
+ from functools import cache as funccache
+ from hashlib import md5, sha256
+ from typing import TYPE_CHECKING
+-from urllib.parse import urlencode, urlparse
++from urllib.parse import quote, urlencode, urlparse
+ 
+ from django.core.cache import cache
+ from django.http import HttpRequest, HttpResponseNotFound
+@@ -158,8 +158,11 @@
+ def format_avatar_url(user: User, mode: str) -> str:
+     """Format avatar URL placeholders while preserving URL percent-encoding."""
+     mail_hash = md5(user.email.lower().encode("utf-8"), usedforsecurity=False).hexdigest()  # nosec
++    seed = str(user.attributes.get("avatar_seed", user.pk))
+     replacements = {
+         "%(username)s": user.username,
++        "%(avatar_seed)s": quote(seed, safe=""),
++        "%(avatar_seed_hash)s": sha256(seed.encode("utf-8")).hexdigest(),
+         "%(mail_hash)s": mail_hash,
+         "%(upn)s": str(user.attributes.get("upn", "")),
+     }
+@@ -171,7 +174,6 @@
+ 
+ def avatar_mode_url(user: User, mode: str) -> str | None:
+     """Format url"""
+-    mail_hash = md5(user.email.lower().encode("utf-8"), usedforsecurity=False).hexdigest()  # nosec
+     formatted_url = format_avatar_url(user, mode)
+ 
+     hostname = urlparse(formatted_url).hostname
+@@ -180,7 +182,8 @@
+     if not cache.get(cache_key_hostname_available, True):
+         return None
+ 
+-    cache_key_image_url = f"goauthentik.io/lib/avatars/{hostname}/{mail_hash}"
++    url_hash = sha256(formatted_url.encode("utf-8")).hexdigest()
++    cache_key_image_url = f"goauthentik.io/lib/avatars/{hostname}/{url_hash}"
+ 
+     if cache.has_key(cache_key_image_url):
+         cache.touch(cache_key_image_url)
+--- a/authentik/core/tests/test_users_avatars.py
++++ b/authentik/core/tests/test_users_avatars.py
+@@ -63,6 +63,46 @@
+         body = loads(response.content.decode())
+         self.assertIn("data:image/svg+xml;base64,", body["user"]["avatar"])
+ 
++    def test_avatars_seed(self):
++        """Seed changes invalidate URL caching; profile changes do not alter the seed."""
++        from hashlib import sha256
++
++        self.set_avatar_mode("https://example.com/avatar/%(avatar_seed_hash)s.png")
++        self.admin.attributes["avatar_seed"] = "kitten-1"
++        self.admin.save()
++        self.client.force_login(self.admin)
++        endpoint = reverse("authentik_api:user-me")
++        first = f"https://example.com/avatar/{sha256(b'kitten-1').hexdigest()}.png"
++        second = f"https://example.com/avatar/{sha256(b'kitten-2').hexdigest()}.png"
++        with Mocker() as mocker:
++            mocker.head(first, headers={"Content-Type": "image/png"})
++            mocker.head(second, headers={"Content-Type": "image/png"})
++            self.assertEqual(self.client.get(endpoint).json()["user"]["avatar"], first)
++            self.admin.name = "Different Name"
++            self.admin.email = "different@example.com"
++            self.admin.username = "different-username"
++            self.admin.save()
++            self.assertEqual(self.client.get(endpoint).json()["user"]["avatar"], first)
++            self.admin.attributes["avatar_seed"] = "kitten-2"
++            self.admin.save()
++            self.assertEqual(self.client.get(endpoint).json()["user"]["avatar"], second)
++            self.assertEqual(len(mocker.request_history), 2)
++
++    def test_avatars_seed_default_and_encoding(self):
++        """Default to a stable account seed and safely encode raw seed placeholders."""
++        from hashlib import sha256
++
++        from authentik.lib.avatars import format_avatar_url
++
++        template = "https://example.com/%(avatar_seed_hash)s.png"
++        digest = sha256(str(self.admin.pk).encode("utf-8")).hexdigest()
++        self.assertEqual(format_avatar_url(self.admin, template), f"https://example.com/{digest}.png")
++        self.admin.attributes["avatar_seed"] = "kitten /?&#"
++        self.assertEqual(
++            format_avatar_url(self.admin, "https://example.com/%(avatar_seed)s.png"),
++            "https://example.com/kitten%20%2F%3F%26%23.png",
++        )
++
+     def test_avatars_custom(self):
+         """Test avatars custom"""
+         self.set_avatar_mode("foo://%(username)s")
+@@ -177,10 +217,10 @@
+         self.assertEqual(body["user"]["avatar"], "/static/dist/assets/images/user_default.png")
+ 
+         # Verify cache was set with the expected structure
+-        from hashlib import md5
+-
+-        mail_hash = md5(self.admin.email.lower().encode("utf-8"), usedforsecurity=False).hexdigest()
+-        cache_key = f"goauthentik.io/lib/avatars/example.com/{mail_hash}"
++        from hashlib import sha256
++
++        url_hash = sha256(b"https://example.com/avatar/%s" % self.admin.username.encode()).hexdigest()
++        cache_key = f"goauthentik.io/lib/avatars/example.com/{url_hash}"
+         self.assertIsNone(cache.get(cache_key))
+         # Verify TTL was set (cache entry exists)
+         self.assertTrue(cache.has_key(cache_key))

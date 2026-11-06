@@ -22,6 +22,7 @@ in
         ./declarative-config.patch
         ./provider-logout.patch
         ./backchannel-logout.patch
+        ./avatar-sync.patch
       ];
     pnpmDeps = fetchPnpmDeps {
       inherit (finalAttrs) pname version src patches;
