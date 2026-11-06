@@ -81,9 +81,6 @@ in {
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };
 
-  # Await a stable release containing this upstream logout fix:
-  # https://github.com/goauthentik/authentik/pull/26565 allows logout despite unfinished flows;
-  # signing out of Immich then Seerr currently leaves Seerr at a blank IdP end-session page.
   # MFA deletion still bypasses fresh authentication; tracked upstream:
   # https://github.com/goauthentik/authentik/issues/6798
   services.authentik = {

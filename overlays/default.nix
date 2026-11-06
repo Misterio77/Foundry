@@ -46,6 +46,11 @@ in {
               url = "https://github.com/goauthentik/authentik/pull/26310.patch";
               hash = "sha256-DLTnbpIDfVwOAq68vF+Yriig1m54mXFNRBalTjQrouk=";
             })
+            # Unfinished flows must not block a subsequent app's logout.
+            (final.fetchpatch {
+              url = "https://github.com/goauthentik/authentik/pull/26565.patch";
+              hash = "sha256-QXL7ESF5D8Yy5A3dwIl0iGYzU3RKcs7WsQq68SbTvd8=";
+            })
           ];
         });
       })).authentikComponents;
