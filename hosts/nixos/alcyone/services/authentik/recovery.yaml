@@ -97,20 +97,31 @@ entries:
       policy_engine_mode: any
       invalid_response_action: retry
 
-  # Email possession resets a password; it must not create an MFA-free session.
+  # Deleting the obsolete redirect also removes its flow binding.
   - model: authentik_stages_redirect.redirectstage
-    id: recovery-login
+    state: absent
     identifiers:
       name: foundry-recovery-login
-    attrs:
-      mode: flow
-      target_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
-      keep_context: false
+
+  # Recovery proves link possession, not possession of an enrolled MFA device.
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf recovery
-      stage: !KeyOf recovery-login
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: 90
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: true
+      invalid_response_action: retry
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf recovery
+      stage: !Find [authentik_stages_user_login.userloginstage, [name, default-authentication-login]]
       order: 100
+    attrs:
+      evaluate_on_plan: true
+      re_evaluate_policies: true
+      invalid_response_action: retry
 
   - model: authentik_stages_identification.identificationstage
     identifiers:
