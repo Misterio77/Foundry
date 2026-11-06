@@ -5,51 +5,13 @@
 }: {
   services.firefly-iii = {
     enable = true;
-    package = pkgs.firefly-iii.overrideAttrs (old: rec {
-      pname = "firefly-iii";
-      version = "6.4.22";
-      src = pkgs.fetchFromGitHub {
-        owner = "firefly-iii";
-        repo = "firefly-iii";
-        tag = "v${version}";
-        hash = "sha256-i20D0/z6GA7pZYrWvRJ8tUlptNI5Cl/e9UY0hKg9SP8=";
-      };
-      composerVendor = pkgs.php.mkComposerVendor {
-        inherit pname src version;
-        composerStrictValidation = true;
-        strictDeps = true;
-        vendorHash = "sha256-m+esW/yQs/GSwnw2iqVfSMXCf6/5M4634GUbt4Nnvbg=";
-      };
-      npmDeps = pkgs.fetchNpmDeps {
-        inherit src;
-        name = "${pname}-npm-deps";
-        hash = "sha256-pu8dxL0NRB1cyqlQEf2zT2wdVp2fbe+Vp85qMs7f6s0=";
-      };
-      passthru =
-        old.passthru
-        // {
-          releaseTarball = pkgs.fetchzip {
-            pname = "firefly-iii-release-tarball";
-            inherit version;
-            url = "https://github.com/firefly-iii/firefly-iii/releases/download/v${version}/FireflyIII-v${version}.tar.gz";
-            stripRoot = false;
-            hash = "sha256-5o8fw2WDIdM9IQImTWVasf7pV2XK2LJ2WuSNSkdzGdE=";
-          };
-        };
-      preInstall = ''
-        npm run prod --workspace=v1
-        npm run build --workspace=v2
-      '';
-      # This release predates the v3 frontend and its separate translations.
-      postInstall = ''
-        chmod -R u+w $out/share
-        mv $out/share/php/firefly-iii/* $out/
-        cp -r ${passthru.releaseTarball}/resources/lang/* $out/resources/lang/
-
-        rm -R $out/share $out/storage $out/bootstrap/cache $out/node_modules
-        ln -s ${config.services.firefly-iii.dataDir}/storage $out/storage
-        ln -s ${config.services.firefly-iii.dataDir}/cache $out/bootstrap/cache
-      '';
+    package = pkgs.firefly-iii.overrideAttrs (old: {
+      postInstall =
+        old.postInstall
+        + ''
+          ln -s ${config.services.firefly-iii.dataDir}/storage $out/storage
+          ln -s ${config.services.firefly-iii.dataDir}/cache $out/bootstrap/cache
+        '';
     });
     settings = {
       APP_KEY_FILE = config.sops.secrets.firefly-key.path;

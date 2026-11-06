@@ -17,17 +17,7 @@ in {
     package = lib.mkOption {
       readOnly = true;
       type = lib.types.package;
-      default = pkgs.oama.overrideAttrs (old: {
-        nativeBuildInputs = [pkgs.makeBinaryWrapper];
-        postInstall = ''
-          wrapProgram $out/bin/oama \
-            --prefix PATH : ${lib.makeBinPath [
-              pkgs.coreutils
-              pkgs.libsecret
-              pkgs.gnupg
-            ]}
-        '';
-      });
+      default = pkgs.oama;
     };
   };
 

@@ -36,6 +36,73 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    # Maildir flag removal must replace aerc's cached flags, not OR into them.
+    aerc = addPatches prev.aerc [./aerc-maildir-replace-flags.patch];
+
+    immich = addPatches prev.immich [./immich-oidc-avatar.patch];
+
+    # https://todo.sr.ht/~scoopta/wofi/174
+    wofi = addPatches prev.wofi [./wofi-run-shell.patch];
+
+    nixbot = addPatches final.inputs.nixbot.nixbot [./nixbot-store-paths.patch];
+
+    oama = prev.oama.overrideAttrs (_: {
+      nativeBuildInputs = [final.makeBinaryWrapper];
+      postInstall = ''
+        wrapProgram $out/bin/oama \
+          --prefix PATH : ${final.lib.makeBinPath [
+          final.coreutils
+          final.libsecret
+          final.gnupg
+        ]}
+      '';
+    });
+
+    firefly-iii = prev.firefly-iii.overrideAttrs (old: rec {
+      pname = "firefly-iii";
+      version = "6.4.22";
+      src = final.fetchFromGitHub {
+        owner = "firefly-iii";
+        repo = "firefly-iii";
+        tag = "v${version}";
+        hash = "sha256-i20D0/z6GA7pZYrWvRJ8tUlptNI5Cl/e9UY0hKg9SP8=";
+      };
+      composerVendor = final.php.mkComposerVendor {
+        inherit pname src version;
+        composerStrictValidation = true;
+        strictDeps = true;
+        vendorHash = "sha256-m+esW/yQs/GSwnw2iqVfSMXCf6/5M4634GUbt4Nnvbg=";
+      };
+      npmDeps = final.fetchNpmDeps {
+        inherit src;
+        name = "${pname}-npm-deps";
+        hash = "sha256-pu8dxL0NRB1cyqlQEf2zT2wdVp2fbe+Vp85qMs7f6s0=";
+      };
+      passthru =
+        old.passthru
+        // {
+          releaseTarball = final.fetchzip {
+            pname = "firefly-iii-release-tarball";
+            inherit version;
+            url = "https://github.com/firefly-iii/firefly-iii/releases/download/v${version}/FireflyIII-v${version}.tar.gz";
+            stripRoot = false;
+            hash = "sha256-5o8fw2WDIdM9IQImTWVasf7pV2XK2LJ2WuSNSkdzGdE=";
+          };
+        };
+      preInstall = ''
+        npm run prod --workspace=v1
+        npm run build --workspace=v2
+      '';
+      # This release predates the v3 frontend and its separate translations.
+      postInstall = ''
+        chmod -R u+w $out/share
+        mv $out/share/php/firefly-iii/* $out/
+        cp -r ${passthru.releaseTarball}/resources/lang/* $out/resources/lang/
+
+        rm -R $out/share $out/storage $out/bootstrap/cache $out/node_modules
+      '';
+    });
+
     authentikComponents =
       ((inputs.authentik-nix.lib.mkAuthentikScope {pkgs = final;}).overrideScope (_: prev: {
         pythonOverlay = final.lib.composeExtensions prev.pythonOverlay (_: pythonPrev: {

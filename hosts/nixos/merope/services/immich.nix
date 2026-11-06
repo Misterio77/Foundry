@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: let
+{config, ...}: let
   isolatedFilesystem = {
     ProtectSystem = "strict";
     # Managed state/cache directories are automatically bound back into these views.
@@ -25,9 +21,6 @@ in {
 
   services.immich = {
     enable = true;
-    package = pkgs.immich.overrideAttrs (old: {
-      patches = (old.patches or []) ++ [./immich-oidc-avatar.patch];
-    });
     accelerationDevices = ["/dev/dri/renderD128"];
     mediaLocation = "/srv/media/photos";
     settings = {
