@@ -50,6 +50,7 @@
     cp ${./immich.yaml} "$out/immich.yaml"
     cp ${./recovery.yaml} "$out/recovery.yaml"
     cp ${./sensitive-changes.yaml} "$out/sensitive-changes.yaml"
+    cp ${./password-guessing.yaml} "$out/password-guessing.yaml"
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
   '';
@@ -94,6 +95,7 @@ in {
       blueprints_dir = blueprints;
       cert_discovery_dir = "${pkgs.emptyDirectory}";
       disable_startup_analytics = true;
+      reputation.expiry = 900;
       email = {
         host = "mail.m7.rs";
         port = 465;
@@ -121,7 +123,16 @@ in {
   # Tenant footer settings aren't exposed by the Blueprint serializer.
   systemd.services.authentik-migrate.postStart = ''
     ${components.manage}/bin/manage.py shell <<'PY'
+    from datetime import timedelta
+
+    from django.utils.timezone import now
+
+    from authentik.policies.reputation.models import Reputation
     from authentik.tenants.utils import get_current_tenant
+
+    # Existing scores otherwise retain the old, longer expiry after this rollout.
+    expiry = now() + timedelta(seconds=900)
+    Reputation.objects.filter(expires__gt=expiry).update(expires=expiry)
 
     tenant = get_current_tenant()
     home = {"name": "Voltar ao início", "href": "https://auth.m7.rs/"}
@@ -135,6 +146,11 @@ in {
   # Importing the community module must not upgrade the shared database cluster.
   services.postgresql.package = pkgs.postgresql_14;
   services.postgresqlBackup.databases = ["authentik"];
+
+  system.build.authentik-password-guessing-test = pkgs.callPackage ./tests/password-guessing.nix {
+    inherit blueprints;
+    inherit (components) pythonEnv;
+  };
 
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;

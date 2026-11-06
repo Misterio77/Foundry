@@ -22,6 +22,12 @@ Describes the checked-in configuration, not deployment status. Sources:
   application authorization has the same checks; ordinary authorization with an
   existing email does not prompt again. These are flow-level checks; Authentik's
   separate authenticator deletion API does not gain a fresh-authentication check.
+- Password flows deny entry at reputation scores of -5 per username or -20 per
+  client IP. Failed identification/password attempts lower scores; successful
+  logins raise them. Scores expire after 15 minutes and survive flow restarts.
+  Checks run after login identification and before sensitive-change passwords,
+  including direct flow URLs. This is a temporary cooldown, not account
+  deactivation; existing-email app authorization and email recovery remain usable.
 - Email password recovery expires after 15 minutes and allows five attempts per
   account per 15 minutes. It neither removes MFA nor reactivates disabled users.
   After email verification, enrolled MFA is checked before prompting for or
