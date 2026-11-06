@@ -1,0 +1,120 @@
+--- a/src/utils/dashboard.js
++++ b/src/utils/dashboard.js
+@@ -17,6 +17,7 @@
+ import itemIdentifier from '../components/itemidentifier/itemidentifier';
+ import { getLocationSearch } from './url.ts';
+ import { queryClient } from './query/queryClient';
++import { isOidcLogin } from './oidcLogout';
+ 
+ export function getCurrentUser() {
+     return window.ApiClient.getCurrentUser(false);
+@@ -115,13 +116,16 @@
+     // Logout requests can themselves return 401; share cleanup across all failures.
+     if (logoutPromise) return logoutPromise;
+ 
+-    logoutPromise = Promise.resolve().then(() => ServerConnections.logout()).then(function () {
++    const token = window.ApiClient?.accessToken();
++    logoutPromise = Promise.resolve().then(async function () {
++        const providerLogout = !sessionExpired && await isOidcLogin(token);
++        await ServerConnections.logout();
+         // Clear the query cache
+         queryClient.clear();
+         // Reset cached views
+         viewContainer.reset();
+ 
+-        if (sessionExpired === true) {
++        if (sessionExpired === true || !providerLogout) {
+             // Reload to discard pending views and in-memory user state.
+             window.history.replaceState(null, '', new URL('#/login', window.location.href).href);
+             window.location.reload();
+--- /dev/null
++++ b/src/utils/oidcLogout.js
+@@ -0,0 +1,15 @@
++export async function isOidcLogin(token) {
++    if (!token) return false;
++
++    // A prior OIDC login must not send a later Quick Connect login to the IdP.
++    try {
++        const expected = localStorage.getItem('gablogin-oidc-token-hash');
++        if (!expected) return false;
++        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
++        const actual = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
++        return actual === expected;
++    } catch {
++        // Missing storage/Web Crypto must never prevent local sign-out.
++        return false;
++    }
++}
+--- /dev/null
++++ b/scripts/test-oidc-logout.mjs
+@@ -0,0 +1,70 @@
++import assert from 'node:assert/strict';
++import { webcrypto } from 'node:crypto';
++import { readFileSync } from 'node:fs';
++import { test } from 'node:test';
++import vm from 'node:vm';
++
++const helper = readFileSync('src/utils/oidcLogout.js', 'utf8').replace('export ', '');
++const dashboard = readFileSync('src/utils/dashboard.js', 'utf8');
++// Exercise the actual logout functions without booting the dashboard's unrelated UI imports.
++const logout = dashboard.slice(dashboard.indexOf('let logoutPromise;'), dashboard.indexOf('export function getPluginUrl'))
++    .replaceAll('export ', '');
++const hash = async token => Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(token))).toString('hex');
++
++function client({ token = 'qc-token', marker, storageFails = false, crypto = webcrypto } = {}) {
++    const calls = [];
++    const context = vm.createContext({
++        crypto, TextEncoder, URL, Uint8Array,
++        localStorage: { getItem: () => { if (storageFails) throw new Error('Storage blocked'); return marker; } },
++        ServerConnections: { logout: async () => { calls.push('logout'); } },
++        queryClient: { clear: () => calls.push('cache') },
++        viewContainer: { reset: () => calls.push('views') },
++        window: {
++            ApiClient: { accessToken: () => token },
++            history: { replaceState: (_state, _title, url) => calls.push(url) },
++            location: {
++                href: 'https://media.example/base/web/#/home',
++                reload: () => calls.push('reload'),
++                assign: url => calls.push(url)
++            }
++        }
++    });
++    vm.runInContext(helper + '\n' + logout, context);
++    return { context, calls, run: expression => vm.runInContext(expression, context) };
++}
++
++test('OIDC logout clears local state before opening provider choices', async () => {
++    const c = client({ token: 'oidc-token', marker: await hash('oidc-token') });
++    await c.run('logout()');
++    assert.deepEqual(c.calls, ['logout', 'cache', 'views', 'https://auth.m7.rs/application/o/jellyfin/end-session/']);
++});
++
++for (const [name, options] of [
++    ['Quick Connect-only login', {}],
++    ['Quick Connect after a previous OIDC login', { marker: await hash('old-oidc-token') }],
++    ['missing bearer', { token: null }],
++    ['blocked storage', { storageFails: true }],
++    ['unavailable Web Crypto', { marker: 'old', crypto: {} }]
++]) {
++    test(`${name} completes logout locally`, async () => {
++        const c = client(options);
++        await c.run('logout()');
++        assert.deepEqual(c.calls, ['logout', 'cache', 'views', 'https://media.example/base/web/#/login', 'reload']);
++    });
++}
++
++test('expired OIDC sessions never open provider logout', async () => {
++    const c = client({ token: 'oidc-token', marker: await hash('oidc-token') });
++    await c.run('logoutOnSessionExpired()');
++    assert.equal(c.calls.at(-1), 'reload');
++    assert.ok(!c.calls.some(value => value.includes('auth.m7.rs')));
++});
++
++test('concurrent logout and expired-session callbacks share local cleanup', async () => {
++    const c = client();
++    const first = c.run('logout()');
++    assert.equal(c.run('logoutOnSessionExpired()'), first);
++    await first;
++    assert.equal(c.calls.filter(value => value === 'logout').length, 1);
++    assert.equal(c.calls.filter(value => value === 'reload').length, 1);
++});

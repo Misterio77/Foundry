@@ -49,10 +49,15 @@ Gravatar pictures sync on OAuth login, replacing existing Jellyfin profile image
 missing pictures leave the existing image alone.
 
 The web client uses same-tab Gablogin, hides password controls, and returns to
-login on authenticated 401s. Explicit logout clears local state before opening
-Authentik's application logout page. Native clients use Quick Connect:
+login on authenticated 401s. Explicit logout clears local state first. Browser
+logins marked by the OIDC callback then open Authentik's application logout page;
+Quick Connect logins (and browser logins predating that marker) finish locally.
+A marker is bound to the bearer hash, so a later Quick Connect login does not
+inherit an earlier OIDC login's logout behavior. Native clients use Quick Connect:
 `https://media.m7.rs/connect`, optionally `?user_code=012345`. QR codes carry only
 the public six-digit code; approval remains explicit and the tab can then close.
+The approval form validates six ASCII digits, decodes API error strings, and offers
+a new OIDC sign-in when its authorization expires or is revoked.
 
 The patched plugin records each Jellyfin token's root OIDC identity, including
 Quick Connect approvals made from the native menu or `/connect`. Devices approved

@@ -3,6 +3,7 @@
   dotnetCorePackages,
   fetchFromGitHub,
   lib,
+  nodejs,
 }:
 buildDotnetModule rec {
   pname = "jellyfin-oidc";
@@ -14,7 +15,7 @@ buildDotnetModule rec {
     tag = "v${version}";
     hash = "sha256-gY4i4e/LAZil0wz6z4IJxv9v5ndG5AahiXfhomC11G8=";
   };
-  patches = [./device-code.patch ./device-code-tests.patch ./localization.patch ./transcoding.patch ./session-lineage.patch];
+  patches = [./device-code.patch ./device-code-tests.patch ./localization.patch ./transcoding.patch ./session-lineage.patch ./auth-qa.patch];
 
   projectFile = "Jellyfin.Plugin.OIDC/Jellyfin.Plugin.OIDC.csproj";
   testProjectFile = "Jellyfin.Plugin.OIDC.Tests/Jellyfin.Plugin.OIDC.Tests.csproj";
@@ -22,6 +23,10 @@ buildDotnetModule rec {
   dotnet-sdk = dotnetCorePackages.sdk_10_0;
   dotnet-runtime = dotnetCorePackages.aspnetcore_10_0;
   doCheck = true;
+  nativeCheckInputs = [nodejs];
+  postCheck = ''
+    node --test scripts/test-auth-pages.mjs
+  '';
   executables = [];
   installPath = builtins.placeholder "out";
 

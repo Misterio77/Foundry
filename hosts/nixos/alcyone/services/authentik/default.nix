@@ -79,6 +79,8 @@ in {
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };
 
+  # Await stable fixes for aged-session revocation and unfinished-flow logout:
+  # https://github.com/goauthentik/authentik/pull/26310 and https://github.com/goauthentik/authentik/pull/26565
   services.authentik = {
     enable = true;
     environmentFile = config.sops.templates.authentik-env.path;

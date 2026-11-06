@@ -1,0 +1,327 @@
+--- a/Jellyfin.Plugin.OIDC/Api/OidcController.cs
++++ b/Jellyfin.Plugin.OIDC/Api/OidcController.cs
+@@ -340,6 +340,16 @@
+             return BadRequest("Missing Quick Connect code");
+         }
+ 
++        if (!IsValidQuickConnectCode(code))
++        {
++            return BadRequest("Quick Connect codes must contain exactly six ASCII digits.");
++        }
++
++        if (_stateManager.IsRevoked(session.Issuer, session.Subject, session.Sid, session.CreatedAt))
++        {
++            return Unauthorized("The authorizing OIDC session has been revoked. Sign in again.");
++        }
++
+         // Provision + apply RBAC once per session; a mistyped-code retry peeks the same object and skips it.
+         Guid userId;
+         if (session.SyncedUserId is { } alreadySynced)
+@@ -386,7 +396,11 @@
+         }
+         catch (MediaBrowser.Controller.Authentication.AuthenticationException)
+         {
+-            return BadRequest("Quick Connect is not active on this server.");
++            if (_stateManager.IsRevoked(session.Issuer, session.Subject, session.Sid, session.CreatedAt))
++            {
++                return Unauthorized("The authorizing OIDC session has been revoked. Sign in again.");
++            }
++            return BadRequest("That code wasn't recognized. Check the code on your device and try again.");
+         }
+         catch (Exception ex) when (ex is not OperationCanceledException)
+         {
+--- a/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
++++ b/Jellyfin.Plugin.OIDC/Configuration/QuickConnectPage.html
+@@ -29,7 +29,8 @@
+     <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off"
+            placeholder="000000" aria-label="Quick Connect code">
+     <button id="submit" data-i18n="authorize">Authorize</button>
+-    <div id="msg"></div>
++    <div id="msg" role="status"></div>
++    <a id="signin" hidden data-i18n="signIn">Sign in again</a>
+ </div>
+ <script type="application/json" id="oidc-messages">
+ {
+@@ -41,7 +42,10 @@
+         "codeLabel": "Quick Connect code",
+         "authorizing": "Authorizing...",
+         "approved": "Approved! Your device should sign in shortly. You can close this tab.",
+-        "error": "Error "
++        "error": "Error ",
++        "invalidCode": "Enter exactly six digits from your device.",
++        "sessionExpired": "Your authorization has expired. Sign in again to approve this device.",
++        "signIn": "Sign in again"
+     },
+     "pt-BR": {
+         "title": "Autorizar dispositivo",
+@@ -51,7 +55,10 @@
+         "codeLabel": "Código do dispositivo",
+         "authorizing": "Autorizando…",
+         "approved": "Autorizado! Seu dispositivo deve entrar em instantes. Você pode fechar esta aba.",
+-        "error": "Erro "
++        "error": "Erro ",
++        "invalidCode": "Digite os seis dígitos exibidos no dispositivo.",
++        "sessionExpired": "Sua autorização expirou. Entre novamente para autorizar este dispositivo.",
++        "signIn": "Entrar novamente"
+     }
+ }
+ </script>
+@@ -74,6 +81,9 @@
+     const codeInput = document.getElementById('code');
+     const button = document.getElementById('submit');
+     const msg = document.getElementById('msg');
++    const signIn = document.getElementById('signin');
++    const signInUrl = new URL('../QuickConnect/' + encodeURIComponent(data.providerId), window.location.href);
++    signIn.href = signInUrl.href;
+ 
+     codeInput.setAttribute('aria-label', messages.codeLabel);
+     codeInput.value = data.userCode || '';
+@@ -81,7 +91,14 @@
+ 
+     function submit() {
+         const code = (codeInput.value || '').trim();
+-        if (!code) { return; }
++        if (!/^[0-9]{6}$/.test(code)) {
++            msg.className = 'err';
++            msg.textContent = messages.invalidCode;
++            return;
++        }
++        signIn.hidden = true;
++        signInUrl.searchParams.set('user_code', code);
++        signIn.href = signInUrl.href;
+         button.disabled = true;
+         msg.className = '';
+         msg.textContent = messages.authorizing;
+@@ -93,7 +110,18 @@
+         })
+         .then(function(r) {
+             return r.text().then(function(body) {
+-                if (!r.ok) { throw new Error(body || (messages.error + r.status)); }
++                if (r.status === 401 || r.status === 403) {
++                    signIn.hidden = false;
++                    throw new Error(messages.sessionExpired);
++                }
++                if (!r.ok) {
++                    let message = body;
++                    try {
++                        const parsed = JSON.parse(body);
++                        message = typeof parsed === 'string' ? parsed : (parsed.detail || parsed.title || body);
++                    } catch (_) { /* Plain-text errors need no decoding. */ }
++                    throw new Error(message || (messages.error + r.status));
++                }
+             });
+         })
+         .then(function() {
+--- a/Jellyfin.Plugin.OIDC/Configuration/CallbackPage.html
++++ b/Jellyfin.Plugin.OIDC/Configuration/CallbackPage.html
+@@ -83,7 +83,7 @@
+         if (!r.ok) throw new Error(messages.authFailed + r.status);
+         return r.json();
+     })
+-    .then(function(auth) {
++    .then(async function(auth) {
+         var credentials = {
+             Servers: [{
+                 Id: auth.ServerId,
+@@ -94,6 +94,9 @@
+             }]
+         };
+         localStorage.setItem(data.credentialsKey, JSON.stringify(credentials));
++        // Bind provider logout to this OIDC bearer, never to a later Quick Connect login.
++        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(auth.AccessToken));
++        localStorage.setItem('gablogin-oidc-token-hash', Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join(''));
+ 
+         document.getElementById('status').textContent = messages.success;
+         window.location.href = appRoot.href;
+--- a/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcControllerTests.cs
+@@ -1177,6 +1177,67 @@
+             Providers = [new OidcProviderConfig { ProviderId = providerId, Enabled = true }]
+         });
+ 
++    [Theory]
++    [InlineData("123")]
++    [InlineData("1234567")]
++    [InlineData("abcdef")]
++    [InlineData("１２３４５６")]
++    public async Task QuickConnectAuthorize_MalformedCode_DoesNotProvisionOrAuthorize(string code)
++    {
++        ConfigureForSyncableUser("alice", "keycloak");
++        using var state = new StateManager(NullLogger<StateManager>.Instance);
++        var token = state.StoreAuthorizedSession(MakeQcSession());
++        var userManager = Substitute.For<IUserManager>();
++        var quickConnect = Substitute.For<IQuickConnect>();
++        quickConnect.IsEnabled.Returns(true);
++        var controller = MakeController(stateManager: state, userManager: userManager, quickConnect: quickConnect);
++
++        var result = await controller.QuickConnectAuthorize(
++            "keycloak", new QuickConnectAuthorizeRequest { Token = token!, Code = code });
++
++        Assert.Contains("six ASCII digits", Assert.IsType<BadRequestObjectResult>(result).Value!.ToString());
++        userManager.DidNotReceive().GetUserByName(Arg.Any<string>());
++        await quickConnect.DidNotReceive().AuthorizeRequest(Arg.Any<Guid>(), Arg.Any<string>());
++        Assert.NotNull(state.PeekAuthorizedSession(token!));
++    }
++
++    [Theory]
++    [InlineData(false)]
++    [InlineData(true)]
++    public async Task QuickConnectAuthorize_RevokedSession_ReturnsUnauthorized(bool revokeDuringApproval)
++    {
++        ConfigureForSyncableUser("alice", "keycloak");
++        using var state = new StateManager(NullLogger<StateManager>.Instance);
++        var session = MakeQcSession();
++        var token = state.StoreAuthorizedSession(session);
++        var (userManager, _) = MakeSyncableUser("alice", "keycloak");
++        var quickConnect = Substitute.For<IQuickConnect>();
++        quickConnect.IsEnabled.Returns(true);
++        if (revokeDuringApproval)
++        {
++            quickConnect.AuthorizeRequest(Arg.Any<Guid>(), Arg.Any<string>()).Returns<bool>(_ =>
++            {
++                state.RecordLogout(session.Issuer, session.Subject, session.Sid);
++                throw new AuthenticationException();
++            });
++        }
++        else
++        {
++            state.RecordLogout(session.Issuer, session.Subject, session.Sid);
++        }
++        var controller = MakeController(stateManager: state, userManager: userManager, quickConnect: quickConnect);
++
++        var result = await controller.QuickConnectAuthorize(
++            "keycloak", new QuickConnectAuthorizeRequest { Token = token!, Code = "123456" });
++
++        Assert.IsType<UnauthorizedObjectResult>(result);
++        if (!revokeDuringApproval)
++        {
++            userManager.DidNotReceive().GetUserByName(Arg.Any<string>());
++            await quickConnect.DidNotReceive().AuthorizeRequest(Arg.Any<Guid>(), Arg.Any<string>());
++        }
++    }
++
+     [Fact]
+     public async Task QuickConnectAuthorize_InvalidToken_ReturnsUnauthorized()
+     {
+@@ -1384,7 +1445,7 @@
+     }
+ 
+     [Fact]
+-    public async Task QuickConnectAuthorize_QuickConnectNotActive_ReturnsBadRequest()
++    public async Task QuickConnectAuthorize_InvalidCodeAuthenticationError_DoesNotClaimDisabled()
+     {
+         var stateManager = new StateManager(NullLogger<StateManager>.Instance);
+         var token = stateManager.StoreAuthorizedSession(MakeQcSession(username: "alice", providerId: "keycloak"));
+@@ -1399,7 +1460,8 @@
+         var result = await controller.QuickConnectAuthorize(
+             "keycloak", new QuickConnectAuthorizeRequest { Token = token!, Code = "000000" });
+ 
+-        Assert.IsType<BadRequestObjectResult>(result);
++        Assert.Contains("wasn't recognized", Assert.IsType<BadRequestObjectResult>(result).Value!.ToString());
++        Assert.NotNull(stateManager.PeekAuthorizedSession(token!));
+     }
+ 
+     [Fact]
+--- /dev/null
++++ b/scripts/test-auth-pages.mjs
+@@ -0,0 +1,100 @@
++import assert from 'node:assert/strict';
++import { webcrypto } from 'node:crypto';
++import { readFileSync } from 'node:fs';
++import { test } from 'node:test';
++import vm from 'node:vm';
++
++function page(name, { status = 200, body = '', language = 'en', token = 'oidc-token' } = {}) {
++    const html = readFileSync(`Jellyfin.Plugin.OIDC/Configuration/${name}.html`, 'utf8');
++    const elements = new Map();
++    for (const [, id] of html.matchAll(/\bid="([^"]+)"/g)) {
++        elements.set(id, { textContent: '', value: '', hidden: id === 'signin', disabled: false,
++            focus() {}, select() {}, setAttribute() {}, addEventListener(event, callback) { this[event] = callback; } });
++    }
++    elements.get('oidc-data').textContent = JSON.stringify({
++        token: 'approval-token', providerId: 'authentik', credentialsKey: 'credentials', deviceIdKey: 'device-id'
++    });
++    elements.get('oidc-messages').textContent = html.match(/id="oidc-messages">([\s\S]*?)<\/script>/)[1];
++    const requests = [];
++    const storage = new Map();
++    const location = { href: 'https://media.example/base/sso/OIDC/Callback/authentik' };
++    const context = vm.createContext({
++        URL, TextEncoder, Uint8Array, crypto: webcrypto,
++        navigator: { languages: [language], userAgent: 'Test' },
++        document: { documentElement: {}, getElementById: id => elements.get(id), querySelectorAll: () => [] },
++        localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
++        window: { location },
++        fetch: async (url, options) => {
++            requests.push({ url: String(url), options });
++            return { status, ok: status >= 200 && status < 300, text: async () => body,
++                json: async () => ({ AccessToken: token, ServerId: 'server', User: { Id: 'user' } }) };
++        }
++    });
++    const script = [...html.matchAll(/<script nonce="__CSP_NONCE__">([\s\S]*?)<\/script>/g)][0][1];
++    vm.runInContext(script, context);
++    return { elements, requests, storage, location };
++}
++
++const settled = () => new Promise(resolve => setImmediate(resolve));
++
++for (const code of ['123', '', 'abcdef', '1234567', '１２３４５６']) {
++    test(`malformed code ${JSON.stringify(code)} is rejected before fetching`, () => {
++        const p = page('QuickConnectPage');
++        p.elements.get('code').value = code;
++        p.elements.get('submit').click();
++        assert.equal(p.requests.length, 0);
++        assert.match(p.elements.get('msg').textContent, /six digits/);
++    });
++}
++
++for (const status of [401, 403]) {
++    test(`${status} offers reauthentication with the entered code and base path`, async () => {
++        const p = page('QuickConnectPage', { status, body: '"Quick Connect is not active on this server."' });
++        p.elements.get('code').value = '012345';
++        p.elements.get('submit').click();
++        await settled();
++        assert.match(p.elements.get('msg').textContent, /authorization has expired/);
++        assert.equal(p.elements.get('signin').hidden, false);
++        assert.equal(p.elements.get('signin').href, 'https://media.example/base/sso/OIDC/QuickConnect/authentik?user_code=012345');
++        assert.equal(p.elements.get('submit').disabled, false);
++    });
++}
++
++for (const body of ['"That code wasn\'t recognized."', 'That code wasn\'t recognized.']) {
++    test(`API error is displayed without JSON quotation marks: ${body}`, async () => {
++        const p = page('QuickConnectPage', { status: 400, body });
++        p.elements.get('code').value = '123456';
++        p.elements.get('submit').click();
++        await settled();
++        assert.equal(p.elements.get('msg').textContent, "That code wasn't recognized.");
++        assert.equal(p.elements.get('submit').disabled, false);
++    });
++}
++
++test('valid approval disables the form after success', async () => {
++    const p = page('QuickConnectPage');
++    p.elements.get('code').value = '012345';
++    p.elements.get('submit').click();
++    await settled();
++    assert.equal(p.requests.length, 1);
++    assert.equal(JSON.parse(p.requests[0].options.body).Code, '012345');
++    assert.equal(p.elements.get('code').disabled, true);
++    assert.equal(p.elements.get('submit').disabled, true);
++    assert.match(p.elements.get('msg').textContent, /Approved!/);
++});
++
++test('Portuguese validation is localized', () => {
++    const p = page('QuickConnectPage', { language: 'pt-BR' });
++    p.elements.get('submit').click();
++    assert.equal(p.elements.get('msg').textContent, 'Digite os seis dígitos exibidos no dispositivo.');
++});
++
++test('OIDC callback stores the matching bearer hash before redirecting', async () => {
++    const p = page('CallbackPage', { token: 'new-oidc-token' });
++    // Web Crypto runs asynchronously outside the VM's promise queue.
++    for (let i = 0; i < 100 && !p.storage.has('gablogin-oidc-token-hash'); i++) await settled();
++    const expected = Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode('new-oidc-token'))).toString('hex');
++    assert.equal(p.storage.get('gablogin-oidc-token-hash'), expected);
++    assert.equal(JSON.parse(p.storage.get('credentials')).Servers[0].AccessToken, 'new-oidc-token');
++    assert.equal(p.location.href, 'https://media.example/base/');
++});
