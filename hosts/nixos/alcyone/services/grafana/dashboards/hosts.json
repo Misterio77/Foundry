@@ -1301,11 +1301,11 @@
                       "version": "v0",
                       "spec": {
                         "qryType": 3,
-                        "query": "query_result(last_over_time(node_btrfs_info{instance=\"$hostname\"}[$__range]))",
+                        "query": "query_result(label_replace(label_replace(last_over_time(node_btrfs_info{instance=\"$hostname\"}[$__range]), \"display_name\", \"$1\", \"uuid\", \"(.+)\"), \"display_name\", \"$1\", \"label\", \"(.+)\"))",
                         "refId": "PrometheusVariableQueryEditor-VariableQuery"
                       }
                     },
-                    "regex": "/label=\"(?<text>[^\"]+)\".*uuid=\"(?<value>[^\"]+)\"/",
+                    "regex": "/display_name=\"(?<text>[^\"]+)\".*uuid=\"(?<value>[^\"]+)\"/",
                     "sort": "disabled",
                     "options": [],
                     "multi": false,
