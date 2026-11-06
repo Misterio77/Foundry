@@ -103,12 +103,20 @@ entries:
     identifiers:
       name: foundry-recovery-login
 
-  # Recovery proves link possession, not possession of an enrolled MFA device.
+  # Order is part of the identifier; remove the old binding on existing installs.
   - model: authentik_flows.flowstagebinding
+    state: absent
     identifiers:
       target: !KeyOf recovery
       stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
       order: 90
+
+  # Prove enrolled MFA before even prompting for a replacement password.
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf recovery
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: 25
     attrs:
       evaluate_on_plan: true
       re_evaluate_policies: true

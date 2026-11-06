@@ -1,0 +1,153 @@
+version: 1
+metadata:
+  name: Foundry - sensitive account changes
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - private identity pilot
+
+  - model: authentik_stages_password.passwordstage
+    id: password
+    identifiers:
+      name: foundry-sensitive-change-password
+    attrs:
+      backends:
+        - authentik.core.auth.InbuiltBackend
+      failed_attempts_before_cancel: 5
+
+  # Direct flow URLs don't seed pending_user like the settings configure endpoint.
+  # Always pin reauthentication to the session owner, never a supplied identity.
+  - model: authentik_policies_expression.expressionpolicy
+    id: current-user
+    identifiers:
+      name: foundry-sensitive-change-current-user
+    attrs:
+      expression: |
+        request.context["flow_plan"].context["pending_user"] = request.http_request.user
+        return True
+
+  - model: authentik_flows.flowstagebinding
+    id: password-change-password
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-password-change]]
+      stage: !KeyOf password
+      order: -20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf password-change-password
+      policy: !KeyOf current-user
+      order: 0
+    attrs:
+      failure_result: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-password-change]]
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: -10
+
+  - model: authentik_flows.flowstagebinding
+    id: settings-password
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-user-settings-flow]]
+      stage: !KeyOf password
+      order: -20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf settings-password
+      policy: !KeyOf current-user
+      order: 0
+    attrs:
+      failure_result: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-user-settings-flow]]
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: -10
+
+  - model: authentik_flows.flowstagebinding
+    id: totp-password
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-authenticator-totp-setup]]
+      stage: !KeyOf password
+      order: -20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf totp-password
+      policy: !KeyOf current-user
+      order: 0
+    attrs:
+      failure_result: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-authenticator-totp-setup]]
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: -10
+
+  - model: authentik_flows.flowstagebinding
+    id: webauthn-password
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-authenticator-webauthn-setup]]
+      stage: !KeyOf password
+      order: -20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf webauthn-password
+      policy: !KeyOf current-user
+      order: 0
+    attrs:
+      failure_result: true
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-authenticator-webauthn-setup]]
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: -10
+
+  - model: authentik_flows.flowstagebinding
+    id: email-password
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, foundry-provider-authorization-email-required]]
+      stage: !KeyOf password
+      order: -20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+      policy_engine_mode: all
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf email-password
+      policy: !KeyOf current-user
+      order: 0
+    attrs:
+      failure_result: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf email-password
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-missing-email]]
+      order: 1
+  - model: authentik_flows.flowstagebinding
+    id: email-mfa
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, foundry-provider-authorization-email-required]]
+      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
+      order: -10
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf email-mfa
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-missing-email]]
+      order: 0

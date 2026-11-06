@@ -12,13 +12,20 @@ Describes the checked-in configuration, not deployment status. Sources:
 - `auth.m7.rs` is public, including the admin UI; authentication, MFA and
   permissions protect administration, not a separate network ACL. Backend
   listeners are loopback-only; metrics allow only loopback/tailnet clients.
-- Login accepts WebAuthn **or TOTP**, with enrollment required when neither
-  exists. WebAuthn requires user verification but not hardware-key attestation.
+- MFA is optional; accounts with an enrolled WebAuthn **or TOTP** device must
+  validate it. WebAuthn requires user verification but not hardware-key attestation.
   Sessions persist for 30 days. Branding/default locale is Gablogin/`pt-BR`;
   saved user preferences can override the locale.
+- Password changes, profile/email settings and authenticator enrollment require
+  the current account password (not an app password), then enrolled MFA if any.
+  A retained browser session alone is insufficient. Adding a missing email during
+  application authorization has the same checks; ordinary authorization with an
+  existing email does not prompt again. These are flow-level checks; Authentik's
+  separate authenticator deletion API does not gain a fresh-authentication check.
 - Email password recovery expires after 15 minutes and allows five attempts per
-  account per 15 minutes. It neither removes MFA nor reactivates disabled users;
-  reset returns to normal login rather than creating an authenticated session.
+  account per 15 minutes. It neither removes MFA nor reactivates disabled users.
+  After email verification, enrolled MFA is checked before prompting for or
+  writing a new password; successful recovery then creates a login session.
   Email uses `auth@m7.rs` through tailnet-restricted SMTP at `mail.m7.rs:465`.
 
 Application membership is shared; `admins` also grants ordinary access.
@@ -205,7 +212,10 @@ IdP. Runtime secrets come from SOPS; never put them in Nix/store files or docs.
 ## Remaining work
 
 - Verify recovery-email delivery/reset, restored MFA browser login and recovery
-  using independently stored key material. The isolated restore result is
+  using independently stored key material. Check that failed/abandoned recovery
+  MFA leaves the old password unchanged, and that password/profile changes and
+  authenticator setup require fresh credentials (including direct flow URLs).
+  Test both enrolled and unenrolled accounts. The isolated restore result is
   recorded in [backups](backups.md), not proof of these paths.
 - Exercise current roles/demotions, native/mobile sign-in, logout and IdP outage;
   review capacity under sustained load. Audit Jellyfin plugin subject-validation,

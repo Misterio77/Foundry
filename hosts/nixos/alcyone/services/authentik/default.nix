@@ -49,6 +49,7 @@
     cp ${./grafana.yaml} "$out/grafana.yaml"
     cp ${./immich.yaml} "$out/immich.yaml"
     cp ${./recovery.yaml} "$out/recovery.yaml"
+    cp ${./sensitive-changes.yaml} "$out/sensitive-changes.yaml"
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
   '';
