@@ -85,6 +85,8 @@ in {
   # deleting an aged Gablogin session currently misses Jellyfin and its Quick Connect devices.
   # https://github.com/goauthentik/authentik/pull/26565 allows logout despite unfinished flows;
   # signing out of Immich then Seerr currently leaves Seerr at a blank IdP end-session page.
+  # MFA deletion still bypasses fresh authentication; tracked upstream:
+  # https://github.com/goauthentik/authentik/issues/6798
   services.authentik = {
     enable = true;
     environmentFile = config.sops.templates.authentik-env.path;
