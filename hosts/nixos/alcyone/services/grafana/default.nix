@@ -311,6 +311,16 @@
       in {
         forceSSL = true;
         enableACME = true;
+        locations."= /metrics" = {
+          proxyPass = "http://localhost:${toString port}";
+          extraConfig = ''
+            allow 127.0.0.1;
+            allow ::1;
+            allow ${config.services.headscale.settings.prefixes.v4};
+            allow ${config.services.headscale.settings.prefixes.v6};
+            deny all;
+          '';
+        };
         locations."/" = {
           proxyPass = "http://localhost:${toString port}";
         };
