@@ -41,6 +41,11 @@ in {
         pythonOverlay = final.lib.composeExtensions prev.pythonOverlay (_: pythonPrev: {
           authentik = addPatches pythonPrev.authentik [
             ./authentik-avatar-cache-url.patch
+            # Track RP logins beyond token expiry so aged sessions still log out clients.
+            (final.fetchpatch {
+              url = "https://github.com/goauthentik/authentik/pull/26310.patch";
+              hash = "sha256-DLTnbpIDfVwOAq68vF+Yriig1m54mXFNRBalTjQrouk=";
+            })
           ];
         });
       })).authentikComponents;
