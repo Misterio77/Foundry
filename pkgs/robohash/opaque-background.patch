@@ -1,0 +1,178 @@
+--- a/robohash/robohash.py
++++ b/robohash/robohash.py
+@@ -3,6 +3,7 @@
+ from typing import List, Optional, Union, Any
+ from PIL import Image
+ import natsort
++from .background import background_color
+ 
+ class Robohash:
+     """
+@@ -234,12 +235,8 @@
+             bg.paste(roboimg, (0, 0), roboimg)
+             roboimg = bg
+ 
+-        # If we're a BMP, flatten the image.
+-        if format in ['bmp', 'jpeg']:
+-            # Flatten bmps
+-            r, g, b, a = roboimg.split()
+-            roboimg = Image.merge("RGB", (r, g, b))
+-
+-        self.img = roboimg.resize((sizex, sizey), Image.LANCZOS)
++        foreground = roboimg.convert("RGBA").resize((sizex, sizey), Image.LANCZOS)
++        self.img = Image.new("RGB", foreground.size, background_color(self.hexdigest))
++        self.img.paste(foreground, (0, 0), foreground)
+         self.format = format
+ 
+--- /dev/null
++++ b/robohash/background.py
+@@ -0,0 +1,33 @@
++from hashlib import sha256
++from math import cos, sin, tau
++
++
++LIGHTNESS = 0.90
++CHROMA = 0.045
++
++
++def oklch_to_linear_srgb(lightness, chroma, hue):
++    a = chroma * cos(hue)
++    b = chroma * sin(hue)
++    l = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
++    m = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
++    s = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
++    return (
++        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
++        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
++        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
++    )
++
++
++def background_color(seed_hash):
++    # A separate digest domain leaves Robohash's part-selection slots untouched.
++    digest = sha256(f"background:{seed_hash}".encode("utf-8")).digest()
++    hue = int.from_bytes(digest[:8], "big") / 2**64 * tau
++    channels = oklch_to_linear_srgb(LIGHTNESS, CHROMA, hue)
++
++    def encode(channel):
++        channel = min(1.0, max(0.0, channel))
++        encoded = 12.92 * channel if channel <= 0.0031308 else 1.055 * channel ** (1 / 2.4) - 0.055
++        return round(encoded * 255)
++
++    return tuple(encode(channel) for channel in channels)
+--- /dev/null
++++ b/tests/test_background.py
+@@ -0,0 +1,59 @@
++from hashlib import sha512
++from io import BytesIO
++from math import hypot, tau
++
++import pytest
++from PIL import Image
++
++from robohash import Robohash
++from robohash.background import CHROMA, LIGHTNESS, background_color, oklch_to_linear_srgb
++
++
++def test_palette_stays_in_srgb_gamut():
++    for step in range(3600):
++        channels = oklch_to_linear_srgb(LIGHTNESS, CHROMA, step / 3600 * tau)
++        assert all(0 <= channel <= 1 for channel in channels)
++
++
++def test_quantized_palette_keeps_lightness_and_chroma():
++    for seed in range(256):
++        rgb = background_color(sha512(str(seed).encode()).hexdigest())
++        channels = [channel / 255 for channel in rgb]
++        r, g, b = [
++            c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
++            for c in channels
++        ]
++        l = (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) ** (1 / 3)
++        m = (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) ** (1 / 3)
++        s = (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b) ** (1 / 3)
++        lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
++        a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
++        b = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
++        assert abs(lightness - LIGHTNESS) < 0.002
++        assert abs(hypot(a, b) - CHROMA) < 0.002
++
++
++def test_background_is_seeded_and_varies():
++    hashes = [sha512(seed.encode()).hexdigest() for seed in ("lucky", "gabriel", "kitten")]
++    colors = [background_color(seed_hash) for seed_hash in hashes]
++    assert len(set(colors)) == 3
++    assert colors == [background_color(seed_hash) for seed_hash in hashes]
++
++
++@pytest.mark.parametrize("format", ["png", "jpeg", "bmp", "webp"])
++def test_kitten_has_opaque_background(format):
++    avatar = Robohash("lucky")
++    avatar.assemble(roboset="set4", format=format, sizex=200, sizey=200)
++    assert avatar.img.mode == "RGB"
++    assert avatar.img.size == (200, 200)
++    assert avatar.img.getpixel((0, 0)) == background_color(avatar.hexdigest)
++    output = BytesIO()
++    avatar.img.save(output, format=format)
++    output.seek(0)
++    assert Image.open(output).convert("RGBA").getchannel("A").getextrema() == (255, 255)
++
++
++def test_extensions_keep_the_same_background():
++    assert background_color(Robohash("lucky.png").hexdigest) == background_color(
++        Robohash("lucky.jpg").hexdigest
++    )
+--- /dev/null
++++ b/tests/test_http.py
+@@ -0,0 +1,29 @@
++from io import BytesIO
++
++from PIL import Image
++from tornado.testing import AsyncHTTPTestCase
++from tornado.web import Application
++
++from robohash.webfront import ImgHandler
++
++
++class TestAvatarHTTP(AsyncHTTPTestCase):
++    def get_app(self):
++        return Application([(r"/(.*)", ImgHandler)])
++
++    def test_kitten_get_and_head(self):
++        url = "/" + "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
++        url += ".png?set=set4&size=200x200"
++        response = self.fetch(url)
++        assert response.code == 200
++        assert response.headers["Content-Type"] == "image/png"
++        image = Image.open(BytesIO(response.body))
++        assert image.size == (200, 200)
++        assert image.mode == "RGB"
++        assert image.convert("RGBA").getchannel("A").getextrema() == (255, 255)
++        assert self.fetch(url).body == response.body
++
++        head = self.fetch(url, method="HEAD")
++        assert head.code == 200
++        assert head.headers["Content-Type"] == "image/png"
++        assert head.body == b""
+--- a/tests/test_image_consistency.py
++++ b/tests/test_image_consistency.py
+@@ -10,6 +10,7 @@
+ from PIL import Image, ImageChops
+ import io
+ from robohash import Robohash
++from robohash.background import background_color
+ 
+ class TestRobohashConsistency(unittest.TestCase):
+     def setUp(self):
+@@ -32,7 +33,10 @@
+         generated_img = Image.open(img_buffer)
+ 
+         # Compare the images
+-        diff = ImageChops.difference(reference_img.convert('RGBA'), generated_img.convert('RGBA'))
++        foreground = reference_img.convert("RGBA")
++        reference_img = Image.new("RGB", foreground.size, background_color(rh.hexdigest))
++        reference_img.paste(foreground, (0, 0), foreground)
++        diff = ImageChops.difference(reference_img, generated_img.convert("RGB"))
+         
+         # If the images are the same, the difference will be all black (0)
+         self.assertFalse(diff.getbbox(), "Generated image doesn't match the reference image")

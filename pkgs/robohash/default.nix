@@ -16,7 +16,7 @@ python3Packages.buildPythonApplication {
   };
 
   # Authentik validates image URLs with HEAD before returning them to clients.
-  patches = [./head-localhost.patch];
+  patches = [./head-localhost.patch ./opaque-background.patch];
 
   postPatch = ''
     substituteInPlace pyproject.toml \
@@ -25,7 +25,6 @@ python3Packages.buildPythonApplication {
     "static/*",
     "static/**/*",'
     printf '\n[project.scripts]\nrobohash = "robohash.webfront:main"\n' >> pyproject.toml
-    cp ${./test_http.py} tests/test_http.py
   '';
 
   build-system = [python3Packages.setuptools];
