@@ -1,0 +1,83 @@
+diff --git a/authentik/lib/avatars.py b/authentik/lib/avatars.py
+--- a/authentik/lib/avatars.py
++++ b/authentik/lib/avatars.py
+@@ -171,7 +171,6 @@
+ 
+ def avatar_mode_url(user: User, mode: str) -> str | None:
+     """Format url"""
+-    mail_hash = md5(user.email.lower().encode("utf-8"), usedforsecurity=False).hexdigest()  # nosec
+     formatted_url = format_avatar_url(user, mode)
+ 
+     hostname = urlparse(formatted_url).hostname
+@@ -180,7 +179,8 @@
+     if not cache.get(cache_key_hostname_available, True):
+         return None
+ 
+-    cache_key_image_url = f"goauthentik.io/lib/avatars/{hostname}/{mail_hash}"
++    url_hash = sha256(formatted_url.encode("utf-8")).hexdigest()
++    cache_key_image_url = f"goauthentik.io/lib/avatars/{hostname}/{url_hash}"
+ 
+     if cache.has_key(cache_key_image_url):
+         cache.touch(cache_key_image_url)
+diff --git a/authentik/core/tests/test_users_avatars.py b/authentik/core/tests/test_users_avatars.py
+--- a/authentik/core/tests/test_users_avatars.py
++++ b/authentik/core/tests/test_users_avatars.py
+@@ -160,6 +160,43 @@
+         # Should fallback to initials since Content-Type header is missing
+         self.assertIn("data:image/svg+xml;base64,", body["user"]["avatar"])
+ 
++    def test_avatars_custom_shared_email(self):
++        """Users with blank or shared emails must not share username-based avatars."""
++        from authentik.lib.avatars import avatar_mode_url
++
++        mode = "https://example.com/avatar/%(username)s"
++        for email in ("", "shared@example.com"):
++            with self.subTest(email=email):
++                cache.clear()
++                self.admin.email = email
++                self.user.email = email
++                with Mocker() as mocker:
++                    for user in (self.admin, self.user):
++                        mocker.head(
++                            f"https://example.com/avatar/{user.username}",
++                            headers={"Content-Type": "image/png"},
++                        )
++                    for _ in range(2):
++                        for user in (self.admin, self.user):
++                            self.assertEqual(
++                                avatar_mode_url(user, mode),
++                                f"https://example.com/avatar/{user.username}",
++                            )
++                    self.assertEqual(mocker.call_count, 2)
++
++    def test_avatars_custom_url_change(self):
++        """Different URLs on the same hostname have independent cache entries."""
++        from authentik.lib.avatars import avatar_mode_url
++
++        cache.clear()
++        with Mocker() as mocker:
++            for suffix in ("old", "new"):
++                url = f"https://example.com/{suffix}/%(username)s"
++                expected = url.replace("%(username)s", self.user.username)
++                mocker.head(expected, headers={"Content-Type": "image/png"})
++                self.assertEqual(avatar_mode_url(self.user, url), expected)
++            self.assertEqual(mocker.call_count, 2)
++
+     def test_avatars_custom_404_cached(self):
+         """Test that 404 responses are cached with TTL"""
+         cache.clear()
+@@ -177,10 +214,11 @@
+         self.assertEqual(body["user"]["avatar"], "/static/dist/assets/images/user_default.png")
+ 
+         # Verify cache was set with the expected structure
+-        from hashlib import md5
++        from hashlib import sha256
+ 
+-        mail_hash = md5(self.admin.email.lower().encode("utf-8"), usedforsecurity=False).hexdigest()
+-        cache_key = f"goauthentik.io/lib/avatars/example.com/{mail_hash}"
++        url = f"https://example.com/avatar/{self.admin.username}"
++        url_hash = sha256(url.encode("utf-8")).hexdigest()
++        cache_key = f"goauthentik.io/lib/avatars/example.com/{url_hash}"
+         self.assertIsNone(cache.get(cache_key))
+         # Verify TTL was set (cache entry exists)
+         self.assertTrue(cache.has_key(cache_key))
