@@ -81,3 +81,11 @@ it to one or two lines.
 Do not defer this check until commit time; edits and tool-generated changes already mutate the working copy.
 
 **Every commit you create MUST include the `Assisted-by: <harness> (<model>)` trailer** (e.g. `Assisted-by: claude-code (opus-4.8)`) in the commit message. This applies to any commit you add a description to in any repo.
+
+## Machines
+
+If explicitly allowed or asked, you may SSH into the other machines Gabs has (these are declared in `~/.ssh/config`). SSH requires a touch in the yubikey, and the touch window is easy to miss, so if you get a permission denied, let the user know and retry once or twice before switchinng to other approaches. If the user says they will be AFK, you won't be able to SSH (as it requires presence) unless they leave a socket open for you (usually `~/.ssh/master-*`).
+
+Machines in the fleet have different architecturues, so, be careful building packages using e.g. `nixosConfigurations.<name>.config.services.<name>.package`. These builds can work, but, if are for a different architecture, are built via qemu so take very long. Prefer building the package explicitly using the native host's architecture insted.
+
+If explicitly allowed or asked, you may sudo in the machines, including the remote ones. It uses ssh-agent (forwarded to the trusted hosts by default) via PAM, and thus also requires a touch in the yubikey (and presence, and you should retry once or twice). This does not work with `-n`, so use plain `sudo`. This is not cached between SSH invocations and can't be left cached with a socket, so don't sudo if the user says they'll leave you unattended.
