@@ -64,6 +64,13 @@ raw bearer tokens are not stored. Session inactivity does not remove lineage;
 cleanup verifies that the token itself is gone. Failed deletions retain their
 records and return an error so Authentik can retry, including partial failures.
 
+Logout markers cover authorizations started before the logout, not a permanent
+ban on the OIDC session ID: Authentik can reuse that ID after application-only
+logout. A fresh OIDC flow can sign in again, but old tokens, Quick Connect
+approvals and in-flight pre-logout flows stay revoked. Retries retain the original
+cutoff; a distinct later logout revokes the new authorization too. Existing
+lineage files remain compatible and must not be cleared to recover from a 401.
+
 For the initial lineage rollout, revoke pre-existing Jellyfin devices explicitly
 and sign in again with OIDC before approving new devices. Old approval ancestry
 cannot be reconstructed; untracked sessions cannot approve more devices. There
@@ -72,7 +79,8 @@ lineage match logs a migration warning instead. Corrupt state stops startup;
 failed writes reject the login/approval rather than issuing an untracked token.
 The tracking cap rejects new logins rather than evicting live revocation data.
 Verify the three-session revocation case, a chained approval, an independent
-OIDC login, a Jellyfin restart and an aged Authentik session after deployment.
+OIDC login, app-only logout/relogin with the same Gablogin session, a Jellyfin
+restart and an aged Authentik session after deployment.
 
 **Immich:** OAuth-only, auto-launch and auto-registration enabled. Existing
 accounts can link by matching email on first OAuth login: verify the intended

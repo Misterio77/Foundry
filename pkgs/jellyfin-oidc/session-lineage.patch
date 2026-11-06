@@ -1,6 +1,12 @@
 --- a/Jellyfin.Plugin.OIDC/Services/StateManager.cs
 +++ b/Jellyfin.Plugin.OIDC/Services/StateManager.cs
-@@ -58,16 +58,11 @@
+@@ -55,24 +55,22 @@
+     /// </summary>
+     public Guid? SyncedUserId { get; set; }
+ 
++    // Keep the flow's start time: a callback completing after logout is not a fresh authorization.
++    public DateTimeOffset AuthorizationStartedAt { get; init; } = DateTimeOffset.UtcNow;
++
      public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
  }
  
@@ -20,7 +26,13 @@
      public required string ProviderId { get; init; }
      public required string Issuer { get; init; }
      public required string Subject { get; init; }
-@@ -80,12 +75,11 @@
+ 
+-    /// The OIDC <c>sid</c> claim for this in-memory record - not the persisted one; see <see cref="Configuration.UserProviderEntry.LogoutSid"/>.
++    /// The root OIDC <c>sid</c>; separate authorizations may reuse it after application logout.
+     public string? Sid { get; init; }
+     public required Guid UserId { get; init; }
+     public required string DeviceId { get; init; }
+@@ -80,12 +78,11 @@
      public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
  }
  
@@ -34,7 +46,7 @@
  
      // Hard caps prevent unbounded memory growth from unauthenticated flood attacks.
      private const int MaxPendingStates = 500;
-@@ -191,16 +185,45 @@
+@@ -191,16 +188,45 @@
  
      public void TrackSession(TrackedSession session)
      {
@@ -86,7 +98,7 @@
  
      // Self-enforcing precedence (sid, when present, wins outright) rather than relying on every
      // caller to null out sub whenever sid is set - a caller passing both would otherwise silently
-@@ -267,6 +290,7 @@
+@@ -267,6 +293,7 @@
      private void Cleanup(object? state)
      {
          var now = DateTimeOffset.UtcNow;
@@ -94,7 +106,7 @@
  
          foreach (var (key, oidcState) in _pendingStates)
          {
-@@ -284,14 +308,6 @@
+@@ -284,14 +311,6 @@
              }
          }
  
@@ -109,6 +121,56 @@
          foreach (var (jti, forgetAfter) in _seenJti)
          {
              if (now > forgetAfter)
+--- a/Jellyfin.Plugin.OIDC/Services/LoginFlowService.cs
++++ b/Jellyfin.Plugin.OIDC/Services/LoginFlowService.cs
+@@ -149,7 +149,8 @@
+             Sid = string.IsNullOrEmpty(identity.Sid) ? null : identity.Sid,
+             Issuer = disco.Issuer,
+             Email = string.IsNullOrEmpty(identity.Email) ? null : identity.Email,
+-            EmailVerified = identity.EmailVerified
++            EmailVerified = identity.EmailVerified,
++            AuthorizationStartedAt = oidcState.CreatedAt
+         });
+ 
+         if (sessionToken == null)
+--- a/Jellyfin.Plugin.OIDC.Tests/Services/LoginFlowServiceTests.cs
++++ b/Jellyfin.Plugin.OIDC.Tests/Services/LoginFlowServiceTests.cs
+@@ -50,6 +50,35 @@
+         Assert.Equal(Authority, session.Issuer);
+     }
+ 
++    [Theory]
++    [InlineData(false)]
++    [InlineData(true)]
++    public async Task CompleteCallback_PreservesFlowStartAcrossLogout(bool quickConnect)
++    {
++        var key = OidcTestTokens.CreateSigningKey();
++        var idToken = OidcTestTokens.IdToken(key, Authority, ClientId, Nonce, groups: ["staff"]);
++        var (flow, stateManager) = Build(HandlerFor(key, idToken));
++        var pending = new OidcState
++        {
++            ProviderId = ProviderId,
++            Nonce = Nonce,
++            CodeVerifier = "verifier",
++            RedirectUri = $"{Authority}/sso/OIDC/Callback/{ProviderId}",
++            CsrfToken = "csrf",
++            QuickConnect = quickConnect,
++            CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-6)
++        };
++        var cutoff = stateManager.RecordLogout(Authority, "sub-123", null, "logout-a");
++        var outcome = await flow.CompleteCallbackAsync(Provider(), ProviderId, pending, "code");
++
++        Assert.False(outcome.IsFailure);
++        var session = stateManager.PeekAuthorizedSession(outcome.SessionToken!);
++        Assert.NotNull(session);
++        Assert.Equal(pending.CreatedAt, session.AuthorizationStartedAt);
++        Assert.True(session.CreatedAt >= cutoff);
++        Assert.True(stateManager.IsRevoked(session.Issuer!, session.Subject!, session.Sid, session.AuthorizationStartedAt));
++    }
++
+     [Fact]
+     public async Task CompleteCallback_QuickConnectState_FlagsOutcome()
+     {
 --- a/Jellyfin.Plugin.OIDC/Services/ServiceRegistrator.cs
 +++ b/Jellyfin.Plugin.OIDC/Services/ServiceRegistrator.cs
 @@ -5,6 +5,9 @@
@@ -148,7 +210,7 @@
  }
 --- /dev/null
 +++ b/Jellyfin.Plugin.OIDC/Services/SessionLineage.cs
-@@ -0,0 +1,133 @@
+@@ -0,0 +1,132 @@
 +using System.Security.Cryptography;
 +using System.Text;
 +using System.Text.Json;
@@ -226,10 +288,8 @@
 +    {
 +        lock (_trackingSync)
 +        {
-+            return _logoutMarkers.Any(m => m.Issuer == issuer &&
-+                (!string.IsNullOrEmpty(m.Sid)
-+                    ? m.Sid == sid
-+                    : m.Subject == subject && createdAt <= m.CreatedAt));
++            return _logoutMarkers.Any(m => m.Issuer == issuer && createdAt <= m.CreatedAt &&
++                (!string.IsNullOrEmpty(m.Sid) ? m.Sid == sid : m.Subject == subject));
 +        }
 +    }
 +
@@ -239,8 +299,9 @@
 +        {
 +            if (string.IsNullOrEmpty(subject) && string.IsNullOrEmpty(sid))
 +                throw new ArgumentException("Logout must identify a subject or session");
++            // Deduplicate the event, not the sid: a later logout must revoke later authorizations too.
 +            var existing = _logoutMarkers.FirstOrDefault(m => m.Issuer == issuer &&
-+                (!string.IsNullOrEmpty(sid) ? m.Sid == sid : eventId != null && m.EventId == eventId));
++                eventId != null && m.EventId == eventId);
 +            if (existing != null) return existing.CreatedAt;
 +            var marker = new LogoutMarker(issuer, subject, sid, DateTimeOffset.UtcNow, eventId);
 +            _logoutMarkers.Add(marker);
@@ -354,7 +415,7 @@
 +            UserId = userId,
 +            DeviceId = string.Empty,
 +            SessionId = string.Empty,
-+            CreatedAt = session.CreatedAt
++            CreatedAt = session.AuthorizationStartedAt
 +        });
 +    }
 +
@@ -431,7 +492,7 @@
 +            await _stateManager.SessionMutation.WaitAsync().ConfigureAwait(false);
 +            try
 +            {
-+                if (_stateManager.IsRevoked(session.Issuer ?? string.Empty, session.Subject ?? string.Empty, session.Sid, session.CreatedAt))
++                if (_stateManager.IsRevoked(session.Issuer ?? string.Empty, session.Subject ?? string.Empty, session.Sid, session.AuthorizationStartedAt))
 +                    return Unauthorized("The authorizing OIDC session has been revoked");
 +                var authResult = await _sessionManager.AuthenticateDirect(authRequest).ConfigureAwait(false);
 +                try
@@ -495,7 +556,7 @@
 +            // FindTracked self-enforces sid-over-sub precedence - a sid-scoped logout never widens to
 +            // every session sharing the subject, even though both are passed through unmodified here.
 +            var tracked = _stateManager.FindTracked(issuer, sub, sid)
-+                .Where(s => !string.IsNullOrEmpty(sid) || s.CreatedAt <= logoutAt).ToList();
++                .Where(s => s.CreatedAt <= logoutAt).ToList();
 +            var (revokedDevices, deviceRevocationErrored) = await RevokeTrackedDevicesAsync(tracked).ConfigureAwait(false);
 +
 +            if (deviceRevocationErrored)
@@ -659,7 +720,7 @@
 -            SessionId = sessionId ?? deviceId
 +            SessionId = sessionId ?? deviceId,
 +            TokenHash = StateManager.HashToken(token),
-+            CreatedAt = session.CreatedAt
++            CreatedAt = session.AuthorizationStartedAt
          });
  
 -        // Persist the sid on the map row so a post-restart sid-only back-channel logout still resolves
@@ -670,7 +731,7 @@
              _mapStore.SetLogoutSid(session.ProviderId, session.Subject, session.Sid);
 --- /dev/null
 +++ b/Jellyfin.Plugin.OIDC.Tests/Services/SessionLineageTests.cs
-@@ -0,0 +1,341 @@
+@@ -0,0 +1,400 @@
 +using System.Reflection;
 +using Jellyfin.Data.Queries;
 +using Jellyfin.Database.Implementations.Entities.Security;
@@ -729,7 +790,7 @@
 +
 +    private StateManager Open() => new(NullLogger<StateManager>.Instance, Path.Combine(_directory, "lineage.json"));
 +
-+    private TrackedSession Root(string sid = "sid-a", string token = "parent-token", string device = "parent") => new()
++    private TrackedSession Root(string sid = "sid-a", string token = "parent-token", string device = "parent", DateTimeOffset? createdAt = null) => new()
 +    {
 +        ProviderId = "authentik",
 +        Issuer = "https://auth.example/",
@@ -738,7 +799,8 @@
 +        UserId = _user,
 +        DeviceId = device,
 +        SessionId = device,
-+        TokenHash = StateManager.HashToken(token)
++        TokenHash = StateManager.HashToken(token),
++        CreatedAt = createdAt ?? DateTimeOffset.UtcNow
 +    };
 +
 +    private Device Device(string token, string device) => new(_user, "test", "1", "test", device) { AccessToken = token };
@@ -985,26 +1047,84 @@
 +        Assert.Equal("sid-b", state.FindForToken(_user, "other-token")!.Sid);
 +    }
 +
-+    [Fact]
-+    public void RetriedSubjectLogoutDoesNotMoveItsCutoffPastFreshLogins()
++    [Theory]
++    [InlineData(null)]
++    [InlineData("sid-a")]
++    public void RetriedLogoutDoesNotMoveItsCutoffPastFreshLogins(string? sid)
 +    {
 +        using var state = Open();
-+        var cutoff = state.RecordLogout("https://auth.example/", "test", null, "event-a");
++        var cutoff = state.RecordLogout("https://auth.example/", "test", sid, "event-a");
 +        using var restarted = Open();
-+        Assert.Equal(cutoff, restarted.RecordLogout("https://auth.example/", "test", null, "event-a"));
-+        Assert.False(restarted.IsRevoked("https://auth.example/", "test", "fresh-sid", cutoff.AddTicks(1)));
++        Assert.Equal(cutoff, restarted.RecordLogout("https://auth.example/", "test", sid, "event-a"));
++        Assert.False(restarted.IsRevoked("https://auth.example/", "test", "sid-a", cutoff.AddTicks(1)));
++        Assert.True(restarted.IsRevoked("https://auth.example/", "test", "sid-a", cutoff));
 +    }
 +
 +    [Fact]
-+    public void SubjectLogoutPermitsFreshLogin_ButSidLogoutCannotBeReused()
++    public async Task FreshAuthorizationCanReuseSidWithoutRevivingOldQuickConnectTokens()
 +    {
 +        using var state = Open();
-+        var before = DateTimeOffset.UtcNow.AddSeconds(-1);
-+        state.RecordLogout("https://auth.example/", "test", null);
-+        Assert.True(state.IsRevoked("https://auth.example/", "test", "old", before));
-+        Assert.False(state.IsRevoked("https://auth.example/", "test", "new", DateTimeOffset.UtcNow.AddSeconds(1)));
-+        state.RecordLogout("https://auth.example/", "test", "sid-a");
-+        Assert.True(state.IsRevoked("https://auth.example/", "test", "sid-a", DateTimeOffset.UtcNow.AddDays(1)));
++        var old = Root();
++        state.TrackSession(old);
++        _tokens.Add(Device("parent-token", "parent"));
++        Pending("111111", "old-child-token", "old-child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, _context);
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "old-child" });
++        Assert.True(await linked.AuthorizeRequest(_user, "111111"));
++        var cutoff = state.RecordLogout(old.Issuer, old.Subject, old.Sid, "event-a");
++
++        using var restarted = Open();
++        var fresh = Root(token: "fresh-token", device: "fresh", createdAt: cutoff.AddTicks(1));
++        restarted.TrackSession(fresh);
++        _tokens.Add(Device("fresh-token", "fresh"));
++        var afterRestart = new LinkedQuickConnect(_inner, restarted, _devices, _context);
++        Assert.Throws<AuthenticationException>(() => afterRestart.GetAuthorizedRequest("secret-111111"));
++        Pending("222222", "fresh-child-token", "fresh-child");
++        afterRestart.TryConnect(new AuthorizationInfo { DeviceId = "fresh-child" });
++        await Assert.ThrowsAsync<AuthenticationException>(() => afterRestart.AuthorizeRequest(_user, "222222"));
++        _approver = "fresh-token";
++        Assert.True(await afterRestart.AuthorizeRequest(_user, "222222"));
++        Assert.Equal("fresh-child-token", afterRestart.GetAuthorizedRequest("secret-222222").AccessToken);
++        Assert.Equal(fresh.CreatedAt, restarted.FindForToken(_user, "fresh-child-token")!.CreatedAt);
++
++        var secondCutoff = restarted.RecordLogout(old.Issuer, old.Subject, old.Sid, "event-b");
++        Assert.True(secondCutoff > cutoff);
++        Assert.Equal(cutoff, restarted.RecordLogout(old.Issuer, old.Subject, old.Sid, "event-a"));
++        Assert.Throws<AuthenticationException>(() => afterRestart.GetAuthorizedRequest("secret-222222"));
++        using var finalRestart = Open();
++        Assert.True(finalRestart.IsRevoked(fresh.Issuer, fresh.Subject, fresh.Sid, fresh.CreatedAt));
++    }
++
++    [Theory]
++    [InlineData(false)]
++    [InlineData(true)]
++    public async Task OidcApprovalUsesAuthorizationStartNotCallbackCompletion(bool fresh)
++    {
++        using var state = Open();
++        var cutoff = state.RecordLogout("https://auth.example/", "test", "sid-a", "event-a");
++        Pending("111111", "child-token", "child");
++        var linked = new LinkedQuickConnect(_inner, state, _devices, new HttpContextAccessor());
++        linked.TryConnect(new AuthorizationInfo { DeviceId = "child" });
++        var session = new AuthorizedSession
++        {
++            ProviderId = "authentik",
++            Issuer = "https://auth.example/",
++            Subject = "test",
++            Sid = "sid-a",
++            Username = "test",
++            Roles = [],
++            AuthorizationStartedAt = fresh ? cutoff.AddTicks(1) : cutoff.AddSeconds(-1)
++        };
++        if (fresh)
++        {
++            Assert.True(await linked.AuthorizeOidcRequest(_user, "111111", session));
++            Assert.Equal(session.AuthorizationStartedAt, state.FindForToken(_user, "child-token")!.CreatedAt);
++        }
++        else
++        {
++            await Assert.ThrowsAsync<AuthenticationException>(() => linked.AuthorizeOidcRequest(_user, "111111", session));
++            await _inner.DidNotReceive().AuthorizeRequest(_user, "111111");
++        }
 +    }
 +
 +    public void Dispose()
@@ -1014,13 +1134,15 @@
 +}
 --- /dev/null
 +++ b/Jellyfin.Plugin.OIDC.Tests/Api/OidcLineageTests.cs
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,191 @@
 +using System.Security.Claims;
 +using Jellyfin.Data.Queries;
 +using Jellyfin.Database.Implementations.Entities.Security;
++using Jellyfin.Plugin.OIDC.Api;
 +using Jellyfin.Plugin.OIDC.Configuration;
 +using Jellyfin.Plugin.OIDC.Services;
 +using Jellyfin.Plugin.OIDC.Tests.Fixtures;
++using MediaBrowser.Controller.Authentication;
 +using MediaBrowser.Controller.Devices;
 +using MediaBrowser.Controller.Session;
 +using MediaBrowser.Model.Querying;
@@ -1034,6 +1156,43 @@
 +public partial class OidcControllerTests
 +{
 +    [Theory]
++    [InlineData(false)]
++    [InlineData(true)]
++    public async Task Authenticate_AfterAppLogout_RequiresFreshAuthorizationNotFreshCallback(bool fresh)
++    {
++        ConfigureForSyncableUser("alice", "keycloak");
++        var (users, user) = MakeSyncableUser("alice", "keycloak");
++        using var state = new StateManager(NullLogger<StateManager>.Instance);
++        var cutoff = state.RecordLogout("https://idp.example/", "test-subject", "same-sid", "logout-a");
++        var startedAt = fresh ? cutoff.AddTicks(1) : cutoff.AddSeconds(-1);
++        var token = state.StoreAuthorizedSession(new AuthorizedSession
++        {
++            ProviderId = "keycloak",
++            Username = "alice",
++            Subject = "test-subject",
++            Issuer = "https://idp.example/",
++            Sid = "same-sid",
++            Roles = [],
++            AuthorizationStartedAt = startedAt
++        });
++        var sessions = Substitute.For<ISessionManager>();
++        sessions.AuthenticateDirect(Arg.Any<AuthenticationRequest>())
++            .Returns(Task.FromResult(new AuthenticationResult { AccessToken = "fresh-token" }));
++        var controller = MakeController(stateManager: state, userManager: users, sessionManager: sessions);
++        var result = await controller.Authenticate("keycloak", new AuthenticateRequest { Token = token! });
++        if (fresh)
++        {
++            Assert.IsType<OkObjectResult>(result);
++            Assert.Equal(startedAt, state.FindForToken(user.Id, "fresh-token")!.CreatedAt);
++        }
++        else
++        {
++            Assert.IsType<UnauthorizedObjectResult>(result);
++            await sessions.DidNotReceive().AuthenticateDirect(Arg.Any<AuthenticationRequest>());
++        }
++    }
++
++    [Theory]
 +    [InlineData(false, false)]
 +    [InlineData(true, false)]
 +    [InlineData(true, true)]
@@ -1046,6 +1205,7 @@
 +        {
 +            var user = Guid.NewGuid();
 +            var devices = new List<Device>();
++            var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
 +            var state = new StateManager(NullLogger<StateManager>.Instance, path);
 +            foreach (var (device, sid) in new[] { ("parent", "sid-a"), ("child", "sid-a"), ("grandchild", "sid-a"), ("independent", "sid-b") })
 +            {
@@ -1060,7 +1220,8 @@
 +                    UserId = user,
 +                    DeviceId = device,
 +                    SessionId = device,
-+                    TokenHash = StateManager.HashToken(token)
++                    TokenHash = StateManager.HashToken(token),
++                    CreatedAt = startedAt
 +                });
 +            }
 +            // A different token on the same device must not be swept up by DeviceId alone.
@@ -1117,15 +1278,46 @@
 +            {
 +                Assert.Equal(503, Assert.IsType<ObjectResult>(result).StatusCode);
 +                Assert.Single(state.FindTracked(authority, "test", "sid-a"));
++                // A new verified authorization may reuse the sid while the old logout awaits retry.
++                devices.Add(new Device(user, "test", "1", "test", "fresh") { AccessToken = "fresh-token" });
++                state.TrackSession(new TrackedSession
++                {
++                    ProviderId = "keycloak",
++                    Issuer = authority,
++                    Subject = "test",
++                    Sid = "sid-a",
++                    UserId = user,
++                    DeviceId = "fresh",
++                    SessionId = "fresh",
++                    TokenHash = StateManager.HashToken("fresh-token")
++                });
 +                result = await controller.BackchannelLogout("keycloak", logout);
 +            }
 +            Assert.IsType<OkResult>(result);
-+            Assert.Equal(new[] { "independent-token", "unrelated-token" }, devices.Select(d => d.AccessToken).Order().ToArray());
-+            Assert.Empty(state.FindTracked(authority, "test", "sid-a"));
++            var expected = partialFailure
++                ? new[] { "fresh-token", "independent-token", "unrelated-token" }
++                : new[] { "independent-token", "unrelated-token" };
++            Assert.Equal(expected, devices.Select(d => d.AccessToken).Order().ToArray());
++            Assert.Equal(partialFailure ? 1 : 0, state.FindTracked(authority, "test", "sid-a").Count);
 +            Assert.Single(state.FindTracked(authority, "test", "sid-b"));
-+            using var finalRestart = new StateManager(NullLogger<StateManager>.Instance, path);
-+            Assert.True(finalRestart.IsRevoked(authority, "test", "sid-a", DateTimeOffset.UtcNow));
-+            Assert.Single(finalRestart.FindTracked(authority, "test", "sid-b"));
++            using (var finalRestart = new StateManager(NullLogger<StateManager>.Instance, path))
++            {
++                Assert.True(finalRestart.IsRevoked(authority, "test", "sid-a", startedAt));
++                Assert.Single(finalRestart.FindTracked(authority, "test", "sid-b"));
++                if (partialFailure)
++                {
++                    var fresh = Assert.Single(finalRestart.FindTracked(authority, "test", "sid-a"));
++                    Assert.False(finalRestart.IsRevoked(authority, "test", "sid-a", fresh.CreatedAt));
++                }
++            }
++            if (partialFailure)
++            {
++                var secondLogout = OidcTestTokens.SignRs256(key, authority, provider.ClientId,
++                    [EventsClaim, new Claim("sub", "test"), new Claim("sid", "sid-a"), new Claim("jti", "logout-b")]);
++                Assert.IsType<OkResult>(await controller.BackchannelLogout("keycloak", secondLogout));
++                Assert.Empty(state.FindTracked(authority, "test", "sid-a"));
++                Assert.DoesNotContain(devices, d => d.AccessToken == "fresh-token");
++            }
 +            await sessions.DidNotReceive().RevokeUserTokens(Arg.Any<Guid>(), Arg.Any<string>());
 +        }
 +        finally
