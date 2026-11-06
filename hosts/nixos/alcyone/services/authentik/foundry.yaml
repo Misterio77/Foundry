@@ -81,7 +81,7 @@ entries:
     attrs:
       designation: authorization
       name: Acessar aplicativo com e-mail
-      title: Adicione seu e-mail para acessar %(app)s
+      title: Acessar aplicativo
       authentication: require_authenticated
   - model: authentik_policies_expression.expressionpolicy
     id: missing-email
@@ -90,6 +90,17 @@ entries:
     attrs:
       expression: |
         return not bool((request.user.email or "").strip())
+  - model: authentik_stages_prompt.prompt
+    id: required-email-introduction
+    identifiers:
+      name: foundry-required-email-introduction
+    attrs:
+      field_key: email-introduction
+      label: ""
+      type: static
+      required: false
+      initial_value: Adicione seu e-mail para continuar.
+      order: -1
   - model: authentik_stages_prompt.prompt
     id: required-email-field
     identifiers:
@@ -107,6 +118,7 @@ entries:
       name: foundry-required-email-prompt
     attrs:
       fields:
+        - !KeyOf required-email-introduction
         - !KeyOf required-email-field
       validation_policies:
         - !KeyOf unique-email
@@ -206,13 +218,13 @@ entries:
       slug: default-provider-authorization-implicit-consent
     attrs:
       name: Acessar aplicativo
-      title: Redirecionando para %(app)s
+      title: Redirecionando para o aplicativo
   - model: authentik_flows.flow
     identifiers:
       slug: default-provider-invalidation-flow
     attrs:
       name: Sair do aplicativo
-      title: Você saiu de %(app)s
+      title: Você saiu do aplicativo
   - model: authentik_flows.flow
     identifiers:
       slug: default-request
