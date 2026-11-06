@@ -70,10 +70,6 @@ entries:
       name: default-user-settings-field-email
     attrs:
       required: false
-  - model: authentik_stages_prompt.prompt
-    state: absent
-    identifiers:
-      name: foundry-user-settings-avatar-seed
   - model: authentik_stages_prompt.promptstage
     identifiers:
       name: default-user-settings
