@@ -123,16 +123,7 @@ in {
   # Tenant footer settings aren't exposed by the Blueprint serializer.
   systemd.services.authentik-migrate.postStart = ''
     ${components.manage}/bin/manage.py shell <<'PY'
-    from datetime import timedelta
-
-    from django.utils.timezone import now
-
-    from authentik.policies.reputation.models import Reputation
     from authentik.tenants.utils import get_current_tenant
-
-    # Existing scores otherwise retain the old, longer expiry after this rollout.
-    expiry = now() + timedelta(seconds=900)
-    Reputation.objects.filter(expires__gt=expiry).update(expires=expiry)
 
     tenant = get_current_tenant()
     home = {"name": "Voltar ao início", "href": "https://auth.m7.rs/"}

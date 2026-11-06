@@ -39,9 +39,10 @@ for path in blueprints.rglob("*.yaml"):
         defaults={"path": str(path.relative_to(blueprints))},
     )
 
-for filename in ("password-guessing.yaml", "password-guessing.yaml"):
-    importer = Importer.from_string((blueprints / filename).read_text())
-    assert importer.apply(), f"Blueprint import failed: {filename}"
+for _ in range(2):
+    for filename in ("recovery.yaml", "password-guessing.yaml"):
+        importer = Importer.from_string((blueprints / filename).read_text())
+        assert importer.apply(), f"Blueprint import failed: {filename}"
 
 
 class PasswordGuessingTests(unittest.TestCase):
@@ -166,6 +167,22 @@ class PasswordGuessingTests(unittest.TestCase):
         flow = Flow.objects.get(slug="foundry-provider-authorization-email-required")
         plan = FlowPlanner(flow).plan(request)
         self.assertIsNone(plan.next(request))
+
+    def test_recovery_import_is_idempotent_and_mfa_precedes_password_write(self):
+        bindings = FlowStageBinding.objects.filter(
+            target__slug="default-recovery-flow"
+        ).order_by("order")
+        self.assertEqual(
+            list(bindings.values_list("order", "stage__name")),
+            [
+                (10, "default-recovery-identification"),
+                (20, "default-recovery-email"),
+                (25, "default-authentication-mfa-validation"),
+                (30, "default-password-change-prompt"),
+                (40, "default-password-change-write"),
+                (100, "default-authentication-login"),
+            ],
+        )
 
     def test_import_is_idempotent_and_all_gates_are_dynamic(self):
         bindings = FlowStageBinding.objects.filter(

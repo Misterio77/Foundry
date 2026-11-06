@@ -97,20 +97,6 @@ entries:
       policy_engine_mode: any
       invalid_response_action: retry
 
-  # Deleting the obsolete redirect also removes its flow binding.
-  - model: authentik_stages_redirect.redirectstage
-    state: absent
-    identifiers:
-      name: foundry-recovery-login
-
-  # Order is part of the identifier; remove the old binding on existing installs.
-  - model: authentik_flows.flowstagebinding
-    state: absent
-    identifiers:
-      target: !KeyOf recovery
-      stage: !Find [authentik_stages_authenticator_validate.authenticatorvalidatestage, [name, default-authentication-mfa-validation]]
-      order: 90
-
   # Prove enrolled MFA before even prompting for a replacement password.
   - model: authentik_flows.flowstagebinding
     identifiers:
