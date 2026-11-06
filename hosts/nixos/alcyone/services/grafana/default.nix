@@ -1,6 +1,5 @@
 {
   config,
-  outputs,
   pkgs,
   ...
 }: {
@@ -56,7 +55,7 @@
           allow_assign_grafana_admin = false;
         };
         "auth.anonymous" = {
-          enabled = true;
+          enabled = false;
         };
         smtp = rec {
           enabled = true;
@@ -312,13 +311,6 @@
       in {
         forceSSL = true;
         enableACME = true;
-        extraConfig = ''
-          allow 127.0.0.1;
-          allow ::1;
-          allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
-          allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
-          deny all;
-        '';
         locations."/" = {
           proxyPass = "http://localhost:${toString port}";
         };
