@@ -34,7 +34,7 @@ in {
           override_local_dns = true;
           base_domain = "ts.m7.rs";
           magic_dns = true;
-          nameservers.global = ["9.9.9.9"];
+          nameservers.global = ["9.9.9.9" "149.112.112.112"];
           extra_records_path = "/var/lib/headscale/extra-records.json";
         };
         server_url = "https://tailscale.m7.rs";
