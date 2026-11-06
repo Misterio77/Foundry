@@ -90,18 +90,6 @@ in {
   # https://github.com/goauthentik/authentik/issues/6798
   services.authentik = {
     enable = true;
-    authentikComponents =
-      ((inputs.authentik-nix.lib.mkAuthentikScope {inherit pkgs;}).overrideScope (
-        _: prev: {
-          authentikComponents =
-            prev.authentikComponents
-            // {
-              staticWorkdirDeps = prev.authentikComponents.staticWorkdirDeps.override {
-                patches = prev.patches ++ [./avatar-seed.patch];
-              };
-            };
-        }
-      )).authentikComponents;
     environmentFile = config.sops.templates.authentik-env.path;
     settings = {
       blueprints_dir = blueprints;
@@ -116,7 +104,7 @@ in {
         use_ssl = true;
         from = "Gablogin <auth@m7.rs>";
       };
-      avatars = "https://avatars.m7.rs/%(avatar_seed_hash)s.png,initials";
+      avatars = "https://avatars.m7.rs/%(username)s.png,initials";
       storage.file.path = "/var/lib/authentik/data";
       listen = {
         http = ["127.0.0.1:9000"];
