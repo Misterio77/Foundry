@@ -13,9 +13,9 @@ the Vultr API or change another domain's DNS.
 - SMTP ingress: 25 with STARTTLS; authenticated submission: 465 with TLS.
 - IMAP: 993 with TLS; DAV and JMAP: HTTPS.
 - Management `/api/`: loopback/tailnet only. The backend is loopback port 8080.
-- State: `/var/lib/stalwart`, persisted under `/persist`. No periodic snapshots
-  were requested; a mail-data backup/restore plan is still needed before relying
-  on this VM for durable mail.
+- State: `/var/lib/stalwart`, persisted under `/persist`. A one-off encrypted
+  off-host copy and isolated data-restore check now exist; recurring backups and
+  independent key recovery remain unfinished. No periodic snapshots were added.
 
 The fallback `admin` credential is an administrative/bootstrap escape hatch,
 not an end-user mail password. Do not put decrypted secrets in commands, logs,
@@ -217,9 +217,14 @@ validation mailbox were deleted. The guard's eight regression tests also run
 as part of its Nix build. These tests do not replace signing in as each actual
 owner with their chosen clients.
 
-Known canary issue: IMAP `HEADER Message-ID` searches returned no match for a
-message already present in INBOX; `SEARCH ALL` and body fetch/readback worked.
-Investigate header indexing/search before treating IMAP validation as exhaustive.
+Known canary issue, now diagnosed: 0.15.5's default empty email search-field set
+indexes other fields but skips headers. Explicitly selecting **all twelve email
+fields**, not just headers, and reindexing fixed Message-ID queries against an
+isolated snapshot copy, including bracketed and local-part fixture searches.
+The workaround is staged in `services/stalwart.nix` but **not activated**; rebuild
+existing indexes after deployment with authenticated loopback
+`GET /api/store/reindex/email/contato%40lumis.cards`. Production header search
+remains an acceptance item until then. See [the restore check](../tests/stalwart/README.md).
 
 Cutover checks additionally established:
 
@@ -234,18 +239,32 @@ Cutover checks additionally established:
   recipients were accepted on both, while unrelated external relay was rejected
   with 550. Gablogin discovery remained available after Alcyone's deployment.
 
+The subsequent AFK check verified public DNS, TLS/protocol exposure and ACLs,
+plus an isolated crash-consistent restore of the mail database. Fresh browser
+login/refresh/revocation was **not repeated**: the disposable identity/tokens were
+already removed, and obtaining new credentials required interaction. Previous
+real-token results above remain valid historical evidence, not a claim of a new
+owner-client sign-in. The reusable [public check](../tests/stalwart/README.md)
+delivers no mail by default.
+
 Outstanding follow-up, accepted as unfinished when authorizing the MX cutover:
 
-1. Test the actual owners' clients, investigate the IMAP header-search result,
+1. Test the actual owners' clients, activate/reindex the staged header fix,
    and validate oama/DAVx⁵ integration rather than assuming protocol success
    proves a particular client build works.
-2. Establish and test a durable mail backup/restore plan. Persistence on this VM
-   is not a backup, and no periodic snapshots were requested.
-3. Verify the operator's client/tailnet access. Alcyone reached Asterope's private
-   management endpoint; Atlas's peer map initially lacked the node. Do not
-   restart the operator's network while they are AFK.
+2. Finish durable mail backup/restore and independent key recovery. The one-off
+   encrypted copy and limited restore evidence are in [backups](backups.md);
+   there is no recurring Asterope backup or requested periodic snapshot schedule.
+3. Restore the operator's client/tailnet access when present. Atlas still lacked
+   Asterope in its peer map and reported itself offline; Asterope saw Atlas as
+   offline too. Direct tailnet probes timed out. No network restart/reauthentication
+   was attempted while AFK.
 4. Publish the configuration through the normal signed-commit/CI path when
    authorized; this cutover was deployed directly. Keep old SPF sources until
    old queues and forwarding have drained.
+
+The [Alcyone migration proposal](todo/alcyone-stalwart.md) recommends a separate,
+qualified 1.0 instance there, not copying this 0.15 compatibility deployment or
+switching the remaining domains now. Its lab package is not wired into a host.
 
 Do not push this change without explicit permission.

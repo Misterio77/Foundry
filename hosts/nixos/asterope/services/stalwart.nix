@@ -57,6 +57,7 @@
       "storage.lookup"
       "storage.fts"
       "storage.directory"
+      "storage.search-index.email.fields.*"
       "enterprise.license-key"
       "http.*"
       "cache.http-auth.*"
@@ -120,7 +121,24 @@
     # Public MX delivery must not pick up the tailnet's split DNS addresses.
     resolver.type = "cloudflare";
     queue.connection.default.source-ips = ["155.138.245.163" "2001:19f0:6401:cf2::1"];
-    storage.directory = "gablogin";
+    storage = {
+      directory = "gablogin";
+      # 0.15 skips headers with the default empty set; headers alone disables other fields.
+      search-index.email.fields = [
+        "email-from"
+        "email-to"
+        "email-cc"
+        "email-bcc"
+        "email-subject"
+        "email-body"
+        "email-attachment"
+        "email-received-at"
+        "email-sent-at"
+        "email-size"
+        "email-has-attachment"
+        "email-headers"
+      ];
+    };
     directory.gablogin = {
       type = "oidc";
       endpoint = {
