@@ -29,7 +29,14 @@ creation_rules:
       pgp:
       - *misterio
 
-  - path_regex: hosts/nixos/asterope/secrets.ya?ml$
+  - path_regex: hosts/nixos/asterope/oidc-secrets.ya?ml$
+    key_groups:
+    - age:
+      - *asterope
+      - *alcyone
+      pgp:
+      - *misterio
+  - path_regex: hosts/nixos/asterope/(.*-)?secrets.ya?ml$
     key_groups:
     - age:
       - *asterope
