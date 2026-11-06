@@ -96,7 +96,7 @@ entries:
       name: foundry-required-email-introduction
     attrs:
       field_key: email-introduction
-      label: ""
+      label: Instruções
       type: static
       required: false
       initial_value: Adicione seu e-mail para continuar.
