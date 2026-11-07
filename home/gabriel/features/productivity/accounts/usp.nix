@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   realName = "Gabriel Fontes";
@@ -46,6 +47,8 @@
   };
 
   oama = lib.getExe config.programs.oama.package;
+  flock = lib.getExe' pkgs.util-linux "flock";
+  accessTokenCommand = ''${flock} "$XDG_RUNTIME_DIR/oama-usp.lock" ${oama} access ${address}'';
 in {
   accounts = {
     email.accounts.usp = {
@@ -64,7 +67,7 @@ in {
 
       flavor = "gmail.com";
       userName = address;
-      passwordCommand = "${oama} access ${address}";
+      passwordCommand = accessTokenCommand;
 
       mbsync = {
         enable = true;
@@ -109,7 +112,7 @@ in {
         enable = true;
         metadata = ["color" "displayname"];
         collections = ["from a" "from b"];
-        tokenCommand = [oama "access" address];
+        tokenCommand = [pkgs.runtimeShell "-c" accessTokenCommand];
       };
     };
   };

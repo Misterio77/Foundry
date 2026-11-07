@@ -79,8 +79,11 @@ For a fresh installation or a client that needs authorization:
 
    Sign in as `gabriel`. The callback is `http://127.0.0.1:8765/callback`.
    The client requests `openid profile offline_access urn:ietf:params:oauth:scope:mail ak_proxy`.
-   Mail sync, submission and both DAV syncs call `oama access` directly, without
-   a cross-process lock. Restart aerc after switching accounts.
+   Mail sync, submission and both DAV syncs serialize `oama access` with the same
+   `$XDG_RUNTIME_DIR/oama-personal.lock`. This prevents parallel clients from
+   racing a rotating refresh token. USP and MGC likewise share locks between mail
+   and calendar, using `oama-usp.lock` and `oama-mgc.lock` in the same directory;
+   unrelated accounts do not block each other. Restart aerc after switching accounts.
 3. Other DAV clients may continue using `https://dav.m7.rs`, username `gabriel`,
    and a dedicated app password. Prefer a separate app password per device.
    The personal vdirsyncer accounts no longer read `dav.m7.rs/hi@m7.rs` from pass.

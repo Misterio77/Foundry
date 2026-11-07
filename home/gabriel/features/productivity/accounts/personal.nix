@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   realName = "Gabriel Fontes";
@@ -10,6 +11,8 @@
   davHost = "dav.m7.rs";
 
   oama = lib.getExe config.programs.oama.package;
+  flock = lib.getExe' pkgs.util-linux "flock";
+  accessTokenCommand = ''${flock} "$XDG_RUNTIME_DIR/oama-personal.lock" ${oama} access ${address}'';
 in {
   programs.oama.settings.services.gablogin = {
     client_id = "personal-mail";
@@ -34,7 +37,7 @@ in {
       };
 
       userName = address;
-      passwordCommand = "${oama} access ${address}";
+      passwordCommand = accessTokenCommand;
       imap.host = mailHost;
       smtp.host = mailHost;
 
@@ -80,7 +83,7 @@ in {
       vdirsyncer = {
         enable = true;
         collections = ["Main"];
-        tokenCommand = [oama "access" address];
+        tokenCommand = [pkgs.runtimeShell "-c" accessTokenCommand];
       };
     };
 
@@ -98,7 +101,7 @@ in {
       vdirsyncer = {
         enable = true;
         metadata = ["color" "displayname"];
-        tokenCommand = [oama "access" address];
+        tokenCommand = [pkgs.runtimeShell "-c" accessTokenCommand];
         collections = [
           "Personal"
           "ideas"

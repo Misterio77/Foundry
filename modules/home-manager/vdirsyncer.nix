@@ -28,7 +28,7 @@
 
   vdirsyncerAccounts = vdirsyncerCalendarAccounts // vdirsyncerContactAccounts;
 
-  wrap = s: ''"${s}"'';
+  wrap = builtins.toJSON;
 
   listString = l: "[${concatStringsSep ", " l}]";
 
