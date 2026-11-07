@@ -75,7 +75,7 @@ in {
       unitConfig.ConditionPathIsMountPoint = "/srv/media";
       serviceConfig.UMask = lib.mkForce "0027";
       preStart = lib.mkAfter ''
-        ${pkgs.python3}/bin/python3 ${./prepare.py} ${lib.escapeShellArgs [jf.dataDir jf.configDir "${./login.html}" "${./login.css}"]}
+        ${pkgs.python3}/bin/python3 ${./prepare.py} ${lib.escapeShellArgs [jf.dataDir jf.configDir "${./login.html}" "${./custom.css}"]}
         install -d -m 750 ${lib.escapeShellArg pluginDir} ${lib.escapeShellArg "${jf.dataDir}/plugins/configurations"}
         install -m 640 ${pkgs.jellyfin-oidc}/*.dll ${pkgs.jellyfin-oidc}/meta.json ${lib.escapeShellArg pluginDir}/
         install -m 640 ${pluginConfig} ${lib.escapeShellArg "${jf.dataDir}/plugins/configurations/Jellyfin.Plugin.OIDC.xml"}

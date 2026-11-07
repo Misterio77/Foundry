@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-def update_branding(config_dir, login_html, login_css):
+def update_branding(config_dir, login_html, custom_css):
     branding = config_dir / "branding.xml"
     tree = (
         ET.parse(branding)
@@ -13,7 +13,7 @@ def update_branding(config_dir, login_html, login_css):
     )
     blocks = {
         "LoginDisclaimer": login_html.read_text().strip(),
-        "CustomCss": login_css.read_text().strip(),
+        "CustomCss": custom_css.read_text().strip(),
     }
     changed = False
     for tag, block in blocks.items():
@@ -45,9 +45,9 @@ def main():
     parser.add_argument("data_dir", type=Path)
     parser.add_argument("config_dir", type=Path)
     parser.add_argument("login_html", type=Path)
-    parser.add_argument("login_css", type=Path)
+    parser.add_argument("custom_css", type=Path)
     args = parser.parse_args()
-    update_branding(args.config_dir, args.login_html, args.login_css)
+    update_branding(args.config_dir, args.login_html, args.custom_css)
 
 
 if __name__ == "__main__":

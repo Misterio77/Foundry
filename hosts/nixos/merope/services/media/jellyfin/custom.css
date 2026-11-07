@@ -18,3 +18,9 @@
 #loginPage .visualLoginForm,
 #loginPage .btnManual,
 #loginPage .readOnlyContent .btnForgotPassword { display: none; }
+
+/* Passwords and avatars are managed by the identity provider. */
+#userProfilePage .passwordSection,
+#userProfilePage #uploadImage,
+#userProfilePage #btnAddImage,
+#userProfilePage #btnDeleteImage { display: none !important; }
