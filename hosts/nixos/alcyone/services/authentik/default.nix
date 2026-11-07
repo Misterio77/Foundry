@@ -14,6 +14,7 @@
     grafana = "sha256-jzKJcHPuk1lKsjOUgu8hyjdnBEBV2oniuvkGbSVZLfc=";
     immich = "sha256-pdSkOJnmP/x+lyRgNPf2PN/cQQqoA8VxPVRSkGAcTYk=";
     jellyfin = "sha256-f1PPCD27MRnsjFrL2AScUDMidhfkYVQPcFkawQkSQwY=";
+    radicale = "sha256-gFC+Re6xo/zoCV2Ax0DWBVwm48tZ0QWIum/TOSz41Nc=";
     seerr = "sha256-sS5d/WQdlhz7aDYNoz/iiHO5Xqm2TCMjPVuHo3y/pMQ=";
   };
   branding = pkgs.linkFarm "authentik-branding" (

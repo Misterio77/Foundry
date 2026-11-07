@@ -138,6 +138,7 @@ entries:
     attrs:
       name: Calendars and contacts
       provider: !KeyOf dav-provider
+      icon: https://auth.m7.rs/branding/radicale.svg
       meta_launch_url: https://dav.m7.rs/.web/
       policy_engine_mode: all
 
