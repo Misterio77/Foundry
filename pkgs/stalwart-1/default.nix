@@ -4,7 +4,7 @@
   fetchurl,
 }:
 stdenvNoCC.mkDerivation rec {
-  pname = "stalwart-lab";
+  pname = "stalwart";
   version = "1.0.3";
 
   src = fetchurl {
@@ -23,7 +23,7 @@ stdenvNoCC.mkDerivation rec {
   '';
 
   meta = {
-    description = "Pinned upstream Stalwart binary for isolated migration experiments only";
+    description = "Stalwart 1.0 collaboration and mail server";
     homepage = "https://github.com/stalwartlabs/stalwart";
     license = lib.licenses.agpl3Only;
     platforms = ["x86_64-linux"];
