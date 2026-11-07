@@ -16,14 +16,7 @@
       "m7.rs"
       "misterio.me"
       "gsfontes.com"
-      "lumis.cards"
     ];
-    forwards = {
-      "contato@lumis.cards" = [
-        "gabriel@gsfontes.com"
-        "offrakki@gmail.com"
-      ];
-    };
     storage = {
       directoryLayout = "fs";
       path = "/srv/mail/vmail";
@@ -60,9 +53,6 @@
         sendOnly = true;
         passwordFile = config.sops.secrets.calibre-mail-password.path;
       };
-      "contato@lumis.cards" = {
-        passwordFile = config.sops.secrets.lumis-mail-password.path;
-      };
     };
     mailboxes = {
       Archive = {
@@ -93,8 +83,6 @@
   networking.firewall.allowedTCPPorts = [25];
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [465 993]; # SMTP, IMAP (both SSL)
 
-  # Prefer ipv4 and use main ipv6 to avoid reverse DNS issues
-  # CHANGEME when switching hosts
   services.postfix.settings.main = {
     # Authentication is only available through the Tailscale-restricted submissions service.
     smtpd_sasl_auth_enable = lib.mkForce false;
@@ -110,7 +98,6 @@
     firefly-mail-password.sopsFile = ../secrets.yaml;
     media-mail-password.sopsFile = ../secrets.yaml;
     calibre-mail-password.sopsFile = ../secrets.yaml;
-    lumis-mail-password.sopsFile = ../secrets.yaml;
   };
 
   # IMAP/SMTP still need this certificate without a webmail application.
