@@ -1,18 +1,19 @@
 usage() {
   printf '%s\n' \
-    'Usage: jjw [name] [-c command | -C]' \
+    'Usage: jjw [name] [-c command | -C | -R]' \
     '' \
     'Open an interactive shell in a temporary jj workspace, then forget/remove it.' \
     'Names default to a random adjective-animal pair (e.g. quiet-otter).' \
     '' \
     '  -c, --command COMMAND  Run a shell command instead; forget/remove on exit' \
     '  -C, --create          Print the absolute workspace path and retain it' \
+    '  -R, --remove          Integrate and forget/remove a named workspace without prompting' \
     '  -h, --help             Show this help' \
     '' \
     'Names must match [a-z][a-z0-9-]*. Options may precede or follow the name.' \
-    '--create and --command are mutually exclusive.' \
+    '--create, --command, and --remove are mutually exclusive.' \
     'Without a terminal, use --create or --command; changes stay separate.' \
-    'Retained workspaces must be explicitly forgotten and their directories removed.'
+    'Use jjw NAME --remove to integrate and clean up a retained workspace.'
 }
 
 fail() {
@@ -30,15 +31,18 @@ while (($#)); do
       exit 0
       ;;
     -c | --command)
-      [[ "$mode" == shell ]] || fail '--command and --create may only be specified once and are mutually exclusive'
+      [[ "$mode" == shell ]] || fail '--command, --create, and --remove may only be specified once and are mutually exclusive'
       (($# >= 2)) || fail "$1 requires a command string"
       mode='command'
       command=$2
       shift 2
       ;;
-    -C | --create)
-      [[ "$mode" == shell ]] || fail '--command and --create may only be specified once and are mutually exclusive'
-      mode=create
+    -C | --create | -R | --remove)
+      [[ "$mode" == shell ]] || fail '--command, --create, and --remove may only be specified once and are mutually exclusive'
+      case "$1" in
+        -C | --create) mode=create ;;
+        -R | --remove) mode=remove ;;
+      esac
       shift
       ;;
     -*) fail "unknown option: $1" ;;
@@ -50,6 +54,10 @@ while (($#)); do
       ;;
   esac
 done
+
+if [[ "$mode" == remove && -z "$workspace_name" ]]; then
+  fail '--remove requires a workspace name'
+fi
 
 if [[ "$mode" == shell ]] && [[ ! -t 0 ]]; then
   fail 'opening a shell requires a terminal; use --command or --create'
@@ -66,7 +74,10 @@ name_taken() {
     $'\n'"$workspace_names"$'\n' == *$'\n'"$1"$'\n'* ]]
 }
 
-if [[ -n "$workspace_name" ]]; then
+if [[ "$mode" == remove ]]; then
+  workspace_path=$(jj -R "$root" workspace root --name "$workspace_name")
+  [[ "$workspace_path" != "$root" ]] || fail 'cannot remove the invoking workspace'
+elif [[ -n "$workspace_name" ]]; then
   ! name_taken "$workspace_name" || fail "workspace name or path already exists: $workspace_name"
 else
   adjectives=(bright calm clever copper cozy crisp daring gentle golden hazy jolly keen lively lucky mellow misty nimble quiet silver sleepy soft sunny swift wild)
@@ -79,26 +90,28 @@ else
   done
   ! name_taken "$workspace_name" || fail 'could not find an unused workspace name; specify one explicitly'
 fi
-workspace_path="$workspace_dir/$workspace_name"
-
-mkdir -p "$workspace_dir"
-jj -R "$root" workspace add "$workspace_path" --name "$workspace_name" >&2
-
-if [[ "$mode" == create ]]; then
-  printf '%s\n' "$workspace_path"
-  exit 0
-fi
-
-printf 'jjw: entering %s (%s)\n' "$workspace_name" "$workspace_path" >&2
 shell_status=0
-(
-  cd "$workspace_path/$relative_dir" || exit 1
-  if [[ "$mode" == command ]]; then
-    "${SHELL:-bash}" -c "$command"
-  else
-    "${SHELL:-bash}" -i
+if [[ "$mode" != remove ]]; then
+  workspace_path="$workspace_dir/$workspace_name"
+
+  mkdir -p "$workspace_dir"
+  jj -R "$root" workspace add "$workspace_path" --name "$workspace_name" >&2
+
+  if [[ "$mode" == create ]]; then
+    printf '%s\n' "$workspace_path"
+    exit 0
   fi
-) || shell_status=$?
+
+  printf 'jjw: entering %s (%s)\n' "$workspace_name" "$workspace_path" >&2
+  (
+    cd "$workspace_path/$relative_dir" || exit 1
+    if [[ "$mode" == command ]]; then
+      "${SHELL:-bash}" -c "$command"
+    else
+      "${SHELL:-bash}" -i
+    fi
+  ) || shell_status=$?
+fi
 
 # Snapshot the workspace, then account for concurrent changes to the invoking workspace.
 jj -R "$workspace_path" status >/dev/null
@@ -114,8 +127,9 @@ if [[ -n "$(jj -R "$workspace_path" diff --from "$base" --to @ --summary)" ]]; t
       -r 'heads(first_ancestors(@) & ~empty())' -T change_id
   )
   printf '\n' >&2
-  if [[ -t 0 ]] && read -r -p "Integrate changes into the invoking workspace? [y/N] " confirm &&
-    [[ "$confirm" =~ ^[Yy]$ ]]; then
+  if [[ "$mode" == remove ]] || { [[ -t 0 ]] &&
+    read -r -p "Integrate changes into the invoking workspace? [y/N] " confirm &&
+    [[ "$confirm" =~ ^[Yy]$ ]]; }; then
     jj -R "$root" rebase -s "$invoking_change" -d "$imported_change"
     result="integrated changes into the invoking workspace"
   else
