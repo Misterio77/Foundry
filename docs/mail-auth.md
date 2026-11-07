@@ -96,7 +96,7 @@ htpasswd file. No collections or mail storage paths change.
 
 ## Browser access and session termination
 
-The **Calendars and contacts** Gablogin dashboard tile launches
+The **Radicale** Gablogin dashboard tile launches
 `https://dav.m7.rs/.web/`. It remains tailnet-only. Radicale's built-in UI manages
 collections and imports/exports; it is not a full calendar/contact frontend.
 The native outpost handles the browser OAuth flow and proxy cookie through

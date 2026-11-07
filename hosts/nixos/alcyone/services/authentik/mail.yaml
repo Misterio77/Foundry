@@ -136,7 +136,7 @@ entries:
     identifiers:
       slug: personal-dav
     attrs:
-      name: Calendars and contacts
+      name: Radicale
       provider: !KeyOf dav-provider
       icon: https://auth.m7.rs/branding/radicale.svg
       meta_launch_url: https://dav.m7.rs/.web/
