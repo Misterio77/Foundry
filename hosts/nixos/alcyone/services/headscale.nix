@@ -36,7 +36,7 @@ in {
           override_local_dns = true;
           base_domain = "ts.m7.rs";
           magic_dns = true;
-          nameservers.global = ["9.9.9.9" "149.112.112.112"];
+          nameservers.global = ["1.1.1.1" "1.0.0.1"];
           extra_records_path = "/var/lib/headscale/extra-records.json";
         };
         server_url = "https://${controlDomain}";
