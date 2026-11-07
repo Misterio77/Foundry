@@ -61,8 +61,8 @@ htpasswd file. No collections or mail storage paths change.
 
    Sign in as `gabriel`. The callback is `http://127.0.0.1:8765/callback`.
    The client requests `openid offline_access urn:ietf:params:oauth:scope:mail`.
-   Mail sync and submission serialize `oama access` with the same per-user lock
-   to avoid refresh-token rotation races. Restart aerc after switching accounts.
+   Mail sync and submission call `oama access` directly. Restart aerc after
+   switching accounts.
 4. Verify a real IMAP sync, SMTP submission, and CalDAV/CardDAV discovery and sync.
    Keep existing collections; don't delete local sync state to change credentials.
    A brief sync outage is expected between server/client activation and credential

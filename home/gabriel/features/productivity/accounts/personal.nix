@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   realName = "Gabriel Fontes";
@@ -12,12 +11,6 @@
 
   pass = lib.getExe config.programs.password-store.package;
   oama = lib.getExe config.programs.oama.package;
-  tokenCommand = pkgs.writeShellScript "personal-mail-access-token" ''
-    umask 077
-    exec ${lib.getExe' pkgs.util-linux "flock"} --wait 60 \
-      "''${XDG_RUNTIME_DIR:-/run/user/$UID}/personal-mail-oama.lock" \
-      ${oama} access ${address}
-  '';
 in {
   programs.oama.settings.services.gablogin = {
     client_id = "personal-mail";
@@ -42,7 +35,7 @@ in {
       };
 
       userName = address;
-      passwordCommand = toString tokenCommand;
+      passwordCommand = "${oama} access ${address}";
       imap.host = mailHost;
       smtp.host = mailHost;
 
