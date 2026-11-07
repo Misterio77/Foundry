@@ -24,7 +24,20 @@ The shared OAuth client ID and application slug are both `mail-and-dav`, distinc
 from the mail-only `personal-mail` permission group.
 
 The public `mail-and-dav` OAuth client uses authorization code + PKCE,
-a five-minute access token and a thirty-day refresh token. The mail scope mapping
+a five-minute access token and a thirty-day refresh token. Its application policies
+require both membership in either access group and an S256 challenge with the
+43-character base64url shape of a SHA-256 digest. Missing challenges, `plain` and
+malformed challenges are denied. The Blueprint replaces the old OR group bindings
+in place with two policies under `all`, so membership cannot bypass PKCE.
+Authentik's OAuth authorization view evaluates these policies without cached
+results; token exchange still verifies the supplied code verifier.
+
+This requirement applies to new authorizations, not existing access/refresh grants,
+and does not change the confidential Radicale proxy client's authentication.
+After deployment, verify both policy bindings applied before treating PKCE as
+enforced. Existing grants are not revoked by this configuration change.
+
+The mail scope mapping
 emits `mail_account = hi@m7.rs` and `mail_access = allowed` only for active group
 members. Dovecot checks these through Authentik's bearer-authenticated userinfo
 endpoint for each new OAuth authentication. Only this provider has that mapping.
@@ -143,6 +156,7 @@ For a fresh installation or a client that needs authorization:
    racing a rotating refresh token. USP and MGC likewise share locks between mail
    and calendar, using `oama-usp.lock` and `oama-mgc.lock` in the same directory;
    unrelated accounts do not block each other. Restart aerc after switching accounts.
+
 3. Other DAV clients use `https://dav.m7.rs/`, their own **Authentik username**,
    and a dedicated app password. Prefer a separate app password per device.
    OAuth-capable clients use the same public client ID and callback, requesting

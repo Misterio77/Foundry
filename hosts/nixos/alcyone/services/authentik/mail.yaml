@@ -107,6 +107,33 @@ entries:
         - !KeyOf mail-access
         - !KeyOf dav-identity
 
+  - model: authentik_policies_expression.expressionpolicy
+    id: mail-membership
+    identifiers:
+      name: foundry-mail-and-dav-membership
+    attrs:
+      expression: |
+        return (
+            ak_is_group_member(request.user, name="personal-mail")
+            or ak_is_group_member(request.user, name="dav-users")
+        )
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: mail-pkce
+    identifiers:
+      name: foundry-mail-and-dav-pkce
+    attrs:
+      expression: |
+        from re import fullmatch
+
+        challenge = request.context.get("oauth_code_challenge", "")
+        return (
+            request.context.get("oauth_grant_type") == "authorization_code"
+            and request.context.get("oauth_code_challenge_method") == "S256"
+            and isinstance(challenge, str)
+            and fullmatch(r"[A-Za-z0-9_-]{43}", challenge) is not None
+        )
+
   - model: authentik_core.application
     id: mail
     identifiers:
@@ -115,21 +142,26 @@ entries:
       name: Mail and DAV
       provider: !KeyOf mail-client
       meta_launch_url: blank://blank
-      policy_engine_mode: any
+      policy_engine_mode: all
 
+  # Replace the old OR group bindings in place; membership must not bypass PKCE.
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf mail
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, personal-mail]]
+      group: null
+      policy: !KeyOf mail-membership
+      failure_result: false
 
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf mail
       order: 1
     attrs:
-      group: !Find [authentik_core.group, [name, dav-users]]
+      group: null
+      policy: !KeyOf mail-pkce
+      failure_result: false
 
   - model: authentik_core.application
     id: dav
