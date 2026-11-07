@@ -85,7 +85,7 @@ entries:
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       client_type: public
-      client_id: personal-mail
+      client_id: mail-and-dav
       issuer_mode: per_provider
       jwt_federation_providers:
         - !KeyOf dav-provider
@@ -110,7 +110,7 @@ entries:
   - model: authentik_core.application
     id: mail
     identifiers:
-      slug: personal-mail
+      slug: mail-and-dav
     attrs:
       name: Mail and DAV
       provider: !KeyOf mail-client

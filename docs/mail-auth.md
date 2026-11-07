@@ -20,10 +20,10 @@ The **Mail and DAV** application admits members of either `personal-mail` or
 The blueprint creates the groups but does not assign membership. Add intended
 DAV users to `dav-users`; `gabriel` needs both groups to use both services.
 The DAV application slug is `radicale` and its proxy provider is named `Radicale`.
-The shared OAuth client ID/application slug `personal-mail` is retained for client
-compatibility, not as an authorization rule.
+The shared OAuth client ID and application slug are both `mail-and-dav`, distinct
+from the mail-only `personal-mail` permission group.
 
-The public `personal-mail` OAuth client uses authorization code + PKCE,
+The public `mail-and-dav` OAuth client uses authorization code + PKCE,
 a five-minute access token and a thirty-day refresh token. The mail scope mapping
 emits `mail_account = hi@m7.rs` and `mail_access = allowed` only for active group
 members. Dovecot checks these through Authentik's bearer-authenticated userinfo
@@ -149,6 +149,8 @@ For a fresh installation or a client that needs authorization:
    `openid profile offline_access ak_proxy` (plus the mail scope if wanted).
    Never substitute an account password or use another user's storage URL.
    The personal vdirsyncer accounts no longer read `dav.m7.rs/hi@m7.rs` from pass.
+   After a client-ID change, activate the updated configuration on every oama
+   host. Existing refresh grants work with the new ID; the old ID is rejected.
 
 Keep existing collections; don't delete local sync state to change credentials.
 A brief sync outage can occur between server/client activation and credential
@@ -218,3 +220,10 @@ policy bindings, client ID, mappings, federation and outpost assignments were
 preserved without duplicate objects. Existing browser cookies, fresh dashboard
 SSO, app-password Basic, native bearer authentication and the renamed OIDC
 discovery endpoint all passed after the rename.
+
+The shared OAuth provider (ID 28) and application were also renamed in place to
+client ID/slug `mail-and-dav`, retaining their IDs, policies and DAV federation.
+Real PKCE authorization and refresh passed with the new ID, including refreshing
+a grant issued before the rename. DAV-only grants still had no mailbox claims
+and discovered only their own DAV principal; the retired client ID was rejected.
+Disposable grants, app passwords and browser sessions were removed afterward.

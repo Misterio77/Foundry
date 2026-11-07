@@ -15,7 +15,7 @@
   accessTokenCommand = ''${flock} "$XDG_RUNTIME_DIR/oama-personal.lock" ${oama} access ${address}'';
 in {
   programs.oama.settings.services.gablogin = {
-    client_id = "personal-mail";
+    client_id = "mail-and-dav";
     auth_endpoint = "https://auth.m7.rs/application/o/authorize/";
     auth_http_method = "GET";
     token_endpoint = "https://auth.m7.rs/application/o/token/";

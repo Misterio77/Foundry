@@ -83,7 +83,7 @@
     oauth2 = {
       introspection_mode = "auth";
       introspection_url = "https://auth.m7.rs/application/o/userinfo/";
-      openid_configuration_url = "https://auth.m7.rs/application/o/personal-mail/.well-known/openid-configuration";
+      openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
       username_attribute = "mail_account";
       # Only the mail provider's scope mapping can emit this authorization marker.
       active_attribute = "mail_access";
