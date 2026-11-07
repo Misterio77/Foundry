@@ -1,6 +1,9 @@
 {config, ...}: let
   port = config.services.robohash.port;
 in {
+  # Keep transient DNS failures from triggering Authentik's eight-hour avatar failure cache.
+  networking.hosts."127.0.0.2" = ["avatars.m7.rs"];
+
   services.robohash.enable = true;
 
   services.nginx = {
