@@ -62,10 +62,6 @@ in {
       sopsFile = ../../secrets.yaml;
       neededForUsers = true;
     };
-    brave_api_key = {
-      sopsFile = ../../../../common/secrets.yaml;
-      owner = "gabriel";
-    };
     kagi_session_token = {
       sopsFile = ../../../../common/secrets.yaml;
       owner = "gabriel";
