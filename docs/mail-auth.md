@@ -134,3 +134,23 @@ DAV read/write and cross-user isolation with both OAuth and app passwords, and
 revocation with and without an existing proxy cookie. Also confirm ports 465/993
 and DAV remain inaccessible outside the tailnet and SMTP 25 still lacks AUTH.
 Builds and mocked protocol tests do not establish those production results.
+
+### Deployed DAV verification
+
+On 2026-11-07, the deployed nginx/outpost/Radicale stack passed:
+
+- Authorization code + PKCE and refresh through the shared public OAuth client
+  for a DAV-only user.
+- Principal discovery, calendar/address-book creation, event/contact writes and
+  reads for two distinct users under both bearer tokens and app-password Basic.
+  The second user's bearer token came from the native proxy's OAuth grant.
+- Cross-method access to the same user's collections, with cross-user reads,
+  writes, discovery and forged identity headers denied. Neither test identity
+  could access `gabriel`'s existing namespace.
+- Access-token and app-password revocation after waiting 65 seconds for the
+  header cache. Forged cookies did not restore access; independent credentials
+  and the other user continued working. No DAV response exposed Set-Cookie.
+
+Disposable collections, credentials and the second account were removed, and
+`test`'s original membership was restored. Existing user collections were not
+modified. This does not complete the broader mail/network/expiry checklist above.
