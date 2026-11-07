@@ -58,7 +58,7 @@ entries:
   - model: authentik_providers_proxy.proxyprovider
     id: dav-provider
     identifiers:
-      name: Calendars and contacts
+      name: Radicale
     attrs:
       authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
@@ -134,7 +134,7 @@ entries:
   - model: authentik_core.application
     id: dav
     identifiers:
-      slug: personal-dav
+      slug: radicale
     attrs:
       name: Radicale
       provider: !KeyOf dav-provider

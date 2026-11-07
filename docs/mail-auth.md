@@ -19,8 +19,9 @@ The **Mail and DAV** application admits members of either `personal-mail` or
 
 The blueprint creates the groups but does not assign membership. Add intended
 DAV users to `dav-users`; `gabriel` needs both groups to use both services.
-The OAuth client ID/application slug `personal-mail` and DAV application slug
-`personal-dav` are retained for compatibility, not as authorization rules.
+The DAV application slug is `radicale` and its proxy provider is named `Radicale`.
+The shared OAuth client ID/application slug `personal-mail` is retained for client
+compatibility, not as an authorization rule.
 
 The public `personal-mail` OAuth client uses authorization code + PKCE,
 a five-minute access token and a thirty-day refresh token. The mail scope mapping
@@ -62,7 +63,7 @@ Authentik's native introspection also accepts refresh tokens; clients must send
 only `oama access` output, never refresh tokens.
 
 For other DAV clients, Basic authentication still uses Authentik's embedded proxy
-outpost and the `personal-dav` application. Supply the **Authentik username and
+outpost and the `radicale` application. Supply the **Authentik username and
 app password**, not the account password, on each request. App-password revocation
 is also subject to the 60-second header cache, not a browser session. The proxy
 provider issues five-minute tokens independently of the one-year ceiling on
@@ -210,3 +211,10 @@ Disposable collections, credentials, peer account and browser sessions were
 removed; `test`'s original group membership was restored. The dashboard launch
 URL also needed a one-time live API update because deployment alone had not
 updated that existing application; its final value is declared in the blueprint.
+
+The application slug and proxy-provider name were subsequently renamed in place
+on the same date to `radicale` and `Radicale`. Application UUID, provider ID 29,
+policy bindings, client ID, mappings, federation and outpost assignments were
+preserved without duplicate objects. Existing browser cookies, fresh dashboard
+SSO, app-password Basic, native bearer authentication and the renamed OIDC
+discovery endpoint all passed after the rename.
