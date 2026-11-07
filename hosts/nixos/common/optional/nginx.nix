@@ -6,6 +6,8 @@
 }: let
   inherit (config.networking) hostName;
 in {
+  imports = [./nginx-unavailable.nix];
+
   sops.secrets.metrics-client-ca = {
     sopsFile = ../secrets.yaml;
     owner = config.services.nginx.user;

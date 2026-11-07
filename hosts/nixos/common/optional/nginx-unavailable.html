@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Temporarily unavailable</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --backdrop: #131313;
+        --surface: #ffffff;
+        --text: #151515;
+        --muted: #5f6368;
+        --star: #7c4996;
+        --rule: #e2e2e2;
+        --button: #0066cc;
+        --button-hover: #004b95;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --backdrop: #1b1d21;
+          --surface: #1b1d21;
+          --text: #e2e2e2;
+          --muted: #b8bbbe;
+          --star: #e8b3ff;
+          --rule: #3c3f42;
+          --button-hover: #005bb8;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100svh;
+        padding: 4rem 1.5rem 2rem;
+        background: var(--backdrop);
+        color: var(--text);
+        font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: 100%;
+        max-width: 35rem;
+        margin: 0 auto;
+        padding: 3rem;
+        background: var(--surface);
+        box-shadow: 0 2px 8px #0006;
+      }
+      .service {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        margin-bottom: 3rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+      .service svg {
+        flex: 0 0 2rem;
+        width: 2rem;
+        height: 2rem;
+        color: var(--star);
+      }
+      #service { overflow-wrap: anywhere; }
+      h1 {
+        margin: 0 0 1rem;
+        font-size: 1.75rem;
+        line-height: 1.25;
+        font-weight: 400;
+      }
+      p { margin: 0; }
+      .description { color: var(--muted); }
+      .recovery {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin: 2rem 0;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--rule);
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      .spinner {
+        flex: 0 0 1.25rem;
+        width: 1.25rem;
+        height: 1.25rem;
+        border: 2px solid var(--rule);
+        border-top-color: var(--star);
+        border-radius: 50%;
+        animation: waiting 1.2s linear infinite;
+      }
+      #retry {
+        display: block;
+        padding: 0.55rem 1rem;
+        border-radius: 3px;
+        background: var(--button);
+        color: #ffffff;
+        text-align: center;
+        text-decoration: none;
+      }
+      #retry:hover { background: var(--button-hover); }
+      #retry:focus-visible {
+        outline: 2px solid var(--star);
+        outline-offset: 4px;
+      }
+      footer {
+        margin: 1.75rem auto 0;
+        color: #d2d2d2;
+        font-size: 0.875rem;
+        text-align: center;
+      }
+      @keyframes waiting { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner { animation: none; }
+      }
+      @media (max-width: 37rem) {
+        body { padding: 2rem 1rem; }
+        main { padding: 2rem 1.5rem; }
+        .service { font-size: 1.25rem; margin-bottom: 2rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="service">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path fill="currentColor" d="M16 1 21 11 31 16 21 21 16 31 11 21 1 16 11 11Z"/>
+        </svg>
+        <span id="service">Service unavailable</span>
+      </div>
+      <h1>We’ll be right back</h1>
+      <p class="description">This service is temporarily unavailable. It may be restarting or finishing an update.</p>
+      <div class="recovery">
+        <span class="spinner" aria-hidden="true" hidden></span>
+        <p id="recovery-status" role="status">Please wait a moment, then try again.</p>
+      </div>
+      <a href="" id="retry">Try again</a>
+    </main>
+    <footer>Please try again shortly.</footer>
+    <script>
+      (() => {
+        const status = document.getElementById("recovery-status");
+        const url = window.location.href;
+        document.getElementById("service").textContent = window.location.hostname;
+        document.getElementById("retry").href = url;
+        if (!window.fetch || !window.AbortController) return;
+        document.querySelector(".spinner").hidden = false;
+        document.querySelector("footer").textContent = "No need to refresh. This page will reconnect automatically.";
+        status.textContent = "Waiting for the service. Checking every 10 seconds…";
+
+        async function check() {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          try {
+            // HEAD avoids downloading the app or replaying a failed form submission.
+            const response = await fetch(url, {
+              method: "HEAD",
+              cache: "no-store",
+              redirect: "manual",
+              signal: controller.signal,
+            });
+            // Auth redirects and 4xx responses also mean the backend is answering.
+            if (response.type === "opaqueredirect" || (response.status >= 200 && response.status < 500)) {
+              status.textContent = "Back online. Taking you back…";
+              window.location.replace(url);
+              return;
+            }
+          } catch (_) {
+            // A reboot can take nginx offline too; keep waiting through network errors.
+          } finally {
+            clearTimeout(timeout);
+          }
+          setTimeout(check, 10000);
+        }
+        setTimeout(check, 10000);
+      })();
+    </script>
+  </body>
+</html>
