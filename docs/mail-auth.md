@@ -87,10 +87,10 @@ from the outpost's response, passes it as `X-Remote-User` to loopback-only Radic
 and strips Authorization and cookies before proxying to Radicale. Radicale
 explicitly uses `owner_only` rights.
 Client-supplied identity headers cannot select a user; an empty/missing trusted
-principal cannot access collections. Unauthenticated HTML GET/HEAD navigation can
-redirect to browser SSO; DAV methods and non-HTML requests receive authentication
-challenges. On DAV resources, an explicit invalid Authorization header always
-receives 401, even with a valid browser cookie or HTML Accept header.
+principal cannot access collections. All unauthenticated requests receive
+Basic/Bearer authentication challenges, including HTML GET/HEAD navigation.
+Cookies are never forwarded to the outpost, so even a previously valid browser
+session cannot authenticate DAV requests or override invalid header credentials.
 
 New principals default to the user's immutable Authentik UUID, independent of
 username/email changes. An administrator may set the user attribute
@@ -108,28 +108,18 @@ The SNM password database is retained for service senders. The personal mailbox
 has a locked password marker and only accepts OAuth. Radicale no longer uses its
 htpasswd file. No collections or mail storage paths change.
 
-## Browser access and session termination
+## No browser UI or cookie authentication
 
-The **Radicale** Gablogin dashboard tile launches
-`https://dav.m7.rs/.web/`. It remains tailnet-only. Radicale's built-in UI manages
-collections and imports/exports; it is not a full calendar/contact frontend.
-The native outpost handles the browser OAuth flow and proxy cookie through
-`/outpost.goauthentik.io/`. Radicale's `prefer_browser_login` setting lets its
-initial principal-discovery request include that cookie without a second login.
+Radicale's web UI is disabled (`web.type = "none"`), and its Gablogin application
+has no dashboard launch URL. The DAV hostname does not expose the outpost's
+browser-login endpoints or forward browser cookies to its internal auth endpoint.
+Existing proxy-session cookies therefore no longer grant access after deployment.
+The embedded outpost and Radicale proxy provider remain necessary for OAuth bearer
+and app-password authentication, including the shared client's JWT federation.
 
-Browser sessions are independent credentials, not a side effect of app-password
-or bearer authentication. Revoking an app password/access token does not terminate
-an independently established browser session. Conversely, browser logout does
-not revoke independent app passwords or OAuth refresh tokens.
-
-Authentik browser logout and administrative session termination send a native
-websocket back-channel event to the embedded outpost. It deletes matching
-PostgreSQL-backed proxy sessions by `sid`; captured-cookie replay then fails
-without relying on the browser clearing its cookie. Other sessions and users are
-not terminated. Treat group membership, account status and principal changes as
-requiring explicit browser-session termination rather than assuming continuous
-policy re-evaluation. To remove every authentication path, terminate browser
-sessions and revoke access/refresh tokens and app passwords as appropriate.
+Manage collections and imports/exports with DAV clients. To remove a client's
+access, revoke its access/refresh tokens or app passwords as appropriate; header
+authentication remains subject to the outpost's 60-second cache.
 
 ## Provisioning and client setup
 
@@ -176,7 +166,10 @@ Verify a real IMAP sync, SMTP submission, and CalDAV/CardDAV discovery and sync.
 Live acceptance must cover DAV-only, mail-only and non-member users, wrong
 passwords/tokens, expired and revoked access tokens, refresh-token rotation,
 DAV read/write and cross-user isolation with both OAuth and app passwords, and
-revocation with and without an existing proxy cookie. Also confirm ports 465/993
+revocation with and without an existing proxy cookie. Confirm cookie-only requests
+receive 401 without redirects or Set-Cookie, including HTML navigation and retired
+outpost login URLs, and authenticated `/.web/` requests cannot serve the UI.
+Also confirm ports 465/993
 and DAV remain inaccessible outside the tailnet and SMTP 25 still lacks AUTH.
 Builds and mocked protocol tests do not establish those production results.
 
@@ -201,8 +194,9 @@ Disposable collections, credentials and the second account were removed, and
 `test`'s original membership was restored. Existing user collections were not
 modified. This does not complete the broader mail/network/expiry checklist above.
 
-### Deployed browser SSO verification
+### Historical browser SSO verification (before removal)
 
+These results describe the retired browser integration, not the current config.
 On 2026-11-07, after deploying browser SSO on the same `dav.m7.rs` hostname:
 
 - Two users in three independent browser sessions launched the actual Radicale
