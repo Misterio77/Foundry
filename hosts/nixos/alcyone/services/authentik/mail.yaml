@@ -210,7 +210,6 @@ entries:
     attrs:
       name: Radicale
       provider: !KeyOf dav-provider
-      icon: ""
       meta_launch_url: blank://blank
       policy_engine_mode: all
 
