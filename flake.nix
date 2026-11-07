@@ -174,13 +174,6 @@
           inherit inputs outputs;
         };
       };
-      # Lab (Vultr)
-      asterope = lib.nixosSystem {
-        modules = [./hosts/nixos/asterope];
-        specialArgs = {
-          inherit inputs outputs;
-        };
-      };
     };
 
     systemConfigs.electra = system-manager.lib.makeSystemConfig {

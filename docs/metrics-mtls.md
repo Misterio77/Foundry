@@ -4,8 +4,7 @@ HTTPS scrape jobs present a dedicated Prometheus client certificate. nginx reque
 client certificates optionally across all TLS vhosts via shared HTTP settings,
 then requires successful verification on metrics locations only. Normal application
 authentication, tailnet ACLs, and Let's Encrypt server certificates are unchanged.
-Plain HTTP host-exporter jobs still use the tailnet. Asterope's HTTP-only default vhost retains its existing
-IP ACL rather than pretending client certificates work over HTTP.
+Plain HTTP host-exporter jobs still use the tailnet.
 
 Metrics locations check `$ssl_client_verify` and return 403 unless it is `SUCCESS`.
 Vhosts with a server-level IP ACL retain it: their metrics require both tailnet

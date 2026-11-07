@@ -46,7 +46,6 @@
     cp ${./password-guessing.yaml} "$out/password-guessing.yaml"
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
-    cp ${./stalwart.yaml} "$out/stalwart.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
@@ -54,7 +53,6 @@ in {
   sops.secrets = {
     authentik-jellyfin-client-secret.sopsFile = ../../secrets.yaml;
     authentik-seerr-client-secret.sopsFile = ../../secrets.yaml;
-    authentik-stalwart-client-secret.sopsFile = ../../secrets.yaml;
     authentik-key.sopsFile = ../../secrets.yaml;
     authentik-immich-client-secret.sopsFile = ../../secrets.yaml;
     authentik-mail-password.sopsFile = ../../secrets.yaml;
@@ -72,7 +70,6 @@ in {
       AUTHENTIK_EMAIL__PASSWORD=${config.sops.placeholder.authentik-mail-password}
       AUTHENTIK_JELLYFIN_CLIENT_SECRET=${config.sops.placeholder.authentik-jellyfin-client-secret}
       AUTHENTIK_SEERR_CLIENT_SECRET=${config.sops.placeholder.authentik-seerr-client-secret}
-      AUTHENTIK_STALWART_CLIENT_SECRET=${config.sops.placeholder.authentik-stalwart-client-secret}
     '';
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };

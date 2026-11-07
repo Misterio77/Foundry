@@ -12,7 +12,6 @@ keys:
     - &maia age150kp4hx4qzfpcxayyfh8xcv8nf0uudppsknwgzgj724djqup2qvqz2gwj5
     - &pleione age1mhlh8lj8jv58xy9mdhsarfyanckyx8c2xdu09xrn23nrc56e94xserztxx
     - &mgc age1znn83s2w8s6manxmfj488kmrrmp49s2497qvz5kk25xajfyn7cfqk8meu5
-    - &asterope age1nyjvxk0kk46rgjl5u6acku282utzl3zkz9zu280w6xs6hm86p34svcdeht
 creation_rules:
   - path_regex: hosts/common/secrets.ya?ml$
     key_groups:
@@ -25,16 +24,9 @@ creation_rules:
       - *maia
       - *pleione
       - *mgc
-      - *asterope
       pgp:
       - *misterio
 
-  - path_regex: hosts/nixos/asterope/secrets.ya?ml$
-    key_groups:
-    - age:
-      - *asterope
-      pgp:
-      - *misterio
   - path_regex: hosts/nixos/taygeta/secrets.ya?ml$
     key_groups:
     - age:
@@ -70,6 +62,5 @@ creation_rules:
       - *taygeta
       - *maia
       - *pleione
-      - *asterope
       pgp:
       - *misterio

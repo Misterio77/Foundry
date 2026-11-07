@@ -45,29 +45,13 @@ Configuration inventory, not a current health report. Sources:
   records were present. Browser MFA, external clients and independently stored
   key recovery were **not tested**. The effective key came from production.
 
-### Asterope
-
-There is no recurring mail backup or periodic snapshot job. A one-off **0.15.5**
-data restore passed in isolation on 2026-11-07, reusing production credentials.
-Its GPG-encrypted archive and manifest remain on Atlas:
-
-```text
-~/.local/state/stalwart-backups/asterope-20261107T001312Z.tar.gpg
-```
-
-That archive predates the **1.0** migration: it does not cover current mail or the
-new datastore. Hardware-key decryption, independent credential recovery and a
-fresh-host restore remain unproven. See the [pilot guide](stalwart.md).
-
 ## Remaining work
 
 1. Back up Merope's irreplaceable state and Immich media/DB consistently; bulk
    movie/TV downloads can be excluded deliberately.
 2. Add an offsite copy and independently recoverable Borg key/passphrase,
    Authentik key and SOPS recovery material. Do not rely on host SSH keys alone.
-3. Agree Asterope mail RPO/RTO, destination, retention and key recovery, then
-   implement and prove its recurring backup; the one-off copy is not automation.
-4. Schedule full integrity checks, age alerts and isolated service restores.
+3. Schedule full integrity checks, age alerts and isolated service restores.
    A snapshot is not automatically an application-consistent database backup.
    Recheck Btrfs scrub results and the music backup rather than trusting old
    capacity/corruption observations or a green timer.

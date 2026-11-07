@@ -8,7 +8,6 @@
     ./features/productivity/accounts/personal.nix
     ./features/productivity/accounts/usp.nix
     ./features/productivity/accounts/mgc.nix
-    ./features/productivity/accounts/lumis.nix
     ./features/pass
     ./features/games
     ./features/games/shadps4.nix

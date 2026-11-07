@@ -1,7 +1,6 @@
 # Operations and proposals
 
 - [Authentik / Gablogin](authentik.md): access, application behavior and recovery.
-- [Stalwart pilot](stalwart.md): Asterope-only scope, 1.0 configuration, OAuth and remaining work.
 - [Backups](backups.md): declared coverage, restore evidence and gaps.
 - [Immich egress](todo/immich-egress.md): proposed lateral-movement containment.
 - [Atelier publishing](todo/atelier-publishing.md): unimplemented artifact boundary.
