@@ -33,7 +33,11 @@ entries:
       expression: |
         if not request.user.is_active or not ak_is_group_member(request.user, name="personal-mail"):
             return {}
-        return {"mail_account": "hi@m7.rs", "mail_access": "allowed"}
+        return {
+            "mail_account": "hi@m7.rs",
+            "mail_username": request.user.username,
+            "mail_access": "allowed",
+        }
 
   - model: authentik_providers_oauth2.scopemapping
     id: dav-identity
@@ -106,6 +110,43 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
         - !KeyOf mail-access
         - !KeyOf dav-identity
+
+  # Keep noninteractive app-password grants separate from the PKCE-only client.
+  - model: authentik_providers_oauth2.oauth2provider
+    id: mail-app-passwords-provider
+    identifiers:
+      name: Mail app passwords
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: public
+      client_id: mail-app-passwords
+      issuer_mode: per_provider
+      grant_types:
+        - password
+      redirect_uris: []
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      access_token_validity: minutes=5
+      property_mappings:
+        - !KeyOf mail-access
+
+  - model: authentik_core.application
+    id: mail-app-passwords
+    identifiers:
+      slug: mail-app-passwords
+    attrs:
+      name: Mail app passwords
+      provider: !KeyOf mail-app-passwords-provider
+      meta_launch_url: blank://blank
+      policy_engine_mode: all
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf mail-app-passwords
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, personal-mail]]
+      failure_result: false
 
   - model: authentik_policies_expression.expressionpolicy
     id: mail-membership

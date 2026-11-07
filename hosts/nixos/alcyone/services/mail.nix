@@ -4,7 +4,19 @@
   pkgs,
   inputs,
   ...
-}: {
+}: let
+  oauth2Settings = {
+    introspection_mode = "auth";
+    introspection_url = "https://auth.m7.rs/application/o/userinfo/";
+    openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
+    username_attribute = "mail_account";
+    # Only the mail providers' scope mapping can emit this authorization marker.
+    active_attribute = "mail_access";
+    active_value = "allowed";
+    force_introspection = true;
+    ssl_client_ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  };
+in {
   imports = [inputs.nixos-mailserver.nixosModules.mailserver];
 
   mailserver = rec {
@@ -29,7 +41,7 @@
     localDnsResolver = false;
     accounts = {
       "hi@m7.rs" = {
-        # SNM requires a password field; lock it so this mailbox is OAuth-only.
+        # Local passwords stay locked; Authentik handles OAuth and app passwords.
         hashedPassword = "!";
         aliases = map (d: "@" + d) domains;
       };
@@ -80,17 +92,27 @@
 
   services.dovecot2.settings = {
     auth_mechanisms = lib.mkAfter ["oauthbearer" "xoauth2"];
-    oauth2 = {
-      introspection_mode = "auth";
-      introspection_url = "https://auth.m7.rs/application/o/userinfo/";
-      openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
-      username_attribute = "mail_account";
-      # Only the mail provider's scope mapping can emit this authorization marker.
-      active_attribute = "mail_access";
-      active_value = "allowed";
-      force_introspection = true;
-      ssl_client_ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    # Authenticate the Authentik username, then select its authorized mailbox.
+    oauth2_fields.user = "%{oauth2:mail_account}";
+    "passdb oauth2" = {
+      driver = "oauth2";
+      mechanisms_filter = ["plain" "login"];
+      oauth2 =
+        oauth2Settings
+        // {
+          grant_url = "https://auth.m7.rs/application/o/token/";
+          client_id = "mail-app-passwords";
+          # Dovecot requires a nonempty secret even for public clients; Authentik ignores it.
+          client_secret = "unused";
+          scope = ["urn:ietf:params:oauth:scope:mail"];
+          # 2.4.5 checks active_attribute before introspection of password grants.
+          # Require the group-gated username claim instead (absent for unauthorized users).
+          active_attribute = "";
+          active_value = "";
+          username_attribute = "mail_username";
+        };
     };
+    oauth2 = oauth2Settings;
   };
 
   # Disable default open ports, we want to lock down SMTP and IMAP to tailscale.
