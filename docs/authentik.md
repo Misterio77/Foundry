@@ -11,7 +11,8 @@ Describes the checked-in configuration, not deployment status. Sources:
 
 - `auth.m7.rs` is public, including the admin UI; authentication, MFA and
   permissions protect administration, not a separate network ACL. Backend
-  listeners are loopback-only; metrics allow only loopback/tailnet clients.
+  listeners are loopback-only; HTTPS metrics require a dedicated client
+  certificate, not a tailnet source address. See [metrics mTLS](metrics-mtls.md).
 - MFA is optional; accounts with an enrolled WebAuthn **or TOTP** device must
   validate it. WebAuthn requires user verification but not hardware-key attestation.
   Sessions persist for 30 days. Branding/default locale is Gablogin/`pt-BR`;
@@ -34,9 +35,10 @@ Describes the checked-in configuration, not deployment status. Sources:
   writing a new password; successful recovery then creates a login session.
   Email uses `auth@m7.rs` through tailnet-restricted SMTP at `mail.m7.rs:465`.
 
-Application membership is shared; `admins` also grants ordinary access.
-Neither group grants Authentik administration. Roles below are OIDC claims,
-not Authentik RBAC roles or additional membership groups.
+Media and monitoring applications share membership; `admins` also grants ordinary
+access. Neither group grants Authentik administration. Roles below are OIDC claims,
+not Authentik RBAC roles or additional membership groups. Personal mail/DAV use the
+separate `personal-mail` group; see [mail authentication](mail-auth.md).
 
 | Group    | Jellyfin roles                      | Immich role | Grafana organization role |
 | -------- | ----------------------------------- | ----------- | ------------------------- |
@@ -45,30 +47,28 @@ not Authentik RBAC roles or additional membership groups.
 
 Each provider/client uses its own `jellyfin_roles`, `immich_roles` or
 `grafana_roles` scope. Membership is assigned manually, never by the Blueprint.
-On migration, populate the shared groups before deploying Alcyone, then Merope.
-Keep old `jellyfin-access` membership until Merope's client switches. Access
+When migrating an older installation, populate the shared groups before switching
+clients; retain old `jellyfin-access` membership until its client switches. Access
 bindings update in place by application/order; separately audit extra manual
 bindings. Old app-specific groups and removed LDAP/Calibre objects are not
 implicitly deleted from Authentik's database.
 
 ## Application behavior
 
-Avatars use Robohash kittens (`set4`) in Gablogin and the OIDC `picture` claim,
-without Gravatar lookups. The editable **Semente do avatar** profile field stores
-`attributes.avatar_seed`; its SHA-256 hash selects the kitten. Until customized,
-the seed defaults to the stable numeric account ID, not a name or email. Changing
-the seed rerolls the kitten; changing other profile fields does not. The seed is
-not a secret and only its hash is sent to Robohash. A small Authentik backend
-patch adds URL-escaped `%(avatar_seed)s` and SHA-256 `%(avatar_seed_hash)s`
-placeholders; the generator URL stays in Nix configuration. Avatar lookups cache
-by resolved URL so a seed change takes effect immediately. Local initials remain
-the outage fallback, but aren't shared over OIDC.
-A small Immich patch replaces the profile image on each OAuth login, including
-existing images, and deletes the old file after a successful replacement. A
-failed fetch or decode leaves the old image intact. Seerr also refreshes existing
-users' avatars from the picture claim, retaining the old avatar if it's absent.
-Rerolls reach Jellyfin, Immich and Seerr on their next OAuth login, not immediately
-in existing sessions. Grafana retains its independent Gravatar-based handling.
+Avatars use the self-hosted Robohash service at
+`https://avatars.m7.rs/%(username)s.png` in Gablogin and the OIDC `picture` claim.
+nginx fixes generation to kittens (`set4`), 200×200 pixels, disables remote
+Gravatar lookups and caches successful images. Usernames select the image; there
+is no editable avatar-seed field. Authentik caches avatar lookups by resolved URL;
+local initials remain its outage fallback, but aren't shared over OIDC.
+
+Immich replaces the profile image on each OAuth login, including existing images,
+and deletes the old file after a successful replacement. A failed fetch or decode
+leaves the old image intact. Jellyfin and Seerr also refresh existing users'
+avatars from the picture claim, retaining the old image if it's absent. Grafana's
+OIDC-picture patch stores a valid HTTPS picture URL on login and otherwise falls
+back to its existing Gravatar/default-image behavior. Picture changes reach these
+applications on the next OAuth login, not immediately in existing sessions.
 
 **Jellyfin:** admits either role, manages all-library access and admin status,
 allows audio transcoding and disables video transcoding for everyone. New
@@ -125,7 +125,7 @@ Browser/mobile access is public with native shared links; the separate public-sh
 proxy has been removed.
 
 **Grafana:** OAuth-only with strict role mapping and no email-based linking or
-server-admin assignment. Anonymous tailnet viewing remains enabled. State is
+server-admin assignment. Anonymous access is disabled. State is
 intentionally ephemeral; dashboards, data sources and alert rules are provisioned.
 
 **Seerr:** experimental native OIDC pinned to
@@ -157,10 +157,14 @@ requests to `/api/v1/auth/oidc/backchannel/authentik`. Seerr persists revocation
 markers and checks them on API requests and OIDC callbacks, correlating the
 verified issuer/client/subject and optional session ID. Existing sessions without
 this metadata need a fresh login (or explicit session clearing during rollout).
-Provider logout delivery still depends on an unexpired Authentik provider token;
-test both fresh and aged sessions. Email remains required.
+Provider logout delivery uses Authentik's recorded application logins rather than
+requiring an unexpired access token; test both fresh and aged sessions. Email
+remains required.
 
-### Seerr preview rollout
+### Initial Seerr provisioning and migration
+
+These steps apply to fresh installs or clients predating the OIDC/logout patches,
+not as a checklist of work still outstanding on every deployment.
 
 1. Generate a client secret locally (for example, `openssl rand -hex 32`). Add
    the **same** `authentik-seerr-client-secret` value using `sops` to both
@@ -190,9 +194,11 @@ sessions/API keys when immediate removal matters.
 Back-channel logout is configured for Jellyfin, Immich and Seerr, but is not a
 blanket revocation guarantee. With the pinned Authentik and application patches:
 
-- Authentik session deletion dispatches against unexpired access tokens;
-  Jellyfin's and Seerr's unrefreshed ten-minute tokens can age out of notification
-  delivery.
+- Authentik records application logins independently of access-token expiry
+  (upstream patches 26310 and 26565 also prevent unfinished flows from blocking
+  later logout). Migration backfills login records from retained access/refresh
+  tokens; it cannot reconstruct records whose tokens are already gone. Verify
+  aged sessions after upgrading rather than assuming migration coverage.
 - Jellyfin persists token-to-OIDC lineage and cascades delivered logout to Quick
   Connect descendants, preserving independent logins across restarts. Pre-lineage
   devices require explicit revocation and a fresh login; see the rollout above.
@@ -243,11 +249,14 @@ IdP. Runtime secrets come from SOPS; never put them in Nix/store files or docs.
 - Exercise current roles/demotions, native/mobile sign-in, logout and IdP outage;
   review capacity under sustained load. Audit Jellyfin plugin subject-validation,
   provider-scoping and logout limitations before widening use.
-- Mail/DAV device credentials are **not integrated**. Prototype OAuth against a
-  disposable mailbox; test IMAP, SMTP, refresh/revocation, existing connections,
-  mailbox paths and delivery during IdP failure before migrating real clients.
-  Separate DAV credentials from mail and revisit GPG-gated background sync without
-  breaking other accounts. Browser-session deletion does not revoke refresh
-  tokens; app-password labels do not impose per-application scopes.
+- Complete and record the [mail/DAV live acceptance checks](mail-auth.md#live-acceptance):
+  IMAP/SMTP, DAV read/write, refresh/revocation, existing connections and delivery
+  during IdP failure. OAuth is implemented and mail/DAV intentionally share one
+  grant. Browser-session deletion does not revoke refresh tokens; app-password
+  labels do not impose per-application scopes. Verify unattended oama/GPG behavior
+  without breaking the other accounts.
+- Track the authenticator-deletion API's missing fresh-authentication check
+  ([upstream issue 6798](https://github.com/goauthentik/authentik/issues/6798));
+  the sensitive-change flows do not close that separate API path.
 - Choose phone notifications for new authorizations, MFA/recovery and admin
   changes. No phone-push transport or custom event rules are declared.

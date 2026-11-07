@@ -55,11 +55,12 @@ initial enforcement and restart them after the policy is active.
 
 ### OIDC and HTTPS caveats
 
-`auth.m7.rs` may resolve to Alcyone's tailnet addresses because Headscale currently
-includes it in the generated private DNS records (its metrics locations are
-restricted). Verify the deployed resolution from Merope before selecting allowed
-addresses. Keep IPv4 and IPv6 destination sets current with atomic updates;
-retain TLS certificate validation and the public issuer URL.
+Verify the deployed resolution of `auth.m7.rs` from Merope before selecting allowed
+addresses. Headscale generates private DNS records from tailnet IP allowlists;
+Authentik's metrics now use client-certificate authentication instead and do not
+cause a private DNS override. Do not assume a tailnet address, including during
+migration from older DNS records. Keep IPv4 and IPv6 destination sets current with
+atomic updates; retain TLS certificate validation and the public issuer URL.
 
 An IP/port exception for Alcyone:443 also permits reaching its other nginx
 virtual hosts, including tailnet-only ones. UID filtering cannot distinguish

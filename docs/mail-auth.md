@@ -10,8 +10,9 @@ SMTP 25 does not offer authentication.
 
 Only members of Authentik's `personal-mail` group may access the new applications.
 Membership grants the existing `hi@m7.rs` mailbox and DAV principal; it does not
-use the user's editable profile email. Add `gabriel` to this group after the
-`Foundry - personal mail and DAV` blueprint applies. The group starts empty.
+use the user's editable profile email. The blueprint does not assign membership;
+on a fresh installation, add `gabriel` after `Foundry - personal mail and DAV`
+applies.
 
 For mail, the public `personal-mail` OAuth client uses authorization code + PKCE,
 a five-minute access token and a thirty-day refresh token. The mail scope mapping
@@ -63,10 +64,12 @@ The SNM password database is retained for service senders. The personal mailbox
 has a locked password marker and only accepts OAuth. Radicale no longer uses its
 htpasswd file. No collections or mail storage paths change.
 
-## Rollout
+## Provisioning and client setup
 
-1. Deploy Alcyone, wait for the Authentik blueprint to apply, and add `gabriel` to
-   `personal-mail`. Confirm the embedded outpost has the DAV provider assigned.
+For a fresh installation or a client that needs authorization:
+
+1. Deploy Alcyone and wait for the Authentik blueprint to apply. Confirm `gabriel`
+   belongs to `personal-mail` and the embedded outpost has the DAV provider assigned.
 2. Activate the updated Home Manager configuration on Atlas/Maia and authorize
    (or reauthorize existing mail credentials to grant the proxy scopes):
 
@@ -81,11 +84,14 @@ htpasswd file. No collections or mail storage paths change.
 3. Other DAV clients may continue using `https://dav.m7.rs`, username `gabriel`,
    and a dedicated app password. Prefer a separate app password per device.
    The personal vdirsyncer accounts no longer read `dav.m7.rs/hi@m7.rs` from pass.
-4. Verify a real IMAP sync, SMTP submission, and CalDAV/CardDAV discovery and sync.
-   Keep existing collections; don't delete local sync state to change credentials.
-   A brief sync outage is expected between server/client activation and credential
-   setup. Mail delivery itself does not depend on interactive OAuth login.
 
+Keep existing collections; don't delete local sync state to change credentials.
+A brief sync outage can occur between server/client activation and credential
+setup. Mail delivery itself does not depend on interactive OAuth login.
+
+## Live acceptance
+
+Verify a real IMAP sync, SMTP submission, and CalDAV/CardDAV discovery and sync.
 Live acceptance must cover allowed and non-member users, wrong passwords/tokens,
 expired and revoked access tokens, refresh-token rotation, DAV read/write, and
 revocation with and without an existing proxy cookie. Also confirm ports 465/993
