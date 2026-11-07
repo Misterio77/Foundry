@@ -12,6 +12,8 @@ entries:
       name: personal-mail
     attrs:
       is_superuser: false
+      attributes:
+        goauthentik.io/user/token-maximum-lifetime: days=365
 
   - model: authentik_providers_oauth2.scopemapping
     id: mail-access

@@ -32,6 +32,10 @@ to clients to reduce repeated authentication work. Existing proxy sessions can
 outlive the credential that created them; don't assume app-password deletion
 immediately invalidates every session.
 
+The `personal-mail` group permits app-password lifetimes up to 365 days; choose
+an expiry explicitly when creating one. This ceiling covers all app passwords
+created by group members, not just DAV, and does not extend existing credentials.
+
 The existing SNM password database is retained for service senders and rollback,
 including the old personal mail password for now. Radicale no longer uses its
 htpasswd file. No collections or mail storage paths change.
