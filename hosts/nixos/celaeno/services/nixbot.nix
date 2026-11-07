@@ -51,6 +51,14 @@ in {
     allowUnauthenticatedControl = true;
   };
 
+  services.nginx.virtualHosts."ci.m7.rs".locations."= /metrics" = {
+    proxyPass = config.services.nginx.virtualHosts."ci.m7.rs".locations."/".proxyPass;
+    extraConfig = ''
+      if ($ssl_client_verify != SUCCESS) {
+        return 403;
+      }
+    '';
+  };
   services.nginx.virtualHosts."ci.m7.rs".extraConfig = ''
     allow 127.0.0.1;
     allow ::1;

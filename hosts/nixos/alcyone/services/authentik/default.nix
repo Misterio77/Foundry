@@ -5,13 +5,6 @@
   ...
 }: let
   components = config.services.authentik.authentikComponents;
-  metricsAccess = ''
-    allow 127.0.0.1;
-    allow ::1;
-    allow ${config.services.headscale.settings.prefixes.v4};
-    allow ${config.services.headscale.settings.prefixes.v6};
-    deny all;
-  '';
   # Blueprint retrieval rejects symlinks resolving outside blueprints_dir.
   blueprints = pkgs.runCommand "authentik-blueprints" {} ''
     cp -rL ${components.staticWorkdirDeps}/blueprints "$out"
@@ -131,11 +124,19 @@ in {
     locations."/branding/".alias = "${./branding}/";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
-      extraConfig = metricsAccess;
+      extraConfig = ''
+        if ($ssl_client_verify != SUCCESS) {
+          return 403;
+        }
+      '';
     };
     locations."= /metrics/worker" = {
       proxyPass = "http://127.0.0.1:9301/metrics";
-      extraConfig = metricsAccess;
+      extraConfig = ''
+        if ($ssl_client_verify != SUCCESS) {
+          return 403;
+        }
+      '';
     };
     locations."/" = {
       proxyPass = "http://127.0.0.1:9000";

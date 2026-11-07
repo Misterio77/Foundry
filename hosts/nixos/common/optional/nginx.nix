@@ -6,6 +6,11 @@
 }: let
   inherit (config.networking) hostName;
 in {
+  sops.secrets.metrics-client-ca = {
+    sopsFile = ../secrets.yaml;
+    restartUnits = ["nginx.service"];
+  };
+
   services = {
     nginx = {
       enable = true;
@@ -15,19 +20,30 @@ in {
       recommendedOptimisation = true;
       clientMaxBodySize = "300m";
 
+      appendHttpConfig = ''
+        ssl_client_certificate ${config.sops.secrets.metrics-client-ca.path};
+        ssl_verify_client optional;
+      '';
       virtualHosts."${hostName}.m7.rs" = {
         default = true;
         forceSSL = true;
         enableACME = true;
         locations."/metrics" = {
           proxyPass = "http://localhost:${toString config.services.prometheus.exporters.nginxlog.port}";
-          extraConfig = ''
-            allow 127.0.0.1;
-            allow ::1;
-            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
-            allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
-            deny all;
-          '';
+          extraConfig =
+            if config.services.nginx.virtualHosts."${hostName}.m7.rs".forceSSL
+            then ''
+              if ($ssl_client_verify != SUCCESS) {
+                return 403;
+              }
+            ''
+            else ''
+              allow 127.0.0.1;
+              allow ::1;
+              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v4};
+              allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
+              deny all;
+            '';
         };
       };
     };

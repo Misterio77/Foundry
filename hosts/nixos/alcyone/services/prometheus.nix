@@ -13,7 +13,14 @@ in {
         # Scrape a bit more frequently
         scrape_interval = "30s";
       };
-      scrapeConfigs = [
+      scrapeConfigs = map (job:
+        job
+        // lib.optionalAttrs ((job.scheme or "http") == "https") {
+          tls_config = {
+            cert_file = config.sops.secrets.prometheus-client-cert.path;
+            key_file = config.sops.secrets.prometheus-client-key.path;
+          };
+        }) [
         {
           job_name = "authentik";
           scheme = "https";
@@ -96,12 +103,27 @@ in {
           allow ${outputs.nixosConfigurations.alcyone.config.services.headscale.settings.prefixes.v6};
           deny all;
         '';
-        locations."/" = {
-          proxyPass = "http://localhost:${toString config.services.prometheus.port}";
+        locations = {
+          "/".proxyPass = "http://localhost:${toString config.services.prometheus.port}";
+          "= /metrics" = {
+            proxyPass = "http://localhost:${toString config.services.prometheus.port}";
+            extraConfig = ''
+              if ($ssl_client_verify != SUCCESS) {
+                return 403;
+              }
+            '';
+          };
         };
       };
     };
   };
+
+  sops.secrets = lib.genAttrs ["prometheus-client-cert" "prometheus-client-key"] (_: {
+    sopsFile = ../secrets.yaml;
+    owner = "prometheus";
+    mode = "0400";
+    restartUnits = ["prometheus.service"];
+  });
 
   environment.persistence = {
     "/persist".directories = [
