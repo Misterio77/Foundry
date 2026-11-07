@@ -5,7 +5,10 @@
   inherit (inputs.nixpkgs) lib;
 
   notBroken = pkg: !(pkg.meta.broken or false);
-  isDistributable = pkg: (pkg.meta.license or {redistributable = true;}).redistributable;
+  isDistributable = pkg: lib.licenses.isRedistributable (pkg.meta.license or {
+    redistributable = true;
+    licenseType = "simple";
+  });
   hasPlatform = sys: pkg: lib.elem sys (pkg.meta.platforms or [sys]);
   filterValidPkgs = sys: pkgs:
     lib.filterAttrs (_: pkg:

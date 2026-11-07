@@ -35,7 +35,7 @@ python3Packages.buildPythonApplication {
   meta = {
     description = "Deterministic avatar generator";
     homepage = "https://github.com/e1ven/Robohash";
-    license = with lib.licenses; [mit cc-by-30 cc-by-40];
+    license = with lib.licenses; AND [mit cc-by-30 cc-by-40];
     mainProgram = "robohash";
   };
 }
