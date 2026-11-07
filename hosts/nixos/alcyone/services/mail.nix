@@ -78,6 +78,21 @@
     };
   };
 
+  services.dovecot2.settings = {
+    auth_mechanisms = lib.mkAfter ["oauthbearer" "xoauth2"];
+    oauth2 = {
+      introspection_mode = "auth";
+      introspection_url = "https://auth.m7.rs/application/o/userinfo/";
+      openid_configuration_url = "https://auth.m7.rs/application/o/personal-mail/.well-known/openid-configuration";
+      username_attribute = "mail_account";
+      # Only the mail provider's scope mapping can emit this authorization marker.
+      active_attribute = "mail_access";
+      active_value = "allowed";
+      force_introspection = true;
+      ssl_client_ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    };
+  };
+
   # Disable default open ports, we want to lock down SMTP and IMAP to tailscale.
   mailserver.openFirewall = false;
   networking.firewall.allowedTCPPorts = [25];

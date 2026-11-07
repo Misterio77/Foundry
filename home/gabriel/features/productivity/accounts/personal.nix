@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   realName = "Gabriel Fontes";
@@ -10,7 +11,24 @@
   davHost = "dav.m7.rs";
 
   pass = lib.getExe config.programs.password-store.package;
+  oama = lib.getExe config.programs.oama.package;
+  tokenCommand = pkgs.writeShellScript "personal-mail-access-token" ''
+    umask 077
+    exec ${lib.getExe' pkgs.util-linux "flock"} --wait 60 \
+      "''${XDG_RUNTIME_DIR:-/run/user/$UID}/personal-mail-oama.lock" \
+      ${oama} access ${address}
+  '';
 in {
+  programs.oama.settings.services.gablogin = {
+    client_id = "personal-mail";
+    auth_endpoint = "https://auth.m7.rs/application/o/authorize/";
+    auth_http_method = "GET";
+    token_endpoint = "https://auth.m7.rs/application/o/token/";
+    token_params_mode = "RequestBodyForm";
+    redirect_uri = "http://127.0.0.1:8765/callback";
+    auth_scope = "openid offline_access urn:ietf:params:oauth:scope:mail";
+  };
+
   accounts = {
     email.accounts.personal = {
       inherit address realName aliases;
@@ -24,21 +42,25 @@ in {
       };
 
       userName = address;
-      passwordCommand = "${pass} ${mailHost}/${address}";
+      passwordCommand = toString tokenCommand;
       imap.host = mailHost;
       smtp.host = mailHost;
 
       mbsync = {
         enable = true;
-        extraConfig.channel = {
-          Expunge = "Both"; # Sync deleted messages
-          Create = "Both"; # Create mailboxes if needed
-          Remove = "None"; # Don't ever delete mailboxes
-          SyncState = "*"; # Ensure sync state is in mail dir
+        extraConfig = {
+          account.AuthMechs = "XOAUTH2";
+          channel = {
+            Expunge = "Both";
+            Create = "Both";
+            Remove = "None";
+            SyncState = "*";
+          };
         };
       };
       msmtp = {
         enable = true;
+        extraConfig.auth = "oauthbearer";
       };
       aerc = {
         enable = true;
@@ -62,8 +84,8 @@ in {
       remote = {
         type = "carddav";
         url = "https://${davHost}";
-        userName = address;
-        passwordCommand = [pass "${mailHost}/${address}"];
+        userName = "gabriel";
+        passwordCommand = [pass "${davHost}/${address}"];
       };
       vdirsyncer = {
         enable = true;
@@ -81,8 +103,8 @@ in {
       remote = {
         type = "caldav";
         url = "https://${davHost}";
-        userName = address;
-        passwordCommand = [pass "${mailHost}/${address}"];
+        userName = "gabriel";
+        passwordCommand = [pass "${davHost}/${address}"];
       };
       vdirsyncer = {
         enable = true;

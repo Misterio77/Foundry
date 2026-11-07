@@ -46,6 +46,7 @@
     cp ${./password-guessing.yaml} "$out/password-guessing.yaml"
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
+    cp ${./mail.yaml} "$out/mail.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
@@ -103,7 +104,7 @@ in {
         metrics = ["127.0.0.1:9300"];
         trusted_proxy_cidrs = ["127.0.0.1/32" "::1/128"];
       };
-      outposts.disable_embedded_outpost = true;
+      outposts.disable_embedded_outpost = false;
     };
     worker = {
       listenHTTP = "127.0.0.1:9001";
