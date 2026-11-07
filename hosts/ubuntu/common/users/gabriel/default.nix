@@ -41,6 +41,11 @@ in {
   };
 
   sops.secrets = {
+    google-oauth-client-secret = lib.mkIf config.home-manager.users.gabriel.programs.oama.enable {
+      sopsFile = ../../../../common/secrets.yaml;
+      # A desktop client credential, not a user's access or refresh token.
+      mode = "0444";
+    };
     kagi_session_token = {
       sopsFile = ../../../../common/secrets.yaml;
       owner = "gabriel";
