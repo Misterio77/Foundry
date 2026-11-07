@@ -1,0 +1,78 @@
+--- a/vdirsyncer/storage/dav.py
++++ b/vdirsyncer/storage/dav.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import asyncio
+ import contextlib
+ import datetime
+ import logging
+@@ -371,12 +372,21 @@
+         password="",
+         verify=None,
+         auth=None,
++        token_command=None,
+         useragent=USERAGENT,
+         verify_fingerprint=None,
+         auth_cert=None,
+         *,
+         connector: aiohttp.BaseConnector,
+     ):
++        if token_command is not None and (not token_command or password or auth):
++            raise exceptions.UserError(
++                "token_command requires a fetch strategy and cannot be combined "
++                "with password or auth"
++            )
++        self._bearer_token_command = token_command
++        self._bearer_token = None
++        self._bearer_token_lock = asyncio.Lock()
+         self._settings = {
+             "cert": prepare_client_cert(auth_cert),
+         }
+@@ -404,10 +414,42 @@
+         more = dict(self._settings)
+         more.update(kwargs)
+ 
+-        # XXX: This is a temporary hack to pin-point bad refactoring.
+-        assert self.connector is not None
+-        async with self._session as session:
+-            return await http.request(method, url, session=session, **more)
++        bearer = getattr(self, "_bearer_token_command", None)
++        if bearer:
++            token = await self._get_bearer_token()
++            more["headers"] = dict(more.get("headers", {}))
++            more["headers"]["Authorization"] = f"Bearer {token}"
++
++        async def send():
++            assert self.connector is not None
++            async with self._session as session:
++                return await http.request(method, url, session=session, **more)
++
++        try:
++            return await send()
++        except aiohttp.ClientResponseError as error:
++            if not bearer or error.status != 401:
++                raise
++            token = await self._get_bearer_token(rejected=token)
++            more["headers"]["Authorization"] = f"Bearer {token}"
++            return await send()
++
++    async def _get_bearer_token(self, rejected=None):
++        from vdirsyncer.cli.fetchparams import STRATEGIES
++
++        async with self._bearer_token_lock:
++            if self._bearer_token is None or self._bearer_token == rejected:
++                try:
++                    fetch = STRATEGIES[self._bearer_token_command[0]]
++                except KeyError:
++                    raise exceptions.UserError("Unknown token_command strategy") from None
++                token = await asyncio.to_thread(fetch, *self._bearer_token_command[1:])
++                if not isinstance(token, str) or not token.strip() or any(
++                    c in token for c in "\r\n"
++                ):
++                    raise exceptions.UserError("token_command returned an invalid token")
++                self._bearer_token = token.strip()
++            return self._bearer_token
+ 
+     @property
+     def _session(self):

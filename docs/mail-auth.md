@@ -1,7 +1,8 @@
 # Mail and DAV authentication
 
 Personal mail stays on simple-nixos-mailserver (Postfix/Dovecot); calendars and
-contacts stay on Radicale. Both use Gablogin, but clients authenticate differently.
+contacts stay on Radicale. The personal mail and DAV clients share Gablogin OAuth
+tokens through oama. DAV also accepts app passwords for other clients.
 IMAP 993, SMTP submission 465 and DAV remain restricted to the tailnet. Public
 SMTP 25 does not offer authentication.
 
@@ -21,16 +22,38 @@ Userinfo rejects expired/revoked access tokens, refresh tokens and ID tokens;
 there is no confidential introspection credential or locally distributed JWT key.
 Revocation does not terminate an already-authenticated IMAP connection.
 
-For DAV, nginx delegates authentication to Authentik's embedded proxy outpost,
-using the `personal-dav` application. Clients send Basic authentication with their
-**Authentik username and app password**, not their account password. On success,
-nginx supplies the fixed `hi@m7.rs` identity to loopback-only Radicale and strips
-the Authorization header. Client-supplied identity headers cannot select a user.
-Missing/invalid credentials receive a Basic challenge, never a login-page redirect;
-an unavailable outpost fails closed. Cookies returned by the outpost are forwarded
-to clients to reduce repeated authentication work. Existing proxy sessions can
-outlive the credential that created them; don't assume app-password deletion
-immediately invalidates every session.
+For DAV bearer authentication, nginx uses Authentik's existing embedded proxy
+outpost. The mail OAuth provider authorizes the DAV proxy provider to introspect
+its tokens through `jwt_federation_providers`; no extra service or shared secret
+is needed. The client requests `profile` and `ak_proxy` for the outpost's claims.
+These are combined mail/DAV credentials: the outpost does not enforce a separate
+DAV resource scope on federated tokens. Vdirsyncer's generic DAV token-command
+patch fetches the access token from oama and refetches/retries once on HTTP 401.
+Google token-command support is unchanged.
+
+The outpost caches successful Authorization headers for 60 seconds. DAV is
+header-only for both bearer tokens and app passwords: nginx strips incoming proxy
+cookies and does not forward the outpost's Set-Cookie headers, so cookies cannot
+extend that window. Explicitly revoked/expired access tokens can therefore remain
+usable for approximately one cache interval. Group removal does not revoke existing
+access or refresh tokens, and the refresh grant does not recheck the application's
+group policy. Revoke both access and refresh tokens when removing access; don't
+rely on group removal followed by waiting five minutes. Revoking only refresh
+tokens stops renewal but need not invalidate already-issued access tokens.
+Authentik's native introspection also accepts refresh tokens; clients must send
+only `oama access` output, never refresh tokens.
+
+For other DAV clients, Basic authentication still uses Authentik's embedded proxy
+outpost and the `personal-dav` application. Supply the **Authentik username and
+app password**, not the account password, on each request. App-password revocation
+is also subject to the 60-second header cache, not a browser session. The proxy
+provider issues five-minute tokens independently of the one-year ceiling on
+app-password credentials.
+
+After either authentication path succeeds, nginx supplies the fixed `hi@m7.rs`
+identity to loopback-only Radicale and strips the Authorization header.
+Client-supplied identity headers cannot select a user. Missing/invalid credentials
+receive authentication challenges, never a login-page redirect.
 
 The `personal-mail` group permits app-password lifetimes up to 365 days; choose
 an expiry explicitly when creating one. This ceiling covers all app passwords
@@ -44,25 +67,20 @@ htpasswd file. No collections or mail storage paths change.
 
 1. Deploy Alcyone, wait for the Authentik blueprint to apply, and add `gabriel` to
    `personal-mail`. Confirm the embedded outpost has the DAV provider assigned.
-2. In Gablogin, create a dedicated app password for DAV. Save it without printing
-   it to the terminal:
-
-   ```sh
-   pass insert dav.m7.rs/hi@m7.rs
-   ```
-
-   Other DAV clients use server `https://dav.m7.rs`, username `gabriel`, and that
-   app password. Prefer a separate app password per device where practical.
-3. Activate the updated Home Manager configuration on Atlas/Maia and authorize:
+2. Activate the updated Home Manager configuration on Atlas/Maia and authorize
+   (or reauthorize existing mail credentials to grant the proxy scopes):
 
    ```sh
    oama authorize gablogin hi@m7.rs --nohint
    ```
 
    Sign in as `gabriel`. The callback is `http://127.0.0.1:8765/callback`.
-   The client requests `openid offline_access urn:ietf:params:oauth:scope:mail`.
-   Mail sync and submission call `oama access` directly. Restart aerc after
-   switching accounts.
+   The client requests `openid profile offline_access urn:ietf:params:oauth:scope:mail ak_proxy`.
+   Mail sync, submission and both DAV syncs call `oama access` directly, without
+   a cross-process lock. Restart aerc after switching accounts.
+3. Other DAV clients may continue using `https://dav.m7.rs`, username `gabriel`,
+   and a dedicated app password. Prefer a separate app password per device.
+   The personal vdirsyncer accounts no longer read `dav.m7.rs/hi@m7.rs` from pass.
 4. Verify a real IMAP sync, SMTP submission, and CalDAV/CardDAV discovery and sync.
    Keep existing collections; don't delete local sync state to change credentials.
    A brief sync outage is expected between server/client activation and credential

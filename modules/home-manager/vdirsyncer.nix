@@ -263,9 +263,12 @@ in {
             [
               "timeRange"
               "itemTypes"
+              "tokenCommand"
             ]
             ++ remoteOptions
-          else if (t == "carddav" || t == "http")
+          else if (t == "carddav")
+          then ["tokenCommand"] ++ remoteOptions
+          else if (t == "http")
           then remoteOptions
           else if (t == "filesystem")
           then [

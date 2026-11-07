@@ -261,6 +261,7 @@ in {
       })
       # token_command doesn't provide a client ID to use as the user agent.
       ./vdirsyncer-token-command-useragent.patch
+      ./vdirsyncer-dav-token-command.patch
     ];
 
     todoman = addPatches prev.todoman [

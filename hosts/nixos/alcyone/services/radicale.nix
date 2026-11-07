@@ -28,8 +28,6 @@ in {
             extraConfig = ''
               auth_request /_dav_auth;
               error_page 401 = @dav_unauthorized;
-              auth_request_set $dav_auth_cookie $upstream_http_set_cookie;
-              add_header Set-Cookie $dav_auth_cookie always;
 
               # This application grants access to one mailbox, not the profile email.
               proxy_set_header X-Remote-User hi@m7.rs;
@@ -48,12 +46,14 @@ in {
               proxy_pass_request_body off;
               proxy_set_header Content-Length "";
               proxy_set_header Host dav.m7.rs;
-              proxy_set_header X-Original-URL https://dav.m7.rs$request_uri;
+              # A fixed URL avoids the outpost's reserved-path authentication bypass.
+              proxy_set_header X-Original-URL https://dav.m7.rs/;
               proxy_set_header X-Forwarded-Host dav.m7.rs;
               proxy_set_header X-Forwarded-Proto https;
               proxy_set_header X-Forwarded-For $remote_addr;
               proxy_set_header Authorization $http_authorization;
-              proxy_set_header Cookie $http_cookie;
+              # DAV credentials must not turn into longer-lived proxy sessions.
+              proxy_set_header Cookie "";
               proxy_intercept_errors on;
               # DAV clients need an authentication challenge, never a browser redirect.
               error_page 301 302 303 307 308 = @dav_unauthorized;
@@ -61,6 +61,7 @@ in {
           };
           "@dav_unauthorized".extraConfig = ''
             add_header WWW-Authenticate 'Basic realm="Gablogin DAV"' always;
+            add_header WWW-Authenticate 'Bearer realm="Gablogin DAV"' always;
             return 401;
           '';
         };

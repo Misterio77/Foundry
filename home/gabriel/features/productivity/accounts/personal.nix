@@ -9,7 +9,6 @@
   mailHost = "mail.m7.rs";
   davHost = "dav.m7.rs";
 
-  pass = lib.getExe config.programs.password-store.package;
   oama = lib.getExe config.programs.oama.package;
 in {
   programs.oama.settings.services.gablogin = {
@@ -19,7 +18,7 @@ in {
     token_endpoint = "https://auth.m7.rs/application/o/token/";
     token_params_mode = "RequestBodyForm";
     redirect_uri = "http://127.0.0.1:8765/callback";
-    auth_scope = "openid offline_access urn:ietf:params:oauth:scope:mail";
+    auth_scope = "openid profile offline_access urn:ietf:params:oauth:scope:mail ak_proxy";
   };
 
   accounts = {
@@ -77,12 +76,11 @@ in {
       remote = {
         type = "carddav";
         url = "https://${davHost}";
-        userName = "gabriel";
-        passwordCommand = [pass "${davHost}/${address}"];
       };
       vdirsyncer = {
         enable = true;
         collections = ["Main"];
+        tokenCommand = [oama "access" address];
       };
     };
 
@@ -96,12 +94,11 @@ in {
       remote = {
         type = "caldav";
         url = "https://${davHost}";
-        userName = "gabriel";
-        passwordCommand = [pass "${davHost}/${address}"];
       };
       vdirsyncer = {
         enable = true;
         metadata = ["color" "displayname"];
+        tokenCommand = [oama "access" address];
         collections = [
           "Personal"
           "ideas"

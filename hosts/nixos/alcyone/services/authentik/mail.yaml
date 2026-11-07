@@ -27,6 +27,20 @@ entries:
             return {}
         return {"mail_account": "hi@m7.rs", "mail_access": "allowed"}
 
+  - model: authentik_providers_proxy.proxyprovider
+    id: dav-provider
+    identifiers:
+      name: Personal calendars and contacts
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      external_host: https://dav.m7.rs
+      mode: forward_single
+      intercept_header_auth: true
+      basic_auth_enabled: false
+      access_token_validity: minutes=5
+
   - model: authentik_providers_oauth2.oauth2provider
     id: mail-client
     identifiers:
@@ -38,6 +52,8 @@ entries:
       client_type: public
       client_id: personal-mail
       issuer_mode: per_provider
+      jwt_federation_providers:
+        - !KeyOf dav-provider
       grant_types:
         - authorization_code
         - refresh_token
@@ -51,6 +67,8 @@ entries:
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
         - !KeyOf mail-access
 
   - model: authentik_core.application
@@ -69,19 +87,6 @@ entries:
       order: 0
     attrs:
       group: !Find [authentik_core.group, [name, personal-mail]]
-
-  - model: authentik_providers_proxy.proxyprovider
-    id: dav-provider
-    identifiers:
-      name: Personal calendars and contacts
-    attrs:
-      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
-      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-      external_host: https://dav.m7.rs
-      mode: forward_single
-      intercept_header_auth: true
-      basic_auth_enabled: false
 
   - model: authentik_core.application
     id: dav
