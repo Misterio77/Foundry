@@ -1,0 +1,29 @@
+--- a/lib/OAMa/Authorization.hs
++++ b/lib/OAMa/Authorization.hs
+@@ -132,7 +132,7 @@
+         >>= \case
+           Left err -> return $ Left err
+           Right newat -> do
+-            let expire = addUTCTime (newat.expires_in - 300) now
++            let expire = addUTCTime (newat.expires_in - min 300 (newat.expires_in / 10)) now
+                 expDate = formatTime defaultTimeLocale timeStampFormat expire
+                 authrec' =
+                   authrec
+@@ -250,7 +250,7 @@
+     >>= \case
+       Left err -> fatalError "forceRenew" (show err)
+       Right newat -> do
+-        let expire = addUTCTime (expires_in newat - 300) now
++        let expire = addUTCTime (expires_in newat - min 300 (expires_in newat / 10)) now
+             expDate = formatTime defaultTimeLocale timeStampFormat expire
+             authrec' =
+               authrec
+@@ -392,7 +392,7 @@
+ storeAuthRecord :: Environment -> String -> EmailAddress -> AuthRecord -> IO ()
+ storeAuthRecord env servName email_ authr = do
+   now <- getCurrentTime
+-  let expire = addUTCTime (expires_in authr - 300) now
++  let expire = addUTCTime (expires_in authr - min 300 (expires_in authr / 10)) now
+       expDate = formatTime defaultTimeLocale timeStampFormat expire
+       authRec = authr{exp_date = Just expDate, email = Just email_, service = Just servName}
+   putAuthRecord env email_ authRec

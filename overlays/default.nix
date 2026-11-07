@@ -68,17 +68,21 @@ in {
 
     nixbot = addPatches final.inputs.nixbot.nixbot [./nixbot-store-paths.patch];
 
-    oama = prev.oama.overrideAttrs (_: {
-      nativeBuildInputs = [final.makeBinaryWrapper];
-      postInstall = ''
-        wrapProgram $out/bin/oama \
-          --prefix PATH : ${final.lib.makeBinPath [
-          final.coreutils
-          final.libsecret
-          final.gnupg
-        ]}
-      '';
-    });
+    oama =
+      (addPatches prev.oama [
+        ./oama-refresh-margin.patch
+        ./oama-refresh-token-rotation.patch
+      ]).overrideAttrs (_: {
+        nativeBuildInputs = [final.makeBinaryWrapper];
+        postInstall = ''
+          wrapProgram $out/bin/oama \
+            --prefix PATH : ${final.lib.makeBinPath [
+            final.coreutils
+            final.libsecret
+            final.gnupg
+          ]}
+        '';
+      });
 
     firefly-iii = prev.firefly-iii.overrideAttrs (old: rec {
       pname = "firefly-iii";

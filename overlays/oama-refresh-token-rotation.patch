@@ -1,0 +1,22 @@
+--- a/lib/OAMa/Authorization.hs
++++ b/lib/OAMa/Authorization.hs
+@@ -139,8 +139,7 @@
+                     { access_token = newat.access_token,
+                       expires_in = newat.expires_in,
+                       exp_date = Just expDate,
+-                      -- despite of google's doc refresh_token is not returned!
+-                      -- , refresh_token = refresh_token newat
++                      refresh_token = newat.refresh_token <|> authrec.refresh_token,
+                       scope = newat.scope,
+                       token_type = newat.token_type
+                     }
+@@ -257,8 +256,7 @@
+                 { access_token = access_token newat,
+                   expires_in = expires_in newat,
+                   exp_date = Just expDate,
+-                  -- despite of google's doc refresh_token is not returned!
+-                  -- , refresh_token = refresh_token newat
++                  refresh_token = refresh_token newat <|> refresh_token authrec,
+                   scope = scope newat,
+                   token_type = token_type newat
+                 }

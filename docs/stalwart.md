@@ -50,6 +50,11 @@ attribute select the mailbox through the `mail_account` claim. Gabriel and
 Lucky share `contato@lumis.cards`, not login credentials or profile emails.
 The mailbox has no password; SMTP advertises only OAuth authentication.
 
+Atlas's `lumis` mail account uses oama with mail-only scopes. Authorize with
+`oama authorize gablogin contato@lumis.cards --nohint`, then sync with
+`mbsync lumis`. Sign in as the human owner, not the shared mailbox. Reopen aerc
+after enabling the account; account definitions cannot be hot-reloaded.
+
 The directory enforces issuer, audience and interoperable scopes. Authentik
 copies `nonce` into access JWTs, requiring `allowIdTokenClaims` compatibility;
 `unscopedTokens = reject` still rejects its ID tokens, which lack access scopes.
@@ -69,18 +74,25 @@ message/header readback, SMTP sender restrictions, DAV CRUD/ETags and private
 management ACLs over both public address families. The retained test submission's
 RSA and Ed25519 DKIM signatures verify against public DNS. Both contact forwards
 and the catch-all received remote SMTP acceptance (the latter after greylisting),
-and the delivery queue was empty. This is not owner-client/inbox acceptance or a
-complete migration qualification.
+and the delivery queue was empty. This does not establish recipient inbox
+placement or complete client compatibility.
 
 Revision `c5fd0384` was deployed and boot-pinned on 2026-11-07, including
 persistent header indexing. The disposable OAuth identity and runtime credentials
 were removed after validation; refresh revocation rejected reuse, while its issued
 access JWT remained usable immediately after revocation (offline validation).
 
+Gabriel's real browser login, repeated forced refresh, expiry-triggered renewal,
+mbsync download and msmtp submission passed. Both forwards were accepted, and
+an isolated aerc instance loaded the account and its folders. Atlas's user
+configuration and per-account sync timer are active. The oama patches preserve
+rotated refresh tokens and scales the refresh margin for five-minute tokens;
+Authentik's token endpoint requires `RequestBodyForm`, not oama's JSON default.
+
 Still to do:
 
-- Exercise the owners' oama/mail/DAV clients, including their exact scopes and
-  refresh behavior. DAVx⁵ generic OIDC remains experimental.
+- Finish interactive aerc compose/sent-folder acceptance, Lucky's mail client and
+  the owners' DAV clients. DAVx⁵ generic OIDC remains experimental.
 - Review the five-minute offline JWT revocation window before expanding the pilot.
 - Qualify 1.0 recovery separately. The old encrypted 0.15 archive and restore
   drill do not protect current 1.0 state; no recurring Asterope backup exists.
