@@ -36,7 +36,6 @@ entries:
         return {
             "mail_account": "hi@m7.rs",
             "mail_username": request.user.username,
-            "mail_access": "allowed",
         }
 
   - model: authentik_providers_oauth2.scopemapping

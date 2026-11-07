@@ -9,10 +9,8 @@
     introspection_mode = "auth";
     introspection_url = "https://auth.m7.rs/application/o/userinfo/";
     openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
+    # Identity claims are emitted only for active personal-mail members.
     username_attribute = "mail_account";
-    # Only the mail providers' scope mapping can emit this authorization marker.
-    active_attribute = "mail_access";
-    active_value = "allowed";
     force_introspection = true;
     ssl_client_ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
   };
@@ -105,10 +103,6 @@ in {
           # Dovecot requires a nonempty secret even for public clients; Authentik ignores it.
           client_secret = "unused";
           scope = ["urn:ietf:params:oauth:scope:mail"];
-          # 2.4.5 checks active_attribute before introspection of password grants.
-          # Require the group-gated username claim instead (absent for unauthorized users).
-          active_attribute = "";
-          active_value = "";
           username_attribute = "mail_username";
         };
     };
