@@ -29,6 +29,8 @@
     useDHCP = true;
   };
 
+  services.tailscale.useRoutingFeatures = "both";
+
   boot.kernelPackages = pkgs.linuxKernel.packages.linux_xanmod_latest;
 
   powerManagement.powertop.enable = true;

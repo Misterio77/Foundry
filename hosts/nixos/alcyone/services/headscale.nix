@@ -6,6 +6,7 @@
   ...
 }: let
   derpPort = 3478;
+  controlDomain = "tailscale.m7.rs";
   inherit (lib) listToAttrs flatten attrsToList mapAttrsToList attrByPath nameValuePair any;
   isSubstring = needle: haystack: (builtins.match ".*${needle}.*" haystack) != null;
   hasTailnetAllowlist = cfg: (isSubstring "allow fd7a:" cfg.extraConfig) || (isSubstring "allow 100." cfg.extraConfig);
@@ -18,7 +19,8 @@
             vhostName: vhostConfig: let
               aliases = vhostConfig.serverAliases or [];
             in
-              lib.optional (isRestricted vhostConfig) (map (domain: nameValuePair domain name) ([vhostName] ++ aliases))
+              # Coordination must remain reachable by tailscaled's tunnel-bypassing dialer.
+              lib.optional (isRestricted vhostConfig) (map (domain: nameValuePair domain name) (lib.filter (domain: domain != controlDomain) ([vhostName] ++ aliases)))
           )
           vhosts)
     )
@@ -37,7 +39,7 @@ in {
           nameservers.global = ["9.9.9.9" "149.112.112.112"];
           extra_records_path = "/var/lib/headscale/extra-records.json";
         };
-        server_url = "https://tailscale.m7.rs";
+        server_url = "https://${controlDomain}";
         metrics_listen_addr = "127.0.0.1:8095";
         logtail = {
           enabled = false;
@@ -58,12 +60,12 @@ in {
     };
 
     nginx.virtualHosts = {
-      "tailscale.m7.rs" = {
+      ${controlDomain} = {
         forceSSL = true;
         enableACME = true;
         locations = {
           "/" = {
-            proxyPass = "http://localhost:${toString config.services.headscale.port}";
+            proxyPass = "http://${config.services.headscale.address}:${toString config.services.headscale.port}";
             proxyWebsockets = true;
           };
           "/metrics" = {
@@ -81,7 +83,7 @@ in {
       "tailscale.misterio.me" = {
         forceSSL = true;
         enableACME = true;
-        locations."/".return = "302 https://tailscale.m7.rs$request_uri";
+        locations."/".return = "302 https://${controlDomain}$request_uri";
       };
     };
   };
