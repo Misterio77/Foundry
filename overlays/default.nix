@@ -43,13 +43,23 @@ in {
 
     grafana = assert final.lib.versions.majorMinor prev.grafana.version == "13.3";
       prev.grafana.overrideAttrs (old: {
-        patches = (old.patches or []) ++ [./grafana-oidc-backchannel.patch];
+        patches = (old.patches or []) ++ [./grafana-oidc-backchannel.patch ./grafana-oidc-picture.patch];
         postCheck =
           (old.postCheck or "")
           + ''
             export GOMAXPROCS=4
             go test -p 4 -tags oss -count=1 \
               ./pkg/login/oidcbackchannel \
+              ./pkg/login/social/connectors \
+              ./pkg/api/dtos \
+              ./pkg/services/user/userimpl \
+              ./pkg/services/authn/authnimpl/sync \
+              ./pkg/services/navtree/navtreeimpl \
+              ./pkg/services/org/orgimpl \
+              ./pkg/services/team/teamimpl \
+              ./pkg/services/team/teamapi \
+              ./pkg/services/annotations/annotationsimpl \
+              ./pkg/services/accesscontrol/resourcepermissions \
               ./pkg/services/auth/authimpl \
               ./pkg/services/authn/clients \
               ./pkg/services/authn/authnimpl \

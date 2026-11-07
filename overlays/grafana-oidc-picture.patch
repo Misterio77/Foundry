@@ -1,0 +1,1298 @@
+From: Foundry <hi@m7.rs>
+Subject: [PATCH] use Generic OAuth picture claims for user avatars
+
+Persist a valid HTTPS picture URL at login and hotlink it from the existing
+SQL-backed user views, falling back to the existing Gravatar behavior.
+No image downloader, proxy, or provider refresh is involved.
+
+diff --git a/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/profile-pictures.md b/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/profile-pictures.md
+new file mode 100644
+--- /dev/null
++++ b/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/profile-pictures.md
+@@ -0,0 +1,35 @@
++---
++title: OIDC profile pictures
++description: Use Generic OAuth picture claims as profile images
++---
++
++# OIDC profile pictures
++
++Generic OAuth reads the standard `picture` claim using its existing source
++precedence: ID token, UserInfo, then access token. The first valid absolute
++HTTPS URL wins. Missing, non-string, insecure, credential-bearing, or oversized
++URLs are ignored. No additional Grafana setting is required.
++
++The URL is persisted on the SQL-backed user at login and used in the sidebar,
++user profiles, user and team-member lists, permissions, and annotations. A
++subsequent Generic OAuth login updates it, or clears it if no valid picture
++is supplied. Other login methods do not clear it. Existing users get their
++picture on their next OAuth login; this does not force existing sessions out.
++
++The browser hotlinks the image. Grafana neither downloads nor proxies it, and
++normal dashboard requests do not contact the identity provider for a new URL.
++Image hosts must be allowed by any custom Content Security Policy. They see
++the browser's image requests, and the URL must work without a Grafana access
++token. A valid URL that later fails to load does not automatically fall back.
++
++Without a valid picture, the existing Gravatar behavior is unchanged: Gravatar
++when enabled, otherwise the default profile image. Disabling Gravatar does not
++disable OIDC pictures. Team and service-account avatars are unchanged.
++
++Authentik's stock `profile` scope already emits URL avatars as `picture` and
++omits inline `data:` avatars. No custom mapping is needed for absolute HTTPS
++URLs. Request the `profile` scope as usual. Providers emitting relative URLs
++must first convert those to absolute HTTPS URLs in their scope mapping.
++
++This patch targets Grafana's SQL-backed users, not the experimental Kubernetes
++user service or IAM identity-display APIs.
+diff --git a/pkg/api/annotations.go b/pkg/api/annotations.go
+--- a/pkg/api/annotations.go
++++ b/pkg/api/annotations.go
+@@ -72,7 +72,7 @@
+ 
+ 	for _, item := range items {
+ 		if item.Email != "" {
+-			item.AvatarURL = dtos.GetGravatarUrl(hs.Cfg, item.Email)
++			item.AvatarURL = dtos.GetUserAvatarURL(hs.Cfg, item.Email, item.AvatarURL)
+ 		}
+ 	}
+ 
+@@ -428,7 +428,7 @@
+ 	}
+ 
+ 	if annotation.Email != "" {
+-		annotation.AvatarURL = dtos.GetGravatarUrl(hs.Cfg, annotation.Email)
++		annotation.AvatarURL = dtos.GetUserAvatarURL(hs.Cfg, annotation.Email, annotation.AvatarURL)
+ 	}
+ 
+ 	return response.JSON(http.StatusOK, annotation)
+diff --git a/pkg/api/dashboard_permission.go b/pkg/api/dashboard_permission.go
+--- a/pkg/api/dashboard_permission.go
++++ b/pkg/api/dashboard_permission.go
+@@ -58,7 +58,7 @@
+ 			continue
+ 		}
+ 
+-		perm.UserAvatarURL = dtos.GetGravatarUrl(hs.Cfg, perm.UserEmail)
++		perm.UserAvatarURL = dtos.GetUserAvatarURL(hs.Cfg, perm.UserEmail, perm.UserAvatarURL)
+ 
+ 		if perm.TeamID > 0 {
+ 			perm.TeamAvatarURL = dtos.GetGravatarUrlWithDefault(hs.Cfg, perm.TeamEmail, perm.Team)
+@@ -179,6 +179,7 @@
+ 			UserID:         p.UserID,
+ 			UserLogin:      p.UserLogin,
+ 			UserEmail:      p.UserEmail,
++			UserAvatarURL:  p.UserAvatarURL,
+ 			TeamID:         p.TeamID,
+ 			TeamEmail:      p.TeamEmail,
+ 			Team:           p.Team,
+diff --git a/pkg/api/dtos/models.go b/pkg/api/dtos/models.go
+--- a/pkg/api/dtos/models.go
++++ b/pkg/api/dtos/models.go
+@@ -9,6 +9,7 @@
+ 	"github.com/grafana/grafana/pkg/apimachinery/identity"
+ 	"github.com/grafana/grafana/pkg/components/simplejson"
+ 	"github.com/grafana/grafana/pkg/services/org"
++	"github.com/grafana/grafana/pkg/services/user"
+ 	"github.com/grafana/grafana/pkg/setting"
+ )
+ 
+@@ -104,6 +105,13 @@
+ 	}
+ }
+ 
++func GetUserAvatarURL(cfg *setting.Cfg, email, picture string) string {
++	if picture = user.NormalizeAvatarURL(picture); picture != "" {
++		return picture
++	}
++	return GetGravatarUrl(cfg, email)
++}
++
+ func GetGravatarUrl(cfg *setting.Cfg, text string) string {
+ 	if cfg.DisableGravatar {
+ 		return cfg.AppSubURL + "/public/img/user_profile.png"
+diff --git a/pkg/api/dtos/oidc_picture_test.go b/pkg/api/dtos/oidc_picture_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/api/dtos/oidc_picture_test.go
+@@ -0,0 +1,24 @@
++package dtos
++
++import (
++	"strings"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"github.com/grafana/grafana/pkg/setting"
++)
++
++func TestUserAvatarURL(t *testing.T) {
++	for _, disabled := range []bool{false, true} {
++		cfg := setting.NewCfg()
++		cfg.DisableGravatar = disabled
++		cfg.AppSubURL = "/grafana"
++		const email = "alice@example.com"
++		const picture = "https://images.example/alice.png?size=200"
++		require.Equal(t, picture, GetUserAvatarURL(cfg, email, " "+picture+" "))
++		for _, invalid := range []string{"", "http://example.com/a.png", "javascript:alert(1)", "//example.com/a.png", "https:///a.png", "https://user:secret@example.com/a.png", "https://example.com/" + strings.Repeat("a", 2048)} {
++			require.Equal(t, GetGravatarUrl(cfg, email), GetUserAvatarURL(cfg, email, invalid))
++		}
++	}
++}
+diff --git a/pkg/api/folder_permission.go b/pkg/api/folder_permission.go
+--- a/pkg/api/folder_permission.go
++++ b/pkg/api/folder_permission.go
+@@ -53,7 +53,7 @@
+ 		perm.FolderID = folder.ID
+ 		perm.DashboardID = 0
+ 
+-		perm.UserAvatarURL = dtos.GetGravatarUrl(hs.Cfg, perm.UserEmail)
++		perm.UserAvatarURL = dtos.GetUserAvatarURL(hs.Cfg, perm.UserEmail, perm.UserAvatarURL)
+ 
+ 		if perm.TeamID > 0 {
+ 			perm.TeamAvatarURL = dtos.GetGravatarUrlWithDefault(hs.Cfg, perm.TeamEmail, perm.Team)
+@@ -159,6 +159,7 @@
+ 			UserUID:        p.UserUID,
+ 			UserLogin:      p.UserLogin,
+ 			UserEmail:      p.UserEmail,
++			UserAvatarURL:  p.UserAvatarURL,
+ 			TeamID:         p.TeamID,
+ 			TeamUID:        p.TeamUID,
+ 			TeamEmail:      p.TeamEmail,
+diff --git a/pkg/api/index.go b/pkg/api/index.go
+--- a/pkg/api/index.go
++++ b/pkg/api/index.go
+@@ -154,7 +154,7 @@
+ 			OrgName:                    c.OrgName,
+ 			OrgRole:                    c.GetOrgRole(),
+ 			OrgCount:                   hs.getUserOrgCount(c, userID),
+-			GravatarUrl:                dtos.GetGravatarUrl(hs.Cfg, c.GetEmail()),
++			GravatarUrl:                dtos.GetUserAvatarURL(hs.Cfg, c.GetEmail(), c.SignedInUser.AvatarURL),
+ 			IsGrafanaAdmin:             c.IsGrafanaAdmin,
+ 			Theme:                      theme.ID,
+ 			LightTheme:                 theme.Type == "light",
+@@ -208,10 +208,6 @@
+ 
+ 	data.User.Permissions = ac.BuildPermissionsMap(userPermissions)
+ 
+-	if hs.Cfg.DisableGravatar {
+-		data.User.GravatarUrl = hs.Cfg.AppSubURL + "/public/img/user_profile.png"
+-	}
+-
+ 	if len(data.User.Name) == 0 {
+ 		data.User.Name = data.User.Login
+ 	}
+diff --git a/pkg/api/org_users.go b/pkg/api/org_users.go
+--- a/pkg/api/org_users.go
++++ b/pkg/api/org_users.go
+@@ -328,7 +328,7 @@
+ 	userIDs := map[string]bool{}
+ 	authLabelsUserIDs := make([]int64, 0, len(result.OrgUsers))
+ 	for _, user := range result.OrgUsers {
+-		user.AvatarURL = dtos.GetGravatarUrl(hs.Cfg, user.Email)
++		user.AvatarURL = dtos.GetUserAvatarURL(hs.Cfg, user.Email, user.AvatarURL)
+ 
+ 		userIDs[fmt.Sprint(user.UserID)] = true
+ 		authLabelsUserIDs = append(authLabelsUserIDs, user.UserID)
+@@ -502,7 +502,7 @@
+ 			Name:               u.Name,
+ 			Login:              u.Login,
+ 			Role:               u.Role,
+-			AvatarURL:          dtos.GetGravatarUrl(hs.Cfg, u.Email),
++			AvatarURL:          dtos.GetUserAvatarURL(hs.Cfg, u.Email, u.AvatarURL),
+ 			AccessControl:      u.AccessControl,
+ 			LastSeenAt:         u.LastSeenAt,
+ 			LastSeenAtAge:      u.LastSeenAtAge,
+diff --git a/pkg/api/user.go b/pkg/api/user.go
+--- a/pkg/api/user.go
++++ b/pkg/api/user.go
+@@ -100,7 +100,7 @@
+ 	}
+ 
+ 	userProfile.AccessControl = getAccessControlMetadata(c, "global.users:id:", strconv.FormatInt(userID, 10))
+-	userProfile.AvatarURL = dtos.GetGravatarUrl(hs.Cfg, userProfile.Email)
++	userProfile.AvatarURL = dtos.GetUserAvatarURL(hs.Cfg, userProfile.Email, userProfile.AvatarURL)
+ 
+ 	return response.JSON(http.StatusOK, userProfile)
+ }
+diff --git a/pkg/login/social/connectors/generic_oauth.go b/pkg/login/social/connectors/generic_oauth.go
+--- a/pkg/login/social/connectors/generic_oauth.go
++++ b/pkg/login/social/connectors/generic_oauth.go
+@@ -21,6 +21,7 @@
+ 	"github.com/grafana/grafana/pkg/services/ssosettings"
+ 	ssoModels "github.com/grafana/grafana/pkg/services/ssosettings/models"
+ 	"github.com/grafana/grafana/pkg/services/ssosettings/validation"
++	"github.com/grafana/grafana/pkg/services/user"
+ 	"github.com/grafana/grafana/pkg/util"
+ )
+ 
+@@ -220,6 +221,7 @@
+ 	Login       string              `json:"login"`
+ 	Username    string              `json:"username"`
+ 	Email       string              `json:"email"`
++	Picture     any                 `json:"picture"`
+ 	Upn         string              `json:"upn"`
+ 	Attributes  map[string][]string `json:"attributes"`
+ 	rawJSON     []byte
+@@ -310,6 +312,10 @@
+ 
+ // extractBasicUserFields extracts basic user fields (ID, Name, Login, Email) from data
+ func (s *SocialGenericOAuth) extractBasicUserFields(logger log.Logger, userInfo *social.BasicUserInfo, data *UserInfoJson) {
++	if userInfo.AvatarURL == "" {
++		picture, _ := data.Picture.(string)
++		userInfo.AvatarURL = user.NormalizeAvatarURL(picture)
++	}
+ 	if userInfo.Id == "" {
+ 		userInfo.Id = data.Sub
+ 	}
+diff --git a/pkg/login/social/connectors/oidc_picture_test.go b/pkg/login/social/connectors/oidc_picture_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/login/social/connectors/oidc_picture_test.go
+@@ -0,0 +1,36 @@
++package connectors
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"github.com/grafana/grafana/pkg/infra/log"
++	"github.com/grafana/grafana/pkg/login/social"
++)
++
++func TestGenericOAuthPicture(t *testing.T) {
++	for _, tc := range []struct {
++		name   string
++		claims []any
++		want   string
++	}{
++		{"id token preferred", []any{"https://images.example/id.png", "https://images.example/userinfo.png"}, "https://images.example/id.png"},
++		{"userinfo fallback", []any{nil, "https://images.example/userinfo.png"}, "https://images.example/userinfo.png"},
++		{"invalid claim ignored", []any{42, "https://images.example/userinfo.png"}, "https://images.example/userinfo.png"},
++		{"http rejected", []any{"http://images.example/a.png"}, ""},
++		{"relative rejected", []any{"/static/avatar.png"}, ""},
++		{"data rejected", []any{"data:image/png;base64,abc"}, ""},
++		{"credentials rejected", []any{"https://user:secret@images.example/a.png"}, ""},
++		{"missing", []any{nil}, ""},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			connector := &SocialGenericOAuth{}
++			info := &social.BasicUserInfo{Id: "alice", Name: "Alice", Email: "alice@example.com", Login: "alice"}
++			for _, picture := range tc.claims {
++				connector.extractBasicUserFields(log.NewNopLogger(), info, &UserInfoJson{Picture: picture})
++			}
++			require.Equal(t, tc.want, info.AvatarURL)
++		})
++	}
++}
+diff --git a/pkg/login/social/social.go b/pkg/login/social/social.go
+--- a/pkg/login/social/social.go
++++ b/pkg/login/social/social.go
+@@ -138,6 +138,7 @@
+ 
+ type BasicUserInfo struct {
+ 	Id             string
++	AvatarURL      string
+ 	Name           string
+ 	Email          string
+ 	Login          string
+diff --git a/pkg/services/accesscontrol/models.go b/pkg/services/accesscontrol/models.go
+--- a/pkg/services/accesscontrol/models.go
++++ b/pkg/services/accesscontrol/models.go
+@@ -256,6 +256,7 @@
+ 	UserUID          string
+ 	UserLogin        string
+ 	UserEmail        string
++	UserAvatarURL    string
+ 	TeamID           int64
+ 	TeamUID          string
+ 	TeamEmail        string
+diff --git a/pkg/services/accesscontrol/resourcepermissions/api.go b/pkg/services/accesscontrol/resourcepermissions/api.go
+--- a/pkg/services/accesscontrol/resourcepermissions/api.go
++++ b/pkg/services/accesscontrol/resourcepermissions/api.go
+@@ -313,7 +313,7 @@
+ 				UserID:           p.UserID,
+ 				UserUID:          p.UserUID,
+ 				UserLogin:        p.UserLogin,
+-				UserAvatarUrl:    dtos.GetGravatarUrl(a.cfg, p.UserEmail),
++				UserAvatarUrl:    dtos.GetUserAvatarURL(a.cfg, p.UserEmail, p.UserAvatarURL),
+ 				Team:             p.Team,
+ 				TeamID:           p.TeamID,
+ 				TeamUID:          p.TeamUID,
+diff --git a/pkg/services/accesscontrol/resourcepermissions/api_adapter.go b/pkg/services/accesscontrol/resourcepermissions/api_adapter.go
+--- a/pkg/services/accesscontrol/resourcepermissions/api_adapter.go
++++ b/pkg/services/accesscontrol/resourcepermissions/api_adapter.go
+@@ -192,7 +192,7 @@
+ 			permDTO.UserID = userDetails.ID
+ 			permDTO.UserUID = userDetails.UID
+ 			permDTO.UserLogin = userDetails.Login
+-			permDTO.UserAvatarUrl = dtos.GetGravatarUrl(a.cfg, userDetails.Email)
++			permDTO.UserAvatarUrl = dtos.GetUserAvatarURL(a.cfg, userDetails.Email, userDetails.AvatarURL)
+ 			permDTO.RoleName = userManagedRoleName(userDetails.ID)
+ 			permDTO.ID = subjects.permissionIDs[permDTO.RoleName]
+ 		case iamv0.ResourcePermissionSpecPermissionKindServiceAccount:
+@@ -545,7 +545,7 @@
+ 				UserID:           p.UserID,
+ 				UserUID:          p.UserUID,
+ 				UserLogin:        p.UserLogin,
+-				UserAvatarUrl:    dtos.GetGravatarUrl(a.cfg, p.UserEmail),
++				UserAvatarUrl:    dtos.GetUserAvatarURL(a.cfg, p.UserEmail, p.UserAvatarURL),
+ 				Team:             p.Team,
+ 				TeamID:           p.TeamID,
+ 				TeamUID:          p.TeamUID,
+@@ -958,7 +958,7 @@
+ 		permDTO.UserID = userDetails.ID
+ 		permDTO.UserUID = userDetails.UID
+ 		permDTO.UserLogin = userDetails.Login
+-		permDTO.UserAvatarUrl = dtos.GetGravatarUrl(a.cfg, userDetails.Email)
++		permDTO.UserAvatarUrl = dtos.GetUserAvatarURL(a.cfg, userDetails.Email, userDetails.AvatarURL)
+ 		permDTO.IsServiceAccount = userDetails.IsServiceAccount
+ 		permDTO.RoleName = fmt.Sprintf("managed:users:%d:permissions", userDetails.ID)
+ 		permDTO.ID = a.getRoleIDFromK8sObject(permDTO.RoleName, c.GetOrgID())
+diff --git a/pkg/services/accesscontrol/resourcepermissions/store.go b/pkg/services/accesscontrol/resourcepermissions/store.go
+--- a/pkg/services/accesscontrol/resourcepermissions/store.go
++++ b/pkg/services/accesscontrol/resourcepermissions/store.go
+@@ -39,6 +39,7 @@
+ 	UserUid          string
+ 	UserLogin        string
+ 	UserEmail        string
++	UserAvatarURL    string `xorm:"user_avatar_url"`
+ 	TeamId           int64
+ 	TeamUid          string
+ 	TeamEmail        string
+@@ -436,6 +437,7 @@
+ 		u.uid AS user_uid,
+ 		u.is_service_account AS is_service_account,
+ 		u.email AS user_email,
++		u.avatar_url AS user_avatar_url,
+ 		0 AS team_id,
+ 		'' AS team,
+ 		'' AS team_uid,
+@@ -449,6 +451,7 @@
+ 		'' AS user_uid,
+ 		` + s.sql.GetDialect().BooleanStr(false) + ` AS is_service_account,
+ 		'' AS user_email,
++		'' AS user_avatar_url,
+ 		tr.team_id AS team_id,
+ 		t.name AS team,
+ 		t.uid AS team_uid,
+@@ -462,6 +465,7 @@
+ 		'' AS user_uid,
+ 		` + s.sql.GetDialect().BooleanStr(false) + ` AS is_service_account,
+ 		'' AS user_email,
++		'' AS user_avatar_url,
+ 		0 as team_id,
+ 		'' AS team,
+ 		'' AS team_uid,
+@@ -651,6 +655,7 @@
+ 		UserUID:          first.UserUid,
+ 		UserLogin:        first.UserLogin,
+ 		UserEmail:        first.UserEmail,
++		UserAvatarURL:    first.UserAvatarURL,
+ 		TeamID:           first.TeamId,
+ 		TeamUID:          first.TeamUid,
+ 		TeamEmail:        first.TeamEmail,
+@@ -785,6 +790,7 @@
+ 		ur.user_id AS user_id,
+ 		u.login AS user_login,
+ 		u.email AS user_email,
++		u.avatar_url AS user_avatar_url,
+ 		tr.team_id AS team_id,
+ 		t.name AS team,
+ 		t.email AS team_email,
+diff --git a/pkg/services/annotations/annotationsimpl/xorm_store.go b/pkg/services/annotations/annotationsimpl/xorm_store.go
+--- a/pkg/services/annotations/annotationsimpl/xorm_store.go
++++ b/pkg/services/annotations/annotationsimpl/xorm_store.go
+@@ -340,6 +340,7 @@
+ 				annotation.created,
+ 				annotation.updated,
+ 				usr.email,
++				usr.avatar_url,
+ 				usr.login,
+ 				usr.uid as user_uid,
+ 				r.title as alert_name
+diff --git a/pkg/services/authn/authnimpl/sync/oidc_picture_test.go b/pkg/services/authn/authnimpl/sync/oidc_picture_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/authn/authnimpl/sync/oidc_picture_test.go
+@@ -0,0 +1,54 @@
++package sync
++
++import (
++	"context"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++
++	"github.com/grafana/grafana/pkg/infra/tracing"
++	"github.com/grafana/grafana/pkg/services/authn"
++	"github.com/grafana/grafana/pkg/services/featuremgmt"
++	"github.com/grafana/grafana/pkg/services/login"
++	"github.com/grafana/grafana/pkg/services/login/authinfoimpl"
++	"github.com/grafana/grafana/pkg/services/login/authinfotest"
++	"github.com/grafana/grafana/pkg/services/quota/quotatest"
++	"github.com/grafana/grafana/pkg/services/user"
++	"github.com/grafana/grafana/pkg/services/user/usertest"
++	"github.com/grafana/grafana/pkg/setting"
++)
++
++func TestSyncOIDCPicture(t *testing.T) {
++	const oldPicture = "https://images.example/old.png"
++	const newPicture = "https://images.example/new.png"
++	for _, tc := range []struct {
++		name, module, picture string
++		update                bool
++	}{
++		{"replace", login.GenericOAuthModule, newPicture, true},
++		{"remove", login.GenericOAuthModule, "", true},
++		{"unchanged", login.GenericOAuthModule, oldPicture, false},
++		{"other provider preserves", login.AuthProxyAuthModule, "", false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			provider.UsingFlags(t, defaultFeatureFlags)
++			var captured *user.UpdateUserCommand
++			users := &usertest.FakeUserService{UpdateFn: func(_ context.Context, cmd *user.UpdateUserCommand) error {
++				captured = cmd
++				return nil
++			}}
++			s := ProvideUserSync(users, &authinfoimpl.OSSUserProtectionImpl{}, &authinfotest.FakeService{}, &quotatest.FakeQuotaService{}, tracing.InitializeTracerForTest(), featuremgmt.WithFeatures(), setting.NewCfg(), nil)
++			usr := &user.User{ID: 1, Login: "alice", AvatarURL: oldPicture}
++			id := &authn.Identity{ID: "1", Login: "alice", AuthenticatedBy: tc.module, AvatarURL: tc.picture}
++			require.NoError(t, s.updateUserAttributes(context.Background(), usr, id, &login.UserAuth{}))
++			if tc.update {
++				require.NotNil(t, captured)
++				require.NotNil(t, captured.AvatarURL)
++				require.Equal(t, tc.picture, *captured.AvatarURL)
++			} else {
++				require.Nil(t, captured)
++				require.Equal(t, oldPicture, usr.AvatarURL)
++			}
++		})
++	}
++}
+diff --git a/pkg/services/authn/authnimpl/sync/user_sync.go b/pkg/services/authn/authnimpl/sync/user_sync.go
+--- a/pkg/services/authn/authnimpl/sync/user_sync.go
++++ b/pkg/services/authn/authnimpl/sync/user_sync.go
+@@ -542,6 +542,13 @@
+ 		needsUpdate = true
+ 	}
+ 
++	// Only Generic OAuth asserts pictures; a missing claim clears its previous URL.
++	if id.AuthenticatedBy == login.GenericOAuthModule && id.AvatarURL != usr.AvatarURL {
++		updateCmd.AvatarURL = &id.AvatarURL
++		usr.AvatarURL = id.AvatarURL
++		needsUpdate = true
++	}
++
+ 	// Sync isGrafanaAdmin permission
+ 	if id.IsGrafanaAdmin != nil && *id.IsGrafanaAdmin != usr.IsAdmin {
+ 		updateCmd.IsGrafanaAdmin = id.IsGrafanaAdmin
+@@ -680,6 +687,7 @@
+ 		Login:            id.Login,
+ 		Email:            id.Email,
+ 		Name:             id.Name,
++		AvatarURL:        id.AvatarURL,
+ 		IsAdmin:          isAdmin,
+ 		DefaultOrgRole:   defaultOrgRole,
+ 		SkipOrgSetup:     len(id.OrgRoles) > 0,
+@@ -828,6 +836,7 @@
+ 	id.Login = usr.Login
+ 	id.Email = usr.Email
+ 	id.Name = usr.Name
++	id.AvatarURL = usr.AvatarURL
+ 	id.EmailVerified = usr.EmailVerified
+ 	id.IsGrafanaAdmin = &usr.IsAdmin
+ 
+@@ -844,6 +853,7 @@
+ func syncSignedInUserToIdentity(usr *user.SignedInUser, id *authn.Identity) {
+ 	id.UID = usr.UserUID
+ 	id.Name = usr.Name
++	id.AvatarURL = usr.AvatarURL
+ 	id.Login = usr.Login
+ 	id.Email = usr.Email
+ 	id.OrgID = usr.OrgID
+diff --git a/pkg/services/authn/clients/oauth.go b/pkg/services/authn/clients/oauth.go
+--- a/pkg/services/authn/clients/oauth.go
++++ b/pkg/services/authn/clients/oauth.go
+@@ -242,6 +242,7 @@
+ 	return &authn.Identity{
+ 		Login:           userInfo.Login,
+ 		Name:            userInfo.Name,
++		AvatarURL:       userInfo.AvatarURL,
+ 		Email:           userInfo.Email,
+ 		IsGrafanaAdmin:  userInfo.IsGrafanaAdmin,
+ 		AuthenticatedBy: c.moduleName,
+diff --git a/pkg/services/authn/identity.go b/pkg/services/authn/identity.go
+--- a/pkg/services/authn/identity.go
++++ b/pkg/services/authn/identity.go
+@@ -38,7 +38,8 @@
+ 	// Login is the shorthand identifier of the entity. Should be unique.
+ 	Login string
+ 	// Name is the display name of the entity. It is not guaranteed to be unique.
+-	Name string
++	Name      string
++	AvatarURL string
+ 	// Email is the email address of the entity. Should be unique.
+ 	Email string
+ 	// EmailVerified is true if entity has verified their email with grafana.
+@@ -299,6 +300,7 @@
+ 		OrgRole:           i.GetOrgRole(),
+ 		Login:             i.Login,
+ 		Name:              i.Name,
++		AvatarURL:         i.AvatarURL,
+ 		Email:             i.Email,
+ 		EmailVerified:     i.EmailVerified,
+ 		AuthID:            i.AuthID,
+diff --git a/pkg/services/navtree/navtreeimpl/navtree.go b/pkg/services/navtree/navtreeimpl/navtree.go
+--- a/pkg/services/navtree/navtreeimpl/navtree.go
++++ b/pkg/services/navtree/navtreeimpl/navtree.go
+@@ -276,7 +276,7 @@
+ 	if c.GetLogin() != c.GetName() {
+ 		login = c.GetLogin()
+ 	}
+-	gravatarURL := dtos.GetGravatarUrl(s.cfg, c.GetEmail())
++	gravatarURL := dtos.GetUserAvatarURL(s.cfg, c.GetEmail(), c.SignedInUser.AvatarURL)
+ 
+ 	children := []*navtree.NavLink{
+ 		{
+diff --git a/pkg/services/org/orgimpl/queries/search_org_users.sql b/pkg/services/org/orgimpl/queries/search_org_users.sql
+--- a/pkg/services/org/orgimpl/queries/search_org_users.sql
++++ b/pkg/services/org/orgimpl/queries/search_org_users.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/queries/search_org_users_by_emails.sql b/pkg/services/org/orgimpl/queries/search_org_users_by_emails.sql
+--- a/pkg/services/org/orgimpl/queries/search_org_users_by_emails.sql
++++ b/pkg/services/org/orgimpl/queries/search_org_users_by_emails.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-all_filters.sql b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-all_filters.sql
+--- a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-all_filters.sql
++++ b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-denied.sql b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-denied.sql
+--- a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-denied.sql
++++ b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-denied.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-negative_limit.sql b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-negative_limit.sql
+--- a/pkg/services/org/orgimpl/testdata/mysql--search_org_users-negative_limit.sql
++++ b/pkg/services/org/orgimpl/testdata/mysql--search_org_users-negative_limit.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/mysql--search_org_users_by_emails-search_org_users_by_emails.sql b/pkg/services/org/orgimpl/testdata/mysql--search_org_users_by_emails-search_org_users_by_emails.sql
+--- a/pkg/services/org/orgimpl/testdata/mysql--search_org_users_by_emails-search_org_users_by_emails.sql
++++ b/pkg/services/org/orgimpl/testdata/mysql--search_org_users_by_emails-search_org_users_by_emails.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-all_filters.sql b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-all_filters.sql
+--- a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-all_filters.sql
++++ b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-denied.sql b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-denied.sql
+--- a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-denied.sql
++++ b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-denied.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-negative_limit.sql b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-negative_limit.sql
+--- a/pkg/services/org/orgimpl/testdata/postgres--search_org_users-negative_limit.sql
++++ b/pkg/services/org/orgimpl/testdata/postgres--search_org_users-negative_limit.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/postgres--search_org_users_by_emails-search_org_users_by_emails.sql b/pkg/services/org/orgimpl/testdata/postgres--search_org_users_by_emails-search_org_users_by_emails.sql
+--- a/pkg/services/org/orgimpl/testdata/postgres--search_org_users_by_emails-search_org_users_by_emails.sql
++++ b/pkg/services/org/orgimpl/testdata/postgres--search_org_users_by_emails-search_org_users_by_emails.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-all_filters.sql b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-all_filters.sql
+--- a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-all_filters.sql
++++ b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-denied.sql b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-denied.sql
+--- a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-denied.sql
++++ b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-denied.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-negative_limit.sql b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-negative_limit.sql
+--- a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-negative_limit.sql
++++ b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users-negative_limit.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users_by_emails-search_org_users_by_emails.sql b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users_by_emails-search_org_users_by_emails.sql
+--- a/pkg/services/org/orgimpl/testdata/sqlite--search_org_users_by_emails-search_org_users_by_emails.sql
++++ b/pkg/services/org/orgimpl/testdata/sqlite--search_org_users_by_emails-search_org_users_by_emails.sql
+@@ -2,6 +2,7 @@
+   org_user.org_id,
+   org_user.user_id,
+   u.email,
++  u.avatar_url,
+   u.uid,
+   u.name,
+   u.login,
+diff --git a/pkg/services/searchusers/searchusers.go b/pkg/services/searchusers/searchusers.go
+--- a/pkg/services/searchusers/searchusers.go
++++ b/pkg/services/searchusers/searchusers.go
+@@ -107,7 +107,7 @@
+ 	}
+ 
+ 	for _, user := range res.Users {
+-		user.AvatarURL = dtos.GetGravatarUrl(s.cfg, user.Email)
++		user.AvatarURL = dtos.GetUserAvatarURL(s.cfg, user.Email, user.AvatarURL)
+ 		user.AuthLabels = make([]string, 0, len(user.AuthModule))
+ 		for _, authModule := range user.AuthModule {
+ 			user.AuthLabels = append(user.AuthLabels, login.GetAuthProviderLabel(authModule))
+diff --git a/pkg/services/sqlstore/migrations/testdata/migration_ids.txt b/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
+--- a/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
++++ b/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
+@@ -40,6 +40,7 @@
+ "Add is_provisioned column to user"
+ "update login field with orgid to allow for multiple service accounts with same name across orgs"
+ "update service accounts login field orgid to appear only once"
++"Add avatar_url column to user"
+ "update login and email fields to lowercase"
+ "update login and email fields to lowercase2"
+ "Add index on user.is_service_account and user.last_seen_at"
+diff --git a/pkg/services/sqlstore/migrations/user_mig.go b/pkg/services/sqlstore/migrations/user_mig.go
+--- a/pkg/services/sqlstore/migrations/user_mig.go
++++ b/pkg/services/sqlstore/migrations/user_mig.go
+@@ -173,6 +173,11 @@
+ 	// This migration removes the duplicate org_id from the login.
+ 	mg.AddMigration(usermig.DedupOrgInLogin, &usermig.ServiceAccountsDeduplicateOrgInLogin{})
+ 
++	// The historical lowercase migrations below load the current user model.
++	mg.AddMigration("Add avatar_url column to user", NewAddColumnMigration(userV2, &Column{
++		Name: "avatar_url", Type: DB_Text, Nullable: true,
++	}))
++
+ 	// Users login and email should be in lower case
+ 	mg.AddMigration(usermig.LowerCaseUserLoginAndEmail, &usermig.UsersLowerCaseLoginAndEmail{})
+ 	// Users login and email should be in lower case - 2, fix for creating users not lowering login and email
+diff --git a/pkg/services/team/teamapi/team_members.go b/pkg/services/team/teamapi/team_members.go
+--- a/pkg/services/team/teamapi/team_members.go
++++ b/pkg/services/team/teamapi/team_members.go
+@@ -50,7 +50,7 @@
+ 			continue
+ 		}
+ 
+-		member.AvatarURL = dtos.GetGravatarUrl(tapi.cfg, member.Email)
++		member.AvatarURL = dtos.GetUserAvatarURL(tapi.cfg, member.Email, member.AvatarURL)
+ 		member.Labels = []string{}
+ 
+ 		if tapi.license.FeatureEnabled("teamgroupsync") && member.External {
+diff --git a/pkg/services/team/teamimpl/queries/get_team_members.sql b/pkg/services/team/teamimpl/queries/get_team_members.sql
+--- a/pkg/services/team/teamimpl/queries/get_team_members.sql
++++ b/pkg/services/team/teamimpl/queries/get_team_members.sql
+@@ -4,6 +4,7 @@
+   team_member.user_id,
+   team_member.uid,
+   team_user.email,
++  team_user.avatar_url,
+   team_user.name,
+   team_user.login,
+   team_user.uid AS user_uid,
+diff --git a/pkg/services/team/teamimpl/testdata/mysql--get_team_members-all_filters.sql b/pkg/services/team/teamimpl/testdata/mysql--get_team_members-all_filters.sql
+--- a/pkg/services/team/teamimpl/testdata/mysql--get_team_members-all_filters.sql
++++ b/pkg/services/team/teamimpl/testdata/mysql--get_team_members-all_filters.sql
+@@ -4,6 +4,7 @@
+   team_member.user_id,
+   team_member.uid,
+   team_user.email,
++  team_user.avatar_url,
+   team_user.name,
+   team_user.login,
+   team_user.uid AS user_uid,
+diff --git a/pkg/services/team/teamimpl/testdata/postgres--get_team_members-all_filters.sql b/pkg/services/team/teamimpl/testdata/postgres--get_team_members-all_filters.sql
+--- a/pkg/services/team/teamimpl/testdata/postgres--get_team_members-all_filters.sql
++++ b/pkg/services/team/teamimpl/testdata/postgres--get_team_members-all_filters.sql
+@@ -4,6 +4,7 @@
+   team_member.user_id,
+   team_member.uid,
+   team_user.email,
++  team_user.avatar_url,
+   team_user.name,
+   team_user.login,
+   team_user.uid AS user_uid,
+diff --git a/pkg/services/team/teamimpl/testdata/sqlite--get_team_members-all_filters.sql b/pkg/services/team/teamimpl/testdata/sqlite--get_team_members-all_filters.sql
+--- a/pkg/services/team/teamimpl/testdata/sqlite--get_team_members-all_filters.sql
++++ b/pkg/services/team/teamimpl/testdata/sqlite--get_team_members-all_filters.sql
+@@ -4,6 +4,7 @@
+   team_member.user_id,
+   team_member.uid,
+   team_user.email,
++  team_user.avatar_url,
+   team_user.name,
+   team_user.login,
+   team_user.uid AS user_uid,
+diff --git a/pkg/services/user/avatar.go b/pkg/services/user/avatar.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/user/avatar.go
+@@ -0,0 +1,18 @@
++package user
++
++import (
++	"net/url"
++	"strings"
++)
++
++func NormalizeAvatarURL(picture string) string {
++	picture = strings.TrimSpace(picture)
++	if len(picture) > 2048 {
++		return ""
++	}
++	u, err := url.Parse(picture)
++	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
++		return ""
++	}
++	return u.String()
++}
+diff --git a/pkg/services/user/identity.go b/pkg/services/user/identity.go
+--- a/pkg/services/user/identity.go
++++ b/pkg/services/user/identity.go
+@@ -19,6 +19,7 @@
+ var _ identity.Requester = (*SignedInUser)(nil)
+ 
+ type SignedInUser struct {
++	AvatarURL     string `xorm:"avatar_url"`
+ 	UserID        int64  `xorm:"user_id"`
+ 	UserUID       string `xorm:"user_uid"`
+ 	OrgID         int64  `xorm:"org_id"`
+diff --git a/pkg/services/user/model.go b/pkg/services/user/model.go
+--- a/pkg/services/user/model.go
++++ b/pkg/services/user/model.go
+@@ -19,6 +19,7 @@
+ 	UID           string `json:"uid" xorm:"uid"`
+ 	Version       int
+ 	Email         string
++	AvatarURL     string `xorm:"avatar_url"`
+ 	Name          string
+ 	Login         string
+ 	Password      Password
+@@ -52,6 +53,7 @@
+ type CreateUserCommand struct {
+ 	UID              string
+ 	Email            string
++	AvatarURL        string
+ 	Login            string
+ 	Name             string
+ 	Company          string
+@@ -82,10 +84,11 @@
+ 	Login string `json:"login"`
+ 	Theme string `json:"theme"`
+ 
+-	UserID         int64 `json:"-"`
+-	IsDisabled     *bool `json:"-"`
+-	EmailVerified  *bool `json:"-"`
+-	IsGrafanaAdmin *bool `json:"-"`
++	UserID         int64   `json:"-"`
++	AvatarURL      *string `json:"-"`
++	IsDisabled     *bool   `json:"-"`
++	EmailVerified  *bool   `json:"-"`
++	IsGrafanaAdmin *bool   `json:"-"`
+ 	// If password is included it will be validated, hashed and updated for user.
+ 	Password *Password `json:"-"`
+ 	// If old password is included it will be validated against users current password.
+diff --git a/pkg/services/user/userimpl/legacy_user.go b/pkg/services/user/userimpl/legacy_user.go
+--- a/pkg/services/user/userimpl/legacy_user.go
++++ b/pkg/services/user/userimpl/legacy_user.go
+@@ -148,6 +148,7 @@
+ 		UID:              cmd.UID,
+ 		Email:            strings.ToLower(cmd.Email),
+ 		Name:             cmd.Name,
++		AvatarURL:        user.NormalizeAvatarURL(cmd.AvatarURL),
+ 		Login:            strings.ToLower(cmd.Login),
+ 		Company:          cmd.Company,
+ 		IsAdmin:          cmd.IsAdmin,
+diff --git a/pkg/services/user/userimpl/oidc_picture_test.go b/pkg/services/user/userimpl/oidc_picture_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/user/userimpl/oidc_picture_test.go
+@@ -0,0 +1,34 @@
++package userimpl
++
++import (
++	"context"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++
++	"github.com/grafana/grafana/pkg/infra/db"
++	"github.com/grafana/grafana/pkg/services/user"
++	"github.com/grafana/grafana/pkg/setting"
++	"github.com/grafana/grafana/pkg/storage/legacysql"
++)
++
++func TestIntegrationOIDCPicturePersistence(t *testing.T) {
++	store := ProvideStore(legacysql.NewDatabaseProvider(db.InitTestDB(t)), setting.NewCfg())
++	ctx := context.Background()
++	usr := &user.User{Login: "picture", Email: "picture@example.com", AvatarURL: "https://images.example/first.png", Created: time.Now(), Updated: time.Now()}
++	id, err := store.Insert(ctx, usr)
++	require.NoError(t, err)
++	for _, picture := range []string{usr.AvatarURL, "https://images.example/second.png", ""} {
++		require.NoError(t, store.Update(ctx, &user.UpdateUserCommand{UserID: id, AvatarURL: &picture}))
++		stored, err := store.GetByID(ctx, id)
++		require.NoError(t, err)
++		require.Equal(t, picture, stored.AvatarURL)
++		profile, err := store.GetProfile(ctx, &user.GetUserProfileQuery{UserID: id})
++		require.NoError(t, err)
++		require.Equal(t, picture, profile.AvatarURL)
++		signedIn, err := store.GetSignedInUser(ctx, &user.GetSignedInUserQuery{UserID: id})
++		require.NoError(t, err)
++		require.Equal(t, picture, signedIn.AvatarURL)
++	}
++}
+diff --git a/pkg/services/user/userimpl/queries/get_signed_in_user.sql b/pkg/services/user/userimpl/queries/get_signed_in_user.sql
+--- a/pkg/services/user/userimpl/queries/get_signed_in_user.sql
++++ b/pkg/services/user/userimpl/queries/get_signed_in_user.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/queries/search_users.sql b/pkg/services/user/userimpl/queries/search_users.sql
+--- a/pkg/services/user/userimpl/queries/search_users.sql
++++ b/pkg/services/user/userimpl/queries/search_users.sql
+@@ -50,6 +50,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/queries/update_user.sql b/pkg/services/user/userimpl/queries/update_user.sql
+--- a/pkg/services/user/userimpl/queries/update_user.sql
++++ b/pkg/services/user/userimpl/queries/update_user.sql
+@@ -1,5 +1,8 @@
+ UPDATE {{ .Ident .UserTable }}
+ SET
++{{ if .AvatarURL }}
++  avatar_url = {{ .Arg .AvatarURL }},
++{{ end }}
+ {{ if .Email -}}
+   email = {{ .Arg .Email }},
+ {{ end -}}
+diff --git a/pkg/services/user/userimpl/store.go b/pkg/services/user/userimpl/store.go
+--- a/pkg/services/user/userimpl/store.go
++++ b/pkg/services/user/userimpl/store.go
+@@ -352,6 +352,7 @@
+ 	UserTable      string
+ 	UserID         int64
+ 	Email          string
++	AvatarURL      *string
+ 	Name           string
+ 	Login          string
+ 	Password       *user.Password
+@@ -414,6 +415,7 @@
+ 			UserID:         cmd.UserID,
+ 			Email:          strings.ToLower(cmd.Email),
+ 			Name:           cmd.Name,
++			AvatarURL:      cmd.AvatarURL,
+ 			Login:          strings.ToLower(cmd.Login),
+ 			Password:       cmd.Password,
+ 			Theme:          cmd.Theme,
+@@ -545,6 +547,7 @@
+ 			ID:             usr.ID,
+ 			UID:            usr.UID,
+ 			Name:           usr.Name,
++			AvatarURL:      usr.AvatarURL,
+ 			Email:          usr.Email,
+ 			Login:          usr.Login,
+ 			Theme:          usr.Theme,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_email.sql b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_email.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_email.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_email.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_id_with_org.sql b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_id_with_org.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_id_with_org.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_id_with_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_login_without_org.sql b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_login_without_org.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_login_without_org.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--get_signed_in_user-by_login_without_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--search_users-all_filters.sql b/pkg/services/user/userimpl/testdata/mysql--search_users-all_filters.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--search_users-all_filters.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--search_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--search_users-default.sql b/pkg/services/user/userimpl/testdata/mysql--search_users-default.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--search_users-default.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--search_users-default.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/mysql--search_users-empty_in.sql b/pkg/services/user/userimpl/testdata/mysql--search_users-empty_in.sql
+--- a/pkg/services/user/userimpl/testdata/mysql--search_users-empty_in.sql
++++ b/pkg/services/user/userimpl/testdata/mysql--search_users-empty_in.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_email.sql b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_email.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_email.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_email.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_id_with_org.sql b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_id_with_org.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_id_with_org.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_id_with_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_login_without_org.sql b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_login_without_org.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_login_without_org.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--get_signed_in_user-by_login_without_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--search_users-all_filters.sql b/pkg/services/user/userimpl/testdata/postgres--search_users-all_filters.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--search_users-all_filters.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--search_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--search_users-default.sql b/pkg/services/user/userimpl/testdata/postgres--search_users-default.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--search_users-default.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--search_users-default.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/postgres--search_users-empty_in.sql b/pkg/services/user/userimpl/testdata/postgres--search_users-empty_in.sql
+--- a/pkg/services/user/userimpl/testdata/postgres--search_users-empty_in.sql
++++ b/pkg/services/user/userimpl/testdata/postgres--search_users-empty_in.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_email.sql b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_email.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_email.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_email.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_id_with_org.sql b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_id_with_org.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_id_with_org.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_id_with_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_login_without_org.sql b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_login_without_org.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_login_without_org.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--get_signed_in_user-by_login_without_org.sql
+@@ -3,6 +3,7 @@
+   u.uid AS user_uid,
+   u.is_admin AS is_grafana_admin,
+   u.email AS email,
++  u.avatar_url AS avatar_url,
+   u.email_verified AS email_verified,
+   u.login AS login,
+   u.name AS name,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--search_users-all_filters.sql b/pkg/services/user/userimpl/testdata/sqlite--search_users-all_filters.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--search_users-all_filters.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--search_users-all_filters.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--search_users-default.sql b/pkg/services/user/userimpl/testdata/sqlite--search_users-default.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--search_users-default.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--search_users-default.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/pkg/services/user/userimpl/testdata/sqlite--search_users-empty_in.sql b/pkg/services/user/userimpl/testdata/sqlite--search_users-empty_in.sql
+--- a/pkg/services/user/userimpl/testdata/sqlite--search_users-empty_in.sql
++++ b/pkg/services/user/userimpl/testdata/sqlite--search_users-empty_in.sql
+@@ -2,6 +2,7 @@
+   u.id,
+   u.uid,
+   u.email,
++  u.avatar_url,
+   u.name,
+   u.login,
+   u.is_admin,
+diff --git a/scripts/test-oidc-backchannel.py b/scripts/test-oidc-backchannel.py
+--- a/scripts/test-oidc-backchannel.py
++++ b/scripts/test-oidc-backchannel.py
+@@ -87,6 +87,7 @@
+         grafana = f"http://127.0.0.1:{port}"
+         codes = {}
+         sessions = []
++        provider_requests = []
+ 
+         class Provider(http.server.BaseHTTPRequestHandler):
+             def log_message(self, *args):
+@@ -102,6 +103,7 @@
+ 
+             def do_GET(self):
+                 parsed = urllib.parse.urlparse(self.path)
++                provider_requests.append(parsed.path)
+                 if parsed.path == "/keys":
+                     self.reply(
+                         {
+@@ -129,6 +131,7 @@
+                             "preferred_username": "alice",
+                             "email": "alice@example.com",
+                             "grafana_role": "Viewer",
++                            "picture": picture,
+                         }
+                     )
+                 elif parsed.path == "/authorize":
+@@ -173,6 +176,7 @@
+                     "preferred_username": "alice",
+                     "email": "alice@example.com",
+                     "grafana_role": "Viewer",
++                    "picture": picture,
+                 }
+                 self.reply(
+                     {
+@@ -185,6 +189,7 @@
+ 
+         provider = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Provider)
+         issuer = f"https://localhost:{provider.server_port}/"
++        picture = issuer + "alice.png"
+         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+         tls.load_cert_chain(ca, key_path)
+         provider.socket = tls.wrap_socket(provider.socket, server_side=True)
+@@ -204,6 +209,7 @@
+ root_url = {grafana}/
+ [security]
+ disable_initial_admin_creation = true
++disable_gravatar = true
+ secret_key = disposable-loopback-test-key
+ [analytics]
+ reporting_enabled = false
+@@ -295,6 +301,34 @@
+             alice, other = browser(), browser()
+             login(alice)
+             login(other)
++            assert (
++                json.loads(request(alice, grafana + "/api/user")[2])["avatarUrl"]
++                == picture
++            )
++            for value in [
++                issuer + "updated.png",
++                None,
++                42,
++                "http://example.com/insecure.png",
++                issuer + "alice.png",
++            ]:
++                picture = value
++                client = browser()
++                login(client)
++                expected = (
++                    picture
++                    if isinstance(picture, str) and picture.startswith("https://")
++                    else "/public/img/user_profile.png"
++                )
++                assert (
++                    json.loads(request(client, grafana + "/api/user")[2])["avatarUrl"]
++                    == expected
++                )
++            assert not any(path.endswith(".png") for path in provider_requests)
++            print(
++                "PASS: OIDC pictures are hotlinked, updated, and cleared with the existing fallback",
++                flush=True,
++            )
+             time.sleep(2)
+             assert request(alice, grafana + "/api/user")[0] == 200
+             assert request(other, grafana + "/api/user")[0] == 200
+@@ -330,6 +364,10 @@
+             start()
+             assert request(alice, grafana + "/api/user")[0] == 401
+             assert request(other, grafana + "/api/user")[0] == 200
++            assert (
++                json.loads(request(other, grafana + "/api/user")[2])["avatarUrl"]
++                == picture
++            )
+             print(
+                 "PASS: revocation and unaffected sessions survive Grafana restart",
+                 flush=True,
+@@ -338,7 +376,14 @@
+             provider.server_close()
+             provider_running = False
+             assert request(other, grafana + "/api/user")[0] == 200
+-            print("PASS: existing session works with the IdP offline", flush=True)
++            assert (
++                json.loads(request(other, grafana + "/api/user")[2])["avatarUrl"]
++                == picture
++            )
++            print(
++                "PASS: existing session and stored picture URL work with the IdP offline",
++                flush=True,
++            )
+         except BaseException:
+             log.flush()
+             log.seek(0)
