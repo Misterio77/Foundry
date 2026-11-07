@@ -885,12 +885,13 @@ diff --git a/pkg/services/auth/authimpl/oidc_logout_test.go b/pkg/services/auth/
 new file mode 100644
 --- /dev/null
 +++ b/pkg/services/auth/authimpl/oidc_logout_test.go
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,125 @@
 +package authimpl
 +
 +import (
 +	"context"
 +	"testing"
++	"time"
 +
 +	"github.com/grafana/grafana/pkg/infra/db"
 +	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
@@ -898,7 +899,43 @@ new file mode 100644
 +	"github.com/grafana/grafana/pkg/services/user"
 +	"github.com/grafana/grafana/pkg/util/testutil"
 +	"github.com/stretchr/testify/require"
++	"golang.org/x/oauth2"
 +)
++
++func TestIntegrationOIDCRotationAndRefresh(t *testing.T) {
++	testutil.SkipIntegrationTestInShortMode(t)
++	test := createTestContext(t)
++	ctx := context.Background()
++	service := test.tokenService
++	originalTime := getTime
++	now := time.Now()
++	getTime = func() time.Time { return now }
++	defer func() { getTime = originalTime }()
++	token, err := service.CreateToken(ctx, &auth.CreateTokenCommand{User: &user.User{ID: 10}, ExternalSession: &auth.ExternalSession{UserID: 10, AuthModule: "oauth_generic_oauth", OIDCScope: "provider", OIDCSubject: "alice", OIDCSession: "sid", OIDCIssuedAt: 100}})
++	require.NoError(t, err)
++	now = now.Add(time.Hour)
++	rotated, err := service.RotateToken(ctx, auth.RotateCommand{UnHashedToken: token.UnhashedToken})
++	require.NoError(t, err)
++	require.NotEqual(t, token.UnhashedToken, rotated.UnhashedToken)
++	require.Equal(t, token.ExternalSessionId, rotated.ExternalSessionId)
++	refreshed := (&oauth2.Token{AccessToken: "new-access", RefreshToken: "new-refresh", Expiry: now.Add(time.Hour)}).WithExtra(map[string]any{"id_token": "new-id-token"})
++	require.NoError(t, service.UpdateExternalSession(ctx, rotated.ExternalSessionId, &auth.UpdateExternalSessionCommand{Token: refreshed}))
++	ext, err := service.GetExternalSession(ctx, rotated.ExternalSessionId)
++	require.NoError(t, err)
++	require.EqualValues(t, 100, ext.OIDCIssuedAt)
++	require.Equal(t, "sid", ext.OIDCSession)
++	require.NoError(t, service.RecordOIDCLogout(ctx, oidcbackchannel.Binding{Scope: "provider", Subject: "alice", Session: "sid", IssuedAt: 110}))
++	for _, raw := range []string{token.UnhashedToken, rotated.UnhashedToken} {
++		_, err = service.LookupToken(ctx, raw)
++		require.Error(t, err)
++		_, err = service.RotateToken(ctx, auth.RotateCommand{UnHashedToken: raw})
++		require.Error(t, err)
++	}
++	// A refresh already in flight may update secrets but cannot erase revocation.
++	require.NoError(t, service.UpdateExternalSession(ctx, rotated.ExternalSessionId, &auth.UpdateExternalSessionCommand{Token: refreshed}))
++	_, err = service.LookupToken(ctx, rotated.UnhashedToken)
++	require.Error(t, err)
++}
 +
 +func TestIntegrationOIDCLogout(t *testing.T) {
 +	testutil.SkipIntegrationTestInShortMode(t)
@@ -958,8 +995,17 @@ new file mode 100644
 +	require.NoError(t, err)
 +	helper, err := service.sql(ctx)
 +	require.NoError(t, err)
-+	// Unavailable revocation storage fails closed; no IdP connection is involved.
-+	require.NoError(t, helper.DB.WithDbSession(ctx, func(sess *db.Session) error { _, err := sess.Exec("DROP TABLE oidc_session_logout"); return err }))
++	// Hide revocation storage without poisoning the shared database for other tests.
++	require.NoError(t, helper.DB.WithDbSession(ctx, func(sess *db.Session) error {
++		_, err := sess.Exec("ALTER TABLE oidc_session_logout RENAME TO oidc_session_logout_unavailable")
++		return err
++	}))
++	t.Cleanup(func() {
++		require.NoError(t, helper.DB.WithDbSession(ctx, func(sess *db.Session) error {
++			_, err := sess.Exec("ALTER TABLE oidc_session_logout_unavailable RENAME TO oidc_session_logout")
++			return err
++		}))
++	})
 +	_, err = service.LookupToken(ctx, otherProvider.UnhashedToken)
 +	require.Error(t, err)
 +	_, err = service.LookupToken(ctx, local.UnhashedToken)

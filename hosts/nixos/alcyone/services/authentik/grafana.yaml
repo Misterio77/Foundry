@@ -40,8 +40,8 @@ entries:
         - matching_mode: strict
           url: https://dash.m7.rs/login/generic_oauth
           redirect_uri_type: authorization
-      logout_uri: https://dash.m7.rs/logout
-      logout_method: frontchannel
+      logout_uri: https://dash.m7.rs/login/generic_oauth/backchannel-logout
+      logout_method: backchannel
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
       access_token_validity: minutes=1
       refresh_token_validity: days=7

@@ -125,8 +125,80 @@ Browser/mobile access is public with native shared links; the separate public-sh
 proxy has been removed.
 
 **Grafana:** OAuth-only with strict role mapping and no email-based linking or
-server-admin assignment. Anonymous access is disabled. State is
-intentionally ephemeral; dashboards, data sources and alert rules are provisioned.
+server-admin assignment. Basic/local login and anonymous viewing are disabled.
+Generic OAuth back-channel logout is enabled with the explicit issuer
+`https://auth.m7.rs/application/o/grafana/`, its HTTPS `jwks/` endpoint and signed
+ID-token validation. Authentik sends signed events to
+`https://dash.m7.rs/login/generic_oauth/backchannel-logout`. OAuth refresh is
+disabled and `offline_access` is not requested: local sessions do not depend on
+access-token expiry or IdP availability. Grafana's own maximum/inactive session
+lifetimes still apply. User-initiated logout retains Authentik's Grafana
+end-session redirect.
+
+Verified issuer/client/subject, optional `sid` and ID-token issuance time are
+bound to each new local session. Delivered `sid` events revoke matching sessions
+(and match `sub` too when supplied); subject-only events revoke all that subject's
+sessions for this client. Monotonic database cutoffs are checked on session
+creation and authenticated session lookups. Repeated/out-of-order delivery cannot
+undo revocation; cookie rotation and OAuth-token updates do not replace the
+original binding. Old ID tokens cannot establish usable sessions after logout.
+A fresh login with an ID-token `iat` later than the logout can succeed even with
+a reused `sid`; same-second login/logout requires retrying in the next second.
+Already-running requests, WebSockets and rendered pages are not terminated.
+Service accounts/API keys are not covered by browser-session logout. Signing keys
+are fetched only from the configured HTTPS URL, cached for an hour and refreshed
+on verification failure with five-second backoff. Invalid events return 400;
+key-fetch/storage failures return 503. Successful delivery means the cutoff was
+persisted, not that an already-running request was interrupted.
+
+State remains intentionally ephemeral; dashboards, data sources and alert rules
+are provisioned. Ordinary service restarts retain the SQLite database, session
+bindings and logout markers. A host reboot/reset that discards Grafana's data
+loses **both** sessions and markers: old cookies no longer authenticate, but old
+in-flight OIDC callbacks are no longer protected by the lost cutoffs. Restoring
+old session data without its markers can resurrect access. Do not truncate only
+the marker table or persist only one half. A coordinated full reset is acceptable
+because this instance's state is disposable; stop/drain authentication first so
+old callbacks cannot cross the reset boundary. No new persistence is introduced
+here.
+
+### Grafana logout rollout
+
+1. Temporarily block Grafana browser traffic, stop Grafana and discard its
+   disposable state. Drain existing OAuth requests and reject old callback URLs
+   across the reset boundary. This clears all pre-rollout sessions, which lack
+   verified logout bindings; a service restart alone would not clear them.
+2. Apply the integration while browser admission remains closed: patched
+   Authentik runtime/Python package and migrations (PRs 26310 and 26565), patched
+   Grafana with the enabled client settings, then the provider's back-channel
+   Blueprint settings. On this shared host a single maintenance switch is fine:
+   wait for all three to be ready before reopening. Ensure Authentik can reach the
+   callback, which must reject unsigned requests. No new secret is needed.
+3. Reopen Grafana and sign in afresh. Declarative dashboards, data sources and
+   alerts are recreated. Fresh OAuth logins populate both Grafana's bindings and
+   Authentik's RP-login records; do not rely on pre-upgrade IdP records being
+   reconstructed.
+
+Production acceptance still requires authenticated-request checks, not just
+callback status:
+
+- In separate browser sessions, verify Viewer/Admin mapping, denied admission
+  without membership, avatar update/fallback and Grafana's logout redirect. End
+  one Authentik session: its next authenticated Grafana API request must fail
+  while an independent session still works. Repeat after the one-minute access
+  token expires and ordinary Grafana/Authentik restarts; also test an abandoned
+  unrelated Authentik flow before app logout.
+- Verify fresh login after logout (including reused `sid`), duplicate and
+  subject-only events, signing-key rotation/delivery retries, a callback racing
+  logout, and IdP outage with an existing Grafana session. Test the reboot/reset
+  boundary with authentication drained; there is no revocation continuity across
+  database loss. Check administrative session termination, deactivation and group
+  removal separately rather than assuming they emit equivalent logout events.
+
+Package tests use a disposable loopback IdP and SQLite database, not live
+Authentik or browsers. Configured callbacks and successful callback responses are
+not production acceptance; the authenticated-request and independent-session
+checks above remain required.
 
 **Seerr:** experimental native OIDC pinned to
 [PR #2715](https://github.com/seerr-team/seerr/pull/2715), revision `2e523125`.
@@ -191,20 +263,26 @@ Role changes apply on OAuth login; removing group membership is not immediate
 application-session revocation. Disable application-local access and revoke its
 sessions/API keys when immediate removal matters.
 
-Back-channel logout is configured for Jellyfin, Immich and Seerr, but is not a
-blanket revocation guarantee. With the pinned Authentik and application patches:
+Back-channel logout is configured for Jellyfin, Immich, Seerr and Grafana, but is
+not a blanket revocation guarantee. With the pinned Authentik and application
+patches:
 
-- Authentik records application logins independently of access-token expiry
-  (upstream patches 26310 and 26565 also prevent unfinished flows from blocking
-  later logout). Migration backfills login records from retained access/refresh
+- Authentik PR 26310 records application logins independently of access-token
+  expiry, allowing session-deletion notifications after tokens expire or are
+  cleaned up. Migration backfills login records from retained access/refresh
   tokens; it cannot reconstruct records whose tokens are already gone. Verify
-  aged sessions after upgrading rather than assuming migration coverage.
+  aged sessions after upgrading rather than assuming migration coverage. PR 26565
+  prevents an unrelated unfinished flow from swallowing a subsequent app logout.
+  Delivery/retries and each administrative revocation path still need live checks.
 - Jellyfin persists token-to-OIDC lineage and cascades delivered logout to Quick
   Connect descendants, preserving independent logins across restarts. Pre-lineage
   devices require explicit revocation and a fresh login; see the rollout above.
 - Seerr's correlation and revocation markers survive restarts, but only sessions
   created after the back-channel patch carry the required identity metadata.
-- Grafana sessions can survive IdP group/session changes.
+- Grafana rejects correlated browser sessions after delivered logout, including
+  after ordinary service restarts. Pre-rollout sessions require explicit clearing;
+  ephemeral database loss also loses cutoffs. Group changes alone are not a
+  continuous role sync or a guaranteed logout event; see its staged rollout above.
 
 Test fresh and aged logins, restart, Quick Connect and two independent sessions
 when changing this behavior. A successful callback alone does not prove that
@@ -234,7 +312,9 @@ IdP. Runtime secrets come from SOPS; never put them in Nix/store files or docs.
   `oauth.autoLaunch = false` under `services.immich.settings`, then redeploy.
   Do not delete users or the database to reset authentication.
 - **Grafana:** recover through SSH and declarative provisioning, not a retained
-  local password. Do not reset its database as a routine OAuth repair.
+  local password. Its state is disposable: a coordinated full reset is acceptable
+  with Grafana stopped and authentication drained, but never restore old sessions
+  without their revocation markers.
 - After rotating the SMTP password, restart Dovecot as well as Authentik; the
   mail password declaration has no Dovecot restart hook.
 
