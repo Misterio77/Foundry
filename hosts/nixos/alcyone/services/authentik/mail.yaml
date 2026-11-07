@@ -15,6 +15,14 @@ entries:
       attributes:
         goauthentik.io/user/token-maximum-lifetime: days=365
 
+  - model: authentik_core.group
+    identifiers:
+      name: dav-users
+    attrs:
+      is_superuser: false
+      attributes:
+        goauthentik.io/user/token-maximum-lifetime: days=365
+
   - model: authentik_providers_oauth2.scopemapping
     id: mail-access
     identifiers:
@@ -27,10 +35,30 @@ entries:
             return {}
         return {"mail_account": "hi@m7.rs", "mail_access": "allowed"}
 
+  - model: authentik_providers_oauth2.scopemapping
+    id: dav-identity
+    identifiers:
+      name: foundry-dav-identity
+    attrs:
+      # Evaluated after ak_proxy, overriding any additionalHeaders attribute.
+      scope_name: profile
+      description: DAV authorization and storage identity
+      expression: |
+        principal = ""
+        if request.user.is_active and ak_is_group_member(request.user, name="dav-users"):
+            principal = request.user.attributes.get("dav_principal", str(request.user.uuid))
+        return {
+            "ak_proxy": {
+                "user_attributes": {
+                    "additionalHeaders": {"X-Foundry-DAV-Principal": principal},
+                },
+            },
+        }
+
   - model: authentik_providers_proxy.proxyprovider
     id: dav-provider
     identifiers:
-      name: Personal calendars and contacts
+      name: Calendars and contacts
     attrs:
       authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
@@ -40,11 +68,18 @@ entries:
       intercept_header_auth: true
       basic_auth_enabled: false
       access_token_validity: minutes=5
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-entitlements]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
+        - !KeyOf dav-identity
 
   - model: authentik_providers_oauth2.oauth2provider
     id: mail-client
     identifiers:
-      name: Personal mail
+      name: Mail and DAV
     attrs:
       authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
@@ -70,16 +105,17 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
         - !KeyOf mail-access
+        - !KeyOf dav-identity
 
   - model: authentik_core.application
     id: mail
     identifiers:
       slug: personal-mail
     attrs:
-      name: Personal mail
+      name: Mail and DAV
       provider: !KeyOf mail-client
       meta_launch_url: blank://blank
-      policy_engine_mode: all
+      policy_engine_mode: any
 
   - model: authentik_policies.policybinding
     identifiers:
@@ -88,12 +124,19 @@ entries:
     attrs:
       group: !Find [authentik_core.group, [name, personal-mail]]
 
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf mail
+      order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, dav-users]]
+
   - model: authentik_core.application
     id: dav
     identifiers:
       slug: personal-dav
     attrs:
-      name: Personal calendars and contacts
+      name: Calendars and contacts
       provider: !KeyOf dav-provider
       meta_launch_url: blank://blank
       policy_engine_mode: all
@@ -103,7 +146,7 @@ entries:
       target: !KeyOf dav
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, personal-mail]]
+      group: !Find [authentik_core.group, [name, dav-users]]
 
   - model: authentik_outposts.outpost
     identifiers:

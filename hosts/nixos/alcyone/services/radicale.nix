@@ -12,6 +12,7 @@ in {
           ];
         };
         auth.type = "http_x_remote_user";
+        rights.type = "owner_only";
         storage = {
           filesystem_folder = "/var/lib/radicale/collections";
         };
@@ -29,8 +30,8 @@ in {
               auth_request /_dav_auth;
               error_page 401 = @dav_unauthorized;
 
-              # This application grants access to one mailbox, not the profile email.
-              proxy_set_header X-Remote-User hi@m7.rs;
+              auth_request_set $dav_principal $upstream_http_x_foundry_dav_principal;
+              proxy_set_header X-Remote-User $dav_principal;
               proxy_set_header Authorization "";
               proxy_set_header Host $host;
               proxy_set_header X-Script-Name "";

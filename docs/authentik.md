@@ -37,8 +37,9 @@ Describes the checked-in configuration, not deployment status. Sources:
 
 Media and monitoring applications share membership; `admins` also grants ordinary
 access. Neither group grants Authentik administration. Roles below are OIDC claims,
-not Authentik RBAC roles or additional membership groups. Personal mail/DAV use the
-separate `personal-mail` group; see [mail authentication](mail-auth.md).
+not Authentik RBAC roles or additional membership groups. Mail and DAV have
+independent `personal-mail` and `dav-users` groups, even when sharing one OAuth
+grant; see [mail authentication](mail-auth.md).
 
 | Group    | Jellyfin roles                      | Immich role | Grafana organization role |
 | -------- | ----------------------------------- | ----------- | ------------------------- |
