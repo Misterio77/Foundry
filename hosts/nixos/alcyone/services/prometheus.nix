@@ -9,6 +9,8 @@ in {
   services = {
     prometheus = {
       enable = true;
+      # Client credentials are installed by sops-nix at runtime, outside the build sandbox.
+      checkConfig = "syntax-only";
       globalConfig = {
         # Scrape a bit more frequently
         scrape_interval = "30s";
