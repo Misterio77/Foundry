@@ -2,7 +2,8 @@
 
 Personal mail stays on simple-nixos-mailserver (Postfix/Dovecot); calendars and
 contacts stay on Radicale. Mail and DAV can share one Gablogin OAuth grant, but
-have independent access policies. DAV users can use OAuth or app passwords.
+have independent access policies. DAV clients can use OAuth or app passwords;
+the browser UI uses Gablogin SSO on the same hostname.
 IMAP 993, SMTP submission 465 and DAV remain restricted to the tailnet. Public
 SMTP 25 does not offer authentication.
 
@@ -14,7 +15,7 @@ The **Mail and DAV** application admits members of either `personal-mail` or
 - `personal-mail` grants the existing `hi@m7.rs` mailbox, never a mailbox derived
   from an editable profile email.
 - `dav-users` grants a user's own calendars and address books, via OAuth or an
-  Authentik app password. It does not grant mailbox access.
+  Authentik app password, or browser SSO. It does not grant mailbox access.
 
 The blueprint creates the groups but does not assign membership. Add intended
 DAV users to `dav-users`; `gabriel` needs both groups to use both services.
@@ -47,10 +48,11 @@ or `mail_access` claims. DAV-only clients can also omit the mail scope entirely.
 OAuth support requires a client that supports a configurable provider; app
 passwords remain the broadly compatible option.
 
-The outpost caches successful Authorization headers for 60 seconds. DAV is
-header-only for both bearer tokens and app passwords: nginx strips incoming proxy
-cookies and does not forward the outpost's Set-Cookie headers, so cookies cannot
-extend that window. Explicitly revoked/expired access tokens can therefore remain
+The outpost caches successful Authorization headers for 60 seconds. Requests with
+an Authorization header remain session-independent: nginx strips incoming proxy
+cookies and suppresses the outpost's Set-Cookie headers. An existing browser
+session cannot rescue invalid explicit credentials or extend their cache window.
+Explicitly revoked/expired access tokens can therefore remain
 usable for approximately one cache interval. Group removal does not revoke existing
 access or refresh tokens, and the refresh grant does not recheck the application's
 group policy. Revoke both access and refresh tokens when removing access; don't
@@ -66,12 +68,15 @@ is also subject to the 60-second header cache, not a browser session. The proxy
 provider issues five-minute tokens independently of the one-year ceiling on
 app-password credentials.
 
-After either authentication path succeeds, nginx takes the DAV principal only
+After any authentication path succeeds, nginx takes the DAV principal only
 from the outpost's response, passes it as `X-Remote-User` to loopback-only Radicale,
-and strips Authorization. Radicale explicitly uses `owner_only` rights.
+and strips Authorization and cookies before proxying to Radicale. Radicale
+explicitly uses `owner_only` rights.
 Client-supplied identity headers cannot select a user; an empty/missing trusted
-principal cannot access collections. Missing/invalid credentials receive
-authentication challenges, never a login-page redirect.
+principal cannot access collections. Unauthenticated HTML GET/HEAD navigation can
+redirect to browser SSO; DAV methods and non-HTML requests receive authentication
+challenges. On DAV resources, an explicit invalid Authorization header always
+receives 401, even with a valid browser cookie or HTML Accept header.
 
 New principals default to the user's immutable Authentik UUID, independent of
 username/email changes. An administrator may set the user attribute
@@ -88,6 +93,29 @@ created by group members, not just DAV, and does not extend existing credentials
 The SNM password database is retained for service senders. The personal mailbox
 has a locked password marker and only accepts OAuth. Radicale no longer uses its
 htpasswd file. No collections or mail storage paths change.
+
+## Browser access and session termination
+
+The **Calendars and contacts** Gablogin dashboard tile launches
+`https://dav.m7.rs/.web/`. It remains tailnet-only. Radicale's built-in UI manages
+collections and imports/exports; it is not a full calendar/contact frontend.
+The native outpost handles the browser OAuth flow and proxy cookie through
+`/outpost.goauthentik.io/`. Radicale's `prefer_browser_login` setting lets its
+initial principal-discovery request include that cookie without a second login.
+
+Browser sessions are independent credentials, not a side effect of app-password
+or bearer authentication. Revoking an app password/access token does not terminate
+an independently established browser session. Conversely, browser logout does
+not revoke independent app passwords or OAuth refresh tokens.
+
+Authentik browser logout and administrative session termination send a native
+websocket back-channel event to the embedded outpost. It deletes matching
+PostgreSQL-backed proxy sessions by `sid`; captured-cookie replay then fails
+without relying on the browser clearing its cookie. Other sessions and users are
+not terminated. Treat group membership, account status and principal changes as
+requiring explicit browser-session termination rather than assuming continuous
+policy re-evaluation. To remove every authentication path, terminate browser
+sessions and revoke access/refresh tokens and app passwords as appropriate.
 
 ## Provisioning and client setup
 
@@ -149,8 +177,36 @@ On 2026-11-07, the deployed nginx/outpost/Radicale stack passed:
   could access `gabriel`'s existing namespace.
 - Access-token and app-password revocation after waiting 65 seconds for the
   header cache. Forged cookies did not restore access; independent credentials
-  and the other user continued working. No DAV response exposed Set-Cookie.
+  and the other user continued working. Header-authenticated DAV responses did
+  not expose Set-Cookie.
 
 Disposable collections, credentials and the second account were removed, and
 `test`'s original membership was restored. Existing user collections were not
 modified. This does not complete the broader mail/network/expiry checklist above.
+
+### Deployed browser SSO verification
+
+On 2026-11-07, after deploying browser SSO on the same `dav.m7.rs` hostname:
+
+- Two users in three independent browser sessions launched the actual Radicale
+  collections UI from the Gablogin dashboard without a second login. Each
+  discovered their own UUID principal.
+- Requests authenticated with captured browser cookies created calendars and an
+  address book, wrote/read events and contacts, and shared storage with the same
+  user's other browser session and app password.
+- Cross-user reads/writes and forged identity headers were denied; existing
+  `gabriel` collections were inaccessible and untouched. Valid explicit header
+  credentials selected their own identity even with another user's browser cookie.
+- Invalid explicit Basic/Bearer credentials received 401 with a valid browser
+  cookie, including HTML navigation. After 65 seconds, revoked app passwords and
+  access tokens also failed with that cookie; the independent browser session
+  remained valid. Header-authenticated responses did not mint session cookies.
+- Browser logout rejected replay of the captured DAV cookie in approximately
+  0.08 seconds; administrative session termination did so in approximately
+  0.12 seconds. Other browser sessions/users and independent app passwords kept
+  working. These timings are observations, not a guaranteed delivery bound.
+
+Disposable collections, credentials, peer account and browser sessions were
+removed; `test`'s original group membership was restored. The dashboard launch
+URL also needed a one-time live API update because deployment alone had not
+updated that existing application; its final value is declared in the blueprint.

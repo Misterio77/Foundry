@@ -138,7 +138,7 @@ entries:
     attrs:
       name: Calendars and contacts
       provider: !KeyOf dav-provider
-      meta_launch_url: blank://blank
+      meta_launch_url: https://dav.m7.rs/.web/
       policy_engine_mode: all
 
   - model: authentik_policies.policybinding
