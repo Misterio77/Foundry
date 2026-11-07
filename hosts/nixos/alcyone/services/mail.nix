@@ -29,8 +29,8 @@
     localDnsResolver = false;
     accounts = {
       "hi@m7.rs" = {
-        # mkpasswd -sm bcrypt
-        hashedPasswordFile = config.sops.secrets.gabriel-mail-password.path;
+        # SNM requires a password field; lock it so this mailbox is OAuth-only.
+        hashedPassword = "!";
         aliases = map (d: "@" + d) domains;
       };
       "auth@m7.rs" = lib.mkIf config.services.authentik.enable {
@@ -106,7 +106,6 @@
   };
 
   sops.secrets = {
-    gabriel-mail-password.sopsFile = ../secrets.yaml;
     # FIXME: Restart dovecot.service when any mail password changes.
     authentik-mail-password.sopsFile = ../secrets.yaml;
     grafana-mail-password.sopsFile = ../secrets.yaml;

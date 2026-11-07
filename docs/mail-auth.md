@@ -59,8 +59,8 @@ The `personal-mail` group permits app-password lifetimes up to 365 days; choose
 an expiry explicitly when creating one. This ceiling covers all app passwords
 created by group members, not just DAV, and does not extend existing credentials.
 
-The existing SNM password database is retained for service senders and rollback,
-including the old personal mail password for now. Radicale no longer uses its
+The SNM password database is retained for service senders. The personal mailbox
+has a locked password marker and only accepts OAuth. Radicale no longer uses its
 htpasswd file. No collections or mail storage paths change.
 
 ## Rollout
