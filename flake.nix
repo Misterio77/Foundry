@@ -174,7 +174,7 @@
           inherit inputs outputs;
         };
       };
-      # Mail canary (Vultr)
+      # Lab (Vultr)
       asterope = lib.nixosSystem {
         modules = [./hosts/nixos/asterope];
         specialArgs = {
