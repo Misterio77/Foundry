@@ -41,6 +41,28 @@ in {
 
     immich = addPatches prev.immich [./immich-oidc-avatar.patch];
 
+    grafana = assert final.lib.versions.majorMinor prev.grafana.version == "13.3";
+      prev.grafana.overrideAttrs (old: {
+        patches = (old.patches or []) ++ [./grafana-oidc-backchannel.patch];
+        postCheck =
+          (old.postCheck or "")
+          + ''
+            export GOMAXPROCS=4
+            go test -p 4 -tags oss -count=1 \
+              ./pkg/login/oidcbackchannel \
+              ./pkg/services/auth/authimpl \
+              ./pkg/services/authn/clients \
+              ./pkg/services/authn/authnimpl \
+              ./pkg/services/ssosettings/strategies \
+              ./pkg/middleware/csrf \
+              ./pkg/services/sqlstore/migrations
+            go test -p 4 -tags oss -count=1 ./pkg/api \
+              -run 'Test(OAuthLogin|OIDCBackchannelLogout)'
+            ${final.python3.withPackages (ps: [ps.cryptography])}/bin/python3 \
+              scripts/test-oidc-backchannel.py "$GOPATH/bin/grafana" "$PWD"
+          '';
+      });
+
     # https://todo.sr.ht/~scoopta/wofi/174
     wofi = addPatches prev.wofi [./wofi-run-shell.patch];
 

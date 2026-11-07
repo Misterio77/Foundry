@@ -1,0 +1,1565 @@
+From: Foundry <hi@m7.rs>
+Subject: [PATCH] support opt-in Generic OAuth back-channel logout
+
+Bind verified OIDC identities to local sessions and persist monotonic logout
+cutoffs, independent of refresh-token enforcement and provider availability.
+See the included backchannel-logout.md for configuration and rollout notes.
+
+diff --git a/conf/defaults.ini b/conf/defaults.ini
+--- a/conf/defaults.ini
++++ b/conf/defaults.ini
+@@ -1058,6 +1058,9 @@
+ 
+ #################################### Generic OAuth #######################
+ [auth.generic_oauth]
++# Back-channel logout requires an explicitly trusted issuer and jwk_set_url.
++backchannel_logout = false
++oidc_issuer =
+ name = OAuth
+ icon = signin
+ enabled = false
+diff --git a/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/backchannel-logout.md b/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/backchannel-logout.md
+new file mode 100644
+--- /dev/null
++++ b/docs/sources/setup-grafana/configure-access/configure-authentication/generic-oauth/backchannel-logout.md
+@@ -0,0 +1,108 @@
++---
++title: Generic OAuth back-channel logout (Foundry patch)
++---
++
++# Generic OAuth back-channel logout
++
++This opt-in extension accepts OpenID Connect Back-Channel Logout 1.0 events for
++Generic OAuth. Ordinary Grafana sessions are validated against local database
++state; they do not contact the identity provider.
++
++Configure `[auth.generic_oauth]`:
++
++```ini
++backchannel_logout = true
++oidc_issuer = https://auth.m7.rs/application/o/grafana/
++jwk_set_url = https://auth.m7.rs/application/o/grafana/jwks/
++validate_id_token = true
++use_refresh_token = false
++scopes = openid profile email grafana_roles
++```
++
++The issuer must exactly match the provider's `iss` claim, including its trailing
++slash. Both issuer and JWKS URL must be explicit HTTPS URLs. Incoming tokens
++cannot select the provider, issuer, client, keys, or verification algorithm.
++The existing `validate_id_token` setting is recommended for consistency;
++back-channel-enabled logins independently require a signed, current ID token
++with the configured issuer, client audience, subject, and issuance time.
++
++Configure Authentik's Grafana provider:
++
++```yaml
++logout_uri: https://dash.m7.rs/login/generic_oauth/backchannel-logout
++logout_method: backchannel
++```
++
++Do not replace Grafana's `signout_redirect_url`: it still starts provider logout
++when the user signs out of Grafana. `offline_access` and refresh grants are not
++needed when refresh is disabled. Local session lifetimes continue to be governed
++by `login_maximum_lifetime_duration` and `login_maximum_inactive_lifetime_duration`.
++
++## Session and event handling
++
++Login persists hashes binding the local session to the provider/client, `sub`,
++optional `sid`, and ID-token `iat`. Raw identity values are not stored in the new
++columns or logout-marker table.
++
++The public POST endpoint accepts one form-encoded `logout_token`, with a 64 KiB
++request limit. It verifies an asymmetric JWT signature, exact issuer, client
++audience, `iat`, `jti`, the logout event, optional `exp`/`nbf`, absence of `nonce`,
++and at least one of `sid`/`sub`. Issuance must be within five minutes, with ten
++seconds of clock-skew allowance. JWKS are cached for an hour and refreshed on
++verification failure, rate-limited to once per five seconds per configured URL.
++Key-fetch or database failures return 503; invalid events return 400. Only
++successful durable persistence returns 200. No browser session or CSRF cookie is
++required; the JWT authenticates the request.
++
++Events with `sid` match that provider/client session, and also `sub` if supplied.
++Events with only `sub` match all that subject's sessions for the provider/client.
++Unrelated providers, users, and local sessions remain untouched.
++
++Monotonic logout cutoffs are checked locally on every session lookup and during
++session creation. A logout racing an in-flight callback cannot resurrect usable
++credentials, and replay or out-of-order delivery cannot undo a newer logout.
++Cookie rotation does not change the original identity binding. A login whose
++ID-token issuance time is later than the event may establish a new session,
++even if the provider reuses its `sid`. Same-second login/logout is conservatively
++revoked; retry login after the next second.
++
++The implementation rejects subsequent authenticated requests; it does not close
++an already-running request, WebSocket, or rendered dashboard. Logout markers do
++not physically delete session rows, so session listings can still show them
++until normal cleanup. Revocation storage errors fail closed for bound sessions.
++
++## Rollout and limitations
++
++- Existing sessions lack verified bindings and cannot be correlated. Revoke
++  pre-rollout Grafana sessions (or require users to sign in again) before relying
++  on back-channel logout. Merely deploying the patch does not revoke them.
++- The patch is disabled by default and does not change refresh enforcement.
++  Disable refresh explicitly to obtain outage-independent sessions.
++- Delivery matters: a missed logout event cannot be inferred while Authentik is
++  unavailable. Test administrative termination and group/access removal rather
++  than assuming they emit logout events.
++- Markers deliberately have no automatic expiry. Do not truncate them while
++  older sessions or in-flight logins could still exist. A bounded cleanup policy
++  would need to account for all local session lifetimes and clock skew.
++- The migration adds nullable binding columns, a marker table and an index.
++  SQLite tests cover migrations and persistence; PostgreSQL/MySQL need separate
++  integration verification before calling this an upstream-ready feature.
++
++## Acceptance checks
++
++`scripts/test-oidc-backchannel.py /path/to/grafana /path/to/source` runs an
++isolated loopback HTTPS IdP and real Grafana server with a disposable SQLite
++database. It requires Python's `cryptography` package and checks token expiry,
++session-targeted logout, persistence across restart, and an IdP outage. These
++checks also run in Grafana's normal package check phase in Foundry.
++
++The real-provider checks still matter:
++
++1. Log in twice in separate browser sessions; confirm the expected `sid` scope.
++2. End one Authentik session and confirm only its Grafana session is rejected.
++3. Repeat after the one-minute OIDC access token has expired and after restarting
++   Grafana. Refresh must remain disabled.
++4. Stop or block Authentik; existing Grafana sessions must continue to work.
++5. Restart Authentik, log in again, and verify logout still targets the new login.
++6. Exercise subject-only events, duplicate events, key rotation, and a callback
++   racing logout. Check HTTP failure responses and the IdP's delivery behaviour.
+diff --git a/pkg/api/api.go b/pkg/api/api.go
+--- a/pkg/api/api.go
++++ b/pkg/api/api.go
+@@ -81,6 +81,7 @@
+ 	r := hs.RouteRegister
+ 
+ 	// not logged in views
++	r.Post("/login/generic_oauth/backchannel-logout", hs.OIDCBackchannelLogout)
+ 	r.Get("/logout", hs.Logout)
+ 	r.Post("/login", requestmeta.SetOwner(requestmeta.TeamAuth), quota(string(auth.QuotaTargetSrv)), routing.Wrap(hs.LoginPost))
+ 	r.Get("/login/:name", quota(string(auth.QuotaTargetSrv)), hs.OAuthLogin)
+diff --git a/pkg/api/oidc_backchannel.go b/pkg/api/oidc_backchannel.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/api/oidc_backchannel.go
+@@ -0,0 +1,63 @@
++package api
++
++import (
++	"context"
++	"errors"
++	"net/http"
++
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
++	"github.com/grafana/grafana/pkg/login/social"
++	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
++)
++
++type oidcLogoutRecorder interface {
++	RecordOIDCLogout(context.Context, oidcbackchannel.Binding) error
++}
++
++func (hs *HTTPServer) OIDCBackchannelLogout(c *contextmodel.ReqContext) {
++	c.Resp.Header().Set("Cache-Control", "no-store")
++	info, err := hs.SocialService.GetOAuthInfoProvider(c.Req.Context(), social.GenericOAuthProviderName)
++	if err != nil {
++		c.Resp.WriteHeader(http.StatusServiceUnavailable)
++		return
++	}
++	if info == nil || !info.Enabled || info.Extra["backchannel_logout"] != "true" {
++		c.Resp.WriteHeader(http.StatusNotFound)
++		return
++	}
++	cfg := oidcbackchannel.Config{Issuer: info.Extra["oidc_issuer"], ClientID: info.ClientId, JWKSURL: info.JwkSetURL}
++	if cfg.Check() != nil {
++		c.Resp.WriteHeader(http.StatusServiceUnavailable)
++		return
++	}
++	c.Req.Body = http.MaxBytesReader(c.Resp, c.Req.Body, 64<<10)
++	if err := c.Req.ParseForm(); err != nil {
++		c.Resp.WriteHeader(http.StatusBadRequest)
++		return
++	}
++	values := c.Req.PostForm["logout_token"]
++	if len(values) != 1 {
++		c.Resp.WriteHeader(http.StatusBadRequest)
++		return
++	}
++	event, err := oidcbackchannel.Validate(c.Req.Context(), values[0], cfg, true)
++	if err != nil {
++		if errors.Is(err, oidcbackchannel.ErrKeysUnavailable) {
++			c.Resp.WriteHeader(http.StatusServiceUnavailable)
++		} else {
++			c.Resp.WriteHeader(http.StatusBadRequest)
++		}
++		return
++	}
++	recorder, ok := hs.AuthTokenService.(oidcLogoutRecorder)
++	if !ok {
++		c.Resp.WriteHeader(http.StatusServiceUnavailable)
++		return
++	}
++	if err := recorder.RecordOIDCLogout(c.Req.Context(), event); err != nil {
++		hs.log.Error("Failed to persist OIDC logout", "error", err)
++		c.Resp.WriteHeader(http.StatusServiceUnavailable)
++		return
++	}
++	c.Resp.WriteHeader(http.StatusOK)
++}
+diff --git a/pkg/api/oidc_backchannel_test.go b/pkg/api/oidc_backchannel_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/api/oidc_backchannel_test.go
+@@ -0,0 +1,85 @@
++package api
++
++import (
++	"context"
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/json"
++	"errors"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"strings"
++	"testing"
++	"time"
++
++	jose "github.com/go-jose/go-jose/v4"
++	"github.com/go-jose/go-jose/v4/jwt"
++	"github.com/grafana/grafana/pkg/infra/log"
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
++	"github.com/grafana/grafana/pkg/login/social"
++	"github.com/grafana/grafana/pkg/login/social/socialtest"
++	"github.com/grafana/grafana/pkg/services/auth"
++	"github.com/stretchr/testify/require"
++)
++
++type testLogoutRecorder struct {
++	auth.UserTokenService
++	events []oidcbackchannel.Binding
++	err    error
++}
++
++func (r *testLogoutRecorder) RecordOIDCLogout(_ context.Context, b oidcbackchannel.Binding) error {
++	r.events = append(r.events, b)
++	return r.err
++}
++
++func TestOIDCBackchannelLogout(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	require.NoError(t, err)
++	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		require.NoError(t, json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public}}}))
++	}))
++	defer provider.Close()
++	previous := http.DefaultTransport
++	http.DefaultTransport = provider.Client().Transport
++	defer func() { http.DefaultTransport = previous }()
++	info := &social.OAuthInfo{Enabled: true, ClientId: "grafana", JwkSetURL: provider.URL + "/keys", Extra: map[string]string{"backchannel_logout": "true", "oidc_issuer": provider.URL}}
++	recorder := &testLogoutRecorder{}
++	server := SetupAPITestServer(t, func(hs *HTTPServer) {
++		hs.SocialService = &socialtest.FakeSocialService{GetOAuthInfoProviderFunc: func(context.Context, string) (*social.OAuthInfo, error) { return info, nil }}
++		hs.AuthTokenService = recorder
++		hs.log = log.New("oidc-test")
++	})
++	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, nil)
++	require.NoError(t, err)
++	now := time.Now()
++	raw, err := jwt.Signed(signer).Claims(map[string]any{"iss": provider.URL, "aud": "grafana", "sub": "alice", "sid": "session-a", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix(), "jti": "event-a", "events": map[string]any{oidcbackchannel.Event: map[string]any{}}}).Serialize()
++	require.NoError(t, err)
++	send := func(body string) int {
++		request := server.NewPostRequest("/login/generic_oauth/backchannel-logout", strings.NewReader(body))
++		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++		// A signed server-to-server event must work without browser cookies or a CSRF origin.
++		request.Header.Set("Origin", "https://auth.example")
++		res, err := server.Send(request)
++		require.NoError(t, err)
++		defer res.Body.Close()
++		require.Equal(t, "no-store", res.Header.Get("Cache-Control"))
++		return res.StatusCode
++	}
++	require.Equal(t, http.StatusBadRequest, send(""))
++	require.Equal(t, http.StatusBadRequest, send("logout_token=invalid"))
++	require.Empty(t, recorder.events)
++	body := url.Values{"logout_token": {raw}}.Encode()
++	require.Equal(t, http.StatusOK, send(body))
++	require.Len(t, recorder.events, 1)
++	require.Equal(t, http.StatusOK, send(body))
++	require.Len(t, recorder.events, 2)
++	require.Equal(t, http.StatusBadRequest, send(body+"&"+body))
++	require.Len(t, recorder.events, 2)
++	require.Equal(t, http.StatusBadRequest, send("logout_token="+strings.Repeat("x", 65<<10)))
++	recorder.err = errors.New("database unavailable")
++	require.Equal(t, http.StatusServiceUnavailable, send(body))
++	info.Extra["backchannel_logout"] = "false"
++	require.Equal(t, http.StatusNotFound, send(body))
++}
+diff --git a/pkg/login/oidcbackchannel/remote_test.go b/pkg/login/oidcbackchannel/remote_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/login/oidcbackchannel/remote_test.go
+@@ -0,0 +1,112 @@
++package oidcbackchannel
++
++import (
++	"context"
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	jose "github.com/go-jose/go-jose/v4"
++	"github.com/go-jose/go-jose/v4/jwt"
++	"github.com/stretchr/testify/require"
++)
++
++func TestCachedKeysSurviveProviderOutage(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	require.NoError(t, err)
++	var requests atomic.Int32
++	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		requests.Add(1)
++		require.NoError(t, json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public}}}))
++	}))
++	defer server.Close()
++	previous := http.DefaultTransport
++	http.DefaultTransport = server.Client().Transport
++	defer func() { http.DefaultTransport = previous }()
++	cfg := Config{Issuer: server.URL, ClientID: "grafana", JWKSURL: server.URL + "/jwks"}
++	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, nil)
++	require.NoError(t, err)
++	now := time.Now()
++	raw, err := jwt.Signed(signer).Claims(map[string]any{"iss": cfg.Issuer, "aud": cfg.ClientID, "sub": "alice", "sid": "sid-a", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix()}).Serialize()
++	require.NoError(t, err)
++	_, err = Validate(context.Background(), raw, cfg, false)
++	require.NoError(t, err)
++	require.EqualValues(t, 1, requests.Load())
++	server.Close()
++	raw, err = jwt.Signed(signer).Claims(map[string]any{"iss": cfg.Issuer, "aud": cfg.ClientID, "sub": "alice", "sid": "sid-a", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix(), "jti": "logout", "events": map[string]any{Event: map[string]any{}}}).Serialize()
++	require.NoError(t, err)
++	_, err = Validate(context.Background(), raw, cfg, true)
++	require.NoError(t, err)
++	require.EqualValues(t, 1, requests.Load())
++	keyCache.Lock()
++	delete(keyCache.entries, cfg.JWKSURL)
++	keyCache.Unlock()
++	_, err = Validate(context.Background(), raw, cfg, true)
++	require.ErrorIs(t, err, ErrKeysUnavailable)
++}
++
++func TestKeyRotationAndFetchBackoff(t *testing.T) {
++	var current atomic.Value
++	var requests atomic.Int32
++	var unavailable atomic.Bool
++	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		requests.Add(1)
++		if unavailable.Load() {
++			w.WriteHeader(http.StatusServiceUnavailable)
++			return
++		}
++		require.NoError(t, json.NewEncoder(w).Encode(current.Load()))
++	}))
++	defer server.Close()
++	previous := http.DefaultTransport
++	http.DefaultTransport = server.Client().Transport
++	defer func() { http.DefaultTransport = previous }()
++	cfg := Config{Issuer: server.URL, ClientID: "grafana", JWKSURL: server.URL + "/keys"}
++	mint := func() (string, jose.JSONWebKeySet) {
++		public, private, err := ed25519.GenerateKey(rand.Reader)
++		require.NoError(t, err)
++		signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, nil)
++		require.NoError(t, err)
++		now := time.Now()
++		raw, err := jwt.Signed(signer).Claims(map[string]any{"iss": cfg.Issuer, "aud": cfg.ClientID, "sub": "alice", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix()}).Serialize()
++		require.NoError(t, err)
++		return raw, jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public}}}
++	}
++	allowFetch := func() {
++		keyCache.Lock()
++		cached := keyCache.entries[cfg.JWKSURL]
++		cached.attempted = time.Now().Add(-6 * time.Second)
++		keyCache.entries[cfg.JWKSURL] = cached
++		keyCache.Unlock()
++	}
++	first, keys := mint()
++	current.Store(keys)
++	_, err := Validate(context.Background(), first, cfg, false)
++	require.NoError(t, err)
++	second, keys := mint()
++	current.Store(keys)
++	_, err = Validate(context.Background(), second, cfg, false)
++	require.Error(t, err)
++	require.EqualValues(t, 1, requests.Load())
++	allowFetch()
++	_, err = Validate(context.Background(), second, cfg, false)
++	require.NoError(t, err)
++	require.EqualValues(t, 2, requests.Load())
++	_, err = Validate(context.Background(), first, cfg, false)
++	require.Error(t, err)
++	unavailable.Store(true)
++	third, _ := mint()
++	allowFetch()
++	_, err = Validate(context.Background(), third, cfg, false)
++	require.ErrorIs(t, err, ErrKeysUnavailable)
++	_, err = Validate(context.Background(), third, cfg, false)
++	require.ErrorIs(t, err, ErrKeysUnavailable)
++	require.EqualValues(t, 3, requests.Load())
++	_, err = Validate(context.Background(), second, cfg, false)
++	require.NoError(t, err)
++}
+diff --git a/pkg/login/oidcbackchannel/token.go b/pkg/login/oidcbackchannel/token.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/login/oidcbackchannel/token.go
+@@ -0,0 +1,211 @@
++package oidcbackchannel
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"net/http"
++	"net/url"
++	"sync"
++	"time"
++
++	jose "github.com/go-jose/go-jose/v4"
++	"github.com/go-jose/go-jose/v4/jwt"
++)
++
++const Event = "http://schemas.openid.net/event/backchannel-logout"
++
++var ErrKeysUnavailable = errors.New("OIDC signing keys unavailable")
++
++// Binding contains only hashes of provider/client-scoped identity, never bearer tokens.
++type Binding struct {
++	Scope    string
++	Subject  string
++	Session  string
++	IssuedAt int64
++}
++
++func (b Binding) MatchesSubject(subject string) bool {
++	return subject != "" && b.Subject == digest(subject)
++}
++
++type Config struct {
++	Issuer   string
++	ClientID string
++	JWKSURL  string
++}
++
++func (c Config) Check() error {
++	for _, raw := range []string{c.Issuer, c.JWKSURL} {
++		u, err := url.Parse(raw)
++		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
++			return errors.New("OIDC issuer and JWKS URL must be configured HTTPS URLs")
++		}
++	}
++	if c.ClientID == "" {
++		return errors.New("OIDC client ID is required")
++	}
++	return nil
++}
++
++func digest(values ...string) string {
++	b, _ := json.Marshal(values)
++	h := sha256.Sum256(b)
++	return hex.EncodeToString(h[:])
++}
++
++func (c Config) binding(claims tokenClaims) Binding {
++	b := Binding{Scope: digest("oauth_generic_oauth", c.Issuer, c.ClientID), IssuedAt: int64(*claims.IssuedAt)}
++	if claims.Subject != "" {
++		b.Subject = digest(claims.Subject)
++	}
++	if claims.Session != "" {
++		b.Session = digest(claims.Session)
++	}
++	return b
++}
++
++type tokenClaims struct {
++	jwt.Claims
++	Session         string                     `json:"sid"`
++	Events          map[string]json.RawMessage `json:"events"`
++	Nonce           json.RawMessage            `json:"nonce"`
++	AuthorizedParty string                     `json:"azp"`
++}
++
++var algorithms = []jose.SignatureAlgorithm{jose.RS256, jose.RS384, jose.RS512, jose.PS256, jose.PS384, jose.PS512, jose.ES256, jose.ES384, jose.ES512, jose.EdDSA}
++
++// Verify accepts only asymmetric signatures from explicitly configured keys.
++func Verify(raw string, keys jose.JSONWebKeySet, cfg Config, logout bool, now time.Time) (Binding, error) {
++	token, err := jwt.ParseSigned(raw, algorithms)
++	if err != nil {
++		return Binding{}, err
++	}
++	if len(token.Headers) != 1 {
++		return Binding{}, errors.New("expected one JWT signature")
++	}
++	var claims tokenClaims
++	verified := false
++	for _, key := range keys.Keys {
++		if !key.IsPublic() || (key.Use != "" && key.Use != "sig") || (key.Algorithm != "" && key.Algorithm != token.Headers[0].Algorithm) {
++			continue
++		}
++		if token.Headers[0].KeyID != "" && key.KeyID != token.Headers[0].KeyID {
++			continue
++		}
++		if err = token.Claims(key.Key, &claims); err == nil {
++			verified = true
++			break
++		}
++	}
++	if !verified {
++		return Binding{}, errors.New("JWT signature verification failed")
++	}
++	if claims.IssuedAt == nil || claims.Issuer != cfg.Issuer || !claims.Audience.Contains(cfg.ClientID) {
++		return Binding{}, errors.New("invalid OIDC issuer, audience or issuance time")
++	}
++	if err = claims.ValidateWithLeeway(jwt.Expected{Issuer: cfg.Issuer, AnyAudience: jwt.Audience{cfg.ClientID}, Time: now}, 10*time.Second); err != nil {
++		return Binding{}, err
++	}
++	if logout {
++		event, ok := claims.Events[Event]
++		var obj map[string]json.RawMessage
++		if !ok || json.Unmarshal(event, &obj) != nil || obj == nil || len(obj) != 0 || len(claims.Nonce) != 0 || claims.ID == "" || (claims.Session == "" && claims.Subject == "") {
++			return Binding{}, errors.New("invalid back-channel logout claims")
++		}
++		if claims.IssuedAt.Time().Before(now.Add(-5 * time.Minute)) {
++			return Binding{}, errors.New("logout token is too old")
++		}
++	} else {
++		if claims.Expiry == nil || claims.Subject == "" || claims.Events != nil {
++			return Binding{}, errors.New("invalid ID token")
++		}
++		if (len(claims.Audience) > 1 && claims.AuthorizedParty == "") || (claims.AuthorizedParty != "" && claims.AuthorizedParty != cfg.ClientID) {
++			return Binding{}, errors.New("invalid authorized party")
++		}
++	}
++	return cfg.binding(claims), nil
++}
++
++type cachedKeys struct {
++	keys      jose.JSONWebKeySet
++	fetched   time.Time
++	attempted time.Time
++	fetchErr  error
++}
++
++var keyCache = struct {
++	sync.Mutex
++	entries map[string]cachedKeys
++}{entries: make(map[string]cachedKeys)}
++
++// Cached keys keep logout delivery independent of discovery, including during short outages.
++func Validate(ctx context.Context, raw string, cfg Config, logout bool) (Binding, error) {
++	if err := cfg.Check(); err != nil {
++		return Binding{}, err
++	}
++	if len(raw) == 0 || len(raw) > 64<<10 {
++		return Binding{}, errors.New("invalid JWT length")
++	}
++	keyCache.Lock()
++	defer keyCache.Unlock()
++	cached, ok := keyCache.entries[cfg.JWKSURL]
++	now := time.Now()
++	var binding Binding
++	var verifyErr error
++	if ok && now.Sub(cached.fetched) < time.Hour {
++		binding, verifyErr = Verify(raw, cached.keys, cfg, logout, now)
++		if verifyErr == nil {
++			return binding, nil
++		}
++	}
++	if ok && now.Sub(cached.attempted) < 5*time.Second {
++		if cached.fetchErr != nil {
++			return Binding{}, cached.fetchErr
++		}
++		return binding, verifyErr
++	}
++	keys, err := fetchKeys(ctx, cfg.JWKSURL)
++	cached.attempted = now
++	cached.fetchErr = err
++	if err == nil {
++		cached.keys = keys
++		cached.fetched = now
++	}
++	if len(keyCache.entries) >= 16 {
++		clear(keyCache.entries)
++	}
++	keyCache.entries[cfg.JWKSURL] = cached
++	if err != nil {
++		return Binding{}, err
++	}
++	return Verify(raw, keys, cfg, logout, now)
++}
++
++func fetchKeys(ctx context.Context, endpoint string) (jose.JSONWebKeySet, error) {
++	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
++	if err != nil {
++		return jose.JSONWebKeySet{}, fmt.Errorf("%w: %w", ErrKeysUnavailable, err)
++	}
++	client := &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
++	response, err := client.Do(request)
++	if err != nil {
++		return jose.JSONWebKeySet{}, fmt.Errorf("%w: %w", ErrKeysUnavailable, err)
++	}
++	defer response.Body.Close()
++	if response.StatusCode != http.StatusOK {
++		return jose.JSONWebKeySet{}, ErrKeysUnavailable
++	}
++	var keys jose.JSONWebKeySet
++	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&keys); err != nil {
++		return jose.JSONWebKeySet{}, fmt.Errorf("%w: %w", ErrKeysUnavailable, err)
++	}
++	if len(keys.Keys) == 0 || len(keys.Keys) > 100 {
++		return jose.JSONWebKeySet{}, ErrKeysUnavailable
++	}
++	return keys, nil
++}
+diff --git a/pkg/login/oidcbackchannel/token_test.go b/pkg/login/oidcbackchannel/token_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/login/oidcbackchannel/token_test.go
+@@ -0,0 +1,95 @@
++package oidcbackchannel
++
++import (
++	"crypto/ed25519"
++	"crypto/rand"
++	"testing"
++	"time"
++
++	jose "github.com/go-jose/go-jose/v4"
++	"github.com/go-jose/go-jose/v4/jwt"
++	"github.com/stretchr/testify/require"
++)
++
++func TestVerify(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	require.NoError(t, err)
++	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, (&jose.SignerOptions{}).WithType("logout+jwt"))
++	require.NoError(t, err)
++	keys := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public, Use: "sig", Algorithm: "EdDSA"}}}
++	now := time.Now().Truncate(time.Second)
++	cfg := Config{Issuer: "https://auth.example/application/o/grafana/", ClientID: "grafana", JWKSURL: "https://auth.example/keys"}
++	base := func() map[string]any {
++		return map[string]any{"iss": cfg.Issuer, "aud": cfg.ClientID, "sub": "alice", "sid": "session-a", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix(), "jti": "event-a", "events": map[string]any{Event: map[string]any{}}}
++	}
++	sign := func(c map[string]any) string {
++		raw, err := jwt.Signed(signer).Claims(c).Serialize()
++		require.NoError(t, err)
++		return raw
++	}
++	for _, tc := range []struct {
++		name   string
++		change func(map[string]any)
++		valid  bool
++	}{
++		{"valid", func(map[string]any) {}, true},
++		{"sid only", func(c map[string]any) { delete(c, "sub") }, true},
++		{"subject only", func(c map[string]any) { delete(c, "sid") }, true},
++		{"no exp is permitted by logout spec", func(c map[string]any) { delete(c, "exp") }, true},
++		{"wrong issuer", func(c map[string]any) { c["iss"] = "https://evil.example" }, false},
++		{"wrong client", func(c map[string]any) { c["aud"] = "another-app" }, false},
++		{"expired", func(c map[string]any) { c["exp"] = now.Add(-time.Minute).Unix() }, false},
++		{"old", func(c map[string]any) { c["iat"] = now.Add(-6 * time.Minute).Unix() }, false},
++		{"future", func(c map[string]any) { c["iat"] = now.Add(time.Minute).Unix() }, false},
++		{"no issuance", func(c map[string]any) { delete(c, "iat") }, false},
++		{"no identifier", func(c map[string]any) { delete(c, "jti") }, false},
++		{"no target", func(c map[string]any) { delete(c, "sub"); delete(c, "sid") }, false},
++		{"nonce", func(c map[string]any) { c["nonce"] = "nonce" }, false},
++		{"null nonce", func(c map[string]any) { c["nonce"] = nil }, false},
++		{"wrong event", func(c map[string]any) { c["events"] = map[string]any{"other": map[string]any{}} }, false},
++		{"null event", func(c map[string]any) { c["events"] = map[string]any{Event: nil} }, false},
++		{"ID token is not logout", func(c map[string]any) { delete(c, "events") }, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			c := base()
++			tc.change(c)
++			_, err := Verify(sign(c), keys, cfg, true, now)
++			if tc.valid {
++				require.NoError(t, err)
++			} else {
++				require.Error(t, err)
++			}
++		})
++	}
++	claims := base()
++	raw := sign(claims)
++	other, _, err := ed25519.GenerateKey(rand.Reader)
++	require.NoError(t, err)
++	_, err = Verify(raw, jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: other}}}, cfg, true, now)
++	require.Error(t, err)
++	_, err = Verify("garbage", keys, cfg, true, now)
++	require.Error(t, err)
++	delete(claims, "events")
++	delete(claims, "jti")
++	b, err := Verify(sign(claims), keys, cfg, false, now)
++	require.NoError(t, err)
++	require.True(t, b.MatchesSubject("alice"))
++	require.False(t, b.MatchesSubject("bob"))
++	require.NotEqual(t, "alice", b.Subject)
++	claims["aud"] = []string{"grafana", "other"}
++	_, err = Verify(sign(claims), keys, cfg, false, now)
++	require.Error(t, err)
++	claims["azp"] = "grafana"
++	_, err = Verify(sign(claims), keys, cfg, false, now)
++	require.NoError(t, err)
++	claims["azp"] = "other"
++	_, err = Verify(sign(claims), keys, cfg, false, now)
++	require.Error(t, err)
++}
++
++func TestConfig(t *testing.T) {
++	require.NoError(t, (Config{Issuer: "https://auth.example/", ClientID: "grafana", JWKSURL: "https://auth.example/keys"}).Check())
++	for _, raw := range []string{"", "http://auth.example/", "https://user:pass@auth.example/", "https:///keys", "https://auth.example/#fragment"} {
++		require.Error(t, (Config{Issuer: raw, ClientID: "grafana", JWKSURL: "https://auth.example/keys"}).Check())
++	}
++}
+diff --git a/pkg/login/social/connectors/generic_oauth.go b/pkg/login/social/connectors/generic_oauth.go
+--- a/pkg/login/social/connectors/generic_oauth.go
++++ b/pkg/login/social/connectors/generic_oauth.go
+@@ -31,6 +31,8 @@
+ )
+ 
+ var ExtraGenericOAuthSettingKeys = map[string]ExtraKeyInfo{
++	"backchannel_logout":    {Type: String},
++	"oidc_issuer":           {Type: String},
+ 	nameAttributePathKey:    {Type: String},
+ 	loginAttributePathKey:   {Type: String},
+ 	idTokenAttributeNameKey: {Type: String},
+diff --git a/pkg/middleware/csrf/csrf.go b/pkg/middleware/csrf/csrf.go
+--- a/pkg/middleware/csrf/csrf.go
++++ b/pkg/middleware/csrf/csrf.go
+@@ -33,7 +33,7 @@
+ 		cfg:            cfg,
+ 		trustedOrigins: map[string]struct{}{},
+ 		headers:        map[string]struct{}{},
+-		safeEndpoints:  map[string]struct{}{},
++		safeEndpoints:  map[string]struct{}{cfg.AppSubURL + "/login/generic_oauth/backchannel-logout": {}},
+ 	}
+ 
+ 	additionalHeaders := cfg.SectionWithEnvOverrides("security").Key("csrf_additional_headers").Strings(" ")
+diff --git a/pkg/services/auth/authimpl/auth_token.go b/pkg/services/auth/authimpl/auth_token.go
+--- a/pkg/services/auth/authimpl/auth_token.go
++++ b/pkg/services/auth/authimpl/auth_token.go
+@@ -144,7 +144,19 @@
+ 			_, err := dbSession.Table(dbHelper.Table("user_auth_token")).Insert(&userAuthToken)
+ 			return err
+ 		})
+-		return inErr
++		if inErr != nil {
++			return inErr
++		}
++		if cmd.ExternalSession != nil && cmd.ExternalSession.OIDCScope != "" {
++			revoked, inErr := s.oidcSessionRevoked(ctx, userAuthToken.ExternalSessionId)
++			if inErr != nil {
++				return inErr
++			}
++			if revoked {
++				return &auth.TokenRevokedError{UserID: userAuthToken.UserId, TokenID: userAuthToken.Id}
++			}
++		}
++		return nil
+ 	})
+ 	if err != nil {
+ 		return nil, err
+@@ -193,6 +205,14 @@
+ 
+ 	if !exists {
+ 		return nil, auth.ErrUserTokenNotFound
++	}
++
++	revoked, err := s.oidcSessionRevoked(ctx, model.ExternalSessionId)
++	if err != nil {
++		return nil, err
++	}
++	if revoked {
++		return nil, &auth.TokenRevokedError{UserID: model.UserId, TokenID: model.Id}
+ 	}
+ 
+ 	ctxLogger := s.log.FromContext(ctx)
+diff --git a/pkg/services/auth/authimpl/oidc_logout.go b/pkg/services/auth/authimpl/oidc_logout.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/auth/authimpl/oidc_logout.go
+@@ -0,0 +1,80 @@
++package authimpl
++
++import (
++	"context"
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++
++	"github.com/grafana/grafana/pkg/infra/db"
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
++	"github.com/grafana/grafana/pkg/services/auth"
++)
++
++type oidcLogout struct {
++	ID       string `xorm:"pk 'id'"`
++	Scope    string `xorm:"scope"`
++	Subject  string `xorm:"subject"`
++	Session  string `xorm:"session"`
++	IssuedAt int64  `xorm:"issued_at"`
++}
++
++func (oidcLogout) TableName() string { return "oidc_session_logout" }
++
++// RecordOIDCLogout is idempotent and monotonic: replay cannot revive a session.
++func (s *UserAuthTokenService) RecordOIDCLogout(ctx context.Context, event oidcbackchannel.Binding) error {
++	encoded, _ := json.Marshal([]string{event.Scope, event.Subject, event.Session})
++	sum := sha256.Sum256(encoded)
++	marker := oidcLogout{ID: hex.EncodeToString(sum[:]), Scope: event.Scope, Subject: event.Subject, Session: event.Session, IssuedAt: event.IssuedAt}
++	helper, err := s.sql(ctx)
++	if err != nil {
++		return err
++	}
++	return helper.DB.InTransaction(ctx, func(ctx context.Context) error {
++		return helper.DB.WithDbSession(ctx, func(sess *db.Session) error {
++			var previous oidcLogout
++			found, err := sess.Table(helper.Table(marker.TableName())).Where("id = ?", marker.ID).Get(&previous)
++			if err != nil {
++				return err
++			}
++			if found {
++				_, err = sess.Table(helper.Table(marker.TableName())).Where("id = ? AND issued_at < ?", marker.ID, marker.IssuedAt).Cols("issued_at").Update(&marker)
++			} else {
++				_, err = sess.Table(helper.Table(marker.TableName())).Insert(&marker)
++			}
++			return err
++		})
++	})
++}
++
++func (s *UserAuthTokenService) oidcSessionRevoked(ctx context.Context, externalID int64) (bool, error) {
++	if externalID == 0 {
++		return false, nil
++	}
++	helper, err := s.sql(ctx)
++	if err != nil {
++		return false, err
++	}
++	var external auth.ExternalSession
++	var revoked bool
++	err = helper.DB.WithDbSession(ctx, func(sess *db.Session) error {
++		found, err := sess.Table(helper.Table(external.TableName())).Where("id = ?", externalID).
++			Cols("oidc_scope", "oidc_subject", "oidc_session", "oidc_issued_at").Get(&external)
++		if err != nil {
++			return err
++		}
++		if !found {
++			return auth.ErrExternalSessionNotFound
++		}
++		if external.OIDCScope == "" {
++			return nil
++		}
++		var marker oidcLogout
++		revoked, err = sess.Table(helper.Table(marker.TableName())).
++			Where("scope = ? AND issued_at >= ?", external.OIDCScope, external.OIDCIssuedAt).
++			And("((session = '' AND subject = ?) OR (session <> '' AND session = ? AND (subject = '' OR subject = ?)))", external.OIDCSubject, external.OIDCSession, external.OIDCSubject).
++			Exist(&marker)
++		return err
++	})
++	return revoked, err
++}
+diff --git a/pkg/services/auth/authimpl/oidc_logout_test.go b/pkg/services/auth/authimpl/oidc_logout_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/auth/authimpl/oidc_logout_test.go
+@@ -0,0 +1,79 @@
++package authimpl
++
++import (
++	"context"
++	"testing"
++
++	"github.com/grafana/grafana/pkg/infra/db"
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
++	"github.com/grafana/grafana/pkg/services/auth"
++	"github.com/grafana/grafana/pkg/services/user"
++	"github.com/grafana/grafana/pkg/util/testutil"
++	"github.com/stretchr/testify/require"
++)
++
++func TestIntegrationOIDCLogout(t *testing.T) {
++	testutil.SkipIntegrationTestInShortMode(t)
++	test := createTestContext(t)
++	ctx := context.Background()
++	service := test.tokenService
++	create := func(scope, subject, sid string, iat int64) (*auth.UserToken, error) {
++		return service.CreateToken(ctx, &auth.CreateTokenCommand{User: &user.User{ID: 10}, ExternalSession: &auth.ExternalSession{UserID: 10, AuthModule: "oauth_generic_oauth", OIDCScope: scope, OIDCSubject: subject, OIDCSession: sid, OIDCIssuedAt: iat}})
++	}
++	alice, err := create("provider-a", "alice", "sid-a", 100)
++	require.NoError(t, err)
++	otherSession, err := create("provider-a", "alice", "sid-b", 100)
++	require.NoError(t, err)
++	otherSubject, err := create("provider-a", "bob", "sid-a", 100)
++	require.NoError(t, err)
++	otherProvider, err := create("provider-b", "alice", "sid-a", 100)
++	require.NoError(t, err)
++	local, err := service.CreateToken(ctx, &auth.CreateTokenCommand{User: &user.User{ID: 10}})
++	require.NoError(t, err)
++	_, err = service.LookupToken(ctx, alice.UnhashedToken)
++	require.NoError(t, err)
++	event := oidcbackchannel.Binding{Scope: "provider-a", Subject: "alice", Session: "sid-a", IssuedAt: 110}
++	require.NoError(t, service.RecordOIDCLogout(ctx, event))
++	require.NoError(t, service.RecordOIDCLogout(ctx, event))
++	event.IssuedAt = 105
++	require.NoError(t, service.RecordOIDCLogout(ctx, event))
++	_, err = service.LookupToken(ctx, alice.UnhashedToken)
++	require.Error(t, err)
++	for _, token := range []*auth.UserToken{otherSession, otherSubject, otherProvider, local} {
++		_, err = service.LookupToken(ctx, token.UnhashedToken)
++		require.NoError(t, err)
++	}
++	// An in-flight callback cannot create a usable session after the event.
++	_, err = create("provider-a", "alice", "sid-a", 109)
++	require.Error(t, err)
++	_, err = create("provider-a", "alice", "sid-a", 110)
++	require.Error(t, err)
++	fresh, err := create("provider-a", "alice", "sid-a", 111)
++	require.NoError(t, err)
++	_, err = service.LookupToken(ctx, fresh.UnhashedToken)
++	require.NoError(t, err)
++	// The marker is stored in the database, not in the service instance.
++	restarted := *service
++	_, err = restarted.LookupToken(ctx, alice.UnhashedToken)
++	require.Error(t, err)
++	require.NoError(t, service.RecordOIDCLogout(ctx, oidcbackchannel.Binding{Scope: "provider-a", Session: "sid-a", IssuedAt: 120}))
++	_, err = service.LookupToken(ctx, otherSubject.UnhashedToken)
++	require.Error(t, err)
++	_, err = service.LookupToken(ctx, fresh.UnhashedToken)
++	require.Error(t, err)
++	require.NoError(t, service.RecordOIDCLogout(ctx, oidcbackchannel.Binding{Scope: "provider-a", Subject: "alice", IssuedAt: 120}))
++	_, err = service.LookupToken(ctx, otherSession.UnhashedToken)
++	require.Error(t, err)
++	_, err = service.LookupToken(ctx, otherProvider.UnhashedToken)
++	require.NoError(t, err)
++	_, err = service.LookupToken(ctx, local.UnhashedToken)
++	require.NoError(t, err)
++	helper, err := service.sql(ctx)
++	require.NoError(t, err)
++	// Unavailable revocation storage fails closed; no IdP connection is involved.
++	require.NoError(t, helper.DB.WithDbSession(ctx, func(sess *db.Session) error { _, err := sess.Exec("DROP TABLE oidc_session_logout"); return err }))
++	_, err = service.LookupToken(ctx, otherProvider.UnhashedToken)
++	require.Error(t, err)
++	_, err = service.LookupToken(ctx, local.UnhashedToken)
++	require.NoError(t, err)
++}
+diff --git a/pkg/services/auth/external_session.go b/pkg/services/auth/external_session.go
+--- a/pkg/services/auth/external_session.go
++++ b/pkg/services/auth/external_session.go
+@@ -21,6 +21,10 @@
+ 	NameIDHash    string    `xorm:"name_id_hash"`
+ 	ExpiresAt     time.Time `xorm:"expires_at"`
+ 	CreatedAt     time.Time `xorm:"created 'created_at'"`
++	OIDCScope     string    `xorm:"oidc_scope"`
++	OIDCSubject   string    `xorm:"oidc_subject"`
++	OIDCSession   string    `xorm:"oidc_session"`
++	OIDCIssuedAt  int64     `xorm:"oidc_issued_at"`
+ }
+ 
+ func (e *ExternalSession) TableName() string {
+@@ -42,6 +46,10 @@
+ 		NameIDHash:    e.NameIDHash,
+ 		ExpiresAt:     e.ExpiresAt,
+ 		CreatedAt:     e.CreatedAt,
++		OIDCScope:     e.OIDCScope,
++		OIDCSubject:   e.OIDCSubject,
++		OIDCSession:   e.OIDCSession,
++		OIDCIssuedAt:  e.OIDCIssuedAt,
+ 	}
+ }
+ 
+diff --git a/pkg/services/authn/authnimpl/service.go b/pkg/services/authn/authnimpl/service.go
+--- a/pkg/services/authn/authnimpl/service.go
++++ b/pkg/services/authn/authnimpl/service.go
+@@ -265,6 +265,15 @@
+ 	}
+ 
+ 	externalSession := s.resolveExternalSessionFromIdentity(ctx, id, userID)
++	if id.OIDCSession != nil {
++		if externalSession == nil {
++			return nil, authn.ErrExpiredAccessToken.Errorf("could not persist OIDC session identity")
++		}
++		externalSession.OIDCScope = id.OIDCSession.Scope
++		externalSession.OIDCSubject = id.OIDCSession.Subject
++		externalSession.OIDCSession = id.OIDCSession.Session
++		externalSession.OIDCIssuedAt = id.OIDCSession.IssuedAt
++	}
+ 
+ 	sessionToken, err := s.sessionService.CreateToken(ctx, &auth.CreateTokenCommand{User: &user.User{ID: userID}, ClientIP: ip, UserAgent: r.HTTPRequest.UserAgent(), ExternalSession: externalSession})
+ 	if err != nil {
+diff --git a/pkg/services/authn/clients/oauth.go b/pkg/services/authn/clients/oauth.go
+--- a/pkg/services/authn/clients/oauth.go
++++ b/pkg/services/authn/clients/oauth.go
+@@ -19,6 +19,7 @@
+ 	"github.com/grafana/grafana/pkg/apimachinery/identity"
+ 	"github.com/grafana/grafana/pkg/configprovider"
+ 	"github.com/grafana/grafana/pkg/infra/log"
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
+ 	"github.com/grafana/grafana/pkg/login/social"
+ 	"github.com/grafana/grafana/pkg/login/social/connectors"
+ 	"github.com/grafana/grafana/pkg/services/auth"
+@@ -186,12 +187,26 @@
+ 		}
+ 	}
+ 
++	var oidcSession *oidcbackchannel.Binding
++	if c.providerName == social.GenericOAuthProviderName && oauthCfg.Extra["backchannel_logout"] == "true" {
++		raw, _ := token.Extra("id_token").(string)
++		binding, err := oidcbackchannel.Validate(ctx, raw, oidcbackchannel.Config{Issuer: oauthCfg.Extra["oidc_issuer"], ClientID: oauthCfg.ClientId, JWKSURL: oauthCfg.JwkSetURL}, false)
++		if err != nil {
++			return nil, errOAuthUserInfo.Errorf("invalid OIDC session identity: %w", err)
++		}
++		oidcSession = &binding
++	}
++
+ 	userInfo, err := connector.UserInfo(ctx, connector.Client(clientCtx, token), token)
+ 	if err != nil {
+ 		if sErr, ok := errors.AsType[*connectors.SocialError](err); ok {
+ 			return nil, fromSocialErr(sErr)
+ 		}
+ 		return nil, errOAuthUserInfo.Errorf("failed to get user info: %w", err)
++	}
++
++	if oidcSession != nil && !oidcSession.MatchesSubject(userInfo.Id) {
++		return nil, errOAuthUserInfo.Errorf("OIDC subject mismatch")
+ 	}
+ 
+ 	if userInfo.Id == "" {
+@@ -233,6 +248,7 @@
+ 		AuthID:          userInfo.Id,
+ 		ExternalGroups:  userInfo.Groups,
+ 		OAuthToken:      token,
++		OIDCSession:     oidcSession,
+ 		OrgRoles:        userInfo.OrgRoles,
+ 		ClientParams: authn.ClientParams{
+ 			SyncUser:        true,
+diff --git a/pkg/services/authn/clients/oidc_backchannel_test.go b/pkg/services/authn/clients/oidc_backchannel_test.go
+new file mode 100644
+--- /dev/null
++++ b/pkg/services/authn/clients/oidc_backchannel_test.go
+@@ -0,0 +1,67 @@
++package clients
++
++import (
++	"context"
++	"crypto/ed25519"
++	"crypto/rand"
++	"encoding/json"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++
++	jose "github.com/go-jose/go-jose/v4"
++	"github.com/go-jose/go-jose/v4/jwt"
++	"github.com/grafana/grafana/pkg/infra/tracing"
++	"github.com/grafana/grafana/pkg/login/social"
++	"github.com/grafana/grafana/pkg/login/social/socialtest"
++	"github.com/grafana/grafana/pkg/services/authn"
++	"github.com/grafana/grafana/pkg/services/featuremgmt"
++	"github.com/grafana/grafana/pkg/setting"
++	"github.com/stretchr/testify/require"
++	"golang.org/x/oauth2"
++)
++
++func TestOAuthBackchannelSessionIdentity(t *testing.T) {
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	require.NoError(t, err)
++	provider := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		require.NoError(t, json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public}}}))
++	}))
++	defer provider.Close()
++	previous := http.DefaultTransport
++	http.DefaultTransport = provider.Client().Transport
++	defer func() { http.DefaultTransport = previous }()
++	cfg := setting.NewCfg()
++	info := &social.OAuthInfo{Enabled: true, ClientId: "grafana", JwkSetURL: provider.URL + "/keys", Extra: map[string]string{"backchannel_logout": "true", "oidc_issuer": provider.URL}}
++	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.EdDSA, Key: private}, nil)
++	require.NoError(t, err)
++	now := time.Now()
++	raw, err := jwt.Signed(signer).Claims(map[string]any{"iss": provider.URL, "aud": "grafana", "sub": "alice", "sid": "session-a", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix()}).Serialize()
++	require.NoError(t, err)
++	for _, tc := range []struct {
++		name, subject, token string
++		valid                bool
++	}{
++		{"verified binding", "alice", raw, true},
++		{"mismatching userinfo subject", "bob", raw, false},
++		{"missing ID token", "alice", "", false},
++		{"invalid ID token", "alice", "invalid", false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			socialService := &socialtest.FakeSocialService{ExpectedAuthInfoProvider: info, ExpectedConnector: fakeConnector{ExpectedToken: (&oauth2.Token{}).WithExtra(map[string]any{"id_token": tc.token}), ExpectedUserInfo: &social.BasicUserInfo{Id: tc.subject, Email: "alice@example.com"}, ExpectedIsEmailAllowed: true}}
++			client := ProvideOAuth(authn.ClientWithPrefix("generic_oauth"), testConfigProvider(t, cfg), nil, socialService, nil, featuremgmt.WithFeatures(), tracing.InitializeTracerForTest())
++			request := httptest.NewRequest(http.MethodGet, "https://grafana.example/login/generic_oauth?state=state&code=code", nil)
++			request.AddCookie(&http.Cookie{Name: oauthStateCookieName, Value: hashOAuthState("state", cfg.SecretKey, info.ClientSecret)})
++			identity, err := client.Authenticate(context.Background(), &authn.Request{HTTPRequest: request})
++			if tc.valid {
++				require.NoError(t, err)
++				require.NotNil(t, identity.OIDCSession)
++				require.True(t, identity.OIDCSession.MatchesSubject("alice"))
++				require.NotEmpty(t, identity.OIDCSession.Session)
++			} else {
++				require.Error(t, err)
++			}
++		})
++	}
++}
+diff --git a/pkg/services/authn/identity.go b/pkg/services/authn/identity.go
+--- a/pkg/services/authn/identity.go
++++ b/pkg/services/authn/identity.go
+@@ -11,6 +11,7 @@
+ 	"golang.org/x/oauth2"
+ 
+ 	"github.com/grafana/grafana/pkg/apimachinery/identity"
++	"github.com/grafana/grafana/pkg/login/oidcbackchannel"
+ 	"github.com/grafana/grafana/pkg/models/usertoken"
+ 	"github.com/grafana/grafana/pkg/services/login"
+ 	"github.com/grafana/grafana/pkg/services/org"
+@@ -63,7 +64,8 @@
+ 	// ExternalGroups holds groups asserted by the external IdP (SAML/OIDC/LDAP).
+ 	ExternalGroups []string
+ 	// OAuthToken is the OAuth token used to authenticate the entity.
+-	OAuthToken *oauth2.Token
++	OAuthToken  *oauth2.Token
++	OIDCSession *oidcbackchannel.Binding
+ 	// SAMLSession is the SAML session information.
+ 	SAMLSession *login.SAMLSession
+ 	// SessionToken is the session token used to authenticate the entity.
+diff --git a/pkg/services/sqlstore/migrations/externalsession/migrations.go b/pkg/services/sqlstore/migrations/externalsession/migrations.go
+--- a/pkg/services/sqlstore/migrations/externalsession/migrations.go
++++ b/pkg/services/sqlstore/migrations/externalsession/migrations.go
+@@ -36,4 +36,22 @@
+ 	mg.AddMigration("increase session_id column length to 1024", migrator.NewRawSQLMigration("").
+ 		Mysql("ALTER TABLE user_external_session MODIFY session_id NVARCHAR(1024);").
+ 		Postgres("ALTER TABLE user_external_session ALTER COLUMN session_id TYPE VARCHAR(1024);"))
++
++	for _, name := range []string{"oidc_scope", "oidc_subject", "oidc_session"} {
++		mg.AddMigration("add "+name+" to user_external_session", migrator.NewAddColumnMigration(externalSessionV1, &migrator.Column{Name: name, Type: migrator.DB_Char, Length: 64, Nullable: true}))
++	}
++	mg.AddMigration("add oidc_issued_at to user_external_session", migrator.NewAddColumnMigration(externalSessionV1, &migrator.Column{Name: "oidc_issued_at", Type: migrator.DB_BigInt, Nullable: true}))
++	logout := migrator.Table{
++		Name: "oidc_session_logout",
++		Columns: []*migrator.Column{
++			{Name: "id", Type: migrator.DB_Char, Length: 64, IsPrimaryKey: true},
++			{Name: "scope", Type: migrator.DB_Char, Length: 64, Nullable: false},
++			{Name: "subject", Type: migrator.DB_Char, Length: 64, Nullable: false},
++			{Name: "session", Type: migrator.DB_Char, Length: 64, Nullable: false},
++			{Name: "issued_at", Type: migrator.DB_BigInt, Nullable: false},
++		},
++		Indices: []*migrator.Index{{Cols: []string{"scope"}}},
++	}
++	mg.AddMigration("create oidc_session_logout table", migrator.NewAddTableMigration(logout))
++	mg.AddMigration("add oidc_session_logout scope index", migrator.NewAddIndexMigration(logout, logout.Indices[0]))
+ }
+diff --git a/pkg/services/sqlstore/migrations/testdata/migration_ids.txt b/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
+--- a/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
++++ b/pkg/services/sqlstore/migrations/testdata/migration_ids.txt
+@@ -697,6 +697,12 @@
+ "create user_external_session table"
+ "increase name_id column length to 1024"
+ "increase session_id column length to 1024"
++"add oidc_scope to user_external_session"
++"add oidc_subject to user_external_session"
++"add oidc_session to user_external_session"
++"add oidc_issued_at to user_external_session"
++"create oidc_session_logout table"
++"add oidc_session_logout scope index"
+ "remove scope from alert.notifications.receivers:create"
+ "add created_by column to alert_rule_version table"
+ "add updated_by column to alert_rule table"
+diff --git a/pkg/services/ssosettings/strategies/oauth_strategy_test.go b/pkg/services/ssosettings/strategies/oauth_strategy_test.go
+--- a/pkg/services/ssosettings/strategies/oauth_strategy_test.go
++++ b/pkg/services/ssosettings/strategies/oauth_strategy_test.go
+@@ -145,6 +145,8 @@
+ 		"signout_redirect_url":          "test_signout_redirect_url",
+ 		"allowed_organizations":         "org1, org2",
+ 		"id_token_attribute_name":       "id_token",
++		"backchannel_logout":            "",
++		"oidc_issuer":                   "",
+ 		"login_attribute_path":          "login",
+ 		"name_attribute_path":           "name",
+ 		"team_ids":                      "first, second",
+diff --git a/scripts/test-oidc-backchannel.py b/scripts/test-oidc-backchannel.py
+new file mode 100644
+--- /dev/null
++++ b/scripts/test-oidc-backchannel.py
+@@ -0,0 +1,356 @@
++"""Loopback-only smoke test. Requires cryptography; pass the Grafana binary and source root."""
++
++import base64
++import datetime
++import hashlib
++import http.cookiejar
++import http.server
++import json
++import os
++import socket
++import ssl
++import subprocess
++import sys
++import tempfile
++import threading
++import time
++import urllib.error
++import urllib.parse
++import urllib.request
++from pathlib import Path
++
++from cryptography import x509
++from cryptography.hazmat.primitives import hashes, serialization
++from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
++from cryptography.x509.oid import NameOID
++
++
++def b64(value):
++    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
++
++
++class NoRedirect(urllib.request.HTTPRedirectHandler):
++    def redirect_request(self, *args):
++        return None
++
++
++def request(opener, url, data=None):
++    try:
++        response = opener.open(url, data=data, timeout=5)
++    except urllib.error.HTTPError as error:
++        response = error
++    with response:
++        return response.code, response.headers, response.read()
++
++
++def main(binary, source):
++    with tempfile.TemporaryDirectory(prefix="grafana-oidc-smoke-") as directory:
++        root = Path(directory)
++        tls_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
++        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
++        now = datetime.datetime.now(datetime.UTC)
++        cert = (
++            x509.CertificateBuilder()
++            .subject_name(name)
++            .issuer_name(name)
++            .public_key(tls_key.public_key())
++            .serial_number(x509.random_serial_number())
++            .not_valid_before(now - datetime.timedelta(minutes=1))
++            .not_valid_after(now + datetime.timedelta(days=1))
++            .add_extension(
++                x509.SubjectAlternativeName([x509.DNSName("localhost")]), False
++            )
++            .add_extension(x509.BasicConstraints(ca=True, path_length=None), True)
++            .sign(tls_key, hashes.SHA256())
++        )
++        ca = root / "ca.pem"
++        ca.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
++        key_path = root / "tls.key"
++        key_path.write_bytes(
++            tls_key.private_bytes(
++                serialization.Encoding.PEM,
++                serialization.PrivateFormat.PKCS8,
++                serialization.NoEncryption(),
++            )
++        )
++        jwt_key = ed25519.Ed25519PrivateKey.generate()
++
++        def sign(claims):
++            header = b64(json.dumps({"alg": "EdDSA", "kid": "test-key"}).encode())
++            payload = b64(json.dumps(claims).encode())
++            message = f"{header}.{payload}".encode()
++            return message.decode() + "." + b64(jwt_key.sign(message))
++
++        with socket.socket() as reservation:
++            reservation.bind(("127.0.0.1", 0))
++            port = reservation.getsockname()[1]
++        grafana = f"http://127.0.0.1:{port}"
++        codes = {}
++        sessions = []
++
++        class Provider(http.server.BaseHTTPRequestHandler):
++            def log_message(self, *args):
++                pass
++
++            def reply(self, value):
++                body = json.dumps(value).encode()
++                self.send_response(200)
++                self.send_header("Content-Type", "application/json")
++                self.send_header("Content-Length", str(len(body)))
++                self.end_headers()
++                self.wfile.write(body)
++
++            def do_GET(self):
++                parsed = urllib.parse.urlparse(self.path)
++                if parsed.path == "/keys":
++                    self.reply(
++                        {
++                            "keys": [
++                                {
++                                    "kty": "OKP",
++                                    "crv": "Ed25519",
++                                    "kid": "test-key",
++                                    "alg": "EdDSA",
++                                    "use": "sig",
++                                    "x": b64(
++                                        jwt_key.public_key().public_bytes(
++                                            serialization.Encoding.Raw,
++                                            serialization.PublicFormat.Raw,
++                                        )
++                                    ),
++                                }
++                            ]
++                        }
++                    )
++                elif parsed.path == "/userinfo":
++                    self.reply(
++                        {
++                            "sub": "alice",
++                            "preferred_username": "alice",
++                            "email": "alice@example.com",
++                            "grafana_role": "Viewer",
++                        }
++                    )
++                elif parsed.path == "/authorize":
++                    query = urllib.parse.parse_qs(parsed.query)
++                    sid = "session-" + str(len(sessions) + 1)
++                    sessions.append(sid)
++                    codes[sid] = query
++                    target = (
++                        query["redirect_uri"][0]
++                        + "?"
++                        + urllib.parse.urlencode(
++                            {"state": query["state"][0], "code": sid}
++                        )
++                    )
++                    self.send_response(302)
++                    self.send_header("Location", target)
++                    self.end_headers()
++                else:
++                    self.send_error(404)
++
++            def do_POST(self):
++                if self.path != "/token":
++                    self.send_error(404)
++                    return
++                data = urllib.parse.parse_qs(
++                    self.rfile.read(int(self.headers["Content-Length"])).decode()
++                )
++                sid = data["code"][0]
++                query = codes.pop(sid)
++                assert (
++                    b64(hashlib.sha256(data["code_verifier"][0].encode()).digest())
++                    == query["code_challenge"][0]
++                )
++                issued = int(time.time())
++                claims = {
++                    "iss": issuer,
++                    "aud": "grafana",
++                    "sub": "alice",
++                    "sid": sid,
++                    "iat": issued,
++                    "exp": issued + 1,
++                    "preferred_username": "alice",
++                    "email": "alice@example.com",
++                    "grafana_role": "Viewer",
++                }
++                self.reply(
++                    {
++                        "access_token": sign(claims),
++                        "id_token": sign(claims),
++                        "token_type": "Bearer",
++                        "expires_in": 1,
++                    }
++                )
++
++        provider = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Provider)
++        issuer = f"https://localhost:{provider.server_port}/"
++        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
++        tls.load_cert_chain(ca, key_path)
++        provider.socket = tls.wrap_socket(provider.socket, server_side=True)
++        thread = threading.Thread(target=provider.serve_forever, daemon=True)
++        thread.start()
++        config = root / "grafana.ini"
++        for path in ("data", "logs", "plugins", "provisioning"):
++            (root / path).mkdir()
++        config.write_text(f"""[paths]
++data = {root / "data"}
++logs = {root / "logs"}
++plugins = {root / "plugins"}
++provisioning = {root / "provisioning"}
++[server]
++http_addr = 127.0.0.1
++http_port = {port}
++root_url = {grafana}/
++[security]
++disable_initial_admin_creation = true
++secret_key = disposable-loopback-test-key
++[analytics]
++reporting_enabled = false
++check_for_updates = false
++check_for_plugin_updates = false
++[plugins]
++preinstall_disabled = true
++[unified_alerting]
++enabled = false
++[auth.basic]
++enabled = false
++[auth.generic_oauth]
++enabled = true
++allow_sign_up = true
++client_id = grafana
++client_secret = disposable-test-client
++scopes = openid email profile
++use_pkce = true
++use_refresh_token = false
++backchannel_logout = true
++oidc_issuer = {issuer}
++jwk_set_url = {issuer}keys
++validate_id_token = true
++auth_url = {issuer}authorize
++token_url = {issuer}token
++api_url = {issuer}userinfo
++role_attribute_path = grafana_role
++role_attribute_strict = true
++""")
++        # Do not inherit an operator's Grafana overrides or credentials into this instance.
++        env = {
++            key: value for key, value in os.environ.items() if not key.startswith("GF_")
++        }
++        env["SSL_CERT_FILE"] = str(ca)
++        log = (root / "server.log").open("w+")
++        process = None
++        provider_running = True
++
++        def start():
++            nonlocal process
++            process = subprocess.Popen(
++                [binary, "server", "--homepath", source, "--config", str(config)],
++                env=env,
++                stdout=log,
++                stderr=subprocess.STDOUT,
++            )
++            for _ in range(100):
++                if process.poll() is not None:
++                    raise RuntimeError("Grafana exited during startup")
++                try:
++                    if (
++                        request(urllib.request.build_opener(), grafana + "/api/health")[
++                            0
++                        ]
++                        == 200
++                    ):
++                        return
++                except OSError:
++                    pass
++                time.sleep(0.1)
++            raise RuntimeError("Grafana did not become healthy")
++
++        def stop():
++            if process is not None and process.poll() is None:
++                process.terminate()
++                process.wait(timeout=20)
++
++        def browser():
++            return urllib.request.build_opener(
++                NoRedirect(),
++                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
++                urllib.request.HTTPSHandler(
++                    context=ssl.create_default_context(cafile=ca)
++                ),
++            )
++
++        def login(client):
++            status, headers, _ = request(client, grafana + "/login/generic_oauth")
++            assert status == 302, status
++            status, headers, _ = request(client, headers["Location"])
++            assert status == 302, status
++            status, headers, _ = request(client, headers["Location"])
++            assert status == 302, status
++            status, _, body = request(client, grafana + "/api/user")
++            assert status == 200, (status, body)
++
++        try:
++            start()
++            alice, other = browser(), browser()
++            login(alice)
++            login(other)
++            time.sleep(2)
++            assert request(alice, grafana + "/api/user")[0] == 200
++            assert request(other, grafana + "/api/user")[0] == 200
++            print("PASS: local sessions survive OIDC token expiry", flush=True)
++            issued = int(time.time())
++            event = sign(
++                {
++                    "iss": issuer,
++                    "aud": "grafana",
++                    "sub": "alice",
++                    "sid": sessions[0],
++                    "iat": issued,
++                    "exp": issued + 60,
++                    "jti": "logout-1",
++                    "events": {
++                        "http://schemas.openid.net/event/backchannel-logout": {}
++                    },
++                }
++            )
++            body = urllib.parse.urlencode({"logout_token": event}).encode()
++            assert (
++                request(
++                    urllib.request.build_opener(),
++                    grafana + "/login/generic_oauth/backchannel-logout",
++                    body,
++                )[0]
++                == 200
++            )
++            assert request(alice, grafana + "/api/user")[0] == 401
++            assert request(other, grafana + "/api/user")[0] == 200
++            print("PASS: signed logout revokes only the targeted session", flush=True)
++            stop()
++            start()
++            assert request(alice, grafana + "/api/user")[0] == 401
++            assert request(other, grafana + "/api/user")[0] == 200
++            print(
++                "PASS: revocation and unaffected sessions survive Grafana restart",
++                flush=True,
++            )
++            provider.shutdown()
++            provider.server_close()
++            provider_running = False
++            assert request(other, grafana + "/api/user")[0] == 200
++            print("PASS: existing session works with the IdP offline", flush=True)
++        except BaseException:
++            log.flush()
++            log.seek(0)
++            print(log.read()[-16000:], file=sys.stderr)
++            raise
++        finally:
++            stop()
++            if provider_running:
++                provider.shutdown()
++                provider.server_close()
++            log.close()
++
++
++if __name__ == "__main__":
++    main(*sys.argv[1:])
