@@ -25,6 +25,10 @@ in {
       clientMaxBodySize = "300m";
 
       appendHttpConfig = ''
+        # Keep HSTS on locations with their own cache, CORS or cookie headers.
+        add_header_inherit merge;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+
         ssl_client_certificate ${config.sops.secrets.metrics-client-ca.path};
         ssl_verify_client optional;
       '';
