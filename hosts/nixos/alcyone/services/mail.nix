@@ -102,7 +102,7 @@ in {
           client_id = "mail-app-passwords";
           # Dovecot requires a nonempty secret even for public clients; Authentik ignores it.
           client_secret = "unused";
-          scope = ["urn:ietf:params:oauth:scope:mail"];
+          scope = ["openid" "urn:ietf:params:oauth:scope:mail"];
           username_attribute = "mail_username";
         };
     };
