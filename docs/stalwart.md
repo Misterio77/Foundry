@@ -66,15 +66,22 @@ required no DNS change.
 
 Protocol checks established PKCE/refresh, both IMAP OAuth mechanisms, migrated
 message/header readback, SMTP sender restrictions, DAV CRUD/ETags and private
-management ACLs over both public address families. These are not owner-client
-acceptance or a complete migration qualification.
+management ACLs over both public address families. The retained test submission's
+RSA and Ed25519 DKIM signatures verify against public DNS. Both contact forwards
+and the catch-all received remote SMTP acceptance (the latter after greylisting),
+and the delivery queue was empty. This is not owner-client/inbox acceptance or a
+complete migration qualification.
+
+Revision `c5fd0384` was deployed and boot-pinned on 2026-11-07, including
+persistent header indexing. The disposable OAuth identity and runtime credentials
+were removed after validation; refresh revocation rejected reuse, while its issued
+access JWT remained usable immediately after revocation (offline validation).
 
 Still to do:
 
 - Exercise the owners' oama/mail/DAV clients, including their exact scopes and
   refresh behavior. DAVx⁵ generic OIDC remains experimental.
-- Finish outbound signing/forwarding/catch-all acceptance and review the JWT
-  revocation policy before expanding the pilot.
+- Review the five-minute offline JWT revocation window before expanding the pilot.
 - Qualify 1.0 recovery separately. The old encrypted 0.15 archive and restore
   drill do not protect current 1.0 state; no recurring Asterope backup exists.
 
