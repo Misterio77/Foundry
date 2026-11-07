@@ -8,6 +8,8 @@
 in {
   sops.secrets.metrics-client-ca = {
     sopsFile = ../secrets.yaml;
+    owner = config.services.nginx.user;
+    mode = "0400";
     restartUnits = ["nginx.service"];
   };
 
