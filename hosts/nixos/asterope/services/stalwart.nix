@@ -5,12 +5,7 @@
   ...
 }: let
   hostname = "mail.lumis.cards";
-  introspection = pkgs.runCommand "stalwart-introspection.py" {nativeBuildInputs = [pkgs.python3];} ''
-    cp ${./introspection.py} introspection.py
-    cp ${./test_introspection.py} test_introspection.py
-    python3 -B test_introspection.py
-    cp introspection.py "$out"
-  '';
+  operations = import ./stalwart-plan.nix {inherit lib;};
   isFileReference = value:
     lib.isAttrs value
     && builtins.attrNames value == ["file"]
@@ -26,13 +21,44 @@
     else [];
   rewriteFiles = value:
     if isFileReference value
-    then "%{file:/run/credentials/stalwart.service/${credentialName value.file}}%"
+    then {
+      "@type" = "File";
+      filePath = "/run/credentials/stalwart.service/${credentialName value.file}";
+    }
     else if lib.isList value
     then map rewriteFiles value
     else if lib.isAttrs value
     then lib.mapAttrs (_: rewriteFiles) value
     else value;
-  files = lib.unique (collectFiles settings);
+  files = lib.unique (collectFiles operations);
+  plan = pkgs.writeText "stalwart-plan.ndjson" (
+    lib.concatMapStringsSep "\n" (operation: builtins.toJSON (rewriteFiles operation)) operations + "\n"
+  );
+  database = (pkgs.formats.json {}).generate "stalwart-config.json" {
+    "@type" = "RocksDb";
+    path = "/var/lib/stalwart/v1/db";
+  };
+  start = pkgs.writeShellScript "stalwart-start" ''
+    export STALWART_RECOVERY_ADMIN="admin:$(<"$CREDENTIALS_DIRECTORY/admin-password")"
+    exec ${lib.getExe pkgs.stalwart_1} --config=${database}
+  '';
+  apply = pkgs.writeShellScript "stalwart-apply" ''
+    export STALWART_URL=http://127.0.0.1:8080
+    export STALWART_USER=admin
+    export STALWART_PASSWORD="$(<"$CREDENTIALS_DIRECTORY/admin-password")"
+    for attempt in {1..60}; do
+      ${lib.getExe pkgs.stalwart-cli_1} get SystemSettings --json >/dev/null 2>&1 && break
+      sleep 1
+    done
+    ${lib.getExe pkgs.stalwart-cli_1} apply --file ${plan}
+    ${lib.getExe pkgs.stalwart-cli_1} create Action/ReloadSettings --json '{}' >/dev/null
+  '';
+  publicJmap = pkgs.runCommand "stalwart-public-jmap.py" {nativeBuildInputs = [pkgs.python3];} ''
+    cp ${./public-jmap.py} public-jmap.py
+    cp ${./test_public_jmap.py} test_public_jmap.py
+    python3 -B -m unittest discover -p 'test_public_jmap.py'
+    cp public-jmap.py $out
+  '';
   privateAccess = ''
     allow 127.0.0.1;
     allow ::1;
@@ -40,146 +66,47 @@
     allow fd7a:115c:a1e0:77::/64;
     deny all;
   '';
-  settings = {
-    # Keep Nix settings local without hiding database defaults and signing keys.
-    config.local-keys = [
-      "store.*"
-      "directory.*"
-      "tracer.*"
-      "!server.blocked-ip.*"
-      "!server.allowed-ip.*"
-      "server.*"
-      "certificate.*"
-      "authentication.fallback-admin.*"
-      "cluster.*"
-      "storage.data"
-      "storage.blob"
-      "storage.lookup"
-      "storage.fts"
-      "storage.directory"
-      "storage.search-index.email.fields.*"
-      "enterprise.license-key"
-      "http.*"
-      "cache.http-auth.*"
-      "oauth.key"
-      "session.auth.mechanisms.*"
-      "sieve.untrusted.limits.redirects"
-      "sieve.untrusted.max-redirects"
-      "queue.connection.default.source-ips.*"
-      "webadmin.path"
-      "webadmin.resource"
-      "spam-filter.resource"
-      "resolver.public-suffix.*"
-      "resolver.type"
-    ];
-    http = {
-      url = "'https://${hostname}'";
-      use-x-forwarded = true;
-    };
-    # The 0.15 HTTP cache can reuse expired credentials; introspect every request.
-    cache.http-auth = {
-      size = 0;
-      capacity = 0;
-    };
-    server = {
-      hostname = hostname;
-      listener = {
-        smtp = {
-          bind = ["[::]:25"];
-          protocol = "smtp";
-        };
-        submissions = {
-          bind = ["[::]:465"];
-          protocol = "smtp";
-          tls.implicit = true;
-        };
-        imaptls = {
-          bind = ["[::]:993"];
-          protocol = "imap";
-          tls.implicit = true;
-        };
-        sieve = {
-          bind = ["127.0.0.1:4190"];
-          protocol = "managesieve";
-        };
-        http = {
-          bind = ["127.0.0.1:8080"];
-          protocol = "http";
-        };
-      };
-    };
-    certificate.default = {
-      cert.file = "/var/lib/acme/${hostname}/fullchain.pem";
-      private-key.file = "/var/lib/acme/${hostname}/key.pem";
-      default = true;
-    };
-    authentication.fallback-admin = {
-      user = "admin";
-      secret.file = config.sops.secrets.stalwart-admin-password.path;
-    };
-    oauth.key.file = config.sops.secrets.stalwart-oauth-key.path;
-    # Public MX delivery must not pick up the tailnet's split DNS addresses.
-    resolver.type = "cloudflare";
-    queue.connection.default.source-ips = ["155.138.245.163" "2001:19f0:6401:cf2::1"];
-    storage = {
-      directory = "gablogin";
-      # 0.15 skips headers with the default empty set; headers alone disables other fields.
-      search-index.email.fields = [
-        "email-from"
-        "email-to"
-        "email-cc"
-        "email-bcc"
-        "email-subject"
-        "email-body"
-        "email-attachment"
-        "email-received-at"
-        "email-sent-at"
-        "email-size"
-        "email-has-attachment"
-        "email-headers"
-      ];
-    };
-    directory.gablogin = {
-      type = "oidc";
-      endpoint = {
-        url = "http://127.0.0.1:8081/introspect";
-        method = "introspect";
-      };
-      auth.method = "none";
-      fields.email = "mail_account";
-    };
-    sieve.untrusted = {
-      limits.redirects = 2;
-      max-redirects = 2;
-    };
-    session.auth.mechanisms = [
-      {
-        "if" = "local_port != 25 && is_tls";
-        "then" = "[oauthbearer, xoauth2]";
-      }
-      {"else" = false;}
-    ];
-  };
+  proxyHeaders = ''
+    proxy_hide_header WWW-Authenticate;
+    add_header WWW-Authenticate $stalwart_auth_challenge always;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+  '';
 in {
   imports = [../../common/optional/nginx.nix];
 
-  sops.secrets = {
-    stalwart-admin-password.sopsFile = ../secrets.yaml;
-    contato-password.sopsFile = ../secrets.yaml;
-    stalwart-oauth-key.sopsFile = ../secrets.yaml;
-    authentik-stalwart-client-secret.sopsFile = ../secrets.yaml;
-  };
+  sops.secrets.stalwart-admin-password.sopsFile = ../secrets.yaml;
 
   services.stalwart = {
     enable = true;
     stateVersion = "26.05";
-    credentials = lib.listToAttrs (map (file: lib.nameValuePair (credentialName file) file) files);
-    settings = rewriteFiles settings;
+    package = pkgs.stalwart_1;
+    # The upstream module still generates 0.15 TOML; 1.0 uses JSON plus API plans.
+    settings = lib.mkForce {};
+    credentials =
+      lib.listToAttrs (map (file: lib.nameValuePair (credentialName file) file) files)
+      // {admin-password = config.sops.secrets.stalwart-admin-password.path;};
+  };
+  systemd.services.stalwart = {
+    wants = ["acme-${hostname}.service" "stalwart-public-jmap.service"];
+    after = ["acme-${hostname}.service"];
+    environment = {
+      STALWART_PUBLIC_URL = "https://${hostname}";
+      HOME = "/var/lib/stalwart";
+      XDG_CACHE_HOME = "/var/lib/stalwart/.cache";
+    };
+    serviceConfig = {
+      Type = lib.mkForce "exec";
+      ExecStart = lib.mkForce ["" start];
+      ExecStartPost = [apply];
+    };
+    unitConfig.ConditionPathExists = lib.mkForce [database];
   };
 
   networking.firewall.allowedTCPPorts = [25 465 993];
-
-  # The canary needs no DNS or certificate changes in m7.rs.
   services.nginx.virtualHosts."asterope.m7.rs" = {
     enableACME = lib.mkForce false;
     forceSSL = lib.mkForce false;
@@ -189,6 +116,17 @@ in {
       default "";
       401 'Bearer resource_metadata="https://${hostname}/.well-known/oauth-protected-resource"';
     }
+    geo $stalwart_private_client {
+      default 0;
+      127.0.0.1 1;
+      ::1 1;
+      100.77.0.0/24 1;
+      fd7a:115c:a1e0:77::/64 1;
+    }
+    map $stalwart_private_client $stalwart_jmap_backend {
+      0 http://127.0.0.1:8081;
+      1 http://127.0.0.1:8080;
+    }
   '';
   services.nginx.virtualHosts.${hostname} = {
     forceSSL = true;
@@ -196,17 +134,28 @@ in {
     locations = {
       "/" = {
         proxyPass = "http://127.0.0.1:8080";
-        proxyWebsockets = true;
         recommendedProxySettings = false;
-        extraConfig = ''
-          proxy_hide_header WWW-Authenticate;
-          add_header WWW-Authenticate $stalwart_auth_challenge always;
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
-          proxy_set_header X-Forwarded-For $remote_addr;
-          proxy_set_header X-Forwarded-Proto $scheme;
-          proxy_set_header X-Forwarded-Host $host;
-        '';
+        extraConfig = proxyHeaders;
+      };
+      "= /jmap".return = "308 /jmap/";
+      "= /jmap/" = {
+        proxyPass = "$stalwart_jmap_backend";
+        recommendedProxySettings = false;
+        extraConfig = proxyHeaders;
+      };
+      # WebSocket messages could bypass the public JSON management filter.
+      "^~ /jmap/ws" = {
+        proxyPass = "http://127.0.0.1:8080";
+        proxyWebsockets = true;
+        extraConfig = privateAccess;
+      };
+      "^~ /api/" = {
+        proxyPass = "http://127.0.0.1:8080";
+        extraConfig = privateAccess;
+      };
+      "^~ /admin" = {
+        proxyPass = "http://127.0.0.1:8080";
+        extraConfig = privateAccess;
       };
       "= /.well-known/openid-configuration".return = "302 https://auth.m7.rs/application/o/stalwart/.well-known/openid-configuration";
       "= /.well-known/oauth-authorization-server".return = "302 https://auth.m7.rs/application/o/stalwart/.well-known/openid-configuration";
@@ -215,47 +164,39 @@ in {
         return = "200 '${builtins.toJSON {
           resource = "https://${hostname}";
           authorization_servers = ["https://auth.m7.rs/application/o/stalwart/"];
-          scopes_supported = ["openid" "profile" "email" "offline_access"];
+          scopes_supported = [
+            "openid"
+            "profile"
+            "email"
+            "offline_access"
+            "urn:ietf:params:oauth:scope:mail"
+            "urn:ietf:params:oauth:scope:calendars"
+            "urn:ietf:params:oauth:scope:contacts"
+          ];
           bearer_methods_supported = ["header"];
         }}'";
       };
-      # Management stays on the tailnet; DAV/JMAP and OAuth remain public.
-      "^~ /api/" = {
-        proxyPass = "http://127.0.0.1:8080";
-        extraConfig = privateAccess;
-      };
     };
   };
-
-  systemd.tmpfiles.rules = ["d /var/lib/acme/acme-challenge 0755 acme nginx -"];
-  # Stalwart 0.15 maps introspection claims without checking active/client/scope.
-  systemd.services.stalwart-introspection = {
-    description = "Validate Gablogin mail token introspection";
+  # 1.0 multiplexes management and user methods on the same JMAP endpoint.
+  systemd.services.stalwart-public-jmap = {
+    description = "Keep Stalwart management JMAP methods private";
     wantedBy = ["multi-user.target"];
-    after = ["network-online.target"];
-    wants = ["network-online.target"];
     serviceConfig = {
-      ExecStart = "${pkgs.python3}/bin/python3 ${introspection}";
-      LoadCredential = ["client-secret:${config.sops.secrets.authentik-stalwart-client-secret.path}"];
+      ExecStart = "${pkgs.python3}/bin/python3 ${publicJmap}";
       DynamicUser = true;
+      MemoryMax = "128M";
       Restart = "on-failure";
       NoNewPrivileges = true;
       PrivateTmp = true;
       PrivateDevices = true;
       ProtectSystem = "strict";
       ProtectHome = true;
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
       RestrictAddressFamilies = ["AF_INET" "AF_INET6" "AF_UNIX"];
     };
   };
+  systemd.tmpfiles.rules = ["d /var/lib/acme/acme-challenge 0755 acme nginx -"];
   security.acme.certs.${hostname}.reloadServices = ["stalwart.service"];
-  systemd.services.stalwart = {
-    wants = ["acme-${hostname}.service" "stalwart-introspection.service"];
-    after = ["acme-${hostname}.service" "stalwart-introspection.service"];
-  };
-
   environment.persistence."/persist".directories = [
     {
       directory = "/var/lib/stalwart";

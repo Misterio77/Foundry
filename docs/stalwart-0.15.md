@@ -41,8 +41,8 @@ The blueprint is `hosts/nixos/alcyone/services/authentik/stalwart.yaml`:
 - Confidential introspection resource: `stalwart-resource`. The **issuing native
   provider** lists this resource in `jwt_federation_providers`, permitting it to
   introspect native tokens; setting the relationship in reverse does not work.
-  Its shared secret is duplicated in each host's `secrets.yaml`, encrypted to
-  that host and the operator.
+  Its shared secret is encrypted to both hosts in
+  `hosts/nixos/asterope/oidc-secrets.yaml`.
 - Application access requires membership in **`lumis-mail`**, not the broad
   `users` group.
 - A trusted administrator must assign `attributes.lumis_mail_account`, e.g.

@@ -245,12 +245,14 @@ def main():
         if token:
 
             def jmap(address=address):
-                status, _, body = http(
-                    address,
-                    "GET",
-                    "/.well-known/jmap",
-                    {"Authorization": "Bearer " + token},
-                )
+                headers = {"Authorization": "Bearer " + token}
+                status, response, body = http(address, "GET", "/.well-known/jmap", headers)
+                if status in (301, 302, 307, 308):
+                    target = urllib.parse.urlsplit(
+                        urllib.parse.urljoin("https://" + HOST, response["location"])
+                    )
+                    assert target.scheme == "https" and target.netloc == HOST
+                    status, _, body = http(address, "GET", target.path, headers)
                 assert status == 200 and json.loads(body)["username"] == args.account
 
             def smtp_auth(address=address):

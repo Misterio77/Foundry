@@ -12,6 +12,9 @@ in {
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   jellyfin-oidc = pkgs.callPackage ./jellyfin-oidc {};
   seerr-oidc = pkgs.callPackage ./seerr-oidc {};
+  stalwart_1 = pkgs.callPackage ./stalwart-1 {};
+  stalwart-cli_1 = (pkgs.callPackage ./stalwart-tools {}).cli;
+  vandelay = (pkgs.callPackage ./stalwart-tools {}).vandelay;
   robohash = pkgs.callPackage ./robohash {};
   jellyfin-web-foundry = pkgs.callPackage ./jellyfin-web {};
   hax = pkgs.callPackage ./hax {};

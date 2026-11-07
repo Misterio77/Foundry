@@ -18,13 +18,40 @@ entries:
     identifiers:
       name: foundry-lumis-mail-account
     attrs:
-      scope_name: email
-      description: Access to the assigned lumis.cards mailbox and DAV collections
+      scope_name: openid
+      description: Identify the assigned lumis.cards mailbox independently of profile email
       expression: |
         account = request.user.attributes.get("lumis_mail_account", "")
         if not isinstance(account, str) or not account.endswith("@lumis.cards"):
             return {}
         return {"mail_account": account.lower()}
+
+  - model: authentik_providers_oauth2.scopemapping
+    id: mail-scope
+    identifiers:
+      name: foundry-lumis-mail-scope
+    attrs:
+      scope_name: urn:ietf:params:oauth:scope:mail
+      description: Read and send Lumis mail
+      expression: return {}
+
+  - model: authentik_providers_oauth2.scopemapping
+    id: calendars-scope
+    identifiers:
+      name: foundry-lumis-calendars-scope
+    attrs:
+      scope_name: urn:ietf:params:oauth:scope:calendars
+      description: Read and update Lumis calendars
+      expression: return {}
+
+  - model: authentik_providers_oauth2.scopemapping
+    id: contacts-scope
+    identifiers:
+      name: foundry-lumis-contacts-scope
+    attrs:
+      scope_name: urn:ietf:params:oauth:scope:contacts
+      description: Read and update Lumis contacts
+      expression: return {}
 
   - model: authentik_providers_oauth2.oauth2provider
     id: mail-resource
@@ -75,6 +102,9 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
         - !KeyOf mail-account
+        - !KeyOf mail-scope
+        - !KeyOf calendars-scope
+        - !KeyOf contacts-scope
 
   - model: authentik_core.application
     id: mail
