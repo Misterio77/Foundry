@@ -1,10 +1,32 @@
 {
   config,
   inputs,
+  lib,
   pkgs,
   ...
 }: let
   components = config.services.authentik.authentikComponents;
+  icons = lib.mapAttrs (name: hash:
+    pkgs.fetchurl {
+      url = "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/59f1e9a4108f4f510f41e9588f078631de1e1405/svg/${name}.svg";
+      inherit hash;
+    }) {
+    grafana = "sha256-jzKJcHPuk1lKsjOUgu8hyjdnBEBV2oniuvkGbSVZLfc=";
+    immich = "sha256-pdSkOJnmP/x+lyRgNPf2PN/cQQqoA8VxPVRSkGAcTYk=";
+    jellyfin = "sha256-f1PPCD27MRnsjFrL2AScUDMidhfkYVQPcFkawQkSQwY=";
+    seerr = "sha256-sS5d/WQdlhz7aDYNoz/iiHO5Xqm2TCMjPVuHo3y/pMQ=";
+  };
+  branding = pkgs.linkFarm "authentik-branding" (
+    map (name: {
+      inherit name;
+      path = ./branding + "/${name}";
+    }) (builtins.attrNames (builtins.readDir ./branding))
+    ++ lib.mapAttrsToList (name: path: {
+      name = "${name}.svg";
+      inherit path;
+    })
+    icons
+  );
   # Blueprint retrieval rejects symlinks resolving outside blueprints_dir.
   blueprints = pkgs.runCommand "authentik-blueprints" {} ''
     cp -rL ${components.staticWorkdirDeps}/blueprints "$out"
@@ -119,7 +141,7 @@ in {
   services.nginx.virtualHosts."auth.m7.rs" = {
     forceSSL = true;
     enableACME = true;
-    locations."/branding/".alias = "${./branding}/";
+    locations."/branding/".alias = "${branding}/";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = ''
