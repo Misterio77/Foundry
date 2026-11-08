@@ -1,0 +1,41 @@
+version: 1
+metadata:
+  name: Foundry - authorization
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: user
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: trusted
+    attrs:
+      is_superuser: false
+      attributes:
+        goauthentik.io/user/token-maximum-lifetime: days=365
+  - model: authentik_core.group
+    identifiers:
+      name: admin
+    attrs:
+      is_superuser: false
+      attributes:
+        goauthentik.io/user/token-maximum-lifetime: days=365
+  - model: authentik_core.group
+    identifiers:
+      name: authentik-admin
+    attrs:
+      is_superuser: true
+
+  - model: authentik_policies_expression.expressionpolicy
+    identifiers:
+      name: foundry-application-access
+    attrs:
+      expression: |
+        from authentik.core.models import Application
+
+        return (
+            request.user.is_active
+            and isinstance(request.obj, Application)
+            and request.user.app_entitlements(request.obj).filter(name="access").exists()
+        )

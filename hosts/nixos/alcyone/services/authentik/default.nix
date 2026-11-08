@@ -61,6 +61,7 @@
       --replace-fail 'friendly_name: WebAuthn device' 'friendly_name: Chave de acesso' \
       --replace-fail 'title: Setup WebAuthn' 'title: Configurar chave de acesso'
     cp ${./foundry.yaml} "$out/foundry.yaml"
+    cp ${./authorization.yaml} "$out/authorization.yaml"
     cp ${./grafana.yaml} "$out/grafana.yaml"
     cp ${./immich.yaml} "$out/immich.yaml"
     cp ${./recovery.yaml} "$out/recovery.yaml"
@@ -69,6 +70,8 @@
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
     cp ${./mail.yaml} "$out/mail.yaml"
+    cp ${./dav.yaml} "$out/dav.yaml"
+    cp ${./mail-and-dav.yaml} "$out/mail-and-dav.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];

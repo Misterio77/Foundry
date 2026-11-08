@@ -6,6 +6,10 @@ entries:
     attrs:
       identifiers:
         name: Foundry - private identity pilot
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - authorization
 
   - model: authentik_providers_oauth2.scopemapping
     id: grafana-roles
@@ -13,12 +17,12 @@ entries:
       name: foundry-grafana-roles
     attrs:
       scope_name: grafana_roles
-      description: Grafana organization role
+      description: Grafana application role
       expression: |
-        groups = set(request.user.groups.values_list("name", flat=True))
-        if "admins" in groups:
-            return {"grafana_role": "Admin"}
-        if "users" in groups:
+        entitlements = set(request.user.app_entitlements(provider.application).values_list("name", flat=True))
+        if "admin" in entitlements:
+            return {"grafana_role": "GrafanaAdmin"}
+        if "access" in entitlements:
             return {"grafana_role": "Viewer"}
         return {"grafana_role": ""}
 
@@ -61,16 +65,46 @@ entries:
       provider: !KeyOf grafana-provider
       icon: https://auth.m7.rs/branding/grafana.svg
       meta_launch_url: https://dash.m7.rs/login
-      policy_engine_mode: any
+      policy_engine_mode: all
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf grafana
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, users]]
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      failure_result: false
+
+  - model: authentik_core.applicationentitlement
+    id: access
+    identifiers:
+      app: !KeyOf grafana
+      name: access
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf grafana
+      name: admin
   - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf grafana
+      target: !KeyOf access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, user]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
       order: 1
     attrs:
-      group: !Find [authentik_core.group, [name, admins]]
+      group: !Find [authentik_core.group, [name, trusted]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]

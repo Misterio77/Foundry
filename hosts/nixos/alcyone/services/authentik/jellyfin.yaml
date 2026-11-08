@@ -6,6 +6,10 @@ entries:
     attrs:
       identifiers:
         name: Foundry - private identity pilot
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - authorization
 
   - model: authentik_providers_oauth2.scopemapping
     id: jellyfin-roles
@@ -15,11 +19,11 @@ entries:
       scope_name: jellyfin_roles
       description: Jellyfin application roles
       expression: |
-        groups = set(request.user.groups.values_list("name", flat=True))
+        entitlements = set(request.user.app_entitlements(provider.application).values_list("name", flat=True))
         roles = []
-        if groups & {"users", "admins"}:
+        if "access" in entitlements:
             roles.append("jellyfin-users")
-        if "admins" in groups:
+        if "admin" in entitlements:
             roles.append("jellyfin-admins")
         return {"roles": roles}
 
@@ -62,16 +66,46 @@ entries:
       provider: !KeyOf jellyfin-provider
       icon: https://auth.m7.rs/branding/jellyfin.svg
       meta_launch_url: https://media.m7.rs/sso/OIDC/Start/authentik
-      policy_engine_mode: any
+      policy_engine_mode: all
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf jellyfin
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, users]]
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      failure_result: false
+
+  - model: authentik_core.applicationentitlement
+    id: access
+    identifiers:
+      app: !KeyOf jellyfin
+      name: access
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf jellyfin
+      name: admin
   - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf jellyfin
+      target: !KeyOf access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, user]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
       order: 1
     attrs:
-      group: !Find [authentik_core.group, [name, admins]]
+      group: !Find [authentik_core.group, [name, trusted]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]

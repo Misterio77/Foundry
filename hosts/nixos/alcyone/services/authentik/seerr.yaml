@@ -6,6 +6,10 @@ entries:
     attrs:
       identifiers:
         name: Foundry - private identity pilot
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - authorization
 
   - model: authentik_providers_oauth2.scopemapping
     id: seerr-profile
@@ -36,9 +40,9 @@ entries:
       scope_name: seerr_permissions
       description: Seerr permissions managed by Gablogin
       expression: |
-        groups = set(request.user.groups.values_list("name", flat=True))
-        defaults = ["ADMIN"] if "admins" in groups else ["REQUEST"] if "users" in groups else []
-        return {"seerr_permissions": request.user.attributes.get("seerr_permissions", defaults)}
+        entitlements = set(request.user.app_entitlements(provider.application).values_list("name", flat=True))
+        permissions = ["ADMIN"] if "admin" in entitlements else ["REQUEST"] if "access" in entitlements else []
+        return {"seerr_permissions": permissions}
 
   - model: authentik_providers_oauth2.oauth2provider
     id: seerr-provider
@@ -95,16 +99,46 @@ entries:
       provider: !KeyOf seerr-provider
       icon: https://auth.m7.rs/branding/seerr.svg
       meta_launch_url: https://requests.m7.rs/login?provider=authentik
-      policy_engine_mode: any
+      policy_engine_mode: all
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf seerr
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, users]]
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      failure_result: false
+
+  - model: authentik_core.applicationentitlement
+    id: access
+    identifiers:
+      app: !KeyOf seerr
+      name: access
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf seerr
+      name: admin
   - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf seerr
+      target: !KeyOf access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, user]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
       order: 1
     attrs:
-      group: !Find [authentik_core.group, [name, admins]]
+      group: !Find [authentik_core.group, [name, trusted]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]

@@ -35,24 +35,39 @@ Describes the checked-in configuration, not deployment status. Sources:
   writing a new password; successful recovery then creates a login session.
   Email uses `auth@m7.rs` through tailnet-restricted SMTP at `mail.m7.rs:465`.
 
-Media and monitoring applications share membership; `admins` also grants ordinary
-access. Neither group grants Authentik administration. Roles below are OIDC claims,
-not Authentik RBAC roles or additional membership groups. Mail and DAV have
-independent `personal-mail` and `dav-users` groups, even when sharing one OAuth
-grant; see [mail authentication](mail-auth.md).
+Groups describe access tiers; application entitlements carry the permissions.
+Each tier is complete on its own, without requiring membership in lower tiers.
 
-| Group    | Jellyfin roles                      | Immich role | Grafana organization role |
-| -------- | ----------------------------------- | ----------- | ------------------------- |
-| `users`  | `jellyfin-users`                    | `user`      | `Viewer`                  |
-| `admins` | `jellyfin-users`, `jellyfin-admins` | `admin`     | `Admin`                   |
+| Group | Application entitlements | Authentik administration |
+| --- | --- | --- |
+| `user` | `access` on Grafana, Immich, Jellyfin and Seerr | None |
+| `trusted` | `access` on all six services, including Mail and Radicale | None |
+| `admin` | `access` on all services; `admin` on Grafana, Immich, Jellyfin and Seerr | None |
+| `authentik-admin` | None | Native Authentik superuser |
 
-Each provider/client uses its own `jellyfin_roles`, `immich_roles` or
-`grafana_roles` scope. Membership is assigned manually, never by the Blueprint.
-When migrating an older installation, populate the shared groups before switching
-clients; retain old `jellyfin-access` membership until its client switches. Access
-bindings update in place by application/order; separately audit extra manual
-bindings. Old app-specific groups and removed LDAP/Calibre objects are not
-implicitly deleted from Authentik's database.
+`authorization.yaml` defines the groups and the common access policy. Each
+service blueprint defines its own entitlements and group bindings. Application
+admission checks active status and the application's `access` entitlement;
+role mappings check entitlements rather than group names or user overrides.
+An `admin` entitlement alone does not replace `access`; the `admin` group grants
+both. Authentik superuser status is intentionally independent of app access.
+
+The application mappings translate `admin` into Jellyfin's `jellyfin-admins`,
+Immich's `admin`, Grafana's `GrafanaAdmin` (server administration), and Seerr's
+`ADMIN`. Ordinary access maps to `jellyfin-users`, `user`, `Viewer`, and `REQUEST`,
+respectively. These are downstream claims, not Authentik RBAC roles.
+
+Memberships are live identity data, not blueprint-managed users: `gabriel` belongs
+to `trusted`; `akadmin` belongs to `admin` and `authentik-admin`; other human users
+belong to `user`. Service identities are managed separately. App-role changes
+take effect according to each application's login/session behavior, not instantly
+when an entitlement changes.
+
+Mail and Radicale each have their own `access` entitlement and resource principal,
+while the shared OAuth client admits access to either service. See
+[mail authentication](mail-auth.md). Blueprints describe final state; one-time
+cleanup of superseded database objects belongs in an API migration, not deletion
+entries retained in the blueprints.
 
 ## Application behavior
 
@@ -125,8 +140,9 @@ syncs from the user's `immich_quota` attribute (GiB, default 8; -1 unlimited).
 Browser/mobile access is public with native shared links; the separate public-share
 proxy has been removed.
 
-**Grafana:** OAuth-only with strict role mapping and no email-based linking or
-server-admin assignment. Basic/local login and anonymous viewing are disabled.
+**Grafana:** OAuth-only with strict role mapping and no email-based linking.
+The `admin` entitlement grants server administration; ordinary access is Viewer.
+Basic/local login and anonymous viewing are disabled.
 Generic OAuth back-channel logout is enabled with the explicit issuer
 `https://auth.m7.rs/application/o/grafana/`, its HTTPS `jwks/` endpoint and signed
 ID-token validation. Authentik sends signed events to
@@ -183,8 +199,8 @@ here.
 Production acceptance still requires authenticated-request checks, not just
 callback status:
 
-- In separate browser sessions, verify Viewer/Admin mapping, denied admission
-  without membership, avatar update/fallback and Grafana's logout redirect. End
+- In separate browser sessions, verify Viewer/GrafanaAdmin mapping, denied admission
+  without the access entitlement, avatar update/fallback and Grafana's logout redirect. End
   one Authentik session: its next authenticated Grafana API request must fail
   while an independent session still works. Repeat after the one-minute access
   token expires and ordinary Grafana/Authentik restarts; also test an abandoned
@@ -203,20 +219,13 @@ checks above remain required.
 
 **Seerr:** experimental native OIDC pinned to
 [PR #2715](https://github.com/seerr-team/seerr/pull/2715), revision `2e523125`.
-Only `users`/`admins` may authenticate. A local patch replaces permissions from
-`seerr_permissions` on each OIDC login (and account linking), including for the
-owner account. `admins` defaults to `[ADMIN]`; `users` defaults to `[REQUEST]`.
-A per-user Authentik `seerr_permissions` attribute **replaces** that default:
+Only users with Seerr's `access` entitlement may authenticate. A local patch
+replaces permissions from `seerr_permissions` on each OIDC login (and account
+linking), including for the owner account. The `admin` entitlement emits `[ADMIN]`;
+ordinary `access` emits `[REQUEST]`. Per-user permission attributes do not bypass
+these entitlements.
 
-```yaml
-seerr_permissions:
-  - REQUEST
-  - AUTO_APPROVE
-  - VIEW_ISSUES
-  - CREATE_ISSUES
-```
-
-Use Seerr's uppercase
+The mapping uses Seerr's uppercase
 [permission names](https://github.com/seerr-team/seerr/blob/2e523125e8e7262af44309c70db20fe2d7ca28a3/server/lib/permissions.ts).
 `[]` grants no permissions; missing/malformed claims and unknown names reject
 login rather than preserving stale grants. Request quotas are unchanged. Local

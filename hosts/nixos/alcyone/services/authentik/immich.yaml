@@ -6,6 +6,10 @@ entries:
     attrs:
       identifiers:
         name: Foundry - private identity pilot
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - authorization
 
   - model: authentik_providers_oauth2.scopemapping
     id: immich-roles
@@ -15,10 +19,10 @@ entries:
       scope_name: immich_roles
       description: Immich application role
       expression: |
-        groups = set(request.user.groups.values_list("name", flat=True))
-        if "admins" in groups:
+        entitlements = set(request.user.app_entitlements(provider.application).values_list("name", flat=True))
+        if "admin" in entitlements:
             return {"immich_role": "admin"}
-        if "users" in groups:
+        if "access" in entitlements:
             return {"immich_role": "user"}
         return {}
 
@@ -75,16 +79,46 @@ entries:
       provider: !KeyOf immich-provider
       icon: https://auth.m7.rs/branding/immich.svg
       meta_launch_url: https://photos.m7.rs/auth/login?autoLaunch=1
-      policy_engine_mode: any
+      policy_engine_mode: all
   - model: authentik_policies.policybinding
     identifiers:
       target: !KeyOf immich
       order: 0
     attrs:
-      group: !Find [authentik_core.group, [name, users]]
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      failure_result: false
+
+  - model: authentik_core.applicationentitlement
+    id: access
+    identifiers:
+      app: !KeyOf immich
+      name: access
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf immich
+      name: admin
   - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf immich
+      target: !KeyOf access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, user]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
       order: 1
     attrs:
-      group: !Find [authentik_core.group, [name, admins]]
+      group: !Find [authentik_core.group, [name, trusted]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]

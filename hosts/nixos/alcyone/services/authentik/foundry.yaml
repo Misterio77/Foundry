@@ -35,17 +35,6 @@ entries:
       identifiers:
         name: System - OAuth2 Provider - Scopes
 
-  - model: authentik_core.group
-    identifiers:
-      name: users
-    attrs:
-      is_superuser: false
-  - model: authentik_core.group
-    identifiers:
-      name: admins
-    attrs:
-      is_superuser: false
-
   - model: authentik_policies_expression.expressionpolicy
     id: unique-email
     identifiers:

@@ -9,7 +9,7 @@
     introspection_mode = "auth";
     introspection_url = "https://auth.m7.rs/application/o/userinfo/";
     openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
-    # Identity claims are emitted only for active personal-mail members.
+    # Authentik emits the administrator-assigned principal only with mail access.
     username_attribute = "mail_account";
     force_introspection = true;
     ssl_client_ca_file = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";

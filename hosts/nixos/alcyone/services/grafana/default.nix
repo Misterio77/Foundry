@@ -56,7 +56,7 @@
           login_attribute_path = "preferred_username";
           role_attribute_path = "grafana_role";
           role_attribute_strict = true;
-          allow_assign_grafana_admin = false;
+          allow_assign_grafana_admin = true;
         };
         "auth.anonymous" = {
           enabled = false;
