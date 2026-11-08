@@ -7,6 +7,19 @@ Describes the checked-in configuration, not deployment status. Sources:
 [Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),
 [Seerr](../hosts/nixos/merope/services/media/jellyseerr.nix).
 
+## Blueprint organization
+
+- `identity.yaml`: shared authentication, MFA, profile/email handling and flow labels.
+- `branding.yaml`: Gablogin's brand, artwork URLs and default locale.
+- `authorization.yaml`: access-tier groups and the common entitlement policy.
+- Per-app blueprints: providers, claims, applications and entitlement assignments.
+- `mail-and-dav.yaml`: the shared OAuth client, PKCE and DAV federation.
+- Recovery, sensitive changes and password-guessing protection have their own
+  flow-specific blueprints.
+
+Identity and branding are independent; applying service permissions need not
+reapply the site's brand. Flow labels stay alongside their flow configuration.
+
 ## Access
 
 - `auth.m7.rs` is public, including the admin UI; authentication, MFA and

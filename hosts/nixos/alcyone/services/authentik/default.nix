@@ -60,7 +60,8 @@
     substituteInPlace "$out/default/flow-default-authenticator-webauthn-setup.yaml" \
       --replace-fail 'friendly_name: WebAuthn device' 'friendly_name: Chave de acesso' \
       --replace-fail 'title: Setup WebAuthn' 'title: Configurar chave de acesso'
-    cp ${./foundry.yaml} "$out/foundry.yaml"
+    cp ${./identity.yaml} "$out/identity.yaml"
+    cp ${./branding.yaml} "$out/branding.yaml"
     cp ${./authorization.yaml} "$out/authorization.yaml"
     cp ${./grafana.yaml} "$out/grafana.yaml"
     cp ${./immich.yaml} "$out/immich.yaml"

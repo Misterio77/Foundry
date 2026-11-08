@@ -1,11 +1,7 @@
 version: 1
 metadata:
-  name: Foundry - private identity pilot
+  name: Foundry - identity
 entries:
-  - model: authentik_blueprints.metaapplyblueprint
-    attrs:
-      identifiers:
-        name: Default - Brand
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
@@ -230,14 +226,3 @@ entries:
     attrs:
       name: Solicitar acesso
       title: Solicitar acesso
-  - model: authentik_brands.brand
-    identifiers:
-      default: true
-    attrs:
-      branding_title: Gablogin
-      branding_logo: https://auth.m7.rs/branding/logo-%(theme)s.svg
-      branding_favicon: https://auth.m7.rs/branding/favicon.svg
-      branding_default_flow_background: https://auth.m7.rs/branding/background.svg
-      attributes:
-        settings:
-          locale: pt-BR

@@ -9,7 +9,7 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
-        name: Foundry - private identity pilot
+        name: Foundry - identity
 
   - model: authentik_flows.flow
     id: recovery
