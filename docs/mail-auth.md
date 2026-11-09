@@ -164,15 +164,14 @@ sharing and user-created mappings are enabled; token/link sharing remains disabl
 No shared credentials or broader rights file are needed. New API shares default to
 read-only; owners can deliberately grant read/write in the UI.
 
-1. Obtain the recipient's **DAV principal**, not their Gablogin username or profile
-   email. Normally this is their Authentik UUID; an existing `dav_principal` override
-   takes precedence. The recipient must inspect their own discovered principal URL;
-   the friendly username in the web heading is not the sharing identity. Do not change identities
-   or move existing data merely to get friendlier sharing names.
-2. On an owned collection, open **Share**, then **New Share by Map**. Enter that
-   principal as **Share User**, choose permissions, and leave the share enabled and
-   not hidden. **Share Href** is a single collection-name component (the generated
-   value is fine), not a full URL: it becomes `/<recipient-principal>/<share-href>/`.
+1. On an owned collection, open **Share**, then **New Share by Map**. Search/select
+   the recipient's exact Gablogin username in **Share User**. The picker resolves it
+   to their existing UUID/`dav_principal`; it does not change storage identities.
+   Unknown names and partial matches cannot be submitted. Existing shares retain
+   their immutable principal when edited.
+2. Choose permissions and leave the share enabled and not hidden. **Share Href** is
+   a single collection-name component (the generated value is fine), not a full URL:
+   it becomes `/<recipient-principal>/<share-href>/`.
 3. The recipient opens Radicale and enables/shows the incoming share using its
    controls. Individual-recipient shares start disabled and hidden on their side.
 4. Once accepted and shown, the alias is returned by normal depth-one home discovery.
@@ -184,9 +183,28 @@ Sharing grants access to the existing collection, not a copy. Owners can change
 permissions, disable or delete the mapping. Read/write recipients can change/delete
 items; deleting a share through the sharing UI does not delete the owner's collection.
 Recipients cannot elevate permissions or re-share another owner's private collection.
-There is no Authentik username search in this UI: a mistyped principal does not
-resolve automatically to the intended person. Principal changes require reviewing
-existing shares as well as client configuration.
+The picker is advisory, not a new authorization mechanism: the native sharing API
+still takes principals and enforces its own permissions. Principal changes require
+reviewing existing shares as well as client configuration.
+
+The same-origin `GET /.sharing-users` endpoint is tailnet-only and authenticated by
+the existing DAV outpost. nginx strips credentials and overwrites identity headers
+before forwarding to Authentik's internal `/-/foundry/dav-users/` view. Public
+Authentik ingress blocks that route and strips the internal gateway marker; the DAV
+outpost ingress strips the marker too. The view rechecks the caller's current active
+status, DAV entitlement and username/principal pairing, then lists only active human
+accounts with Radicale's `access` entitlement. Service accounts, invalid principals
+and duplicate/ambiguous principals are omitted. It exposes only username/principal
+pairs, including the caller for self-targeted calendar conversions. DAV users can
+therefore discover one another's usernames and principals (some legacy principals
+are email-shaped); no additional profile fields are exposed.
+
+Results are not HTTP-cached or stored in browser persistence. The picker reloads on
+each dialog opening, cancels outstanding lookups when closed, and refuses creation
+if lookup fails; it never silently interprets an unknown name as a principal. A stale
+SSO session lacking the username claim needs a fresh login. Directories larger than
+500 active human accounts fail closed rather than presenting a partial list. No
+new daemon, API credential or broader Authentik user-list permission is required.
 
 Share metadata uses Radicale's `files` backend under
 `/var/lib/radicale/collections/collection-db/files`, inside the existing persistent

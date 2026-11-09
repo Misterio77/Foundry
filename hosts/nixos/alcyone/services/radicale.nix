@@ -86,6 +86,30 @@ in {
               proxy_set_header X-Forwarded-For $remote_addr;
             '';
           };
+          "= /.sharing-users" = {
+            proxyPass = "http://127.0.0.1:9000/-/foundry/dav-users/";
+            recommendedProxySettings = false;
+            extraConfig = ''
+              if ($request_method != GET) {
+                return 405;
+              }
+              auth_request /_dav_auth;
+              auth_request_set $dav_directory_principal $upstream_http_x_foundry_dav_principal;
+              auth_request_set $dav_directory_username $upstream_http_x_foundry_dav_username;
+              auth_request_set $dav_directory_cookie $dav_outpost_cookie;
+              add_header Set-Cookie $dav_directory_cookie always;
+              proxy_pass_request_body off;
+              proxy_set_header Content-Length "";
+              proxy_set_header Authorization "";
+              proxy_set_header Cookie "";
+              proxy_set_header Host auth.m7.rs;
+              proxy_set_header X-Forwarded-For 127.0.0.1;
+              proxy_set_header X-Forwarded-Proto https;
+              proxy_set_header X-Foundry-DAV-Directory 1;
+              proxy_set_header X-Foundry-DAV-Principal $dav_directory_principal;
+              proxy_set_header X-Foundry-DAV-Username $dav_directory_username;
+            '';
+          };
           "= /_dav_auth" = {
             proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/auth/nginx";
             recommendedProxySettings = false;
@@ -118,6 +142,7 @@ in {
               proxy_set_header X-Forwarded-For $remote_addr;
               proxy_set_header Authorization $http_authorization;
               proxy_set_header Cookie $dav_request_cookie;
+              proxy_set_header X-Foundry-DAV-Directory "";
               # Header authentication must not mint a reusable browser session.
               proxy_hide_header Set-Cookie;
               add_header Set-Cookie $dav_outpost_cookie always;

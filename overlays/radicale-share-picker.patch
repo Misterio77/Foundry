@@ -1,0 +1,259 @@
+--- a/radicale/web/internal_data/index.html
++++ b/radicale/web/internal_data/index.html
+@@ -254,7 +254,8 @@
+         <details open data-name="sharemapfields" class="hidden">
+           <summary>Map Target</summary>
+           <label for="newshare_attr_shareuser">Share User</label>
+-          <input type="text" data-name="shareuser" id="newshare_attr_shareuser" />
++          <input type="text" data-name="shareuser" id="newshare_attr_shareuser" autocomplete="off" />
++          <datalist id="foundry-dav-users"></datalist>
+           <label for="newshare_attr_sharehref">Share Href</label>
+           <input type="text" data-name="sharehref" id="newshare_attr_sharehref" />
+         </details>
+--- a/radicale/web/internal_data/js/scenes/CreateEditShareScene.js
++++ b/radicale/web/internal_data/js/scenes/CreateEditShareScene.js
+@@ -21,6 +21,9 @@
+ 
+ import { BDAY_CONFIG, Share, ShareConfig, add_share_by_map, add_share_by_token, get_property_key, update_share_by_map, update_share_by_token } from "../api/sharing.js";
+ import { CollectionType, Permission } from "../models/collection.js";
++import { ROOT_PATH, SERVER } from "../constants.js";
++import { create_request } from "../api/common.js";
++import { parseRecipients } from "../utils/share_recipients.js";
+ import { extract_title, update_title_and_description } from "../utils/collection_utils.js";
+ import { collectionsCache } from "../utils/collections_cache.js";
+ import { ErrorHandler } from "../utils/error.js";
+@@ -80,13 +83,22 @@
+         this._cancel_btn = get_element(this._html_scene, "[data-name=cancel]");
+ 
+         this._errorHandler = new ErrorHandler(this._error_form);
+-        this._validator = new FormValidator(this._errorHandler);
++        this._validator = new FormValidator(this._errorHandler, () => is_current_scene(this));
+ 
+         this._validator.addValidator(this._shareuser_input, () => {
+             if (this._shareType !== "map") {
+                 return null;
+             }
+             let conversion = this._get_selected_conversion();
++            if (!this._edit) {
++                if (!this._recipient_directory) {
++                    return this._directory_error || "Loading DAV users…";
++                }
++                const principal = this._selected_user();
++                if (!principal) return "Select a Gablogin username from the DAV users list";
++                if (conversion === "none" && principal === this._user) return "Choose another user to share with";
++                return null;
++            }
+             if (conversion != "none") {
+                 return validate_non_empty(this._shareuser_input, "Share User")();
+             } else {
+@@ -185,10 +197,13 @@
+             // share user has not yet been set.
+             if (conversion != "none") {
+                 if (this._shareuser_input.value === "") {
+-                    this._shareuser_input.value = this._user;
+-                }
+-            } else {
+-                if (this._shareuser_input.value === this._user) {
++                    this._shareuser_input.value = (this._edit || this._shareType !== "map") ? this._user
++                        : this._recipient_directory
++                            ? [...this._recipient_directory].find(([, principal]) => principal === this._user)?.[0] || ""
++                            : "";
++                }
++            } else {
++                if (this._selected_user() === this._user) {
+                     this._shareuser_input.value = "";
+                 }
+             }
+@@ -282,7 +297,7 @@
+             let is_conversion = conversion != "none";
+             let enabled_by_owner = is_conversion ? true : this._enabled_checkbox.checked;
+             let hidden_by_owner = is_conversion ? false : this._hidden_checkbox.checked;
+-            let userVal = (this._edit && this._share) ? (this._share.User || "") : this._shareuser_input.value.trim();
++            let userVal = this._selected_user();
+             let isGroupOrRealm = userVal.startsWith(":") || userVal.startsWith("@");
+             let permissions = is_conversion ? "r" : (this._permissions_rw_radio.checked ? "rw" : "r");
+             if (!isGroupOrRealm) {
+@@ -402,6 +417,47 @@
+         return false;
+     }
+ 
++    _selected_user() {
++        if (this._edit && this._share) return this._share.User || "";
++        if (this._shareType !== "map") return this._shareuser_input.value.trim();
++        return this._recipient_directory?.get(this._shareuser_input.value) || "";
++    }
++
++    _load_recipients() {
++        const options = get_element_by_id("foundry-dav-users");
++        options.replaceChildren();
++        this._recipient_directory = null;
++        this._directory_error = null;
++        this._shareuser_input.setAttribute("list", options.id);
++        this._shareuser_input.placeholder = "Search Gablogin username";
++        const request = create_request("GET", SERVER + ROOT_PATH + ".sharing-users", this._user, this._password);
++        this._directory_request = request;
++        request.timeout = 10000;
++        request.setRequestHeader("Accept", "application/json");
++        request.onreadystatechange = () => {
++            if (request.readyState !== 4 || this._directory_request !== request) return;
++            this._directory_request = null;
++            try {
++                if (request.status !== 200) throw new Error("Directory unavailable");
++                this._recipient_directory = parseRecipients(JSON.parse(request.responseText));
++                for (const username of this._recipient_directory.keys()) {
++                    const option = document.createElement("option");
++                    option.value = username;
++                    options.appendChild(option);
++                }
++                if (this._get_selected_conversion() !== "none" && !this._shareuser_input.value) {
++                    this._shareuser_input.value = [...this._recipient_directory]
++                        .find(([, principal]) => principal === this._user)?.[0] || "";
++                }
++            } catch (_) {
++                this._recipient_directory = null;
++                this._directory_error = "DAV user directory unavailable; reopen this dialog to retry";
++            }
++            this._validator.validate();
++        };
++        request.send();
++    }
++
+     show() {
+         this.release();
+         this._html_scene.classList.remove("hidden");
+@@ -429,6 +485,9 @@
+ 
+         this._shareuser_input.value = (this._edit && this._share) ? this._share.User : "";
+         this._shareuser_input.disabled = this._edit;
++        this._shareuser_input.removeAttribute("list");
++        this._shareuser_input.placeholder = "";
++        if (!this._edit && this._shareType === "map") this._load_recipients();
+         this._enabled_checkbox.checked = (this._edit && this._share && this._share.EnabledByOwner !== null) ? this._share.EnabledByOwner : true;
+         this._hidden_checkbox.checked = (this._edit && this._share && this._share.HiddenByOwner !== null) ? this._share.HiddenByOwner : false;
+ 
+@@ -603,6 +662,11 @@
+     }
+ 
+     hide() {
++        const request = this._directory_request;
++        this._directory_request = null;
++        if (request) request.abort();
++        this._recipient_directory = null;
++        get_element_by_id("foundry-dav-users").replaceChildren();
+         this._html_scene.classList.add("hidden");
+         this._cancel_btn.onclick = null;
+         this._form.onsubmit = null;
+--- /dev/null
++++ b/radicale/web/internal_data/js/utils/share_recipients.js
+@@ -0,0 +1,20 @@
++// Directory results are presentation data, never a replacement for DAV authorization.
++export function parseRecipients(data) {
++    if (!data || !Array.isArray(data.users) || data.users.length > 500) {
++        throw new Error("Invalid DAV directory");
++    }
++    const recipients = new Map();
++    const principals = new Set();
++    for (const row of data.users) {
++        if (!row || typeof row.username !== "string" || !row.username ||
++            typeof row.principal !== "string" || !row.principal ||
++            row.principal === "." || row.principal === ".." ||
++            /[\/\\:{}\x00-\x1f\x7f]/.test(row.principal) || row.principal.startsWith("@") ||
++            recipients.has(row.username) || principals.has(row.principal)) {
++            throw new Error("Invalid DAV directory entry");
++        }
++        recipients.set(row.username, row.principal);
++        principals.add(row.principal);
++    }
++    return recipients;
++}
+--- a/radicale/web/internal_data/js/utils/form_validator.js
++++ b/radicale/web/internal_data/js/utils/form_validator.js
+@@ -27,9 +27,11 @@
+ 
+     /**
+      * @param {ErrorHandler} error_handler
++     * @param {() => boolean} is_active
+      */
+-    constructor(error_handler) {
++    constructor(error_handler, is_active = () => true) {
+         this.error_handler = error_handler;
++        this.is_active = is_active;
+         /** @type {Array<{field: HTMLInputElement, validation_method: () => string | null}>} */
+         this.validation_methods = [];
+     }
+@@ -51,6 +53,7 @@
+      * @returns true if all validators are valid
+      */
+     validate() {
++        if (!this.is_active()) return false;
+         let errorMessages = [];
+         for (let { validation_method } of this.validation_methods) {
+             let errorMessage = validation_method();
+--- a/radicale/web/internal_data/js/utils/error.js
++++ b/radicale/web/internal_data/js/utils/error.js
+@@ -65,7 +65,8 @@
+             html = errorMessages.join("<br>");
+         }
+ 
+-        if (html !== this._lastHTML) {
++        // Scene history can retain different handlers for the same DOM node.
++        if (html !== this._lastHTML || this._element.innerHTML !== html) {
+             this._element.innerHTML = html;
+             if (html) {
+                 this._element.classList.remove("hidden");
+--- /dev/null
++++ b/radicale/tests/test_foundry_share_picker.mjs
+@@ -0,0 +1,53 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { parseRecipients } from '../web/internal_data/js/utils/share_recipients.js';
++import { ErrorHandler } from '../web/internal_data/js/utils/error.js';
++globalThis.location = new URL('https://fixture.invalid/.web/');
++const { FormValidator } = await import('../web/internal_data/js/utils/form_validator.js');
++
++test('resolve exact usernames to UUIDs and overridden principals', () => {
++    const directory = parseRecipients({users: [
++        {username: 'alice', principal: '4950638e-0534-41bd-b509-a44abb0477a8'},
++        {username: 'josé & <friends>', principal: 'legacy@example.invalid'},
++        {username: '__proto__', principal: 'another-uuid'},
++    ]});
++    assert.equal(directory.get('alice'), '4950638e-0534-41bd-b509-a44abb0477a8');
++    assert.equal(directory.get('josé & <friends>'), 'legacy@example.invalid');
++    assert.equal(directory.get('__proto__'), 'another-uuid');
++    assert.equal(directory.get('ali'), undefined);
++    assert.equal(directory.get('ALICE'), undefined);
++    assert.equal(directory.get('legacy@example.invalid'), undefined);
++});
++
++test('only the current dialog validates; returning to a scene restores its error', () => {
++    let current = 'first';
++    const field = new EventTarget();
++    const element = {innerHTML: '', classList: {add() {}, remove() {}}};
++    const first = new FormValidator(new ErrorHandler(element), () => current === 'first');
++    first.addValidator(field, () => 'Directory unavailable');
++    const second = new FormValidator(new ErrorHandler(element), () => current === 'second');
++    second.addValidator(field, () => null);
++    current = 'second';
++    second.validate();
++    assert.equal(element.innerHTML, '');
++    current = 'first';
++    first.validate();
++    assert.equal(element.innerHTML, 'Directory unavailable');
++    field.dispatchEvent(new Event('input'));
++    assert.equal(element.innerHTML, 'Directory unavailable');
++    assert.equal(first.validate(), false);
++});
++
++test('empty directory is valid but offers no implicit raw-principal fallback', () => {
++    assert.equal(parseRecipients({users: []}).get('some-principal'), undefined);
++});
++
++test('malformed, duplicate and group/realm identities fail closed', () => {
++    for (const data of [null, {}, {users: {}}, {users: [null]}, {users: [{username: 'a'}]},
++        {users: [{username: 'a', principal: 'x'}, {username: 'a', principal: 'y'}]},
++        {users: [{username: 'a', principal: 'x'}, {username: 'b', principal: 'x'}]},
++        ...['', '..', '.', 'a/b', 'a\\b', ':group', '@realm', 'a:b', '{user}', 'a\nb'].map(principal => ({users: [{username: 'a', principal}]})),
++        {users: Array.from({length: 501}, (_, i) => ({username: String(i), principal: String(i)}))}]) {
++        assert.throws(() => parseRecipients(data));
++    }
++});

@@ -158,6 +158,7 @@ in {
     forceSSL = true;
     enableACME = true;
     locations."/branding/".alias = "${branding}/";
+    locations."^~ /-/foundry/".return = "404";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = ''
@@ -185,6 +186,7 @@ in {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Foundry-DAV-Directory "";
       '';
     };
   };

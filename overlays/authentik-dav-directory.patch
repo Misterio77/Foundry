@@ -1,0 +1,173 @@
+--- a/authentik/root/urls.py
++++ b/authentik/root/urls.py
+@@ -7,6 +7,7 @@
+ from authentik.lib.config import CONFIG
+ from authentik.lib.utils.reflection import get_apps
+ from authentik.root.monitoring import LiveView, MetricsView, ReadyView
++from authentik.root.foundry_dav import dav_users
+ 
+ LOGGER = get_logger()
+ 
+@@ -45,6 +46,7 @@
+         )
+ 
+ urlpatterns = [
++    path("-/foundry/dav-users/", dav_users, name="foundry-dav-users"),
+     path(CONFIG.get("web.path", "/")[1:], include(_urlpatterns)),
+     path("-/metrics/", MetricsView.as_view(), name="metrics"),
+     path("-/health/live/", LiveView.as_view(), name="health-live"),
+--- /dev/null
++++ b/authentik/root/foundry_dav.py
+@@ -0,0 +1,52 @@
++"""Minimal DAV directory, reachable only through the authenticated nginx gateway."""
++
++from collections import Counter
++from urllib.parse import unquote
++
++from django.http import HttpResponseForbidden, JsonResponse
++from django.views.decorators.cache import never_cache
++from django.views.decorators.http import require_GET
++
++from authentik.core.models import Application, User, UserTypes
++
++
++def principal_for(user):
++    principal = user.attributes.get("dav_principal", str(user.uuid))
++    if (not isinstance(principal, str) or not principal or principal in (".", "..")
++            or principal.startswith("@")
++            or any(c in principal for c in "/\\:{}")
++            or any(ord(c) < 32 or ord(c) == 127 for c in principal)):
++        return None
++    return principal
++
++
++@never_cache
++@require_GET
++def dav_users(request):
++    # Public Authentik ingress strips this marker and blocks this route entirely.
++    if request.META.get("HTTP_X_FOUNDRY_DAV_DIRECTORY") != "1":
++        return HttpResponseForbidden()
++    username = unquote(request.META.get("HTTP_X_FOUNDRY_DAV_USERNAME", ""))
++    principal = request.META.get("HTTP_X_FOUNDRY_DAV_PRINCIPAL", "")
++    if not username or not principal:
++        return HttpResponseForbidden()
++    people = User.objects.filter(
++        is_active=True, type__in=[UserTypes.INTERNAL, UserTypes.EXTERNAL]
++    )
++    caller = people.filter(username=username).first()
++    app = Application.objects.filter(slug="radicale").first()
++    if (not caller or not app or principal_for(caller) != principal
++            or not caller.app_entitlements(app).filter(name="access").exists()):
++        return HttpResponseForbidden()
++
++    # Fail rather than silently offering an incomplete directory.
++    candidates = list(people.order_by("username")[:501])
++    if len(candidates) > 500:
++        return JsonResponse({"error": "DAV directory is too large"}, status=503)
++    recipients = []
++    for user in candidates:
++        target = principal_for(user)
++        if target and user.app_entitlements(app).filter(name="access").exists():
++            recipients.append({"username": user.username, "principal": target})
++    counts = Counter(row["principal"] for row in recipients)
++    return JsonResponse({"users": [row for row in recipients if counts[row["principal"]] == 1]})
+--- /dev/null
++++ b/authentik/root/tests/test_foundry_dav.py
+@@ -0,0 +1,97 @@
++"""Directory policy tests with a request factory and an in-memory user queryset."""
++
++import json
++from types import SimpleNamespace as NS
++from unittest import TestCase
++from unittest.mock import patch
++from urllib.parse import quote
++
++from django.test import RequestFactory
++
++from authentik.root import foundry_dav as directory
++
++
++class Users(list):
++    def filter(self, **kwargs):
++        def matches(user):
++            return all(getattr(user, key[:-4]) in value if key.endswith("__in")
++                       else getattr(user, key) == value for key, value in kwargs.items())
++        return Users(user for user in self if matches(user))
++
++    def first(self):
++        return self[0] if self else None
++
++    def order_by(self, field):
++        return Users(sorted(self, key=lambda user: getattr(user, field)))
++
++
++def user(username, principal=None, entitled=True, active=True, kind="internal"):
++    return NS(username=username, uuid="uuid-" + username, is_active=active, type=kind,
++              attributes={} if principal is None else {"dav_principal": principal},
++              app_entitlements=lambda app: NS(filter=lambda **kw: NS(exists=lambda: entitled)))
++
++
++class TestDAVDirectory(TestCase):
++    def setUp(self):
++        self.caller = user("caller")
++        self.people = Users([self.caller, user("alice"), user("josé", "legacy@example.invalid"),
++                             user("no-access", entitled=False), user("inactive", active=False),
++                             user("service", kind="service_account"),
++                             user("outpost", kind="internal_service_account")])
++        self.app = object()
++        self.factory = RequestFactory()
++
++    def call(self, method="get", **headers):
++        values = {"HTTP_X_FOUNDRY_DAV_DIRECTORY": "1", "HTTP_X_FOUNDRY_DAV_USERNAME": quote(self.caller.username),
++                  "HTTP_X_FOUNDRY_DAV_PRINCIPAL": directory.principal_for(self.caller)}
++        values.update(headers)
++        request = getattr(self.factory, method)("/-/foundry/dav-users/", **values)
++        with patch.object(directory, "User", NS(objects=self.people)), patch.object(
++            directory, "Application", NS(objects=NS(filter=lambda **kw: NS(first=lambda: self.app)))
++        ):
++            response = directory.dav_users(request)
++        assert "no-store" in response.get("Cache-Control", "")
++        return response
++
++    def test_minimal_entitled_people_and_override(self):
++        response = self.call()
++        self.assertEqual(response.status_code, 200)
++        self.assertEqual(json.loads(response.content), {"users": [
++            {"username": "alice", "principal": "uuid-alice"},
++            {"username": "caller", "principal": "uuid-caller"},
++            {"username": "josé", "principal": "legacy@example.invalid"}]})
++
++    def test_marker_and_both_identity_headers_required(self):
++        for key in ("HTTP_X_FOUNDRY_DAV_DIRECTORY", "HTTP_X_FOUNDRY_DAV_USERNAME", "HTTP_X_FOUNDRY_DAV_PRINCIPAL"):
++            with self.subTest(key=key):
++                self.assertEqual(self.call(**{key: ""}).status_code, 403)
++
++    def test_stale_or_forged_principal_denied(self):
++        self.assertEqual(self.call(HTTP_X_FOUNDRY_DAV_PRINCIPAL="uuid-alice").status_code, 403)
++        self.caller.attributes["dav_principal"] = "new-principal"
++        self.assertEqual(self.call(HTTP_X_FOUNDRY_DAV_PRINCIPAL="uuid-caller").status_code, 403)
++
++    def test_removed_entitlement_and_inactive_caller_denied(self):
++        self.caller.app_entitlements = user("caller", entitled=False).app_entitlements
++        self.assertEqual(self.call().status_code, 403)
++        self.caller.app_entitlements = user("caller").app_entitlements
++        self.caller.is_active = False
++        self.assertEqual(self.call().status_code, 403)
++
++    def test_missing_application_denied(self):
++        self.app = None
++        self.assertEqual(self.call().status_code, 403)
++
++    def test_ambiguous_and_invalid_targets_omitted(self):
++        self.people.extend([user("duplicate", "uuid-alice"), user("empty", ""),
++                            user("slash", "a/b"), user("group", ":group"),
++                            user("realm", "@realm"), user("control", "a\nb"), user("dot", "..")])
++        names = {row["username"] for row in json.loads(self.call().content)["users"]}
++        self.assertEqual(names, {"caller", "josé"})
++
++    def test_post_denied(self):
++        self.assertEqual(self.call(method="post").status_code, 405)
++
++    def test_oversized_directory_fails_closed(self):
++        self.people.extend(user("person-" + str(n)) for n in range(501))
++        self.assertEqual(self.call().status_code, 503)
