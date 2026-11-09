@@ -71,12 +71,16 @@ in {
               error_page 401 = @dav_unauthorized;
 
               auth_request_set $dav_principal $upstream_http_x_foundry_dav_principal;
+              auth_request_set $dav_username $upstream_http_x_foundry_dav_username;
               auth_request_set $dav_set_cookie $dav_outpost_cookie;
               add_header Set-Cookie $dav_set_cookie always;
               proxy_set_header X-Remote-User $dav_principal;
+              proxy_set_header X-Foundry-DAV-Username $dav_username;
               proxy_set_header Authorization "";
               proxy_set_header Cookie "";
-              proxy_set_header Host $host;
+              proxy_set_header Host dav.m7.rs;
+              proxy_set_header X-Forwarded-Host dav.m7.rs;
+              proxy_set_header X-Forwarded-Port 443;
               proxy_set_header X-Script-Name "";
               proxy_set_header X-Forwarded-Proto $scheme;
               proxy_set_header X-Forwarded-For $remote_addr;

@@ -1,0 +1,179 @@
+--- a/radicale/utils.py
++++ b/radicale/utils.py
+@@ -23,6 +23,7 @@
+ import ssl
+ import sys
+ import textwrap
++import urllib.parse
+ from hashlib import sha256
+ from importlib import import_module, metadata
+ from string import ascii_letters, digits, punctuation
+@@ -591,6 +592,13 @@
+     return _hash.hexdigest()
+ 
+ 
++def get_remote_username(environ: types.WSGIEnviron, auth_type: str) -> str:
++    """Presentation-only login name; the proxy must overwrite this encoded header."""
++    if auth_type != "http_x_remote_user":
++        return ""
++    return urllib.parse.unquote(environ.get("HTTP_X_FOUNDRY_DAV_USERNAME", ""))
++
++
+ def get_server_netloc(environ: types.WSGIEnviron, force_port: bool = False):
+     if environ.get("HTTP_X_FORWARDED_HOST"):
+         host = environ["HTTP_X_FORWARDED_HOST"]
+--- a/radicale/app/get.py
++++ b/radicale/app/get.py
+@@ -197,6 +197,7 @@
+                 logger.notice("Access to path %r not allowed for unauthenticated user", path)
+                 return httputils.NOT_ALLOWED
+             logger.debug("Request path %r by user %r", path, user)
++            login_username = utils.get_remote_username(environ, self._auth_type) or user
+             (host, port) = utils.get_server_netloc(environ, force_port=True).split(':')
+             useSSL: int = 0
+             if environ.get("SSL_PROTOCOL") or environ.get("HTTP_X_FORWARDED_PROTO", "") == "https":
+@@ -222,7 +223,7 @@
+                             CalDAVAccountDescription="Radicale Calendar",
+                             CalDAVHostName=host,
+                             CalDAVPort=int(port),
+-                            CalDAVUsername=user,
++                            CalDAVUsername=login_username,
+                             CalDAVPrincipalURL=uri,
+                             CalDAVUseSSL=(useSSL == 1)
+                             ),
+@@ -234,7 +235,7 @@
+                             CardDAVAccountDescription="Radicale Contacts",
+                             CardDAVHostName=host,
+                             CardDAVPort=int(port),
+-                            CardDAVUsername=user,
++                            CardDAVUsername=login_username,
+                             CardDAVPrincipalURL=uri,
+                             CardDAVUseSSL=(useSSL == 1)
+                             )
+--- a/radicale/app/propfind.py
++++ b/radicale/app/propfind.py
+@@ -42,6 +42,7 @@
+         user: str, encoding: str,
+         max_resource_size: int,
+         shares: dict = {},
++        login_username: str = "",
+         ) -> Optional[ET.Element]:
+     """Read and answer PROPFIND requests.
+ 
+@@ -96,6 +97,7 @@
+                 conversion=conversion,
+                 raw_permissions=raw_permissions,
+                 freebusy_only=("f" in permission and "r" not in permission),
++                login_username=login_username,
+             )
+         )
+ 
+@@ -118,6 +120,7 @@
+     conversion: Union[str, None] = None,
+     raw_permissions: str = "",
+     freebusy_only: bool = False,
++    login_username: str = "",
+ ) -> ET.Element:
+     """Build and return a PROPFIND response."""
+     if propname and allprop or (props and (propname or allprop)):
+@@ -227,7 +230,10 @@
+     for tag in props:
+         element = ET.Element(tag)
+         is404 = False
+-        if tag == xmlutils.make_clark("D:getetag"):
++        if (tag == xmlutils.make_clark("D:displayname") and login_username and user
++                and is_collection and not is_leaf and collection.path in ("", user)):
++            element.text = login_username
++        elif tag == xmlutils.make_clark("D:getetag"):
+             if not is_collection or is_leaf:
+                 if isinstance(item, storage.BaseCollection):
+                     element.text = item.etag
+@@ -771,7 +777,8 @@
+         headers = {"DAV": httputils.DAV_HEADERS,
+                    "Content-Type": "text/xml; charset=%s" % self._encoding}
+         xml_answer = xml_propfind(self, base_prefix, path, xml_content,
+-                                  allowed_items, user, self._encoding, max_resource_size=self._max_resource_size, shares=shares)
++                                  allowed_items, user, self._encoding, max_resource_size=self._max_resource_size, shares=shares,
++                                  login_username=utils.get_remote_username(environ, self._auth_type))
+         if xml_answer is None:
+             return httputils.NOT_ALLOWED
+         request_info["status"] = client.MULTI_STATUS
+--- /dev/null
++++ b/radicale/tests/test_foundry_username.py
+@@ -0,0 +1,76 @@
++"""Trusted presentation names must never replace DAV storage principals."""
++
++import plistlib
++from urllib.parse import quote
++from xml.etree import ElementTree as ET
++
++import pytest
++
++from radicale.tests import BaseTest
++
++
++class TestFoundryUsername(BaseTest):
++    def setup_method(self):
++        super().setup_method()
++        self.configure({"auth": {"type": "http_x_remote_user"},
++                        "rights": {"type": "owner_only"}})
++
++    @pytest.mark.parametrize("principal", [
++        "4950638e-0534-41bd-b509-a44abb0477a8", "owner@example.invalid"])
++    @pytest.mark.parametrize("username", ["gabriel", "josé & <friends> %"])
++    def test_profile_and_discovery(self, principal, username):
++        headers = {"HTTP_X_REMOTE_USER": principal,
++                   "HTTP_X_FOUNDRY_DAV_USERNAME": quote(username, safe=""),
++                   "HTTP_X_FORWARDED_HOST": "dav.m7.rs",
++                   "HTTP_X_FORWARDED_PROTO": "https",
++                   "HTTP_X_FORWARDED_PORT": "443"}
++        _, _, body = self.request("GET", "/.mobileconfig", check=200, **headers)
++        profile = plistlib.loads(body.encode() if isinstance(body, str) else body)
++        assert profile["PayloadIdentifier"] == "org.radicale.mobileconfig." + principal
++        for payload, prefix in zip(profile["PayloadContent"], ["CalDAV", "CardDAV"]):
++            assert payload[prefix + "Username"] == username
++            assert payload[prefix + "HostName"] == "dav.m7.rs"
++            assert payload[prefix + "Port"] == 443
++            assert payload[prefix + "UseSSL"] is True
++            assert payload[prefix + "PrincipalURL"] == "/"
++            assert prefix + "Password" not in payload
++
++        query = ('<propfind xmlns="DAV:"><prop><displayname/>'
++                 '<current-user-principal/></prop></propfind>')
++        for path in ["/", "/" + principal + "/"]:
++            _, _, body = self.request("PROPFIND", path, query, check=207,
++                                      HTTP_DEPTH="0", **headers)
++            xml = ET.fromstring(body)
++            assert xml.findtext(".//{DAV:}displayname") == username
++            assert xml.findtext(".//{DAV:}current-user-principal/{DAV:}href") == "/" + quote(principal, safe="/") + "/"
++        self.request("PROPFIND", "/" + principal + "/", check=403,
++                     HTTP_X_REMOTE_USER="unrelated-user",
++                     HTTP_X_FOUNDRY_DAV_USERNAME=quote(username, safe=""))
++
++        collection = "/" + principal + "/calendar/"
++        self.request("MKCALENDAR", collection, check=201, **headers)
++        self.request("PROPPATCH", collection,
++                     '<propertyupdate xmlns="DAV:"><set><prop><displayname>'
++                     'Keep calendar title</displayname></prop></set></propertyupdate>',
++                     check=207, **headers)
++        _, _, body = self.request("PROPFIND", collection, query, check=207,
++                                  HTTP_DEPTH="0", **headers)
++        assert ET.fromstring(body).findtext(".//{DAV:}displayname") == "Keep calendar title"
++
++    def test_header_is_not_authentication(self):
++        self.request("GET", "/.mobileconfig", check=403,
++                     HTTP_X_FOUNDRY_DAV_USERNAME="gabriel")
++
++    def test_missing_header_falls_back_to_principal(self):
++        _, _, body = self.request("GET", "/.mobileconfig", check=200,
++                                  HTTP_X_REMOTE_USER="principal")
++        profile = plistlib.loads(body.encode() if isinstance(body, str) else body)
++        assert profile["PayloadContent"][0]["CalDAVUsername"] == "principal"
++
++    def test_header_ignored_without_trusted_proxy_auth(self):
++        self.configure({"auth": {"type": "none"}})
++        _, _, body = self.request("GET", "/.mobileconfig", check=200,
++                                  login="realuser:",
++                                  HTTP_X_FOUNDRY_DAV_USERNAME="forged")
++        profile = plistlib.loads(body.encode() if isinstance(body, str) else body)
++        assert profile["PayloadContent"][0]["CalDAVUsername"] == "realuser"

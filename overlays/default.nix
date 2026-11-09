@@ -41,6 +41,8 @@ in {
 
     immich = addPatches prev.immich [./immich-oidc-avatar.patch];
 
+    radicale = addPatches prev.radicale [./radicale-login-username.patch];
+
     grafana = assert final.lib.versions.majorMinor prev.grafana.version == "13.3";
       prev.grafana.overrideAttrs (old: {
         patches = (old.patches or []) ++ [./grafana-oidc-backchannel.patch ./grafana-oidc-picture.patch];

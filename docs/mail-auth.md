@@ -136,6 +136,27 @@ The original integration (`1f4ddbf0`, later removed in `8da12022`) had live mult
 credential-precedence and cookie-replay/logout checks. That historical evidence is
 not a substitute for acceptance of this restoration.
 
+## Usernames and Apple configuration profiles
+
+The web heading displays the Gablogin **username**, while DAV principal URLs,
+collection ownership and sharing continue to use the UUID/`dav_principal` identity.
+Collection titles are unchanged. The Authentik mapping emits a separate percent-encoded
+`X-Foundry-DAV-Username` header; nginx takes it only from the authentication response
+and overwrites any client-supplied value before forwarding. The Radicale patch uses
+it solely for presentation/profile login fields with trusted-proxy authentication.
+It never changes the authenticated principal or authorizes a request.
+
+The web UI's **Mobileconfig** download configures CalDAV and CardDAV with that
+username, `dav.m7.rs`, HTTPS port 443, and `/` for principal discovery. Profile
+identifiers remain based on the stable DAV principal. No password or OAuth token is
+embedded: use a dedicated Authentik app password when the device asks for credentials.
+The device still needs tailnet access; the profile does not configure VPN access.
+Actual Apple-device installation remains an acceptance check.
+
+After deploying the new username mapping, use a fresh Radicale SSO session if the
+heading still shows the principal. Missing username claims fall back to the principal,
+so an older session can still generate a profile with an unsuitable login name.
+
 ## Sharing calendars and address books
 
 Radicale 3.9.0 provides native **Share by Map** management in its web UI. Mapped
@@ -145,8 +166,8 @@ read-only; owners can deliberately grant read/write in the UI.
 
 1. Obtain the recipient's **DAV principal**, not their Gablogin username or profile
    email. Normally this is their Authentik UUID; an existing `dav_principal` override
-   takes precedence. The recipient can copy their identity from Radicale's collections
-   heading or inspect their own discovered principal URL. Do not change identities
+   takes precedence. The recipient must inspect their own discovered principal URL;
+   the friendly username in the web heading is not the sharing identity. Do not change identities
    or move existing data merely to get friendlier sharing names.
 2. On an owned collection, open **Share**, then **New Share by Map**. Enter that
    principal as **Share User**, choose permissions, and leave the share enabled and

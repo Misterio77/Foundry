@@ -20,16 +20,22 @@ entries:
       scope_name: profile
       description: DAV authorization and storage identity
       expression: |
+        from urllib.parse import quote
         from authentik.core.models import Application
 
         app = Application.objects.get(slug="radicale")
         principal = ""
+        username = ""
         if request.user.is_active and request.user.app_entitlements(app).filter(name="access").exists():
             principal = request.user.attributes.get("dav_principal", str(request.user.uuid))
+            username = quote(request.user.username, safe="")
         return {
             "ak_proxy": {
                 "user_attributes": {
-                    "additionalHeaders": {"X-Foundry-DAV-Principal": principal},
+                    "additionalHeaders": {
+                        "X-Foundry-DAV-Principal": principal,
+                        "X-Foundry-DAV-Username": username,
+                    },
                 },
             },
         }
