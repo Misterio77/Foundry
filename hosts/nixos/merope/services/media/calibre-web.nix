@@ -44,23 +44,23 @@ in {
             proxyPass = "http://127.0.0.1:${toString config.services.calibre-web.listen.port}";
             recommendedProxySettings = false;
             extraConfig = ''
-              auth_request /_books_auth;
-              error_page 401 = @books_login;
-              auth_request_set $books_subject $upstream_http_x_foundry_books_subject;
-              auth_request_set $books_cookie $upstream_http_set_cookie;
-              add_header Set-Cookie $books_cookie always;
+              auth_request /_calibre-web_auth;
+              error_page 401 = @calibre-web_login;
+              auth_request_set $calibre_web_subject $upstream_http_x_foundry_calibre_web_subject;
+              auth_request_set $calibre_web_cookie $upstream_http_set_cookie;
+              add_header Set-Cookie $calibre_web_cookie always;
               proxy_set_header Host books.m7.rs;
               proxy_set_header X-Forwarded-Host books.m7.rs;
               proxy_set_header X-Forwarded-Proto https;
               proxy_set_header X-Scheme https;
               proxy_set_header X-Forwarded-For $remote_addr;
-              proxy_set_header X-Foundry-Books-Subject $books_subject;
+              proxy_set_header X-Foundry-Calibre-Web-Subject $calibre_web_subject;
               proxy_set_header Authorization "";
               proxy_set_header X-Script-Name "";
             '';
           };
-          "= /_books_auth" = {
-            proxyPass = "https://auth.m7.rs/books-outpost/auth/nginx";
+          "= /_calibre-web_auth" = {
+            proxyPass = "https://auth.m7.rs/calibre-web-outpost/auth/nginx";
             recommendedProxySettings = false;
             extraConfig =
               outpostProxy
@@ -71,12 +71,12 @@ in {
               '';
           };
           "^~ /outpost.goauthentik.io/" = {
-            proxyPass = "https://auth.m7.rs/books-outpost/";
+            proxyPass = "https://auth.m7.rs/calibre-web-outpost/";
             recommendedProxySettings = false;
             extraConfig = outpostProxy;
           };
-          "@books_login".extraConfig = ''
-            add_header Set-Cookie $books_cookie always;
+          "@calibre-web_login".extraConfig = ''
+            add_header Set-Cookie $calibre_web_cookie always;
             return 302 /outpost.goauthentik.io/start?rd=https://books.m7.rs/;
           '';
           "= /opds".return = "404";

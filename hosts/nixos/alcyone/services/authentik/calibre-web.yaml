@@ -3,9 +3,9 @@ metadata:
   name: Foundry - Calibre-Web
 entries:
   - model: authentik_providers_oauth2.scopemapping
-    id: books-identity
+    id: calibre-web-identity
     identifiers:
-      name: foundry-books-identity
+      name: foundry-calibre-web-identity
     attrs:
       scope_name: profile
       description: Immutable Calibre-Web account identity
@@ -14,14 +14,14 @@ entries:
             "ak_proxy": {
                 "user_attributes": {
                     "additionalHeaders": {
-                        "X-Foundry-Books-Subject": str(request.user.uuid) if request.user.is_active else "",
+                        "X-Foundry-Calibre-Web-Subject": str(request.user.uuid) if request.user.is_active else "",
                     },
                 },
             },
         }
 
   - model: authentik_providers_proxy.proxyprovider
-    id: books-provider
+    id: calibre-web-provider
     identifiers:
       name: Calibre-Web
     attrs:
@@ -36,29 +36,29 @@ entries:
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
-        - !KeyOf books-identity
+        - !KeyOf calibre-web-identity
 
   - model: authentik_core.application
-    id: books
+    id: calibre-web
     identifiers:
       slug: calibre-web
     attrs:
       name: Calibre
-      provider: !KeyOf books-provider
+      provider: !KeyOf calibre-web-provider
       icon: https://auth.m7.rs/branding/calibre.svg
       meta_launch_url: https://books.m7.rs/
       policy_engine_mode: all
 
   - model: authentik_policies_expression.expressionpolicy
-    id: books-access
+    id: calibre-web-access
     identifiers:
-      name: foundry-books-access
+      name: foundry-calibre-web-access
     attrs:
       expression: return request.user.is_authenticated and request.user.is_active
   - model: authentik_policies.policybinding
     identifiers:
-      target: !KeyOf books
+      target: !KeyOf calibre-web
       order: 0
     attrs:
-      policy: !KeyOf books-access
+      policy: !KeyOf calibre-web-access
       failure_result: false

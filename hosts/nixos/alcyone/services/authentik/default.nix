@@ -166,7 +166,7 @@ in {
     enableACME = true;
     locations."/branding/".alias = "${branding}/";
     # Merope reaches the embedded outpost over verified HTTPS, not an exposed port.
-    locations."^~ /books-outpost/" = {
+    locations."^~ /calibre-web-outpost/" = {
       proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/";
       recommendedProxySettings = false;
       extraConfig = ''

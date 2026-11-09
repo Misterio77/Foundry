@@ -59,7 +59,7 @@ class ProxyTests(unittest.TestCase):
         self.engine.dispose()
 
     def get(self, subject=None, **kwargs):
-        return self.client.get("/", headers={"X-Foundry-Books-Subject": subject or self.subject}, **kwargs)
+        return self.client.get("/", headers={"X-Foundry-Calibre-Web-Subject": subject or self.subject}, **kwargs)
 
     def test_first_login_and_repeat(self):
         first = self.get()
@@ -71,14 +71,14 @@ class ProxyTests(unittest.TestCase):
 
     def test_invalid_or_missing_subject(self):
         for subject in ("admin", "guest", "", "123", self.subject + ",admin"):
-            response = self.client.get("/", headers={"X-Foundry-Books-Subject": subject})
+            response = self.client.get("/", headers={"X-Foundry-Calibre-Web-Subject": subject})
             self.assertEqual(response.status_code, 403)
         self.assertEqual(self.client.get("/").status_code, 403)
         self.assertEqual(self.session.query(User).count(), 0)
 
     def test_untrusted_peer_even_with_forwarded_loopback(self):
         response = self.client.get("/", headers={
-            "X-Foundry-Books-Subject": self.subject,
+            "X-Foundry-Calibre-Web-Subject": self.subject,
             "X-Forwarded-For": "127.0.0.1",
         }, environ_overrides={"REMOTE_ADDR": "192.0.2.1"})
         self.assertEqual(response.status_code, 403)

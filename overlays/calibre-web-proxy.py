@@ -64,7 +64,7 @@ def install(app, ub, constants):
         # Do not trust forwarded client IPs, browser sessions, or local passwords.
         if request.remote_addr not in ("127.0.0.1", "::1"):
             abort(403)
-        subject = request.headers.get("X-Foundry-Books-Subject", "")
+        subject = request.headers.get("X-Foundry-Calibre-Web-Subject", "")
         try:
             user = provision(ub.session, ub.User, constants, subject)
         except (ValueError, AttributeError):
