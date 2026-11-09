@@ -6,7 +6,8 @@ application entitlements and resource identities. Both also accept Authentik app
 passwords for clients without configurable OAuth support.
 
 IMAP 993, SMTP submission 465 and DAV are restricted to the tailnet. Public SMTP
-25 does not offer authentication. DAV has no browser UI or cookie authentication.
+25 does not offer authentication. Radicale's collection-management UI uses Gablogin
+browser SSO on the same tailnet-only DAV hostname.
 
 ## Configuration boundaries
 
@@ -101,10 +102,39 @@ nginx takes the principal only from the outpost response, passes it as
 Radicale uses `owner_only` rights. Client-supplied identity headers cannot select
 a different user's collections, and an empty principal cannot access them.
 
-Cookies are never forwarded to the outpost. Unauthenticated requests receive
-Basic/Bearer challenges, not browser redirects, even for HTML navigation.
-Radicale's web UI is disabled. Clients discover their own principal from
-`https://dav.m7.rs/` rather than hardcoding storage URLs.
+Explicit Authorization credentials take precedence over browser cookies: nginx
+removes cookies before header authentication and suppresses session-cookie issuance.
+Invalid Basic/Bearer credentials therefore receive 401 even alongside a valid
+browser cookie. Without an Authorization header, an outpost browser session may
+authenticate the request.
+
+Only unauthenticated HTML GET/HEAD navigation redirects to Gablogin. DAV methods
+and non-HTML requests receive Basic/Bearer challenges. Clients discover their own
+principal from `https://dav.m7.rs/` rather than hardcoding storage URLs.
+
+## Browser collection management
+
+The **Radicale** dashboard tile opens `https://dav.m7.rs/.web/`. Its built-in UI
+manages calendars/address books and imports/exports; SOGo remains the richer
+Mail/DAV frontend. `prefer_browser_login` allows the UI's initial discovery request
+to use its outpost cookie without another credential prompt.
+
+The existing embedded outpost handles login at `/outpost.goauthentik.io/`; no new
+OAuth client, custom session service or public network exposure is introduced.
+Current DAV entitlements, UUID/principal overrides and SOGo/shared-client federation
+remain unchanged. Rights remain `owner_only`: restoring the UI does not enable
+cross-user sharing. Shared collections would require a separate rights policy.
+
+Browser sessions are independent credentials. Revoking an app password or OAuth
+grant does not end an independently established browser session, and browser logout
+does not revoke independent client grants. Authentik's native outpost back-channel
+logout invalidates matching proxy sessions. Treat entitlement, account-status and
+principal changes as requiring explicit session termination rather than assuming
+continuous authorization re-evaluation.
+
+The original integration (`1f4ddbf0`, later removed in `8da12022`) had live multi-user,
+credential-precedence and cookie-replay/logout checks. That historical evidence is
+not a substitute for acceptance of this restoration.
 
 ## Client setup and credential lifetime
 
@@ -147,8 +177,13 @@ After deployment, verify actual IMAP sync, SMTP submission, and CalDAV/CardDAV
 read/write. Check separate users/mailboxes and DAV collections, mail-only and
 DAV-only entitlements, no entitlement, inactive users, and missing mail principals.
 Exercise OAuth and app passwords, refresh, incorrect/revoked credentials,
-principal-header spoofing, and cookie-only requests. Confirm public SMTP lacks
-AUTH and submission/IMAP/DAV remain tailnet-restricted.
+principal-header spoofing, and cookie-only requests. For browser SSO, verify dashboard
+launch without a second login, collection creation, cross-user isolation, invalid
+header rejection despite valid cookies, and no session cookies from header auth.
+Replay captured cookies after logout and administrative session termination while
+checking independent browser sessions and client grants remain usable. Use disposable
+collections only. Confirm public SMTP lacks AUTH and submission/IMAP/DAV remain
+tailnet-restricted.
 
 Local expression checks and Nix builds do not establish protocol or live
 acceptance. Temporary tests belong outside the repository until there is a
