@@ -75,7 +75,7 @@ entries:
     identifiers:
       slug: immich
     attrs:
-      name: Immich
+      name: Fotos e vídeos (Immich)
       provider: !KeyOf immich-provider
       icon: https://auth.m7.rs/branding/immich.svg
       meta_launch_url: https://photos.m7.rs/auth/login?autoLaunch=1

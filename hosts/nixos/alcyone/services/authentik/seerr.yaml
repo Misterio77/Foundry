@@ -95,7 +95,7 @@ entries:
     identifiers:
       slug: seerr
     attrs:
-      name: Seerr
+      name: Pedir filmes e séries (Seerr)
       provider: !KeyOf seerr-provider
       icon: https://auth.m7.rs/branding/seerr.svg
       meta_launch_url: https://requests.m7.rs/login?provider=authentik
