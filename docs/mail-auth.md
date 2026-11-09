@@ -122,8 +122,8 @@ to use its outpost cookie without another credential prompt.
 The existing embedded outpost handles login at `/outpost.goauthentik.io/`; no new
 OAuth client, custom session service or public network exposure is introduced.
 Current DAV entitlements, UUID/principal overrides and SOGo/shared-client federation
-remain unchanged. Rights remain `owner_only`: restoring the UI does not enable
-cross-user sharing. Shared collections would require a separate rights policy.
+remain unchanged. Private collections retain `owner_only` rights; native mapped
+shares provide explicit access through aliases in the recipient's own DAV home.
 
 Browser sessions are independent credentials. Revoking an app password or OAuth
 grant does not end an independently established browser session, and browser logout
@@ -135,6 +135,54 @@ continuous authorization re-evaluation.
 The original integration (`1f4ddbf0`, later removed in `8da12022`) had live multi-user,
 credential-precedence and cookie-replay/logout checks. That historical evidence is
 not a substitute for acceptance of this restoration.
+
+## Sharing calendars and address books
+
+Radicale 3.9.0 provides native **Share by Map** management in its web UI. Mapped
+sharing and user-created mappings are enabled; token/link sharing remains disabled.
+No shared credentials or broader rights file are needed. New API shares default to
+read-only; owners can deliberately grant read/write in the UI.
+
+1. Obtain the recipient's **DAV principal**, not their Gablogin username or profile
+   email. Normally this is their Authentik UUID; an existing `dav_principal` override
+   takes precedence. The recipient can copy their identity from Radicale's collections
+   heading or inspect their own discovered principal URL. Do not change identities
+   or move existing data merely to get friendlier sharing names.
+2. On an owned collection, open **Share**, then **New Share by Map**. Enter that
+   principal as **Share User**, choose permissions, and leave the share enabled and
+   not hidden. **Share Href** is a single collection-name component (the generated
+   value is fine), not a full URL: it becomes `/<recipient-principal>/<share-href>/`.
+3. The recipient opens Radicale and enables/shows the incoming share using its
+   controls. Individual-recipient shares start disabled and hidden on their side.
+4. Once accepted and shown, the alias is returned by normal depth-one home discovery.
+   Refresh/reconnect clients as needed. This matches SOGo's existing direct-child
+   discovery model; live SOGo UI acceptance is still required, not established by
+   protocol tests alone.
+
+Sharing grants access to the existing collection, not a copy. Owners can change
+permissions, disable or delete the mapping. Read/write recipients can change/delete
+items; deleting a share through the sharing UI does not delete the owner's collection.
+Recipients cannot elevate permissions or re-share another owner's private collection.
+There is no Authentik username search in this UI: a mistyped principal does not
+resolve automatically to the intended person. Principal changes require reviewing
+existing shares as well as client configuration.
+
+Share metadata uses Radicale's `files` backend under
+`/var/lib/radicale/collections/collection-db/files`, inside the existing persistent
+and Borg-backed DAV tree. Restore share metadata and collection data together.
+Rolling configuration back to disabled sharing hides mappings but does not erase
+that persisted metadata.
+
+Cookie-authenticated requests other than GET/HEAD/OPTIONS require the exact Origin
+`https://dav.m7.rs`; missing, null and cross-origin values are denied. This protects
+the form-capable sharing API from cross-site writes. Explicit Authorization requests
+still use their own credentials independently of cookies and do not require Origin.
+
+Isolated tests against the packaged Radicale verified recipient acceptance/home
+listing, read-only/read-write access, unrelated-user and escalation denial, disabled
+token sharing, immediate mapping revocation, restart persistence, and owner-data
+preservation after share deletion. An actual nginx fixture checked the evaluated
+origin maps. These are not production SSO or browser-UI acceptance results.
 
 ## Client setup and credential lifetime
 

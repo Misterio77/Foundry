@@ -13,6 +13,15 @@ in {
         };
         auth.type = "http_x_remote_user";
         rights.type = "owner_only";
+        sharing = {
+          type = "files";
+          database_path = "${config.services.radicale.settings.storage.filesystem_folder}/collection-db/files";
+          collection_by_map = true;
+          permit_create_map = true;
+          collection_by_token = false;
+          permit_create_token = false;
+          default_permissions_create_map = "r";
+        };
         web = {
           type = "internal";
           prefer_browser_login = true;
@@ -31,6 +40,16 @@ in {
         default "";
         "" $upstream_http_set_cookie;
       }
+      # The sharing API accepts form POSTs; cookies alone are not CSRF protection.
+      map "$request_method:$http_origin" $dav_cookie_write_allowed {
+        default 0;
+        ~^(GET|HEAD|OPTIONS): 1;
+        "~^[A-Z]+:https://dav\\.m7\\.rs$" 1;
+      }
+      map "$dav_cookie_write_allowed:$http_authorization:$http_cookie" $dav_reject_cookie_write {
+        default 0;
+        ~^0::.+$ 1;
+      }
       map "$request_method:$http_accept" $dav_browser_navigation {
         default 0;
         ~*^(GET|HEAD):.*text/html 1;
@@ -45,6 +64,9 @@ in {
             proxyPass = "http://localhost:${port}";
             recommendedProxySettings = false;
             extraConfig = ''
+              if ($dav_reject_cookie_write) {
+                return 403;
+              }
               auth_request /_dav_auth;
               error_page 401 = @dav_unauthorized;
 
