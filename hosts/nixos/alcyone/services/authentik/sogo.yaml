@@ -125,6 +125,7 @@ entries:
     attrs:
       name: SOGo
       provider: !KeyOf provider
+      icon: https://auth.m7.rs/branding/sogo.svg
       meta_launch_url: https://mail.m7.rs/?autoLaunch=1
       policy_engine_mode: all
   - model: authentik_policies.policybinding

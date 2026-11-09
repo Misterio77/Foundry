@@ -15,6 +15,7 @@
     immich = "sha256-pdSkOJnmP/x+lyRgNPf2PN/cQQqoA8VxPVRSkGAcTYk=";
     jellyfin = "sha256-f1PPCD27MRnsjFrL2AScUDMidhfkYVQPcFkawQkSQwY=";
     seerr = "sha256-sS5d/WQdlhz7aDYNoz/iiHO5Xqm2TCMjPVuHo3y/pMQ=";
+    sogo = "sha256-WyTbl/9q56Zru1Z3qeI09ENWr6lvCBnVZ6pPlj97Jps=";
   };
   branding = pkgs.linkFarm "authentik-branding" (
     map (name: {
