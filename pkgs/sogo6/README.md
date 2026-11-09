@@ -1,9 +1,8 @@
 # SOGo 6 integration
 
-Work in progress: alcyone's native service, Authentik client, nginx routing and
-backups are configured and the full system builds. Nothing has been deployed.
-Isolated systemd lifecycle validation passes; native browser/provider validation
-remains a deployment gate.
+Deployed on alcyone at https://mail.m7.rs behind Tailscale. The native service,
+separate Authentik client, nginx routing and backup configuration are active.
+The integration remains under development; unsupported DAV mutations fail closed.
 
 ## Sources and patches
 
@@ -111,16 +110,33 @@ support. Native checks confirmed the hidden controls and corrected task default.
 These checks used a local OIDC fixture, not Authentik. The temporary setup and
 specific evidence/limitations are in `/tmp/sogo6-native-browser/EVIDENCE.md`.
 
-## Before deployment
+## Production validation (2026-11-09)
 
-1. Finish native recurrence/scoped-edit browser checks and review existing resources
-   outside the writable subset. Advanced event controls (all-day, participants,
-   reminders and recurrence creation) still need to reflect the supported subset.
-2. Validate native refresh/revocation and logout navigation against the real provider;
-   the local OIDC fixture does not establish that integration.
-3. Validate blueprint reconciliation, then ask before deploying. After deployment,
-   verify the deployed revision and actual Mail/DAV/OIDC paths without touching
-   existing resources or sending another SMTP test message.
+Alcyone runs revision `280f6722`, also selected as its boot default. The verified
+system is `/nix/store/g3zfignr7kh1j1hsmla457gpcal6h0yj-nixos-system-alcyone-26.11.20261101.0bb2eed`.
+Automatic upgrades are restored; nothing was pushed. A future newer main deployment
+can remove this service until the change is merged.
 
-No deployment or push has occurred. Existing pilot mail round-trip and live DAV
-preservation results remain separate evidence, not substitutes for these gates.
+- A fresh Authentik PostgreSQL backup completed before activation.
+- All 14 custom Authentik blueprints are successful and their applied hashes match
+  the checked-in YAML. SOGo uses `!Find` dependencies without recursively replaying
+  Mail/DAV identity flows, which saturated the worker during the first activation.
+- A real browser login through Gablogin reached the native mailbox. Mailbox,
+  calendar/address-book discovery, task and event requests returned HTTP 200.
+- Natural access-token expiry triggered real Authentik refresh rotation; the old
+  refresh token was revoked and the replacement was active.
+- Native logout returned HTTP 200, revoked the rotated access/refresh credentials,
+  and reached Authentik's application-only logout page, retaining the Gablogin session.
+- Authentik and both SOGo units are active with zero automatic restarts; no failed
+  units remain. Existing clients/grants and pilots were not modified, existing DAV
+  content was not mutated, and no additional SMTP message was sent.
+
+## Remaining work
+
+Finish native recurrence/scoped-edit browser checks and review existing resources
+outside the writable subset. Advanced event controls (all-day, participants,
+reminders and recurrence creation) still need to reflect the supported subset.
+
+Live entitlement removal and independent-session logout isolation were not exercised
+on the deployed service; their fixture/pilot evidence remains separate. A Borg
+archive restore and the full upstream test suites also remain unverified.
