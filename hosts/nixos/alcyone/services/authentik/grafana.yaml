@@ -61,7 +61,7 @@ entries:
     identifiers:
       slug: grafana
     attrs:
-      name: Monitoramento (Grafana)
+      name: Grafana
       provider: !KeyOf grafana-provider
       icon: https://auth.m7.rs/branding/grafana.svg
       meta_launch_url: https://dash.m7.rs/login

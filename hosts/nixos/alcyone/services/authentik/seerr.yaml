@@ -95,7 +95,7 @@ entries:
     identifiers:
       slug: seerr
     attrs:
-      name: Pedir filmes e séries (Seerr)
+      name: Seerr
       provider: !KeyOf seerr-provider
       icon: https://auth.m7.rs/branding/seerr.svg
       meta_launch_url: https://requests.m7.rs/login?provider=authentik
@@ -105,7 +105,11 @@ entries:
       target: !KeyOf seerr
       order: 0
     attrs:
-      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      policy:
+        !Find [
+          authentik_policies_expression.expressionpolicy,
+          [name, foundry-application-access],
+        ]
       failure_result: false
 
   - model: authentik_core.applicationentitlement

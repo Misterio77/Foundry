@@ -62,7 +62,7 @@ entries:
     identifiers:
       slug: jellyfin
     attrs:
-      name: Filmes e séries (Jellyfin)
+      name: Jellyfin
       provider: !KeyOf jellyfin-provider
       icon: https://auth.m7.rs/branding/jellyfin.svg
       meta_launch_url: https://media.m7.rs/sso/OIDC/Start/authentik
