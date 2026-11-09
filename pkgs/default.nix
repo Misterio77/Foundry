@@ -17,6 +17,7 @@ in {
   robohash = pkgs.callPackage ./robohash {};
   jellyfin-web-foundry = pkgs.callPackage ./jellyfin-web {};
   hax = pkgs.callPackage ./hax {};
+  lichii = pkgs.callPackage ./lichii {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
