@@ -6,7 +6,7 @@
   ...
 }: let
   components = config.services.authentik.authentikComponents;
-  icons = lib.mapAttrs (name: hash:
+  homarrIcons = lib.mapAttrs (name: hash:
     pkgs.fetchurl {
       url = "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/59f1e9a4108f4f510f41e9588f078631de1e1405/svg/${name}.svg";
       inherit hash;
@@ -15,8 +15,15 @@
     immich = "sha256-pdSkOJnmP/x+lyRgNPf2PN/cQQqoA8VxPVRSkGAcTYk=";
     jellyfin = "sha256-f1PPCD27MRnsjFrL2AScUDMidhfkYVQPcFkawQkSQwY=";
     seerr = "sha256-sS5d/WQdlhz7aDYNoz/iiHO5Xqm2TCMjPVuHo3y/pMQ=";
-    sogo = "sha256-WyTbl/9q56Zru1Z3qeI09ENWr6lvCBnVZ6pPlj97Jps=";
   };
+  icons =
+    homarrIcons
+    // {
+      sogo = pkgs.fetchurl {
+        url = "https://raw.githubusercontent.com/Alinto/sogo/ff2819278518d09fe3e3a8eed013fa0ddd3a022c/UI/WebServerResources/img/sogo-compact.svg";
+        hash = "sha256-l9dzTMqv6TrE89YVTTf5C2BWadvRKUcdhAcpOgWDDqg=";
+      };
+    };
   branding = pkgs.linkFarm "authentik-branding" (
     map (name: {
       inherit name;
