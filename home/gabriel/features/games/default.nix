@@ -8,6 +8,7 @@
     ./steam.nix
     ./prism-launcher.nix
     ./hytale.nix
+    ./lichii.nix
   ];
   home = {
     packages = with pkgs; [gamescope];
