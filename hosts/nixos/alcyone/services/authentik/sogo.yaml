@@ -105,6 +105,11 @@ entries:
         http = request.http_request
         if http.method in ("GET", "POST") and http.path == "/application/o/sogo/end-session/":
             return True
+        if http.method == "GET" and http.path in (
+            "/api/v3/core/applications/",
+            "/api/v3/core/applications/sogo/check_access/",
+        ):
+            return True
         challenge = request.context.get("oauth_code_challenge", "")
         return (
             request.context.get("oauth_grant_type") == "authorization_code"

@@ -1866,7 +1866,7 @@
 +        init_config.init_sogo()
 --- /dev/null
 +++ b/tests/test_module/test_auth/test_foundry_sogo_blueprint.py
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,98 @@
 +import os
 +import sys
 +from textwrap import indent
@@ -1911,6 +1911,21 @@
 +    assert policy('pkce', request) is allowed
 +
 +
++@pytest.mark.parametrize('path,method,allowed', [
++    ('/api/v3/core/applications/', 'GET', True),
++    ('/api/v3/core/applications/sogo/check_access/', 'GET', True),
++    ('/api/v3/core/applications/', 'POST', False),
++    ('/api/v3/core/applications/sogo/check_access/', 'POST', False),
++    ('/api/v3/core/applications', 'GET', False),
++    ('/api/v3/core/applications/other/check_access/', 'GET', False),
++    ('/application/o/authorize/', 'GET', False),
++    ('/application/o/authorize/', 'POST', False),
++])
++def test_dashboard_pkce_exception_is_read_only_and_exact(path, method, allowed):
++    request = SimpleNamespace(http_request=SimpleNamespace(path=path, method=method), context={})
++    assert policy('pkce', request) is allowed
++
++
 +@pytest.mark.parametrize('challenge,method,grant,allowed', [
 +    ('a'*43, 'S256', 'authorization_code', True),
 +    ('a'*43, 'plain', 'authorization_code', False),
@@ -1926,7 +1941,12 @@
 +
 +
 +@pytest.mark.parametrize('active,grants,allowed', [(True, {'mail', 'radicale'}, True), (True, {'mail'}, False), (True, {'radicale'}, False), (False, {'mail', 'radicale'}, False)])
-+def test_access_requires_both_entitlements(active, grants, allowed, monkeypatch):
++@pytest.mark.parametrize('path', [
++    '/application/o/authorize/',
++    '/api/v3/core/applications/',
++    '/api/v3/core/applications/sogo/check_access/',
++])
++def test_access_requires_both_entitlements(active, grants, allowed, path, monkeypatch):
 +    class Applications(list):
 +        def count(self):
 +            return len(self)
@@ -1934,7 +1954,7 @@
 +    monkeypatch.setitem(sys.modules, 'authentik.core.models', SimpleNamespace(Application=model))
 +    user = SimpleNamespace(is_active=active, app_entitlements=lambda app: SimpleNamespace(
 +        filter=lambda **_: SimpleNamespace(exists=lambda: app in grants)))
-+    request = SimpleNamespace(user=user, http_request=SimpleNamespace(path='/application/o/authorize/', method='GET'))
++    request = SimpleNamespace(user=user, http_request=SimpleNamespace(path=path, method='GET'))
 +    assert policy('access', request) is allowed
 +
 +
