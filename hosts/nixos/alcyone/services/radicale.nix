@@ -1,6 +1,14 @@
 {config, ...}: let
   port = "5232";
 in {
+  sops.secrets.authentik-radicale-directory-token = {
+    sopsFile = ../secrets.yaml;
+    restartUnits = ["radicale.service"];
+  };
+  systemd.services.radicale.serviceConfig.LoadCredential = [
+    "authentik-directory-token:${config.sops.secrets.authentik-radicale-directory-token.path}"
+  ];
+
   services = {
     radicale = {
       enable = true;
@@ -25,6 +33,8 @@ in {
         web = {
           type = "internal";
           prefer_browser_login = true;
+          authentik_api_url = "https://auth.m7.rs/api/v3/";
+          authentik_token_file = "/run/credentials/radicale.service/authentik-directory-token";
         };
         storage = {
           filesystem_folder = "/var/lib/radicale/collections";
@@ -87,7 +97,7 @@ in {
             '';
           };
           "= /.sharing-users" = {
-            proxyPass = "http://127.0.0.1:9000/-/foundry/dav-users/";
+            proxyPass = "http://127.0.0.1:${port}";
             recommendedProxySettings = false;
             extraConfig = ''
               if ($request_method != GET) {
@@ -102,11 +112,10 @@ in {
               proxy_set_header Content-Length "";
               proxy_set_header Authorization "";
               proxy_set_header Cookie "";
-              proxy_set_header Host auth.m7.rs;
-              proxy_set_header X-Forwarded-For 127.0.0.1;
+              proxy_set_header Host dav.m7.rs;
+              proxy_set_header X-Forwarded-For $remote_addr;
               proxy_set_header X-Forwarded-Proto https;
-              proxy_set_header X-Foundry-DAV-Directory 1;
-              proxy_set_header X-Foundry-DAV-Principal $dav_directory_principal;
+              proxy_set_header X-Remote-User $dav_directory_principal;
               proxy_set_header X-Foundry-DAV-Username $dav_directory_username;
             '';
           };
@@ -142,7 +151,6 @@ in {
               proxy_set_header X-Forwarded-For $remote_addr;
               proxy_set_header Authorization $http_authorization;
               proxy_set_header Cookie $dav_request_cookie;
-              proxy_set_header X-Foundry-DAV-Directory "";
               # Header authentication must not mint a reusable browser session.
               proxy_hide_header Set-Cookie;
               add_header Set-Cookie $dav_outpost_cookie always;

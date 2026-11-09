@@ -81,6 +81,7 @@
     cp ${./seerr.yaml} "$out/seerr.yaml"
     cp ${./mail.yaml} "$out/mail.yaml"
     cp ${./dav.yaml} "$out/dav.yaml"
+    cp ${./dav-directory.yaml} "$out/dav-directory.yaml"
     cp ${./mail-and-dav.yaml} "$out/mail-and-dav.yaml"
     cp ${./sogo.yaml} "$out/sogo.yaml"
   '';
@@ -109,6 +110,7 @@ in {
       AUTHENTIK_JELLYFIN_CLIENT_SECRET=${config.sops.placeholder.authentik-jellyfin-client-secret}
       AUTHENTIK_SEERR_CLIENT_SECRET=${config.sops.placeholder.authentik-seerr-client-secret}
       AUTHENTIK_SOGO_CLIENT_SECRET=${config.sops.placeholder.authentik-sogo-client-secret}
+      AUTHENTIK_RADICALE_DIRECTORY_TOKEN=${config.sops.placeholder.authentik-radicale-directory-token}
     '';
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];
   };
@@ -158,7 +160,6 @@ in {
     forceSSL = true;
     enableACME = true;
     locations."/branding/".alias = "${branding}/";
-    locations."^~ /-/foundry/".return = "404";
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = ''
@@ -186,7 +187,6 @@ in {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Foundry-DAV-Directory "";
       '';
     };
   };

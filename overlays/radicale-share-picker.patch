@@ -1,3 +1,439 @@
+--- /dev/null
++++ b/radicale/dav_directory.py
+@@ -0,0 +1,126 @@
++"""Read-only Authentik API adapter; directory data never authorizes DAV writes."""
++
++import json
++import time
++from collections import Counter
++from urllib.parse import urlencode, urlsplit
++from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
++
++
++class Unavailable(Exception):
++    pass
++
++
++class Forbidden(Exception):
++    pass
++
++
++class NoRedirect(HTTPRedirectHandler):
++    def redirect_request(self, req, fp, code, msg, headers, newurl):
++        return None
++
++
++def principal_for(user):
++    attributes = user.get("attributes")
++    if not isinstance(attributes, dict):
++        return None
++    principal = attributes.get("dav_principal", user.get("uuid"))
++    if (not isinstance(principal, str) or not principal or principal in (".", "..")
++            or principal.startswith("@") or any(c in principal for c in "/\\:{}")
++            or any(ord(c) < 32 or ord(c) == 127 for c in principal)):
++        return None
++    return principal
++
++
++class Directory:
++    def __init__(self, api_url, token):
++        parsed = urlsplit(api_url)
++        if (parsed.scheme != "https" or not parsed.netloc or parsed.username
++                or parsed.password or parsed.query or parsed.fragment
++                or not api_url.endswith("/") or not token
++                or any(c.isspace() or not 33 <= ord(c) <= 126 for c in token)):
++            raise Unavailable()
++        self.api_url = api_url
++        self.token = token
++        self.deadline = time.monotonic() + 8
++        self.opener = build_opener(ProxyHandler({}), NoRedirect())
++
++    def get(self, path, **params):
++        remaining = self.deadline - time.monotonic()
++        if remaining <= 0:
++            raise Unavailable()
++        request = Request(self.api_url + path + "?" + urlencode(params, doseq=True),
++                          headers={"Authorization": "Bearer " + self.token,
++                                   "Accept": "application/json"})
++        try:
++            with self.opener.open(request, timeout=min(3, remaining)) as response:
++                chunks = []
++                size = 0
++                while chunk := response.read(65536):
++                    size += len(chunk)
++                    if size > 2 * 1024 * 1024 or time.monotonic() > self.deadline:
++                        raise Unavailable()
++                    chunks.append(chunk)
++                data = json.loads(b"".join(chunks))
++            if not isinstance(data, dict):
++                raise Unavailable()
++            return data
++        except (OSError, ValueError):
++            # Neither upstream bodies nor credentials belong in errors or logs.
++            raise Unavailable() from None
++
++    def listing(self, path, **params):
++        rows = []
++        page = 1
++        while page:
++            data = self.get(path, page=page, page_size=100, **params)
++            batch = data.get("results")
++            pagination = data.get("pagination")
++            if not isinstance(batch, list) or not isinstance(pagination, dict):
++                raise Unavailable()
++            following = pagination.get("next")
++            if (type(following) is not int or following < 0
++                    or (following and (following != page + 1 or not batch))):
++                raise Unavailable()
++            rows.extend(batch)
++            if len(rows) > 500:
++                raise Unavailable()
++            page = following
++        return rows
++
++    def allowed(self, user):
++        apps = self.listing("core/applications/", slug="radicale",
++                            for_user=user["pk"], only_with_launch_url="false")
++        if any(not isinstance(app, dict) or app.get("slug") != "radicale" for app in apps):
++            raise Unavailable()
++        return bool(apps)
++
++    def users(self, username, principal):
++        if not username or not principal:
++            raise Forbidden()
++        candidates = self.listing("core/users/", is_active="true",
++                                  type=["internal", "external"],
++                                  include_groups="false", include_roles="false",
++                                  ordering="username")
++        people = []
++        for user in candidates:
++            if not isinstance(user, dict):
++                raise Unavailable()
++            if user.get("is_active") is not True or user.get("type") not in ("internal", "external"):
++                continue
++            if type(user.get("pk")) is not int or not isinstance(user.get("username"), str) or not user["username"]:
++                raise Unavailable()
++            people.append(user)
++        callers = [user for user in people if user["username"] == username]
++        if (len(callers) != 1 or principal_for(callers[0]) != principal
++                or not self.allowed(callers[0])):
++            raise Forbidden()
++        recipients = []
++        for user in people:
++            target = principal_for(user)
++            if target and (user is callers[0] or self.allowed(user)):
++                recipients.append({"username": user["username"], "principal": target})
++        principals = Counter(row["principal"] for row in recipients)
++        usernames = Counter(row["username"] for row in recipients)
++        return {"users": [row for row in recipients if principals[row["principal"]] == 1
++                          and usernames[row["username"]] == 1]}
+--- a/radicale/app/get.py
++++ b/radicale/app/get.py
+@@ -20,16 +20,18 @@
+ 
+ import contextlib
+ import datetime
++import json
+ import plistlib
+ import posixpath
+ import re
+ import urllib
+ import uuid
+ from http import client
++from pathlib import Path
+ from typing import Tuple, Union
+ from urllib.parse import parse_qs, quote
+ 
+-from radicale import httputils, pathutils, storage, types, utils, xmlutils
++from radicale import dav_directory, httputils, pathutils, storage, types, utils, xmlutils
+ from radicale.app.base import Access, ApplicationBase
+ from radicale.app.report import freebusy_collection_text
+ from radicale.item import get_etag
+@@ -190,6 +192,22 @@
+                 return httputils.redirect(location, client.MOVED_PERMANENTLY)
+             # Dispatch /.web path to web module
+             return self._web.get(environ, base_prefix, path, user, user_groups, request_info)
++        if path == "/.sharing-users":
++            headers = {"Content-Type": "application/json", "Cache-Control": "no-store"}
++            username = utils.get_remote_username(environ, self._auth_type)
++            if not user or not username:
++                return client.FORBIDDEN, headers, "{}", None
++            try:
++                token_file = self.configuration.get("web", "authentik_token_file")
++                token = Path(token_file).read_text().strip()
++                directory = dav_directory.Directory(
++                    self.configuration.get("web", "authentik_api_url"), token)
++                return client.OK, headers, json.dumps(directory.users(username, user)), None
++            except dav_directory.Forbidden:
++                return client.FORBIDDEN, headers, "{}", None
++            except (dav_directory.Unavailable, OSError, UnicodeError):
++                logger.warning("DAV user directory unavailable")
++                return client.SERVICE_UNAVAILABLE, headers, "{}", None
+         # Catch /.mobileconfig (dynamically generated)
+         # https://developer.apple.com/business/documentation/Configuration-Profile-Reference.pdf
+         if path == "/.mobileconfig":
+--- a/radicale/config.py
++++ b/radicale/config.py
+@@ -774,7 +774,15 @@
+         ("prefer_browser_login", {
+             "value": "False",
+             "help": "prefer browser login",
+-            "type": bool})])),
++            "type": bool}),
++        ("authentik_api_url", {
++            "value": "",
++            "help": "HTTPS Authentik API base URL for the DAV directory",
++            "type": str}),
++        ("authentik_token_file", {
++            "value": "",
++            "help": "server-only read-only Authentik API credential file",
++            "type": str})])),
+     ("logging", OrderedDict([
+         ("level", {
+             "value": "info",
+--- /dev/null
++++ b/radicale/tests/test_foundry_directory.py
+@@ -0,0 +1,161 @@
++"""Supported API permissions, bounded lookup, and trusted-identity boundaries."""
++
++import io
++import json
++from urllib.error import HTTPError
++from urllib.parse import quote
++
++import pytest
++
++from radicale import dav_directory as directory
++from radicale.tests import BaseTest
++
++
++def user(pk, name, principal=None, **extra):
++    return {"pk": pk, "username": name, "uuid": "uuid-" + name,
++            "attributes": {} if principal is None else {"dav_principal": principal},
++            "is_active": True, "type": "internal", **extra}
++
++
++def page(rows, following=0):
++    return {"results": rows, "pagination": {"next": following}}
++
++
++def fake_api(monkeypatch, people=None, allowed=None):
++    people = people if people is not None else [user(1, "caller"), user(2, "josé", "peer@example.invalid")]
++    allowed = {1, 2} if allowed is None else allowed
++    calls = []
++
++    def get(self, path, **params):
++        calls.append((path, params))
++        if path == "core/users/":
++            assert params["is_active"] == "true"
++            assert params["type"] == ["internal", "external"]
++            return page(people)
++        assert path == "core/applications/" and params["slug"] == "radicale"
++        return page([{"slug": "radicale"}] if params["for_user"] in allowed else [])
++
++    monkeypatch.setattr(directory.Directory, "get", get)
++    return calls
++
++
++def client():
++    return directory.Directory("https://auth.example.invalid/api/v3/", "fixture-token")
++
++
++def test_minimal_identity_and_supported_access_checks(monkeypatch):
++    calls = fake_api(monkeypatch)
++    assert client().users("caller", "uuid-caller") == {"users": [
++        {"username": "caller", "principal": "uuid-caller"},
++        {"username": "josé", "principal": "peer@example.invalid"}]}
++    assert [params["for_user"] for path, params in calls if path == "core/applications/"] == [1, 2]
++
++
++@pytest.mark.parametrize("username,principal", [("", "uuid-caller"), ("caller", ""),
++                                                  ("caller", "uuid-other"), ("missing", "uuid-caller")])
++def test_caller_pairing(monkeypatch, username, principal):
++    fake_api(monkeypatch)
++    with pytest.raises(directory.Forbidden):
++        client().users(username, principal)
++
++
++def test_no_access_and_nonhuman_or_inactive_users(monkeypatch):
++    people = [user(1, "caller"), user(2, "denied"), user(3, "inactive", is_active=False),
++              user(4, "service", type="service_account"), user(5, "outpost", type="internal_service_account")]
++    fake_api(monkeypatch, people, {1, 3, 4, 5})
++    assert client().users("caller", "uuid-caller")["users"] == [{"username": "caller", "principal": "uuid-caller"}]
++    for name in ["denied", "inactive", "service", "outpost"]:
++        with pytest.raises(directory.Forbidden):
++            client().users(name, "uuid-" + name)
++
++
++@pytest.mark.parametrize("principal", ["", ".", "..", "@token", "a/b", "a\\b", "a:b", "{user}", "a\n", "a\x7f", 42])
++def test_invalid_principals(principal):
++    assert directory.principal_for(user(1, "test", principal)) is None
++
++
++def test_ambiguous_principals_omitted(monkeypatch):
++    fake_api(monkeypatch, [user(1, "caller"), user(2, "alice", "duplicate"), user(3, "bob", "duplicate")], {1, 2, 3})
++    assert len(client().users("caller", "uuid-caller")["users"]) == 1
++
++
++def test_complete_pagination(monkeypatch):
++    def get(self, path, **params):
++        return page([params["page"]], 2 if params["page"] == 1 else 0)
++    monkeypatch.setattr(directory.Directory, "get", get)
++    assert client().listing("core/users/") == [1, 2]
++
++
++@pytest.mark.parametrize("response", [page([{}] * 501), page([], 2), page([{}], 1),
++                                      page([{}], True), page([{}], -1), {}, {"results": []}])
++def test_partial_or_malformed_directory_rejected(monkeypatch, response):
++    monkeypatch.setattr(directory.Directory, "get", lambda *a, **kw: response)
++    with pytest.raises(directory.Unavailable):
++        client().listing("core/users/")
++
++
++@pytest.mark.parametrize("url", ["http://auth.invalid/", "https://user:password@auth.invalid/",
++                                "https://auth.invalid/?x=1", "https://auth.invalid/#fragment", "https://auth.invalid"])
++def test_unsafe_api_configuration(url):
++    with pytest.raises(directory.Unavailable):
++        directory.Directory(url, "token")
++
++
++def test_transport_keeps_credentials_server_side(monkeypatch):
++    instance = client()
++    def open_request(request, timeout):
++        assert request.headers["Authorization"] == "Bearer fixture-token"
++        assert request.full_url.startswith(instance.api_url + "core/users/?")
++        assert "fixture-token" not in request.full_url
++        return io.BytesIO(json.dumps(page([])).encode())
++    monkeypatch.setattr(instance.opener, "open", open_request)
++    assert instance.listing("core/users/") == []
++    assert directory.NoRedirect().redirect_request(None, None, 302, "", {}, "https://evil.invalid/") is None
++
++
++@pytest.mark.parametrize("body", [b"not json", b"[]", b"x" * (2 * 1024 * 1024 + 1)])
++def test_bad_upstream_bodies(monkeypatch, body):
++    instance = client()
++    monkeypatch.setattr(instance.opener, "open", lambda *a, **kw: io.BytesIO(body))
++    with pytest.raises(directory.Unavailable):
++        instance.get("core/users/")
++
++
++def test_upstream_error_and_deadline(monkeypatch):
++    instance = client()
++    def fail(*args, **kwargs):
++        raise HTTPError("https://auth.invalid/", 403, "private body", {}, None)
++    monkeypatch.setattr(instance.opener, "open", fail)
++    with pytest.raises(directory.Unavailable) as error:
++        instance.get("core/users/")
++    assert not str(error.value)
++    instance.deadline = 0
++    with pytest.raises(directory.Unavailable):
++        instance.get("core/users/")
++
++
++class TestDirectoryRoute(BaseTest):
++    def setup_method(self):
++        super().setup_method()
++        self.configure({"auth": {"type": "http_x_remote_user"}, "rights": {"type": "owner_only"}})
++
++    def test_route(self, monkeypatch, tmp_path):
++        token = tmp_path / "credential"
++        token.write_text("fixture-token")
++        self.configure({"web": {"authentik_api_url": "https://auth.example.invalid/api/v3/",
++                                "authentik_token_file": str(token)}})
++        fake_api(monkeypatch)
++        headers = {"HTTP_X_REMOTE_USER": "peer@example.invalid", "HTTP_X_FOUNDRY_DAV_USERNAME": quote("josé")}
++        _, response_headers, body = self.request("GET", "/.sharing-users", check=200, **headers)
++        assert response_headers["Cache-Control"] == "no-store"
++        assert len(json.loads(body)["users"]) == 2
++        assert "fixture-token" not in body and "attributes" not in body
++        self.request("GET", "/.sharing-users", check=403, HTTP_X_FOUNDRY_DAV_USERNAME="caller")
++        self.request("GET", "/.sharing-users", check=403, HTTP_X_REMOTE_USER="uuid-caller")
++        self.request("GET", "/.sharing-users", check=403, HTTP_X_REMOTE_USER="uuid-caller", HTTP_X_FOUNDRY_DAV_USERNAME="jos%C3%A9")
++        fake_api(monkeypatch, allowed={1})
++        self.request("GET", "/.sharing-users", check=403, **headers)
++        token.unlink()
++        self.request("GET", "/.sharing-users", check=503, **headers)
++        self.configure({"auth": {"type": "none"}})
++        self.request("GET", "/.sharing-users", check=403, login="caller:", HTTP_X_FOUNDRY_DAV_USERNAME="caller")
+--- a/radicale/web/internal_data/js/scenes/CollectionsScene.js
++++ b/radicale/web/internal_data/js/scenes/CollectionsScene.js
+@@ -20,7 +20,7 @@
+  */
+ 
+ import { delete_collection } from "../api/api.js";
+-import { get_auth_header } from "../api/common.js";
++import { create_request, get_auth_header } from "../api/common.js";
+ import { delete_share_by_map, update_incoming_share } from "../api/sharing.js";
+ import { ROOT_PATH, SERVER } from "../constants.js";
+ import { Collection, CollectionType, Permission } from "../models/collection.js";
+@@ -29,6 +29,7 @@
+ import { ErrorHandler } from "../utils/error.js";
+ import { bytesToHumanReadable, decode_and_strip_trailing_slashes, get_element, get_element_by_id, strip_leading_slashes, strip_trailing_slashes } from "../utils/misc.js";
+ import { displayPermissions } from "../utils/permissions.js";
++import { parseRecipients, setOwnerLabel } from "../utils/share_recipients.js";
+ import { UrlTextHandler } from "../utils/url_text.js";
+ import { CreateEditCollectionScene } from "./CreateEditCollectionScene.js";
+ import { DeleteConfirmationScene } from "./DeleteConfirmationScene.js";
+@@ -268,6 +269,31 @@
+ 
+         /** @type {Array<HTMLElement>} */ this._nodes = [];
+         this._errorHandler = new ErrorHandler(this._error_div);
++        this._owner_names = new Map();
++        this._owner_request = null;
++    }
++
++    _load_owner_names() {
++        this._owner_names.clear();
++        const request = create_request("GET", SERVER + ROOT_PATH + ".sharing-users", this._user, this._password);
++        this._owner_request = request;
++        request.timeout = 10000;
++        request.setRequestHeader("Accept", "application/json");
++        request.onreadystatechange = () => {
++            if (request.readyState !== 4 || this._owner_request !== request) return;
++            this._owner_request = null;
++            try {
++                if (request.status !== 200) return;
++                this._owner_names = new Map([...parseRecipients(JSON.parse(request.responseText))]
++                    .map(([username, principal]) => [principal, username]));
++                for (const element of this._html_scene.querySelectorAll("[data-name=shared-by-owner]")) {
++                    if (element.dataset.principal) setOwnerLabel(element, element.dataset.principal, this._owner_names);
++                }
++            } catch (_) {
++                // Labels fall back to principals; discovery and share controls still work.
++            }
++        };
++        request.send();
+     }
+ 
+     _onnew() {
+@@ -624,7 +650,7 @@
+             if (share.Owner !== this._user) {
+                 is_incoming_share = true;
+                 share_info.classList.remove("hidden");
+-                get_element(node, "[data-name=shared-by-owner]").textContent = share.Owner;
++                setOwnerLabel(get_element(node, "[data-name=shared-by-owner]"), share.Owner, this._owner_names);
+ 
+                 share_control_enabled_li.classList.remove("hidden");
+                 share_control_shown_li.classList.remove("hidden");
+@@ -743,6 +769,7 @@
+     }
+ 
+     show() {
++        this._load_owner_names();
+         this._html_scene.classList.remove("hidden");
+         this._new_btn.onclick = () => this._onnew();
+         this._upload_btn.onclick = () => this._onupload();
+@@ -756,6 +783,10 @@
+     }
+ 
+     hide() {
++        const request = this._owner_request;
++        this._owner_request = null;
++        request?.abort();
++        this._owner_names.clear();
+         this._html_scene.classList.add("hidden");
+         this._new_btn.onclick = null;
+         this._upload_btn.onclick = null;
 --- a/radicale/web/internal_data/index.html
 +++ b/radicale/web/internal_data/index.html
 @@ -254,7 +254,8 @@
@@ -145,7 +581,7 @@
          this._form.onsubmit = null;
 --- /dev/null
 +++ b/radicale/web/internal_data/js/utils/share_recipients.js
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,26 @@
 +// Directory results are presentation data, never a replacement for DAV authorization.
 +export function parseRecipients(data) {
 +    if (!data || !Array.isArray(data.users) || data.users.length > 500) {
@@ -165,6 +601,12 @@
 +        principals.add(row.principal);
 +    }
 +    return recipients;
++}
++
++export function setOwnerLabel(element, principal, owners) {
++    element.dataset.principal = principal;
++    element.title = principal;
++    element.textContent = owners.get(principal) || principal;
 +}
 --- a/radicale/web/internal_data/js/utils/form_validator.js
 +++ b/radicale/web/internal_data/js/utils/form_validator.js
@@ -201,59 +643,3 @@
              this._element.innerHTML = html;
              if (html) {
                  this._element.classList.remove("hidden");
---- /dev/null
-+++ b/radicale/tests/test_foundry_share_picker.mjs
-@@ -0,0 +1,53 @@
-+import assert from 'node:assert/strict';
-+import test from 'node:test';
-+import { parseRecipients } from '../web/internal_data/js/utils/share_recipients.js';
-+import { ErrorHandler } from '../web/internal_data/js/utils/error.js';
-+globalThis.location = new URL('https://fixture.invalid/.web/');
-+const { FormValidator } = await import('../web/internal_data/js/utils/form_validator.js');
-+
-+test('resolve exact usernames to UUIDs and overridden principals', () => {
-+    const directory = parseRecipients({users: [
-+        {username: 'alice', principal: '4950638e-0534-41bd-b509-a44abb0477a8'},
-+        {username: 'josé & <friends>', principal: 'legacy@example.invalid'},
-+        {username: '__proto__', principal: 'another-uuid'},
-+    ]});
-+    assert.equal(directory.get('alice'), '4950638e-0534-41bd-b509-a44abb0477a8');
-+    assert.equal(directory.get('josé & <friends>'), 'legacy@example.invalid');
-+    assert.equal(directory.get('__proto__'), 'another-uuid');
-+    assert.equal(directory.get('ali'), undefined);
-+    assert.equal(directory.get('ALICE'), undefined);
-+    assert.equal(directory.get('legacy@example.invalid'), undefined);
-+});
-+
-+test('only the current dialog validates; returning to a scene restores its error', () => {
-+    let current = 'first';
-+    const field = new EventTarget();
-+    const element = {innerHTML: '', classList: {add() {}, remove() {}}};
-+    const first = new FormValidator(new ErrorHandler(element), () => current === 'first');
-+    first.addValidator(field, () => 'Directory unavailable');
-+    const second = new FormValidator(new ErrorHandler(element), () => current === 'second');
-+    second.addValidator(field, () => null);
-+    current = 'second';
-+    second.validate();
-+    assert.equal(element.innerHTML, '');
-+    current = 'first';
-+    first.validate();
-+    assert.equal(element.innerHTML, 'Directory unavailable');
-+    field.dispatchEvent(new Event('input'));
-+    assert.equal(element.innerHTML, 'Directory unavailable');
-+    assert.equal(first.validate(), false);
-+});
-+
-+test('empty directory is valid but offers no implicit raw-principal fallback', () => {
-+    assert.equal(parseRecipients({users: []}).get('some-principal'), undefined);
-+});
-+
-+test('malformed, duplicate and group/realm identities fail closed', () => {
-+    for (const data of [null, {}, {users: {}}, {users: [null]}, {users: [{username: 'a'}]},
-+        {users: [{username: 'a', principal: 'x'}, {username: 'a', principal: 'y'}]},
-+        {users: [{username: 'a', principal: 'x'}, {username: 'b', principal: 'x'}]},
-+        ...['', '..', '.', 'a/b', 'a\\b', ':group', '@realm', 'a:b', '{user}', 'a\nb'].map(principal => ({users: [{username: 'a', principal}]})),
-+        {users: Array.from({length: 501}, (_, i) => ({username: String(i), principal: String(i)}))}]) {
-+        assert.throws(() => parseRecipients(data));
-+    }
-+});

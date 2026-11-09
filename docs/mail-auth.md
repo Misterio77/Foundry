@@ -189,22 +189,38 @@ reviewing existing shares as well as client configuration.
 
 The same-origin `GET /.sharing-users` endpoint is tailnet-only and authenticated by
 the existing DAV outpost. nginx strips credentials and overwrites identity headers
-before forwarding to Authentik's internal `/-/foundry/dav-users/` view. Public
-Authentik ingress blocks that route and strips the internal gateway marker; the DAV
-outpost ingress strips the marker too. The view rechecks the caller's current active
-status, DAV entitlement and username/principal pairing, then lists only active human
-accounts with Radicale's `access` entitlement. Service accounts, invalid principals
-and duplicate/ambiguous principals are omitted. It exposes only username/principal
-pairs, including the caller for self-targeted calendar conversions. DAV users can
-therefore discover one another's usernames and principals (some legacy principals
-are email-shaped); no additional profile fields are exposed.
+before forwarding to Radicale. Its server-side adapter uses Authentik's supported
+`core/users/` and `core/applications/?slug=radicale&for_user=<pk>` APIs. The latter
+evaluates the application's access policy for the target user, including the native
+entitlement/group rules; the adapter does not reimplement those rules. Authentik's
+policy-result cache can delay visibility of access changes by up to five minutes.
+
+The adapter checks the caller's active status, allowed application and
+username/principal pairing, then lists active human accounts allowed to access
+Radicale. Service accounts, invalid principals and duplicate/ambiguous principals
+are omitted. Only username/principal pairs reach the browser, including the caller
+for self-targeted calendar conversions. DAV users can therefore discover one
+another's usernames and principals (some legacy principals are email-shaped); no
+additional profile fields are exposed. “Shared by” resolves through the same
+directory, with the principal retained in the tooltip. Failed or missing lookups
+fall back to principal labels without blocking collection or share controls.
 
 Results are not HTTP-cached or stored in browser persistence. The picker reloads on
 each dialog opening, cancels outstanding lookups when closed, and refuses creation
 if lookup fails; it never silently interprets an unknown name as a principal. A stale
 SSO session lacking the username claim needs a fresh login. Directories larger than
-500 active human accounts fail closed rather than presenting a partial list. No
-new daemon, API credential or broader Authentik user-list permission is required.
+500 active human accounts fail closed rather than presenting a partial list.
+
+The `svc-radicale-directory` service account has only `authentik_core.view_user` and
+`authentik_core.view_user_applications`, granted by the `radicale-directory-reader`
+role. These allow reading full user API records and application visibility, not
+just the two fields exposed by the adapter; the token must remain server-only.
+The account has no superuser, impersonation or user-management grant. Its API token
+is `authentik-radicale-directory-token` in alcyone's existing `secrets.yaml`, supplied
+to Radicale through systemd `LoadCredential`. The DAV-directory blueprint reconciles
+the account, role and token, with the key supplied through Authentik's SOPS-rendered
+environment. Rotate it by replacing that SOPS value and redeploying both services.
+No additional daemon or private Authentik endpoint/patch is needed.
 
 Share metadata uses Radicale's `files` backend under
 `/var/lib/radicale/collections/collection-db/files`, inside the existing persistent

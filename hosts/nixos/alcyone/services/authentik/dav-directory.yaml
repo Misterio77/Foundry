@@ -1,0 +1,33 @@
+version: 1
+metadata:
+  name: Foundry - DAV directory
+entries:
+  - model: authentik_rbac.role
+    id: directory-reader
+    identifiers:
+      name: radicale-directory-reader
+    attrs:
+      permissions:
+        - authentik_core.view_user
+        - authentik_core.view_user_applications
+  - model: authentik_core.user
+    id: directory-user
+    identifiers:
+      username: svc-radicale-directory
+    attrs:
+      name: Radicale directory
+      type: service_account
+      path: services
+      is_active: true
+      groups: []
+      roles:
+        - !KeyOf directory-reader
+  - model: authentik_core.token
+    identifiers:
+      identifier: radicale-directory-api
+    attrs:
+      user: !KeyOf directory-user
+      intent: api
+      description: Read-only Radicale user directory
+      expiring: false
+      key: !Env AUTHENTIK_RADICALE_DIRECTORY_TOKEN

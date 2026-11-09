@@ -41,13 +41,7 @@ in {
 
     immich = addPatches prev.immich [./immich-oidc-avatar.patch];
 
-    radicale = (addPatches prev.radicale [./radicale-login-username.patch ./radicale-share-picker.patch]).overrideAttrs (old: {
-      postCheck =
-        (old.postCheck or "")
-        + ''
-          ${final.buildPackages.nodejs}/bin/node --test radicale/tests/test_foundry_share_picker.mjs
-        '';
-    });
+    radicale = addPatches prev.radicale [./radicale-login-username.patch ./radicale-share-picker.patch];
 
     grafana = assert final.lib.versions.majorMinor prev.grafana.version == "13.3";
       prev.grafana.overrideAttrs (old: {
@@ -151,7 +145,6 @@ in {
       ((inputs.authentik-nix.lib.mkAuthentikScope {pkgs = final;}).overrideScope (_: prev: let
         patches = [
           ./authentik-avatar-cache-url.patch
-          ./authentik-dav-directory.patch
           # Track RP logins beyond token expiry so aged sessions still log out clients.
           (final.fetchpatch {
             url = "https://github.com/goauthentik/authentik/pull/26310.patch";
