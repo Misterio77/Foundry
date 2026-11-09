@@ -43,6 +43,7 @@ in {
       AUTHENTICATION_GUARD = "remote_user_guard";
       AUTHENTICATION_GUARD_HEADER = "REMOTE_USER";
       AUTHENTICATION_GUARD_EMAIL = "REMOTE_EMAIL";
+      CUSTOM_LOGOUT_URL = "https://firefly.m7.rs/outpost.goauthentik.io/sign_out";
       ENABLE_EXCHANGE_RATES = "true";
       ENABLE_EXTERNAL_RATES = "false";
       SITE_OWNER = "hi@m7.rs";
