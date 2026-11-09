@@ -20,10 +20,11 @@ Configuration inventory, not a current health report. Sources:
   var/backup/postgresql        var/lib/private/authentik
   var/lib/firefly-iii          var/lib/freshrss
   var/lib/headscale            var/lib/radicale/collections
+  var/lib/sogo6
   srv/files                   srv/git                   srv/mail
   ```
 
-- Alcyone dumps only the `authentik` PostgreSQL database. Firefly III and
+- Alcyone declares dumps for `authentik` and `sogo6` (SOGo activation is pending). Firefly III and
   FreshRSS use SQLite in their included application directories. Raw MariaDB
   and PostgreSQL directories are not selected by Borg; explicitly include
   dumps if additional databases become important.
@@ -44,6 +45,25 @@ Configuration inventory, not a current health report. Sources:
   server/worker and management-assisted API access worked; signing key and MFA
   records were present. Browser MFA, external clients and independently stored
   key recovery were **not tested**. The effective key came from production.
+
+## SOGo recovery (activation pending)
+
+SOGo's `sogo6` database and `/var/lib/sogo6/{encryption-key,voucher-key}` must be
+restored together from a consistent backup. Stop `sogo6-api` before restoration;
+restore the database with ownership assigned to the `sogo6` role, and restore the
+key directory as `sogo6:sogo6`, mode `0700`, with key files mode `0600`. Retain the
+SOPS-managed OIDC client secret separately. Startup refuses to generate replacement
+keys when the database is already initialized.
+
+Redis is deliberately ephemeral and excluded from backups. Do not restore old
+sessions: users sign in again after recovery. Mail and DAV content remain in their
+existing authoritative stores; SOGo's SQL state is not a Mail/DAV content mirror.
+
+Isolated native-process and booted NixOS VM tests have exercised PostgreSQL 14
+dump/restore using fixture credentials. The VM also verified systemd startup,
+missing-key refusal/recovery, retained database probe data/key fingerprints after
+a cold boot, and discarded Redis fixture sessions. This is not evidence of a Borg
+archive restore or production browser recovery.
 
 ## Remaining work
 

@@ -1,0 +1,186 @@
+--- /dev/null
++++ b/app/module/auth/FoundryIdentity.py
+@@ -0,0 +1,60 @@
++"""Bind SOGo identity to validated OIDC claims, without a second user directory."""
++import os
++from urllib.parse import urlsplit
++
++from app.utils import errors as err
++from app.utils.exceptions import RequestException
++
++
++def public_origin():
++    value = os.environ["SOGO_P_PUBLIC_BASE_URL"]
++    url = urlsplit(value)
++    if (url.scheme != "https" or not url.hostname or url.username or url.password
++            or url.path not in ("", "/") or url.query or url.fragment):
++        raise ValueError("SOGO_P_PUBLIC_BASE_URL must be an HTTPS origin")
++    return value.rstrip("/")
++
++
++def logout_url():
++    value = os.environ["SOGO_OIDC_LOGOUT_URL"]
++    url = urlsplit(value)
++    if (url.scheme != "https" or not url.hostname or url.username or url.password
++            or url.query or url.fragment or not url.path.endswith("/end-session/")):
++        raise ValueError("SOGO_OIDC_LOGOUT_URL must be a fixed HTTPS end-session URL")
++    return value
++
++
++def display_name(claims, mailbox):
++    value = claims.get("name") or claims.get("preferred_username") or mailbox
++    if not isinstance(value, str) or not value.strip():
++        return mailbox
++    return "".join(c for c in value if ord(c) >= 32 and ord(c) != 127)[:256]
++
++
++def restore_identity(user):
++    mailbox = user.mail
++    if (user.auth_kind != "openid" or user.source_id != "oidc" or user.uid != mailbox
++            or not isinstance(mailbox, str) or mailbox.count("@") != 1
++            or not all(32 < ord(c) < 127 for c in mailbox)
++            or not all(mailbox.split("@"))
++            or mailbox.rsplit("@", 1)[1] != user.domain
++            or not isinstance(user.oidc.get("subject"), str) or not user.oidc["subject"]
++            or not user.oidc.get("issuer") or not user.oidc.get("client_id")):
++        return False
++    user.cn = display_name({"name": user.oidc.get("display_name")}, mailbox)
++    user.login_mail_server = mailbox
++    user.login_mail_outgoing = mailbox
++    user.login_mail_filtering = mailbox
++    user.authenticated = True
++    return True
++
++
++def bind_identity(user, identity):
++    if (identity.claims.get("mail_account") != identity.mail
++            or identity.claims.get("sub") != identity.oidc.get("subject")):
++        raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++    user.source_id = "oidc"
++    user.oidc = dict(identity.oidc)
++    user.oidc["display_name"] = display_name(identity.claims, identity.mail)
++    if not restore_identity(user):
++        raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_identity.py
+@@ -0,0 +1,120 @@
++from types import SimpleNamespace
++
++import pytest
++
++from app.auth.User import User
++from app.module.auth.FoundryIdentity import bind_identity, restore_identity, public_origin, logout_url
++from app.module.auth.ModuleAuth import ModuleAuth
++from app.utils.exceptions import RequestException
++
++
++@pytest.fixture(autouse=True)
++def deployment(monkeypatch):
++    monkeypatch.setenv("SOGO_P_PUBLIC_BASE_URL", "https://mail.example.test")
++    monkeypatch.setenv("SOGO_OIDC_LOGOUT_URL", "https://auth.example.test/application/o/sogo/end-session/")
++
++
++@pytest.fixture
++def identity():
++    return SimpleNamespace(
++        mail="person@example.test", access_token="test-access",
++        claims={"sub": "subject-1", "mail_account": "person@example.test", "name": "Person"},
++        oidc={"subject": "subject-1", "issuer": "https://auth.example.test/", "client_id": "sogo"},
++    )
++
++
++@pytest.fixture
++def user():
++    result = User("person@example.test", "test-access", domain="example.test")
++    result.mail = result.uid
++    result.auth_kind = "openid"
++    return result
++
++
++def test_identity_and_session_restore(user, identity):
++    bind_identity(user, identity)
++    assert user.authenticated
++    assert user.cn == "Person"
++    assert user.source_id == "oidc"
++    restored = User.init_from_user_session(user.get_user_session())
++    assert restore_identity(restored)
++    assert restored.login_mail_server == user.mail
++    assert restored.login_mail_outgoing == user.mail
++    assert restored.cn == "Person"
++
++
++def test_profile_email_does_not_select_mailbox(user, identity):
++    identity.claims.pop("mail_account")
++    identity.claims["email"] = identity.mail
++    with pytest.raises(RequestException):
++        bind_identity(user, identity)
++
++
++def test_subject_mismatch(user, identity):
++    identity.claims["sub"] = "different-subject"
++    with pytest.raises(RequestException):
++        bind_identity(user, identity)
++
++
++@pytest.mark.parametrize("field,value", [
++    ("uid", "someone@example.test"), ("domain", "other.test"),
++    ("source_id", "ldap"), ("auth_kind", "plain"),
++    ("mail", "person\x01@example.test"),
++])
++def test_invalid_session_identity(user, identity, field, value):
++    bind_identity(user, identity)
++    setattr(user, field, value)
++    assert not restore_identity(user)
++
++
++def test_callback_never_looks_up_a_directory(identity, mocker):
++    system = SimpleNamespace(SOGO_S_DO_DOMAIN=False, SOGO_S_DOMAINLESS_LOGIN=False,
++                             SOGO_S_KNOWN_DOMAIN=["example.test"], SOGO_S_REJECT_UNKNOWN_DOMAIN=True)
++    auth = SimpleNamespace(SOGO_D_AUTH_TYPE="openid", SOGO_D_OPENID_ALLOW_REDIRECT=[public_origin()])
++    module = ModuleAuth(None, system, auth, {})
++    provider = SimpleNamespace(authenticate_from_callback=lambda _: identity,
++                               ui_redirect=public_origin()+"/en/auth/login/sso")
++    mocker.patch.object(module, "_get_identity_provider", return_value=provider)
++    mocker.patch("app.module.auth.ModuleAuth.ModuleUserSource", side_effect=AssertionError("LDAP lookup"))
++    result, sources = module.get_user_from_sso_callback("openid", "example.test", {}, lambda *_: "callback")
++    assert result.authenticated
++    assert sources == {}
++
++
++def test_authenticated_request_never_looks_up_a_directory(user, identity, mocker):
++    from app.interface.auth.InterfaceAuthUser import InterfaceAuthUser
++    interface = InterfaceAuthUser.__new__(InterfaceAuthUser)
++    interface.default_domain = {"AUTH_SETTINGS": {"SOGO_D_AUTH_TYPE": "openid"}}
++    interface.module_auth = SimpleNamespace(check_sso_access_token=lambda *_: True)
++    interface.module_user_profile = SimpleNamespace(get_user_profile=lambda _: None)
++    bind_identity(user, identity)
++    directory = mocker.patch("app.interface.auth.InterfaceAuthUser.ModuleUserSource", side_effect=AssertionError("LDAP lookup"))
++    directory.init_from_domain_settings.side_effect = AssertionError("LDAP lookup")
++    valid, restored = interface.check_user_and_fill_info(user)
++    assert valid
++    assert restored is user
++
++
++def test_https_host_boundary_and_no_admin_routes():
++    from app import create_app
++    from app.utils import constants
++    app = create_app(constants.SOGO_OK)
++    assert app.config["SESSION_COOKIE_SECURE"]
++    assert app.config["TRUSTED_HOSTS"] == ["mail.example.test"]
++    assert not any(str(rule).startswith("/api/admin/") for rule in app.url_map.iter_rules())
++    response = app.test_client().get("/", base_url="https://attacker.example.test")
++    assert response.status_code == 400
++
++
++def test_public_urls():
++    assert public_origin() == "https://mail.example.test"
++    assert logout_url().endswith("/end-session/")
++
++
++@pytest.mark.parametrize("value", [
++    "http://mail.example.test", "https://user:pass@mail.example.test", "https://mail.example.test/path",
++])
++def test_rejected_public_urls(monkeypatch, value):
++    monkeypatch.setenv("SOGO_P_PUBLIC_BASE_URL", value)
++    with pytest.raises(ValueError):
++        public_origin()

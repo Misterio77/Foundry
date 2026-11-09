@@ -1,0 +1,128 @@
+--- a/app/__init__.py
++++ b/app/__init__.py
+@@ -38,9 +38,11 @@
+     """
+     app = Flask(__name__)
+     app.config.from_object(process_config)
+-    app.config.update(SESSION_COOKIE_NAME="sogo_oidc_pilot", SESSION_COOKIE_HTTPONLY=True,
+-                      SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=False,
+-                      TRUSTED_HOSTS=["localhost", "127.0.0.1", "proxy", "server"])
++    from urllib.parse import urlsplit
++    from app.module.auth.FoundryIdentity import public_origin
++    app.config.update(SESSION_COOKIE_NAME="sogo_oidc", SESSION_COOKIE_HTTPONLY=True,
++                      SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True,
++                      TRUSTED_HOSTS=[urlsplit(public_origin()).hostname])
+     # Hard cap on HTTP request body size, applied at the WSGI layer (Werkzeug). Protects
+     # the server from oversized uploads before any application code reads the body into
+     # memory. See app.utils.constants.MAX_HTTP_REQUEST_BYTES for the rationale.
+@@ -55,9 +57,9 @@
+     admin_api = Api(app, config_prefix="ADMIN_") # type: ignore [call-arg]
+ 
+     register_route(flask_api, cs.API_BASIC, sogo_state)
+-    register_route(admin_api, cs.API_ADMIN, sogo_state)
+-
+-    CORS(app, resources={r"/api/*": {"origins": "http://localhost:18081",
++    # Configuration is operator-owned; do not expose the upstream admin API.
++
++    CORS(app, resources={r"/api/*": {"origins": public_origin(),
+                                      "allow_headers": ["authorization", "content-type"],
+                                         "expose_headers": ["X-Pagination"]}})
+     #TODO: remove CORS policy when we have a proper frontend
+--- a/app/api/v1/auth/AuthUserApi.py
++++ b/app/api/v1/auth/AuthUserApi.py
+@@ -39,7 +39,8 @@
+     endpoint = SSO_CALLBACK_ENDPOINTS.get(kind)
+     if endpoint is None:
+         return ""
+-    return "http://localhost:18081" + url_for(endpoint, domain=domain, _external=False)
++    from app.module.auth.FoundryIdentity import public_origin
++    return public_origin() + url_for(endpoint, domain=domain, _external=False)
+ 
+ 
+ @blp.before_request
+@@ -88,7 +89,7 @@
+         """
+         Action, Authenticate the user for plain mode
+         """
+-        return {"error": "This pilot accepts OIDC only"}, 405
++        return {"error": "This service accepts OIDC only"}, 405
+ 
+ 
+ @blp.route("/callback/openid/<string:domain>")
+@@ -121,7 +122,8 @@
+         from app.utils.api.ApiBaseResponse import create_api_base_response
+         from app.utils.exceptions import RequestException
+         from app.utils import errors as err
+-        if request.headers.get("Origin") != "http://localhost:18081":
++        from app.module.auth.FoundryIdentity import public_origin
++        if request.headers.get("Origin") != public_origin():
+             return create_api_base_response(None, err.ERROR_SSO_INVALID_STATE)
+         try:
+             voucher = redeem((request.get_json(silent=True) or {}).get("ticket"))
+--- a/app/module/auth/ModuleAuth.py
++++ b/app/module/auth/ModuleAuth.py
+@@ -291,11 +291,8 @@
+         user.auth_kind = kind
+         user.oidc = identity.oidc
+ 
+-        #The identity provider authenticated the user, the user sources give its uid, cn, source_id...
+-        module_us = ModuleUserSource(domain_user_sources)
+-        if not module_us.check_user_without_password(user):
+-            logger_auth.info("SSO user %s not found in the user sources", identity.mail)
+-            raise RequestException(error=err.ERROR_SSO_USER_NOT_FOUND)
++        from app.module.auth.FoundryIdentity import bind_identity
++        bind_identity(user, identity)
+         if domain and user.domain != domain:
+             logger_auth.warning("SSO user %s found with domain %s but the callback is for domain %s", identity.mail, user.domain, domain)
+             raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+--- a/app/interface/auth/InterfaceAuthUser.py
++++ b/app/interface/auth/InterfaceAuthUser.py
+@@ -188,9 +188,9 @@
+             #SSO: the access token must still be valid on the identity provider, then the user must still exist in its user source.
+             #default_domain is the settings of the domain of the user here (see before_request)
+             auth_settings = AuthSettingsObj(self.default_domain[AuthSettings.subparent])
+-            module_us = ModuleUserSource.init_from_domain_settings(self.default_domain)
++            from app.module.auth.FoundryIdentity import restore_identity
+             success = (self.module_auth.check_sso_access_token(user, auth_settings)
+-                       and module_us.check_user_without_password(user))
++                       and restore_identity(user))
+             user_found = user
+         else:
+             success, user_found, module_us = self._check_login(user.uid, user.password)
+@@ -212,8 +212,6 @@
+             self.module_auth.logout_user(voucher_data)
+         except RequestException as e:
+             return create_api_base_response(None, e.error)
+-        # This pilot has one fixed IdP. No token hints or redirect parameters enter the URL.
+-        return create_api_base_response({
+-            "logout_url": "https://auth.m7.rs/application/o/sogo6-oidc-pilot/end-session/",
+-        })
+-
++        from app.module.auth.FoundryIdentity import logout_url
++        return create_api_base_response({"logout_url": logout_url()})
++
+--- a/app/module/auth/OpenIDProvider.py
++++ b/app/module/auth/OpenIDProvider.py
+@@ -205,6 +205,9 @@
+             logger_auth.error("Cannot get tokens or user info from openid server: %s", str(e))
+             raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE) from e
+ 
++        validated = token.get("userinfo") or {}
++        if not validated.get("sub") or user_info.get("sub") != validated["sub"]:
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+         mail_field = self.auth_settings.SOGO_D_OPENID_EMAIL
+         mail = user_info.get(mail_field)
+         if not mail or not isinstance(mail, str):
+@@ -268,10 +271,12 @@
+                 raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+             if not self.check_access_token(token["access_token"]):
+                 raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            from app.module.auth.FoundryIdentity import display_name
+             return token["access_token"], {
+                 **user.oidc, "refresh_token": token.get("refresh_token") or user.oidc["refresh_token"],
+                 "scope": token.get("scope", user.oidc["scope"]),
+                 "picture": oidc_picture(info.get("picture")),
++                "display_name": display_name(info, user.mail),
+                 "access_expires_at": issued_at + expires,
+             }
+         except Exception:

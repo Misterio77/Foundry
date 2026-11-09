@@ -1,0 +1,1941 @@
+--- a/src/app/[locale]/(loggedin)/calendars/page.tsx
++++ b/src/app/[locale]/(loggedin)/calendars/page.tsx
+@@ -222,6 +222,7 @@
+               }
+         await deleteCalendarEvent({
+           eventKey,
++          etag: selectedEvent.etag,
+           ...scopeFields,
+         }).unwrap()
+       } else {
+--- a/src/features/address_books/address-books-api-types.ts
++++ b/src/features/address_books/address-books-api-types.ts
+@@ -7,10 +7,7 @@
+ }
+ 
+ export type ApiAddressBookSourceType =
+-  | 'undefined'
+-  | 'local'
+-  | 'carddav'
+-  | 'ldap'
++  'undefined' | 'local' | 'carddav' | 'ldap'
+ 
+ export interface ApiAddressBook {
+   key: string
+@@ -62,6 +59,7 @@
+ }
+ 
+ export interface ApiContact {
++  etag?: string | null
+   key: string
+   addressbook_key?: string | null
+   uid?: string | null
+--- a/src/features/address_books/address-books-types.ts
++++ b/src/features/address_books/address-books-types.ts
+@@ -61,6 +61,7 @@
+ }
+ 
+ export interface VCard {
++  etag?: string | null
+   id: string
+   version: string
+   kind?: ContactKind
+--- a/src/features/address_books/components/__tests__/distribution-list-form-host.test.tsx
++++ b/src/features/address_books/components/__tests__/distribution-list-form-host.test.tsx
+@@ -1,4 +1,7 @@
+ import '@testing-library/jest-dom'
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ contactListsReadOnly: false }),
++}))
+ import { render, screen } from '@testing-library/react'
+ 
+ const mockUseAddressBookState = jest.fn()
+@@ -66,7 +69,9 @@
+   describe('basic rendering', () => {
+     it('shows loading state while editing list is fetched', () => {
+       render(<DistributionListFormHost />)
+-      expect(screen.getByTestId('distribution-list-form')).toHaveTextContent('loading')
++      expect(screen.getByTestId('distribution-list-form')).toHaveTextContent(
++        'loading'
++      )
+     })
+ 
+     it('renders ready form when not loading', () => {
+@@ -77,7 +82,9 @@
+       })
+ 
+       render(<DistributionListFormHost />)
+-      expect(screen.getByTestId('distribution-list-form')).toHaveTextContent('ready')
++      expect(screen.getByTestId('distribution-list-form')).toHaveTextContent(
++        'ready'
++      )
+     })
+   })
+ 
+@@ -85,7 +92,11 @@
+     it('returns null when form is open without active book', () => {
+       mockUseAddressBookState.mockReturnValue({
+         activeBookId: null,
+-        ui: { isListFormOpen: true, editingListId: null, prefillListMembers: null },
++        ui: {
++          isListFormOpen: true,
++          editingListId: null,
++          prefillListMembers: null,
++        },
+       })
+ 
+       const { container } = render(<DistributionListFormHost />)
+--- a/src/features/address_books/components/__tests__/list.test.tsx
++++ b/src/features/address_books/components/__tests__/list.test.tsx
+@@ -1,4 +1,8 @@
+ import '@testing-library/jest-dom'
++let mockContactListsReadOnly = false
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ contactListsReadOnly: mockContactListsReadOnly }),
++}))
+ import { fireEvent, render, screen } from '@testing-library/react'
+ import AddressBookList from '../list'
+ 
+@@ -93,6 +97,7 @@
+ 
+ describe('AddressBookList Component', () => {
+   beforeEach(() => {
++    mockContactListsReadOnly = false
+     mockPermissions.current = {
+       canView: true,
+       canCreate: true,
+@@ -209,6 +214,18 @@
+       ).toBeInTheDocument()
+     })
+ 
++    it('hides unsupported lists while retaining contact deletion', () => {
++      mockContactListsReadOnly = true
++      render(<AddressBookList items={mockItems} />)
++      selectAll()
++      expect(
++        screen.queryByLabelText('create_list_from_selection.string')
++      ).not.toBeInTheDocument()
++      expect(
++        screen.getByLabelText('delete_selected.string')
++      ).toBeInTheDocument()
++    })
++
+     it('hides bulk delete without the erase right', () => {
+       mockPermissions.current = {
+         canView: true,
+--- a/src/features/address_books/components/contact-form-host.tsx
++++ b/src/features/address_books/components/contact-form-host.tsx
+@@ -95,6 +95,7 @@
+             kind: 'individual',
+             ...payload,
+             patchBody: serializedBody,
++            etag: values.etag,
+           }).unwrap()
+           return
+         }
+--- a/src/features/address_books/components/contact-form.tsx
++++ b/src/features/address_books/components/contact-form.tsx
+@@ -156,7 +156,9 @@
+     }
+   })
+ 
+-export type ContactFormValues = z.infer<typeof contactFormSchema>
++export type ContactFormValues = z.infer<typeof contactFormSchema> & {
++  etag?: string | null
++}
+ 
+ const EMPTY_ADDRESS_BOOKS: Pick<AddressBook, 'id' | 'name'>[] = []
+ 
+@@ -348,6 +350,9 @@
+   const [photoPreviewSrc, setPhotoPreviewSrc] = useState<string | undefined>()
+   const [photoError, setPhotoError] = useState<string | null>(null)
+   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false)
++  const version = useRef(contact?.etag)
++  const loadedKey = useRef<string | null>(null)
++  const { isDirty } = form.formState
+   const photoPayloadRef = useRef<PhotoPayload>(undefined)
+   const photoObjectUrlRef = useRef<string | null>(null)
+   const photoInputRef = useRef<HTMLInputElement>(null)
+@@ -375,8 +380,15 @@
+   }, [revokePhotoObjectUrl])
+ 
+   useEffect(() => {
+-    if (!formResetKey || isLoading || loadError) return
+-
++    if (!formResetKey) {
++      loadedKey.current = null
++      return
++    }
++    if (isLoading || loadError) return
++    const key = contact?.id ?? 'create'
++    if (loadedKey.current === key && isDirty) return
++    loadedKey.current = key
++    version.current = contact?.etag
+     revokePhotoObjectUrl()
+     photoPayloadRef.current = undefined
+     setPhotoError(null)
+@@ -443,6 +455,7 @@
+     setPhotoPreviewSrc(prefill?.photo)
+   }, [
+     formResetKey,
++    isDirty,
+     isLoading,
+     loadError,
+     contact,
+@@ -519,7 +532,10 @@
+           ? { photoDataUri: photoPayload, clearPhoto: false as const }
+           : { photoDataUri: undefined, clearPhoto: false as const }
+ 
+-    await onSubmit({ ...values, ...photoValues }, contact?.id)
++    await onSubmit(
++      { ...values, ...photoValues, etag: version.current },
++      contact?.id
++    )
+     onClose()
+   })
+ 
+--- a/src/features/address_books/components/distribution-list-form-host.tsx
++++ b/src/features/address_books/components/distribution-list-form-host.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { useProfile } from '@/features/user-profile'
+ 
+ import { useRouter } from '@/lib/i18n/navigation'
+ import { useAppDispatch } from '@/lib/redux/hooks'
+@@ -24,9 +26,11 @@
+   const { push } = useRouter()
+   const tErrors = useTranslations('ADDRESS_BOOKS_ERRORS')
+   const { activeBookId, ui } = useAddressBookState()
++  const { contactListsReadOnly } = useProfile()
+   const [submitError, setSubmitError] = useState<string | null>(null)
+ 
+-  const [addEntry, { isLoading: isCreating }] = useAddVCardToAddressBookMutation()
++  const [addEntry, { isLoading: isCreating }] =
++    useAddVCardToAddressBookMutation()
+   const [updateEntry, { isLoading: isUpdating }] = useUpdateVCardMutation()
+ 
+   const { contacts: bookContacts, isLoading: isPickerLoading } =
+@@ -35,8 +39,16 @@
+     })
+ 
+   const editingListId = ui.editingListId
+-  const { editingEntity: editingList, isEditLoading, isEditLoadError } =
+-    useAddressBookEditState(editingListId, activeBookId, ui.isListFormOpen, 'group')
++  const {
++    editingEntity: editingList,
++    isEditLoading,
++    isEditLoadError,
++  } = useAddressBookEditState(
++    editingListId,
++    activeBookId,
++    ui.isListFormOpen,
++    'group'
++  )
+ 
+   const handleClose = useCallback(() => {
+     setSubmitError(null)
+@@ -45,7 +57,7 @@
+ 
+   const handleSubmit = useCallback(
+     async (values: DistributionListFormValues, listId?: string) => {
+-      if (!activeBookId) return
++      if (!activeBookId || contactListsReadOnly) return
+ 
+       setSubmitError(null)
+ 
+@@ -92,7 +104,15 @@
+         )
+       }
+     },
+-    [activeBookId, addEntry, dispatch, push, tErrors, updateEntry]
++    [
++      activeBookId,
++      contactListsReadOnly,
++      addEntry,
++      dispatch,
++      push,
++      tErrors,
++      updateEntry,
++    ]
+   )
+ 
+   if (!activeBookId && ui.isListFormOpen) {
+@@ -101,7 +121,7 @@
+ 
+   return (
+     <DistributionListForm
+-      open={ui.isListFormOpen}
++      open={ui.isListFormOpen && !contactListsReadOnly}
+       isEditMode={Boolean(editingListId)}
+       isLoading={isEditLoading || isPickerLoading}
+       loadError={isEditLoadError}
+--- a/src/features/address_books/components/list.tsx
++++ b/src/features/address_books/components/list.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { useProfile } from '@/features/user-profile'
+ 
+ import {
+   AlertDialog,
+@@ -103,6 +105,7 @@
+   const t = useTranslations('ADDRESS_BOOKS_LIST')
+   const tForm = useTranslations('CONTACT_FORM')
+   const { permissions } = useActiveAddressBookWritable()
++  const { contactListsReadOnly } = useProfile()
+   const params = useParams()
+   const dispatch = useAppDispatch()
+   const contact_id = routeParam(params?.contact_id)
+@@ -186,6 +189,7 @@
+             id: book_id,
+             vCardId: item.id,
+             kind: item.kind,
++            etag: item.etag,
+           }).unwrap()
+         )
+       )
+@@ -197,7 +201,10 @@
+   }
+ 
+   const selectedIndividuals = selectedItems.filter(isIndividualContact)
+-  const canCreateList = permissions.canCreate && selectedIndividuals.length >= 2
++  const canCreateList =
++    !contactListsReadOnly &&
++    permissions.canCreate &&
++    selectedIndividuals.length >= 2
+   const hasSelections = canSelect && selectedItems.length > 0
+   const showCheckboxes = hasSelections
+ 
+--- a/src/features/address_books/components/sidebar/__tests__/sidebar-item.test.tsx
++++ b/src/features/address_books/components/sidebar/__tests__/sidebar-item.test.tsx
+@@ -24,7 +24,10 @@
+   useParams: jest.fn(() => ({})),
+ }))
+ 
+-const mockUseProfile = jest.fn(() => ({
++const mockUseProfile = jest.fn<
++  { folderSharingDisabled: string[]; davCollectionsReadOnly?: boolean },
++  []
++>(() => ({
+   folderSharingDisabled: [] as string[],
+ }))
+ jest.mock('@/features/user-profile', () => ({
+@@ -144,6 +147,19 @@
+ 
+   beforeEach(() => {
+     jest.clearAllMocks()
++    mockUseProfile.mockReturnValue({ folderSharingDisabled: [] })
++  })
++
++  it('hides unsupported collection actions but keeps book navigation', () => {
++    mockUseProfile.mockReturnValue({
++      folderSharingDisabled: [],
++      davCollectionsReadOnly: true,
++    })
++    const { queryByTestId, getByTestId } = render(
++      <SidebarItem {...defaultProps} />
++    )
++    expect(queryByTestId('dropdown-menu')).not.toBeInTheDocument()
++    expect(getByTestId('sidebar-menu-button')).toBeInTheDocument()
+   })
+ 
+   it('should use translations from ADDRESS_BOOKS_SIDEBAR namespace', () => {
+--- a/src/features/address_books/components/sidebar/__tests__/sidebar.test.tsx
++++ b/src/features/address_books/components/sidebar/__tests__/sidebar.test.tsx
+@@ -2,6 +2,10 @@
+ import { render, screen } from '@testing-library/react'
+ 
+ const mockUseGetAddressBooksQuery = jest.fn()
++let mockDavCollectionsReadOnly = false
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ davCollectionsReadOnly: mockDavCollectionsReadOnly }),
++}))
+ let mockPermissionsByBook: Record<string, unknown> = {}
+ 
+ jest.mock('@/lib/redux/hooks', () => ({
+@@ -121,6 +125,7 @@
+ describe('AddressBooks Sidebar', () => {
+   beforeEach(() => {
+     mockPermissionsByBook = {}
++    mockDavCollectionsReadOnly = false
+     jest.clearAllMocks()
+   })
+ 
+@@ -133,6 +138,19 @@
+ 
+       render(<Sidebar />)
+       expect(screen.getByTestId('sidebar-skeleton')).toBeInTheDocument()
++    })
++
++    it('hides collection creation without hiding contact creation', () => {
++      mockDavCollectionsReadOnly = true
++      mockUseGetAddressBooksQuery.mockReturnValue({
++        data: { personals: [] },
++        isFetching: false,
++      })
++      render(<Sidebar />)
++      expect(
++        screen.queryByTestId('add-address-book-personals')
++      ).not.toBeInTheDocument()
++      expect(screen.getByTestId('create-contact-opener')).toBeInTheDocument()
+     })
+ 
+     it('renders address book groups when data is loaded', () => {
+--- a/src/features/address_books/components/sidebar/sidebar-item.tsx
++++ b/src/features/address_books/components/sidebar/sidebar-item.tsx
+@@ -70,7 +70,7 @@
+   const formT = useTranslations('FORM_COMMONS')
+   const { push } = useRouter()
+   const params = useParams()
+-  const { folderSharingDisabled } = useProfile()
++  const { folderSharingDisabled, davCollectionsReadOnly } = useProfile()
+   const activeBookId = routeParam(params?.book_id) ?? null
+   const isActive = activeBookId === id
+   const isMobile = useIsMobile()
+@@ -104,7 +104,7 @@
+           )}
+         </span>
+       </SidebarMenuButton>
+-      {!disableActions && (
++      {!disableActions && !davCollectionsReadOnly && (
+         <Dialog
+           open={type !== ''}
+           onOpenChange={(open) => !open && setType('')}
+--- a/src/features/address_books/components/sidebar/sidebar.tsx
++++ b/src/features/address_books/components/sidebar/sidebar.tsx
+@@ -10,6 +10,7 @@
+ } from '@/components/ui/sidebar'
+ import { ALL_CONTACTS_BOOK_ID } from '@/features/address_books/address-books-constants'
+ import { useIsOtherOwner } from '@/hooks/use-is-other-owner'
++import { useProfile } from '@/features/user-profile'
+ import { useRouter } from '@/lib/i18n/navigation'
+ import { useAppSelector } from '@/lib/redux/hooks'
+ import { Contact2 } from 'lucide-react'
+@@ -47,6 +48,7 @@
+ 
+ function Sidebar() {
+   const { data, isFetching, isError } = useGetAddressBooksQuery()
++  const { davCollectionsReadOnly } = useProfile()
+   const t = useTranslations('ADDRESS_BOOKS_SIDEBAR')
+   const tForm = useTranslations('CONTACT_FORM')
+   const { push } = useRouter()
+@@ -92,7 +94,7 @@
+       </SidebarGroup>
+       <SidebarGroup className="group-data-[collapsible=icon]:p-0">
+         <SidebarGroupLabel>{t('personals.string')}</SidebarGroupLabel>
+-        <AddAddressBook type={'personals'} />
++        {!davCollectionsReadOnly && <AddAddressBook type={'personals'} />}
+         <SidebarGroupContent>
+           <SidebarMenu>
+             <SidebarMenuItem>
+--- a/src/features/address_books/components/visualization/__tests__/contact-actions.test.tsx
++++ b/src/features/address_books/components/visualization/__tests__/contact-actions.test.tsx
+@@ -1,4 +1,7 @@
+ import '@testing-library/jest-dom'
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ canExportContacts: true, contactListsReadOnly: false }),
++}))
+ import { render, screen } from '@testing-library/react'
+ import userEvent from '@testing-library/user-event'
+ 
+--- a/src/features/address_books/components/visualization/__tests__/distribution-list-actions.test.tsx
++++ b/src/features/address_books/components/visualization/__tests__/distribution-list-actions.test.tsx
+@@ -1,4 +1,7 @@
+ import '@testing-library/jest-dom'
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ canExportContacts: true, contactListsReadOnly: false }),
++}))
+ import { render, screen } from '@testing-library/react'
+ import userEvent from '@testing-library/user-event'
+ import type { VCard } from '../../../address-books-types'
+--- a/src/features/address_books/components/visualization/__tests__/entry-actions-shell.test.tsx
++++ b/src/features/address_books/components/visualization/__tests__/entry-actions-shell.test.tsx
+@@ -1,4 +1,8 @@
+ import '@testing-library/jest-dom'
++let mockCanExportContacts = true
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ canExportContacts: mockCanExportContacts }),
++}))
+ import { render, screen } from '@testing-library/react'
+ import userEvent from '@testing-library/user-event'
+ 
+@@ -47,6 +51,17 @@
+ describe('EntryActionsShell', () => {
+   beforeEach(() => {
+     jest.clearAllMocks()
++    mockCanExportContacts = true
++  })
++
++  it('hides disabled exports without hiding supported edits', async () => {
++    mockCanExportContacts = false
++    const user = userEvent.setup()
++    render(<EntryActionsShell {...defaultProps} exportOpen />)
++    await user.click(screen.getByTestId('entry-actions-menu'))
++    expect(screen.queryByTestId('export-entry-button')).not.toBeInTheDocument()
++    expect(screen.queryByTestId('export-entry-dialog')).not.toBeInTheDocument()
++    expect(screen.getByTestId('edit-entry-button')).toBeInTheDocument()
+   })
+ 
+   it('calls onWriteMessage when the write button is clicked', async () => {
+--- a/src/features/address_books/components/visualization/__tests__/note-field.test.tsx
++++ b/src/features/address_books/components/visualization/__tests__/note-field.test.tsx
+@@ -59,6 +59,38 @@
+     })
+   })
+ 
++  it('keeps the edit-start version when refreshed data arrives and preserves edits on conflict', async () => {
++    const user = userEvent.setup()
++    mockUpdateVCard.mockReturnValue({
++      unwrap: () => Promise.reject({ status: 409 }),
++    })
++    const { rerender } = render(
++      <NoteField contactId="c1" bookId="work" note="Original" etag={'"old"'} />
++    )
++    await user.click(screen.getByRole('button', { name: 'edit_note.string' }))
++    fireEvent.change(screen.getByRole('textbox'), {
++      target: { value: 'Unsaved edit' },
++    })
++    rerender(
++      <NoteField
++        contactId="c1"
++        bookId="work"
++        note="Concurrent edit"
++        etag={'"new"'}
++      />
++    )
++    await user.click(screen.getByRole('button', { name: 'save.string' }))
++    await waitFor(() =>
++      expect(mockUpdateVCard).toHaveBeenCalledWith({
++        id: 'c1',
++        book_id: 'work',
++        note: 'Unsaved edit',
++        etag: '"old"',
++      })
++    )
++    expect(screen.getByRole('textbox')).toHaveValue('Unsaved edit')
++  })
++
+   it('saves edited note', async () => {
+     const user = userEvent.setup()
+     render(<NoteField contactId="c1" bookId="work" note="Hello" />)
+--- a/src/features/address_books/components/visualization/contact-actions.tsx
++++ b/src/features/address_books/components/visualization/contact-actions.tsx
+@@ -13,6 +13,7 @@
+ type ContactActionsProps = {
+   contactId: string
+   bookId: string
++  etag?: string | null
+   emails?: string[]
+   displayName?: string
+ }
+@@ -20,6 +21,7 @@
+ function ContactActions({
+   contactId,
+   bookId,
++  etag,
+   emails = [],
+   displayName,
+ }: ContactActionsProps) {
+@@ -27,6 +29,7 @@
+   const dispatch = useAppDispatch()
+   const { push } = useRouter()
+   const [deleteOpen, setDeleteOpen] = useState(false)
++  const [version, setVersion] = useState(etag)
+   const [exportOpen, setExportOpen] = useState(false)
+   const { permissions } = useActiveAddressBookWritable()
+   const [deleteContact, { isLoading: isDeleting }] =
+@@ -56,7 +59,11 @@
+ 
+   const handleConfirmDelete = async () => {
+     try {
+-      await deleteContact({ id: bookId, vCardId: contactId }).unwrap()
++      await deleteContact({
++        id: bookId,
++        vCardId: contactId,
++        etag: version,
++      }).unwrap()
+       setDeleteOpen(false)
+       push(`/address_books/${bookId}`)
+     } catch {
+@@ -82,7 +89,10 @@
+       onEdit={handleEdit}
+       deleteLabel={t('delete.string')}
+       deleteTestId="delete-contact-button"
+-      onDeleteOpen={() => setDeleteOpen(true)}
++      onDeleteOpen={() => {
++        setVersion(etag)
++        setDeleteOpen(true)
++      }}
+       exportOpen={exportOpen}
+       onExportOpenChange={setExportOpen}
+       bookId={bookId}
+--- a/src/features/address_books/components/visualization/contact-visualization.tsx
++++ b/src/features/address_books/components/visualization/contact-visualization.tsx
+@@ -54,6 +54,7 @@
+           {bookId && contactId && (
+             <div className="flex w-full min-w-0 shrink-0 flex-wrap items-center gap-2 xl:w-auto">
+               <ContactActions
++                etag={data.etag}
+                 contactId={contactId}
+                 bookId={bookId}
+                 emails={emails}
+@@ -213,6 +214,7 @@
+             {t('notes.string')}
+           </h2>
+           <NoteField
++            etag={data.etag}
+             note={note}
+             contactId={contactId ?? ''}
+             bookId={bookId ?? ''}
+--- a/src/features/address_books/components/visualization/distribution-list-actions.tsx
++++ b/src/features/address_books/components/visualization/distribution-list-actions.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { useProfile } from '@/features/user-profile'
+ 
+ import { createDraft } from '@/features/mails/store'
+ import { useRouter } from '@/lib/i18n/navigation'
+@@ -31,6 +33,7 @@
+   const [deleteOpen, setDeleteOpen] = useState(false)
+   const [exportOpen, setExportOpen] = useState(false)
+   const { permissions } = useActiveAddressBookWritable()
++  const { contactListsReadOnly } = useProfile()
+   const [deleteList, { isLoading: isDeleting }] =
+     useDeleteVCardFromAddressBookMutation()
+ 
+@@ -81,8 +84,8 @@
+       exportLabel={tContact('export.string')}
+       exportTestId="export-list-button"
+       onExportOpen={() => setExportOpen(true)}
+-      canEdit={permissions.canEdit}
+-      canErase={permissions.canErase}
++      canEdit={permissions.canEdit && !contactListsReadOnly}
++      canErase={permissions.canErase && !contactListsReadOnly}
+       editLabel={tContact('edit.string')}
+       editTestId="edit-list-button"
+       onEdit={handleEdit}
+--- a/src/features/address_books/components/visualization/entry-actions-shell.tsx
++++ b/src/features/address_books/components/visualization/entry-actions-shell.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { useProfile } from '@/features/user-profile'
+ 
+ import {
+   AlertDialog,
+@@ -92,6 +94,7 @@
+   isDeleting,
+   extraMenuItems,
+ }: EntryActionsShellProps) {
++  const { canExportContacts } = useProfile()
+   return (
+     <>
+       <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
+@@ -120,10 +123,15 @@
+             </Button>
+           </DropdownMenuTrigger>
+           <DropdownMenuContent align="end" className="min-w-[10rem]">
+-            <DropdownMenuItem onClick={onExportOpen} data-testid={exportTestId}>
+-              <Download className="mr-2 h-4 w-4" />
+-              {exportLabel}
+-            </DropdownMenuItem>
++            {canExportContacts && (
++              <DropdownMenuItem
++                onClick={onExportOpen}
++                data-testid={exportTestId}
++              >
++                <Download className="mr-2 h-4 w-4" />
++                {exportLabel}
++              </DropdownMenuItem>
++            )}
+             {extraMenuItems}
+             {(canEdit || canErase) && <DropdownMenuSeparator />}
+             {canEdit && (
+@@ -147,7 +155,7 @@
+       </div>
+ 
+       <ExportEntryDialog
+-        open={exportOpen}
++        open={exportOpen && canExportContacts}
+         onOpenChange={onExportOpenChange}
+         bookId={bookId}
+         entryId={entryId}
+--- a/src/features/address_books/components/visualization/note-field.tsx
++++ b/src/features/address_books/components/visualization/note-field.tsx
+@@ -7,6 +7,7 @@
+ 
+ interface NoteFieldProps {
+   note?: string
++  etag?: string | null
+   contactId: string
+   bookId: string
+   readOnly?: boolean
+@@ -14,12 +15,14 @@
+ 
+ export function NoteField({
+   note = '',
++  etag,
+   contactId,
+   bookId,
+   readOnly = false,
+ }: NoteFieldProps) {
+   const [isEditing, setIsEditing] = useState(!note && !readOnly)
+   const [editedNote, setEditedNote] = useState(note)
++  const [version, setVersion] = useState(etag)
+   const [submitError, setSubmitError] = useState<string | null>(null)
+   const [updateVCard, { isLoading }] = useUpdateVCardMutation()
+   const t = useTranslations('CONTACT_FORM')
+@@ -32,6 +35,7 @@
+         id: contactId,
+         book_id: bookId,
+         note: editedNote,
++        etag: version,
+       }).unwrap()
+       setIsEditing(false)
+       setEditedNote(result.note || '')
+@@ -48,6 +52,7 @@
+   }
+ 
+   const handleEdit = () => {
++    setVersion(etag)
+     setEditedNote(note)
+     setIsEditing(true)
+   }
+--- a/src/features/address_books/store/address-books-api.ts
++++ b/src/features/address_books/store/address-books-api.ts
+@@ -536,6 +536,7 @@
+         const result = await baseQuery({
+           url: addressBookContactPath(book_id, id),
+           method: 'PATCH',
++          headers: patch.etag ? { 'If-Match': patch.etag } : undefined,
+           body: patchBody ?? serializeContactPatch(patch),
+         })
+         if (result.error) return { error: result.error }
+@@ -663,10 +664,10 @@
+ 
+     deleteVCardFromAddressBook: builder.mutation<
+       void,
+-      { id: string; vCardId: string; kind?: ContactKind }
++      { id: string; vCardId: string; kind?: ContactKind; etag?: string | null }
+     >({
+       async queryFn(
+-        { id: bookId, vCardId, kind },
++        { id: bookId, vCardId, kind, etag },
+         _api,
+         _extraOptions,
+         baseQuery
+@@ -683,7 +684,11 @@
+         const url = isListKind(kind)
+           ? addressBookListPath(bookId, vCardId)
+           : addressBookContactPath(bookId, vCardId)
+-        const result = await baseQuery({ url, method: 'DELETE' })
++        const result = await baseQuery({
++          url,
++          method: 'DELETE',
++          headers: etag ? { 'If-Match': etag } : undefined,
++        })
+         if (result.error) return { error: result.error }
+         return { data: undefined }
+       },
+--- a/src/features/address_books/utils/normalize-contact.ts
++++ b/src/features/address_books/utils/normalize-contact.ts
+@@ -1,4 +1,7 @@
+-import type { ApiContact, ApiContactsListData } from '../address-books-api-types'
++import type {
++  ApiContact,
++  ApiContactsListData,
++} from '../address-books-api-types'
+ import type { ContactKind, VCard } from '../address-books-types'
+ import { unwrapApiData } from './unwrap-api-data'
+ 
+@@ -35,13 +38,12 @@
+     .filter(Boolean)
+   const urls = (api.urls ?? []).map((entry) => entry.value).filter(Boolean)
+   const impp = (api.impp ?? []).map((entry) => entry.uri).filter(Boolean)
+-  const addresses = (api.addresses ?? [])
+-    .map(formatAddressLine)
+-    .filter(Boolean)
++  const addresses = (api.addresses ?? []).map(formatAddressLine).filter(Boolean)
+ 
+   return {
+     id,
+     key: id,
++    etag: api.etag,
+     addressBookKey: api.addressbook_key ?? undefined,
+     uid: api.uid ?? undefined,
+     version: api.version ?? '4.0',
+@@ -65,7 +67,8 @@
+     structuredEmails:
+       api.emails && api.emails.length > 0 ? api.emails : undefined,
+     phoneNumbers: phoneNumbers.length ? phoneNumbers : undefined,
+-    structuredPhones: api.phones && api.phones.length > 0 ? api.phones : undefined,
++    structuredPhones:
++      api.phones && api.phones.length > 0 ? api.phones : undefined,
+     addresses: addresses.length ? addresses : undefined,
+     structuredAddresses:
+       api.addresses && api.addresses.length > 0 ? api.addresses : undefined,
+@@ -81,14 +84,13 @@
+ 
+ export function normalizeContactsList(
+   response:
+-    | ApiContactsListData
+-    | { contacts: ApiContact[] }
+-    | ApiContact[]
+-    | VCard[]
++    ApiContactsListData | { contacts: ApiContact[] } | ApiContact[] | VCard[]
+ ): VCard[] {
+   if (Array.isArray(response)) {
+     return response.map((item) =>
+-      'firstName' in item ? (item as VCard) : normalizeContact(item as ApiContact)
++      'firstName' in item
++        ? (item as VCard)
++        : normalizeContact(item as ApiContact)
+     )
+   }
+ 
+--- a/src/features/calendars/calendars-types.ts
++++ b/src/features/calendars/calendars-types.ts
+@@ -26,6 +26,7 @@
+ 
+ // Calendar event
+ export interface CalendarEvent {
++  etag?: string | null
+   key?: string
+   id: string | null
+   calendar_key?: string
+@@ -139,6 +140,7 @@
+ }
+ 
+ export type CalendarEventUpdateBody = Partial<CalendarEventCreateBody> & {
++  etag?: string | null
+   recurrence_id?: string
+   recurrence_range?: 'ONE' | 'THISANDFUTURE' | 'ALL'
+ }
+@@ -167,6 +169,7 @@
+   timezone?: string
+   is_default?: boolean
+   source_type?: string
++  supported_components?: Array<'VEVENT' | 'VTODO'> | null
+   ctag?: number
+   share_token?: string | null
+   created_at?: string
+@@ -232,10 +235,7 @@
+  * Includes `no_info` for slots with no data on the frontend.
+  */
+ export type FreeBusyPeriodType =
+-  | 'busy'
+-  | 'tentative'
+-  | 'unavailable'
+-  | 'no_info'
++  'busy' | 'tentative' | 'unavailable' | 'no_info'
+ 
+ export interface FreeBusyPeriod {
+   /** Compact UTC backend format: "YYYYMMDDTHHmmSSZ", e.g. "20260511T090000Z" */
+@@ -283,10 +283,7 @@
+ }
+ 
+ export type AttendanceStatus =
+-  | 'accepted'
+-  | 'declined'
+-  | 'tentative'
+-  | 'delegated'
++  'accepted' | 'declined' | 'tentative' | 'delegated'
+ 
+ export interface AttendanceBody {
+   status: AttendanceStatus
+@@ -334,10 +331,7 @@
+  * this is the *right* an ACL grantee has for events of a given classification.
+  */
+ export type CalendarShareLevel =
+-  | 'none'
+-  | 'view-date-time'
+-  | 'view-all'
+-  | 'modify'
++  'none' | 'view-date-time' | 'view-all' | 'modify'
+ 
+ /**
+  * Per-classification rights map + the two standalone (non-classification)
+--- a/src/features/calendars/components/event-form.tsx
++++ b/src/features/calendars/components/event-form.tsx
+@@ -252,6 +252,7 @@
+   const [createCalendarEvent, createState] = useCreateCalendarEventMutation()
+   const [updateCalendarEvent, updateState] = useUpdateCalendarEventMutation()
+   const eventKey = event?.key ?? event?.id ?? event?.uid
++  const version = useRef(event?.etag)
+   const isEditing = Boolean(eventKey)
+   const isSubmitting = createState.isLoading || updateState.isLoading
+   const isAllDay = event?.all_day ?? false
+@@ -496,7 +497,10 @@
+ 
+     try {
+       if (eventKey) {
+-        const updateBody: CalendarEventUpdateBody = { ...body }
++        const updateBody: CalendarEventUpdateBody = {
++          ...body,
++          etag: version.current,
++        }
+         if (recurrenceScope && eventNeedsRecurrenceScope(event)) {
+           Object.assign(
+             updateBody,
+--- a/src/features/calendars/components/sidebar/__tests__/sidebar-item.test.tsx
++++ b/src/features/calendars/components/sidebar/__tests__/sidebar-item.test.tsx
+@@ -20,7 +20,10 @@
+ }))
+ 
+ // Mock useProfile hook
+-const mockUseProfile = jest.fn(() => ({
++const mockUseProfile = jest.fn<
++  { folderSharingDisabled: string[]; davCollectionsReadOnly?: boolean },
++  []
++>(() => ({
+   folderSharingDisabled: [] as string[],
+ }))
+ jest.mock('@/features/user-profile', () => ({
+@@ -204,6 +207,16 @@
+     expect(screen.getByTestId('dropdown-menu-trigger')).toBeInTheDocument()
+   })
+ 
++  it('hides unsupported collection actions but keeps visibility toggles', () => {
++    mockUseProfile.mockReturnValue({
++      folderSharingDisabled: [],
++      davCollectionsReadOnly: true,
++    })
++    render(<SidebarItem {...defaultProps} />)
++    expect(screen.queryByTestId('dropdown-menu')).not.toBeInTheDocument()
++    expect(screen.getByTestId('calendar-checkbox')).toBeInTheDocument()
++  })
++
+   it('should not render dropdown menu when actions are disabled', () => {
+     render(<SidebarItem {...defaultProps} disableActions={true} />)
+ 
+--- a/src/features/calendars/components/sidebar/__tests__/sidebar.test.tsx
++++ b/src/features/calendars/components/sidebar/__tests__/sidebar.test.tsx
+@@ -27,6 +27,10 @@
+ ]
+ 
+ const mockGetCalendarsQuery = jest.fn()
++let mockDavCollectionsReadOnly = false
++jest.mock('@/features/user-profile', () => ({
++  useProfile: () => ({ davCollectionsReadOnly: mockDavCollectionsReadOnly }),
++}))
+ 
+ jest.mock('../../../store/calendars-api', () => ({
+   useGetCalendarsQuery: (...a: unknown[]) => mockGetCalendarsQuery(...a),
+@@ -106,6 +110,7 @@
+ describe('Sidebar', () => {
+   beforeEach(() => {
+     jest.clearAllMocks()
++    mockDavCollectionsReadOnly = false
+   })
+ 
+   describe('configuration', () => {
+@@ -133,6 +138,21 @@
+       expect(
+         screen.getByText('sidebar.subscriptions.string')
+       ).toBeInTheDocument()
++    })
++
++    it('hides collection creation and subscription without hiding events', () => {
++      mockDavCollectionsReadOnly = true
++      mockGetCalendarsQuery.mockReturnValue({
++        data: mockData,
++        isFetching: false,
++      })
++      render(<Sidebar />)
++      expect(screen.queryByTestId('add-calendar')).not.toBeInTheDocument()
++      expect(
++        screen.queryByTestId('add-external-calendar')
++      ).not.toBeInTheDocument()
++      expect(screen.getByTestId('create-event-opener')).toBeInTheDocument()
++      expect(screen.getByTestId('item-Personal')).toBeInTheDocument()
+     })
+ 
+     it('lists backend local calendars under personals', async () => {
+--- a/src/features/calendars/components/sidebar/sidebar-item.tsx
++++ b/src/features/calendars/components/sidebar/sidebar-item.tsx
+@@ -148,11 +148,12 @@
+   const [type, setType] = React.useState('')
+   const [dialogOpen, setDialogOpen] = React.useState(false)
+   const { setCalendarVisibility, isCalendarVisible } = useCalendarVisibility()
+-  const { folderSharingDisabled } = useProfile()
++  const { folderSharingDisabled, davCollectionsReadOnly } = useProfile()
+   const t = useTranslations('CALENDARS')
+   const isMobile = useIsMobile()
+   const { state: sidebarState } = useSidebar()
+-  const isIcs = sourceType === 'ics' && Boolean(calendarKey)
++  const isIcs =
++    !davCollectionsReadOnly && sourceType === 'ics' && Boolean(calendarKey)
+   const isReadOnly = isSubscriptionCalendar({ source_type: sourceType })
+   const resolvedCalendarKey = calendarKey ?? id
+   const canShareCalendar =
+@@ -243,7 +244,7 @@
+           {fullLabel}
+         </TooltipContent>
+       </Tooltip>
+-      {!disableActions && (
++      {!disableActions && !davCollectionsReadOnly && (
+         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+           <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+--- a/src/features/calendars/components/sidebar/sidebar.tsx
++++ b/src/features/calendars/components/sidebar/sidebar.tsx
+@@ -13,6 +13,7 @@
+   isSubscriptionCalendar,
+ } from '@/features/calendars/utils/calendar-source-type'
+ import { useIsOtherOwner } from '@/hooks/use-is-other-owner'
++import { useProfile } from '@/features/user-profile'
+ import { useTranslations } from 'next-intl'
+ import React, { memo, useMemo } from 'react'
+ import { useGetCalendarsQuery } from '../../store/calendars-api'
+@@ -24,6 +25,7 @@
+ 
+ const Sidebar: React.FC = () => {
+   const { data, isFetching } = useGetCalendarsQuery()
++  const { davCollectionsReadOnly } = useProfile()
+   const t = useTranslations('CALENDARS')
+   const isOtherOwner = useIsOtherOwner()
+ 
+@@ -62,7 +64,7 @@
+ 
+       <SidebarGroup className="group-data-[collapsible=icon]:p-0">
+         <SidebarGroupLabel>{t('sidebar.personals.string')}</SidebarGroupLabel>
+-        <AddCalendar type="personals" />
++        {!davCollectionsReadOnly && <AddCalendar type="personals" />}
+         <SidebarGroupContent>
+           <SidebarMenu>
+             {personals.map((calendar) => (
+@@ -106,7 +108,7 @@
+         <SidebarGroupLabel>
+           {t('sidebar.subscriptions.string')}
+         </SidebarGroupLabel>
+-        <AddExternalCalendar />
++        {!davCollectionsReadOnly && <AddExternalCalendar />}
+         <SidebarMenu>
+           {subscriptions.map((calendar) => (
+             <SidebarItem
+--- a/src/features/calendars/hooks/useCalendarState.ts
++++ b/src/features/calendars/hooks/useCalendarState.ts
+@@ -301,14 +301,17 @@
+     const eventKey = event.key ?? event.id ?? event.uid
+     if (!eventKey) return
+ 
+-    await updateCalendarEvent({ eventKey, body }).unwrap()
++    await updateCalendarEvent({
++      eventKey,
++      body: { ...body, etag: event.etag },
++    }).unwrap()
+   }
+ 
+   const handleDeleteEvent = async (event: CalendarEvent) => {
+     const eventKey = event.key ?? event.id ?? event.uid
+     if (!eventKey) return
+ 
+-    await deleteCalendarEvent(eventKey).unwrap()
++    await deleteCalendarEvent({ eventKey, etag: event.etag }).unwrap()
+     setEvents((currentEvents) =>
+       currentEvents.filter(
+         (currentEvent) =>
+@@ -357,6 +360,7 @@
+     updateCalendarEvent({
+       eventKey,
+       body: {
++        etag: event.etag,
+         date_start: nextStartIso,
+         date_end: nextEndIso,
+         all_day: allDay,
+--- a/src/features/calendars/store/calendars-api.ts
++++ b/src/features/calendars/store/calendars-api.ts
+@@ -589,9 +589,10 @@
+         silentSuccess?: boolean
+       }
+     >({
+-      query: ({ eventKey, body }) => ({
++      query: ({ eventKey, body: { etag, ...body } }) => ({
+         url: eventUrl(eventKey),
+         method: 'PATCH',
++        headers: etag ? { 'If-Match': etag } : undefined,
+         body,
+       }),
+       transformResponse: (response: ApiCalendarEventResponse | CalendarEvent) =>
+@@ -630,6 +631,7 @@
+       | string
+       | {
+           eventKey: string
++          etag?: string | null
+           recurrence_id?: string
+           recurrence_range?: 'ONE' | 'THISANDFUTURE' | 'ALL'
+         }
+@@ -643,6 +645,10 @@
+         return {
+           url: eventUrl(eventKey),
+           method: 'DELETE',
++          headers:
++            typeof arg !== 'string' && arg.etag
++              ? { 'If-Match': arg.etag }
++              : undefined,
+           params: {
+             ...(recurrence_id ? { recurrence_id } : {}),
+             ...(recurrence_range ? { recurrence_range } : {}),
+@@ -726,9 +732,7 @@
+       }),
+       transformResponse: (
+         response:
+-          | ApiCalendarEventsResponse
+-          | CalendarEventsResponse
+-          | CalendarEvent[]
++          ApiCalendarEventsResponse | CalendarEventsResponse | CalendarEvent[]
+       ) => {
+         const { events } = normalizeCalendarEventsResponse(response)
+         return events
+--- a/src/features/calendars/utils/__tests__/is-calendar-writable.test.ts
++++ b/src/features/calendars/utils/__tests__/is-calendar-writable.test.ts
+@@ -1,4 +1,30 @@
+-import { isCalendarWritable } from '../is-calendar-writable'
++import {
++  isCalendarWritable,
++  isTaskCalendarWritable,
++} from '../is-calendar-writable'
++import type { Calendar } from '../../calendars-types'
++
++describe('DAV component capabilities', () => {
++  it.each([
++    [['VEVENT'], true, false],
++    [['VTODO'], false, true],
++    [['VEVENT', 'VTODO'], true, true],
++    [[], false, false],
++    [null, true, true],
++  ])('respects advertised components %s', (components, events, tasks) => {
++    const calendar: Calendar = {
++      name: 'DAV',
++      description: null,
++      source_type: 'caldav',
++      supported_components: components as Calendar['supported_components'],
++    }
++    expect(isCalendarWritable(calendar)).toBe(events)
++    expect(isTaskCalendarWritable(calendar)).toBe(tasks)
++    expect(isTaskCalendarWritable({ ...calendar, source_type: 'ics' })).toBe(
++      false
++    )
++  })
++})
+ 
+ describe('isCalendarWritable', () => {
+   it('returns false for undefined calendar', () => {
+--- a/src/features/calendars/utils/is-calendar-writable.ts
++++ b/src/features/calendars/utils/is-calendar-writable.ts
+@@ -1,5 +1,8 @@
+ import type { Calendar } from '@/features/calendars/calendars-types'
+-import { isSubscriptionCalendar } from '@/features/calendars/utils/calendar-source-type'
++import {
++  isPersonalCalendar,
++  isSubscriptionCalendar,
++} from '@/features/calendars/utils/calendar-source-type'
+ 
+ /**
+  * Whether events can be created in this calendar. Subscription calendars are
+@@ -9,5 +12,22 @@
+ export function isCalendarWritable(calendar: Calendar | undefined): boolean {
+   if (!calendar) return false
+   if (isSubscriptionCalendar(calendar)) return false
++  if (
++    calendar.supported_components &&
++    !calendar.supported_components.includes('VEVENT')
++  )
++    return false
+   return calendar.rights ? calendar.rights.can_create_objects : true
+ }
++
++export function isTaskCalendarWritable(
++  calendar: Calendar | undefined
++): boolean {
++  if (!calendar || !isPersonalCalendar(calendar)) return false
++  if (
++    calendar.supported_components &&
++    !calendar.supported_components.includes('VTODO')
++  )
++    return false
++  return calendar.rights ? calendar.rights.can_create_objects : true
++}
+--- a/src/features/mails/components/sidebars/fast-access/content/tasks-content.tsx
++++ b/src/features/mails/components/sidebars/fast-access/content/tasks-content.tsx
+@@ -253,6 +253,7 @@
+       await updateTask({
+         taskKey,
+         body: {
++          etag: task.etag,
+           status: 'completed',
+           percent_complete: 100,
+           completed_at: new Date().toISOString(),
+--- a/src/features/tasks/components/__tests__/task-form.test.tsx
++++ b/src/features/tasks/components/__tests__/task-form.test.tsx
+@@ -127,25 +127,86 @@
+   })
+ 
+   describe('integration', () => {
+-    it('submits create form', async () => {
++    it('retains dirty values and their version across a background refresh', async () => {
+       const user = userEvent.setup()
+       const onSubmit = jest.fn().mockResolvedValue(undefined)
+       const onClose = jest.fn()
+-      render(
+-        <TaskForm
+-          open
+-          calendars={calendars}
++      const task = {
++        id: 't1',
++        key: 't1',
++        title: 'Original',
++        calendar_key: 'cal-1',
++        etag: '"old"',
++      }
++      const { rerender } = render(
++        <TaskForm
++          open
++          calendars={calendars}
++          task={task}
+           onClose={onClose}
+           onSubmit={onSubmit}
+         />
+       )
+-      await user.type(screen.getByLabelText('form.title.string'), 'New task')
++      await user.clear(screen.getByLabelText('form.title.string'))
++      await user.type(
++        screen.getByLabelText('form.title.string'),
++        'Unsaved edit'
++      )
++      rerender(
++        <TaskForm
++          open
++          calendars={calendars}
++          task={{ ...task, title: 'Independent writer', etag: '"new"' }}
++          onClose={onClose}
++          onSubmit={onSubmit}
++        />
++      )
++      expect(screen.getByLabelText('form.title.string')).toHaveValue(
++        'Unsaved edit'
++      )
+       await user.click(screen.getByRole('button', { name: 'form.save.string' }))
+-      await waitFor(() => {
+-        expect(onSubmit).toHaveBeenCalled()
+-      })
+-      expect(onClose).toHaveBeenCalled()
+-    })
++      await waitFor(() =>
++        expect(onSubmit).toHaveBeenCalledWith(
++          expect.objectContaining({
++            body: expect.objectContaining({
++              title: 'Unsaved edit',
++              etag: '"old"',
++            }),
++          })
++        )
++      )
++    })
++
++    it.each([undefined, 'unsupported-calendar'])(
++      'submits an undated task with a valid calendar (%s)',
++      async (defaultCalendarKey) => {
++        const user = userEvent.setup()
++        const onSubmit = jest.fn().mockResolvedValue(undefined)
++        const onClose = jest.fn()
++        render(
++          <TaskForm
++            open
++            calendars={calendars}
++            defaultCalendarKey={defaultCalendarKey}
++            onClose={onClose}
++            onSubmit={onSubmit}
++          />
++        )
++        await user.type(screen.getByLabelText('form.title.string'), 'New task')
++        await user.click(
++          screen.getByRole('button', { name: 'form.save.string' })
++        )
++        await waitFor(() => {
++          expect(onSubmit).toHaveBeenCalledWith(
++            expect.objectContaining({
++              calendarKey: 'cal-1',
++              body: expect.objectContaining({ date_start: null, due: null }),
++            })
++          )
++        })
++        expect(onClose).toHaveBeenCalled()
++      }
++    )
+ 
+     it('blocks submit when due is before start', async () => {
+       const user = userEvent.setup()
+--- a/src/features/tasks/components/task-form-host.tsx
++++ b/src/features/tasks/components/task-form-host.tsx
+@@ -1,7 +1,7 @@
+ 'use client'
+ 
+ import { useGetCalendarsQuery } from '@/features/calendars'
+-import { isPersonalCalendar } from '@/features/calendars/utils/calendar-source-type'
++import { isTaskCalendarWritable } from '@/features/calendars/utils/is-calendar-writable'
+ import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+ import { skipToken } from '@reduxjs/toolkit/query'
+ import { memo, useCallback, useMemo } from 'react'
+@@ -18,7 +18,7 @@
+   const ui = useAppSelector(selectTasksUi)
+   const { data: calendars = [] } = useGetCalendarsQuery()
+   const writableCalendars = useMemo(
+-    () => calendars.filter(isPersonalCalendar),
++    () => calendars.filter(isTaskCalendarWritable),
+     [calendars]
+   )
+   const [createTask] = useCreateTaskMutation()
+--- a/src/features/tasks/components/task-form.tsx
++++ b/src/features/tasks/components/task-form.tsx
+@@ -135,14 +135,22 @@
+   const t = useTranslations('TASKS')
+   const isEdit = Boolean(task?.key ?? task?.id)
+   const schema = useMemo(() => createTaskFormSchema(t), [t])
++  const preferredCalendar = calendars.find(
++    (cal) => (cal.key ?? cal.id) === defaultCalendarKey
++  )
++  const createCalendarKey =
++    preferredCalendar?.key ??
++    preferredCalendar?.id ??
++    calendars[0]?.key ??
++    calendars[0]?.id ??
++    ''
+ 
+   const form = useForm<TaskFormValues>({
+     resolver: zodResolver(schema),
+     defaultValues: {
+       title: '',
+       description: '',
+-      calendar_key:
+-        defaultCalendarKey ?? calendars[0]?.key ?? calendars[0]?.id ?? '',
++      calendar_key: createCalendarKey,
+       due: '',
+       date_start: '',
+       status: 'needs_action',
+@@ -152,8 +160,18 @@
+     },
+   })
+ 
++  const version = useRef(task?.etag)
++  const loadedKey = useRef<string | null>(null)
++  const { isDirty } = form.formState
+   useEffect(() => {
+-    if (!open) return
++    if (!open) {
++      loadedKey.current = null
++      return
++    }
++    const key = task?.key ?? task?.id ?? 'create'
++    if (loadedKey.current === key && isDirty) return
++    loadedKey.current = key
++    version.current = task?.etag
+     if (task) {
+       form.reset({
+         title: task.title,
+@@ -171,8 +189,7 @@
+       form.reset({
+         title: '',
+         description: '',
+-        calendar_key:
+-          defaultCalendarKey ?? calendars[0]?.key ?? calendars[0]?.id ?? '',
++        calendar_key: createCalendarKey,
+         due: '',
+         date_start: '',
+         status: 'needs_action',
+@@ -181,7 +198,15 @@
+         visibility: 'public',
+       })
+     }
+-  }, [open, task, calendars, defaultCalendarKey, form])
++  }, [
++    open,
++    task,
++    calendars,
++    defaultCalendarKey,
++    createCalendarKey,
++    form,
++    isDirty,
++  ])
+ 
+   const status = form.watch('status')
+   const prevStatusRef = useRef<string | undefined>(undefined)
+@@ -203,7 +228,8 @@
+   }, [status, open, form])
+ 
+   const handleSubmit = form.handleSubmit(async (values) => {
+-    const body: TaskCreateBody = {
++    const body: TaskCreateBody & { etag?: string | null } = {
++      etag: version.current,
+       title: values.title,
+       description: values.description || null,
+       due: fromDatetimeLocal(values.due ?? ''),
+--- a/src/features/tasks/components/tasks-page.tsx
++++ b/src/features/tasks/components/tasks-page.tsx
+@@ -11,7 +11,7 @@
+   AlertDialogTitle,
+ } from '@/components/ui/alert-dialog'
+ import { useTranslations } from 'next-intl'
+-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
++import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+ import { useTaskSelection } from '../hooks/use-task-selection'
+ import { useTaskState } from '../hooks/use-task-state'
+ import TaskList from './task-list'
+@@ -44,8 +44,12 @@
+     handleBulkDelete,
+   } = useTaskSelection(tasks)
+ 
+-  const [deleteKey, setDeleteKey] = useState<string | null>(null)
++  const [deleteKey, setDeleteKey] = useState<{
++    taskKey: string
++    etag?: string | null
++  } | null>(null)
+   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
++  const bulkDeleteAction = useRef(handleBulkDelete)
+ 
+   const pageSubtitle = useMemo(() => {
+     const labels: Record<typeof ui.statusFilter, string> = {
+@@ -78,9 +82,9 @@
+   }, [deleteKey, deleteTask])
+ 
+   const handleConfirmBulkDelete = useCallback(async () => {
+-    await handleBulkDelete()
++    await bulkDeleteAction.current()
+     setBulkDeleteOpen(false)
+-  }, [handleBulkDelete])
++  }, [])
+ 
+   return (
+     <div
+@@ -104,7 +108,10 @@
+           onExitSelectionMode={handleExitSelectionMode}
+           onSelectAll={handleSelectAll}
+           onBulkComplete={handleBulkComplete}
+-          onBulkDelete={() => setBulkDeleteOpen(true)}
++          onBulkDelete={() => {
++            bulkDeleteAction.current = handleBulkDelete
++            setBulkDeleteOpen(true)
++          }}
+         />
+ 
+         <div className="min-h-0 flex-1 overflow-y-auto">
+@@ -114,7 +121,13 @@
+             isLoading={isLoading}
+             onToggleComplete={handleToggleComplete}
+             onEdit={openEditForm}
+-            onDelete={setDeleteKey}
++            onDelete={(taskKey) =>
++              setDeleteKey({
++                taskKey,
++                etag: tasks.find((task) => (task.key ?? task.id) === taskKey)
++                  ?.etag,
++              })
++            }
+             onCreateClick={openCreateForm}
+             selectionMode={selectionMode}
+             selectedTaskKeys={selectedTaskKeys}
+--- a/src/features/tasks/hooks/__tests__/use-task-selection.test.ts
++++ b/src/features/tasks/hooks/__tests__/use-task-selection.test.ts
+@@ -85,14 +85,18 @@
+         result.current.handleEnterSelectionMode()
+       })
+       expect(mockDispatch).toHaveBeenCalledWith(
+-        expect.objectContaining({ type: expect.stringContaining('enterSelectionMode') })
++        expect.objectContaining({
++          type: expect.stringContaining('enterSelectionMode'),
++        })
+       )
+ 
+       act(() => {
+         result.current.handleExitSelectionMode()
+       })
+       expect(mockDispatch).toHaveBeenCalledWith(
+-        expect.objectContaining({ type: expect.stringContaining('exitSelectionMode') })
++        expect.objectContaining({
++          type: expect.stringContaining('exitSelectionMode'),
++        })
+       )
+     })
+ 
+@@ -163,7 +167,9 @@
+         })
+       )
+       expect(mockDispatch).toHaveBeenCalledWith(
+-        expect.objectContaining({ type: expect.stringContaining('exitSelectionMode') })
++        expect.objectContaining({
++          type: expect.stringContaining('exitSelectionMode'),
++        })
+       )
+     })
+ 
+@@ -201,10 +207,18 @@
+       })
+ 
+       expect(mockDeleteTask).toHaveBeenCalledTimes(2)
+-      expect(mockDeleteTask).toHaveBeenCalledWith('t1')
+-      expect(mockDeleteTask).toHaveBeenCalledWith('t2')
+-      expect(mockDispatch).toHaveBeenCalledWith(
+-        expect.objectContaining({ type: expect.stringContaining('exitSelectionMode') })
++      expect(mockDeleteTask).toHaveBeenCalledWith({
++        taskKey: 't1',
++        etag: undefined,
++      })
++      expect(mockDeleteTask).toHaveBeenCalledWith({
++        taskKey: 't2',
++        etag: undefined,
++      })
++      expect(mockDispatch).toHaveBeenCalledWith(
++        expect.objectContaining({
++          type: expect.stringContaining('exitSelectionMode'),
++        })
+       )
+     })
+   })
+--- a/src/features/tasks/hooks/use-task-selection.ts
++++ b/src/features/tasks/hooks/use-task-selection.ts
+@@ -1,7 +1,10 @@
+ 'use client'
+ 
+ import type { Task } from '../tasks-types'
+-import { useUpdateTaskMutation, useDeleteTaskMutation } from '../store/tasks-api'
++import {
++  useUpdateTaskMutation,
++  useDeleteTaskMutation,
++} from '../store/tasks-api'
+ import {
+   enterSelectionMode,
+   exitSelectionMode,
+@@ -29,8 +32,7 @@
+   )
+ 
+   const selectedTasks = useMemo(
+-    () =>
+-      tasks.filter((task) => selectedTaskKeys.includes(getTaskKey(task))),
++    () => tasks.filter((task) => selectedTaskKeys.includes(getTaskKey(task))),
+     [tasks, selectedTaskKeys]
+   )
+ 
+@@ -92,6 +94,7 @@
+           return updateTask({
+             taskKey,
+             body: {
++              etag: task.etag,
+               status: 'needs_action',
+               percent_complete: 0,
+               completed_at: null,
+@@ -107,6 +110,7 @@
+         return updateTask({
+           taskKey,
+           body: {
++            etag: task.etag,
+             status: 'completed',
+             percent_complete: 100,
+             completed_at: new Date().toISOString(),
+@@ -123,11 +127,16 @@
+     if (selectedTaskKeys.length === 0) return
+ 
+     await Promise.all(
+-      selectedTaskKeys.map((taskKey) => deleteTask(taskKey).unwrap())
++      selectedTasks.map((task) => {
++        const taskKey = getTaskKey(task)
++        return taskKey
++          ? deleteTask({ taskKey, etag: task.etag }).unwrap()
++          : Promise.resolve()
++      })
+     )
+ 
+     dispatch(exitSelectionMode())
+-  }, [deleteTask, dispatch, selectedTaskKeys])
++  }, [deleteTask, dispatch, selectedTaskKeys, selectedTasks])
+ 
+   return {
+     selectionMode,
+--- a/src/features/tasks/hooks/use-task-state.ts
++++ b/src/features/tasks/hooks/use-task-state.ts
+@@ -1,7 +1,7 @@
+ 'use client'
+ 
+ import { useGetCalendarsQuery } from '@/features/calendars'
+-import { isPersonalCalendar } from '@/features/calendars/utils/calendar-source-type'
++import { isTaskCalendarWritable } from '@/features/calendars/utils/is-calendar-writable'
+ import type { Task, TaskListFilter } from '../tasks-types'
+ import { taskMatchesListFilter } from '../utils/task-list-filter'
+ import {
+@@ -31,7 +31,7 @@
+     useGetCalendarsQuery()
+ 
+   const writableCalendars = useMemo(
+-    () => calendars.filter(isPersonalCalendar),
++    () => calendars.filter(isTaskCalendarWritable),
+     [calendars]
+   )
+ 
+@@ -53,6 +53,7 @@
+       await updateTask({
+         taskKey,
+         body: {
++          etag: task.etag,
+           status: isNowComplete ? 'completed' : 'needs_action',
+           percent_complete: isNowComplete ? 100 : 0,
+           completed_at: isNowComplete ? new Date().toISOString() : null,
+--- /dev/null
++++ b/src/features/tasks/store/__tests__/dav-preconditions.test.ts
+@@ -0,0 +1,111 @@
++import { tasksApiEndpoints } from '../tasks-api'
++import { calendarsApiEndpoints } from '@/features/calendars/store/calendars-api'
++import { addressBooksApiEndpoints } from '@/features/address_books/store/address-books-api'
++
++jest.mock('@/lib/env-service', () => ({ isUsingFakeApi: () => false }))
++jest.mock('@/lib/redux/api/api-slice', () => {
++  const actual = jest.requireActual('@/lib/redux/api/api-slice')
++  const identity = (definition: unknown) => definition
++  return {
++    ...actual,
++    apiSlice: {
++      ...actual.apiSlice,
++      injectEndpoints: ({
++        endpoints,
++      }: {
++        endpoints: (builder: unknown) => unknown
++      }) => ({
++        endpoints: endpoints({ query: identity, mutation: identity }),
++      }),
++    },
++  }
++})
++
++type Query = {
++  query: (args: Record<string, unknown>) => {
++    headers?: Record<string, string>
++    body?: Record<string, unknown>
++  }
++}
++type QueryFn = { queryFn: (...args: unknown[]) => Promise<unknown> }
++
++it('carries the task snapshot version in the header, not the JSON body', () => {
++  const endpoint = tasksApiEndpoints.endpoints.updateTask as unknown as Query
++  const request = endpoint.query({
++    taskKey: 'task',
++    body: { title: 'Edited', etag: '"old"' },
++  })
++  expect(request.headers).toEqual({ 'If-Match': '"old"' })
++  expect(request.body).toEqual({ title: 'Edited' })
++  expect(
++    endpoint.query({ taskKey: 'task', body: { title: 'No version' } }).headers
++  ).toBeUndefined()
++})
++
++it('carries the event snapshot version without changing recurrence fields', () => {
++  const endpoint = calendarsApiEndpoints.endpoints
++    .updateCalendarEvent as unknown as Query
++  const request = endpoint.query({
++    eventKey: 'event',
++    body: { title: 'Edited', etag: '"old"', recurrence_range: 'ALL' },
++  })
++  expect(request.headers).toEqual({ 'If-Match': '"old"' })
++  expect(request.body).toEqual({ title: 'Edited', recurrence_range: 'ALL' })
++})
++
++it('carries task and event delete-dialog versions', () => {
++  const task = tasksApiEndpoints.endpoints.deleteTask as unknown as Query
++  const event = calendarsApiEndpoints.endpoints
++    .deleteCalendarEvent as unknown as Query
++  expect(task.query({ taskKey: 'task', etag: '"old"' }).headers).toEqual({
++    'If-Match': '"old"',
++  })
++  expect(event.query({ eventKey: 'event', etag: '"old"' }).headers).toEqual({
++    'If-Match': '"old"',
++  })
++})
++
++it('does not fetch a newer contact version before submitting an old form', async () => {
++  const endpoint = addressBooksApiEndpoints.endpoints
++    .updateVCard as unknown as QueryFn
++  const baseQuery = jest
++    .fn()
++    .mockResolvedValue({
++      data: { key: 'contact', display_name: 'Fixture', etag: '"new"' },
++    })
++  await endpoint.queryFn(
++    {
++      book_id: 'book',
++      id: 'contact',
++      etag: '"old"',
++      patchBody: { note: 'Edited' },
++    },
++    {},
++    {},
++    baseQuery
++  )
++  expect(baseQuery).toHaveBeenCalledTimes(1)
++  expect(baseQuery).toHaveBeenCalledWith({
++    url: 'addressbooks/book/contacts/contact',
++    method: 'PATCH',
++    headers: { 'If-Match': '"old"' },
++    body: { note: 'Edited' },
++  })
++})
++
++it('carries the contact delete-dialog version', async () => {
++  const endpoint = addressBooksApiEndpoints.endpoints
++    .deleteVCardFromAddressBook as unknown as QueryFn
++  const baseQuery = jest.fn().mockResolvedValue({ data: undefined })
++  await endpoint.queryFn(
++    { id: 'book', vCardId: 'contact', etag: '"old"' },
++    {},
++    {},
++    baseQuery
++  )
++  expect(baseQuery).toHaveBeenCalledWith({
++    url: 'addressbooks/book/contacts/contact',
++    method: 'DELETE',
++    headers: { 'If-Match': '"old"' },
++  })
++})
+--- a/src/features/tasks/store/tasks-api.ts
++++ b/src/features/tasks/store/tasks-api.ts
+@@ -1,8 +1,5 @@
+ import { createApiNotificationHandler } from '@/features/notifications/api-notification-handler'
+-import {
+-  apiSlice,
+-  TASKS_SLICE,
+-} from '@/lib/redux/api/api-slice'
++import { apiSlice, TASKS_SLICE } from '@/lib/redux/api/api-slice'
+ import type { BaseQueryFn } from '@reduxjs/toolkit/query'
+ import { EndpointBuilder } from '@reduxjs/toolkit/query'
+ import type {
+@@ -58,9 +55,7 @@
+   errorMessage: 'task_delete.error.message.string',
+ })
+ 
+-function unwrapTaskResponse(
+-  response: ApiTaskResponse | Task
+-): Task {
++function unwrapTaskResponse(response: ApiTaskResponse | Task): Task {
+   const raw = 'data' in response ? response.data : response
+   return normalizeTask(raw)
+ }
+@@ -126,6 +121,7 @@
+       query: ({ taskKey, body }) => ({
+         url: taskUrl(taskKey),
+         method: 'PATCH',
++        headers: body.etag ? { 'If-Match': body.etag } : undefined,
+         body: serializeTaskBody(body),
+       }),
+       transformResponse: (response: ApiTaskResponse | Task) =>
+@@ -147,10 +143,17 @@
+       },
+     }),
+ 
+-    deleteTask: builder.mutation<void, string>({
+-      query: (taskKey) => ({
+-        url: taskUrl(taskKey),
++    deleteTask: builder.mutation<
++      void,
++      string | { taskKey: string; etag?: string | null }
++    >({
++      query: (arg) => ({
++        url: taskUrl(typeof arg === 'string' ? arg : arg.taskKey),
+         method: 'DELETE',
++        headers:
++          typeof arg !== 'string' && arg.etag
++            ? { 'If-Match': arg.etag }
++            : undefined,
+       }),
+       transformResponse: () => undefined,
+       invalidatesTags: [TASKS_SLICE],
+--- a/src/features/tasks/tasks-types.ts
++++ b/src/features/tasks/tasks-types.ts
+@@ -4,22 +4,16 @@
+ } from '@/features/calendars/calendars-types'
+ 
+ export type TaskStatus =
+-  | 'needs_action'
+-  | 'in_process'
+-  | 'completed'
+-  | 'cancelled'
++  'needs_action' | 'in_process' | 'completed' | 'cancelled'
+ 
+ /** Smart views in the tasks sidebar (navigation). */
+ export type TaskListFilter =
+-  | 'all'
+-  | 'today'
+-  | 'upcoming'
+-  | 'overdue'
+-  | 'completed'
++  'all' | 'today' | 'upcoming' | 'overdue' | 'completed'
+ 
+ export type TaskVisibility = 'public' | 'private' | 'confidential'
+ 
+ export interface Task {
++  etag?: string | null
+   key?: string
+   id: string | null
+   calendar_key?: string
+@@ -61,7 +55,7 @@
+   related_to?: string[]
+ }
+ 
+-export type TaskUpdateBody = Partial<TaskCreateBody>
++export type TaskUpdateBody = Partial<TaskCreateBody> & { etag?: string | null }
+ 
+ export interface ApiTaskResponse {
+   data: Task
+--- /dev/null
++++ b/src/features/user-profile/hooks/__tests__/dav-capabilities.test.ts
+@@ -0,0 +1,49 @@
++import { renderHook } from '@testing-library/react'
++import { useProfile } from '../use-profile'
++
++const mockProfileQuery = jest.fn()
++jest.mock('../../store/profile-api', () => ({
++  useGetUserProfileQuery: () => mockProfileQuery(),
++}))
++jest.mock('@/lib/redux/hooks', () => ({ useAppSelector: () => null }))
++
++describe('DAV collection management capability', () => {
++  it.each([undefined, false, true])(
++    'requires explicit permission (%s)',
++    (allowed) => {
++      mockProfileQuery.mockReturnValue({
++        data: {
++          mailboxes: [],
++          ui: {
++            SOGO_D_DAV_COLLECTION_MANAGEMENT: allowed,
++            SOGO_D_CONTACT_LIST_MANAGEMENT: allowed,
++          },
++        },
++      })
++      const { result } = renderHook(() => useProfile())
++      expect(result.current.davCollectionsReadOnly).toBe(allowed !== true)
++      expect(result.current.contactListsReadOnly).toBe(allowed !== true)
++    }
++  )
++
++  it.each([[], ['contact'], ['mail']].map((disabled) => ({ disabled })))(
++    'honors contact export restrictions $disabled',
++    ({ disabled }) => {
++      mockProfileQuery.mockReturnValue({
++        data: { mailboxes: [], ui: { SOGO_D_FOLDER_DISABLE_EXPORT: disabled } },
++      })
++      const { result } = renderHook(() => useProfile())
++      expect(result.current.canExportContacts).toBe(
++        !disabled.includes('contact')
++      )
++    }
++  )
++
++  it('fails closed while the profile is unavailable', () => {
++    mockProfileQuery.mockReturnValue({ data: undefined, isLoading: true })
++    const { result } = renderHook(() => useProfile())
++    expect(result.current.davCollectionsReadOnly).toBe(true)
++    expect(result.current.contactListsReadOnly).toBe(true)
++    expect(result.current.canExportContacts).toBe(false)
++  })
++})
+--- a/src/features/user-profile/hooks/use-profile.ts
++++ b/src/features/user-profile/hooks/use-profile.ts
+@@ -62,6 +62,12 @@
+ 
+     // UI settings (domain) - Feature toggles
+     uiSettings: profile?.ui,
++    davCollectionsReadOnly:
++      profile?.ui?.SOGO_D_DAV_COLLECTION_MANAGEMENT !== true,
++    contactListsReadOnly: profile?.ui?.SOGO_D_CONTACT_LIST_MANAGEMENT !== true,
++    canExportContacts:
++      Boolean(profile) &&
++      !moduleDisabled(profile?.ui?.SOGO_D_FOLDER_DISABLE_EXPORT, 'contact'),
+     canAddExternalAccount: profile?.ui?.SOGO_D_ALLOW_EXT_MAIL_ACCOUNT ?? false,
+     identitiesEnabled: profile?.ui?.SOGO_D_IDENTITIES_ENABLED ?? false,
+     customFromEnabled:
+--- a/src/features/user-profile/profile-types.ts
++++ b/src/features/user-profile/profile-types.ts
+@@ -144,6 +144,8 @@
+   SOGO_D_MAIL_MAX_RECIPIENT?: number
+ 
+   // Calendar/Contact
++  SOGO_D_DAV_COLLECTION_MANAGEMENT?: boolean
++  SOGO_D_CONTACT_LIST_MANAGEMENT?: boolean
+   SOGO_D_CALDAV_ENABLED?: boolean
+   SOGO_D_CALDAV_PUBLIC_ACCESS_ENABLE?: boolean
+   SOGO_D_CARDAV_ENABLED?: boolean
+--- a/src/hooks/__tests__/use-cross-module-create-actions.test.ts
++++ b/src/hooks/__tests__/use-cross-module-create-actions.test.ts
+@@ -106,6 +106,41 @@
+     expect(task?.disabled).toBe(true)
+   })
+ 
++  it('gates each component and does not prefer an incompatible default', () => {
++    mockUseGetCalendarsQuery.mockReturnValue({
++      data: [
++        { ...writableCalendar, supported_components: ['VTODO'] },
++        {
++          ...writableCalendar,
++          key: 'events',
++          is_default: false,
++          supported_components: ['VEVENT'],
++        },
++      ],
++    })
++    const { result, rerender } = renderHook(() =>
++      useCrossModuleCreateActions('mail')
++    )
++    expect(
++      result.current.others.find((action) => action.id === 'calendar')?.disabled
++    ).toBe(false)
++    expect(
++      result.current.others.find((action) => action.id === 'task')?.disabled
++    ).toBe(false)
++    mockUseGetCalendarsQuery.mockReturnValue({
++      data: [{ ...writableCalendar, supported_components: ['VEVENT'] }],
++    })
++    rerender()
++    expect(
++      result.current.others.find((action) => action.id === 'task')?.disabled
++    ).toBe(true)
++    mockUseGetCalendarsQuery.mockReturnValue({ data: undefined })
++    rerender()
++    expect(
++      result.current.others.find((action) => action.id === 'calendar')?.disabled
++    ).toBe(true)
++  })
++
+   it('keeps contact disabled when the contact action is disabled', () => {
+     mockContactDisabled.mockReturnValue(true)
+     const { result } = renderHook(() => useCrossModuleCreateActions('mail'))
+--- a/src/hooks/use-cross-module-create-actions.ts
++++ b/src/hooks/use-cross-module-create-actions.ts
+@@ -3,9 +3,10 @@
+ import { useCreateContactAction } from '@/features/address_books/hooks/use-create-contact-action'
+ import { useGetCalendarsQuery } from '@/features/calendars'
+ import { useCreateEventAction } from '@/features/calendars/hooks/use-create-event-action'
+-import { isPersonalCalendar } from '@/features/calendars/utils/calendar-source-type'
+-import { isCalendarWritable } from '@/features/calendars/utils/is-calendar-writable'
+-import { pickPreferredCalendar } from '@/features/calendars/utils/pick-preferred-calendar'
++import {
++  isCalendarWritable,
++  isTaskCalendarWritable,
++} from '@/features/calendars/utils/is-calendar-writable'
+ import { useComposeAction } from '@/features/mails/hooks/use-compose-action'
+ import { useCreateTaskAction } from '@/features/tasks/hooks/use-create-task-action'
+ import { useProfile } from '@/features/user-profile'
+@@ -40,13 +41,13 @@
+   const { data: calendars } = useGetCalendarsQuery()
+ 
+   const eventDisabled = useMemo(() => {
+-    if (!calendars) return false
+-    return !isCalendarWritable(pickPreferredCalendar(calendars))
++    if (!calendars) return true
++    return !calendars.some(isCalendarWritable)
+   }, [calendars])
+ 
+   const taskDisabled = useMemo(() => {
+-    if (!calendars) return false
+-    return !calendars.some(isPersonalCalendar)
++    if (!calendars) return true
++    return !calendars.some(isTaskCalendarWritable)
+   }, [calendars])
+ 
+   return useMemo(() => {

@@ -1,0 +1,1090 @@
+--- /dev/null
++++ b/app/module/auth/PilotDavAccess.py
+@@ -0,0 +1,70 @@
++"""Production DAV transport; writes are fenced to three disposable validation collections."""
++from types import SimpleNamespace
++from urllib.parse import urlsplit, unquote
++from http import HTTPStatus
++from flask import g, has_request_context
++import requests
++from app.utils.errors import E
++from app.utils.exceptions import RequestException
++
++ROOT = 'https://dav.m7.rs/'
++HOME = ROOT + 'hi%40m7.rs/'
++COLLECTIONS = {kind: HOME + 'sogo6-validation-0ec52f81e1eb-' + kind + '/' for kind in ('events','tasks','contacts')}
++DENIED = E('S999403','DAV operation outside the validation scope',HTTPStatus.FORBIDDEN)
++CONFLICT = E('S999409','DAV resource changed; reload before retrying',HTTPStatus.CONFLICT)
++UNAVAILABLE = E('S999502','DAV request failed',HTTPStatus.BAD_GATEWAY)
++
++def active(uid):
++    return (has_request_context() and getattr(g,'user',None) is not None
++            and g.user.uid == uid == 'hi@m7.rs' and g.user.auth_kind == 'openid')
++
++def path(url):
++    p=urlsplit(url)
++    decoded=unquote(p.path)
++    if (p.scheme!='https' or p.netloc!='dav.m7.rs' or p.query or p.fragment
++            or not decoded.startswith('/') or '%' in decoded or '\\' in decoded
++            or any(ord(c)<32 for c in decoded) or any(c in ('.','..') for c in decoded.split('/'))):
++        raise RequestException(error=DENIED)
++    return decoded
++
++def writable(url, kind=None):
++    target=path(url)
++    return any(target==path(collection) for name,collection in COLLECTIONS.items() if kind is None or name==kind)
++
++def validate(method,url,headers):
++    target=path(url)
++    if method in ('GET','REPORT','PROPFIND'):
++        return
++    for kind,collection in COLLECTIONS.items():
++        root=path(collection)
++        suffix=target[len(root):] if target.startswith(root) else ''
++        if (suffix and '/' not in suffix and suffix.endswith('.vcf' if kind=='contacts' else '.ics')
++                and method in ('PUT','DELETE')):
++            etag=headers.get('If-Match')
++            if etag and etag!='*' and not etag.startswith('W/'):
++                return
++            if method=='PUT' and headers.get('If-None-Match')=='*':
++                return
++    raise RequestException(error=DENIED)
++
++def request(method,url,*,headers=None,data=None):
++    if not active(getattr(getattr(g,'user',None),'uid',None)):
++        raise RequestException(error=DENIED)
++    headers=dict(headers or {})
++    validate(method,url,headers)
++    headers['Authorization']='Bearer '+g.user.password
++    try:
++        with requests.request(method,url,headers=headers,data=data,timeout=20,allow_redirects=False,stream=True) as r:
++            if r.status_code==412:
++                raise RequestException(error=CONFLICT)
++            if r.status_code not in (200,201,204,207):
++                raise RequestException(error=UNAVAILABLE)
++            chunks=[]; size=0
++            for chunk in r.iter_content(65536):
++                size+=len(chunk)
++                if size>16*1024*1024:
++                    raise RequestException(error=UNAVAILABLE)
++                chunks.append(chunk)
++            return SimpleNamespace(status_code=r.status_code,content=b''.join(chunks),headers=r.headers)
++    except requests.RequestException as exc:
++        raise RequestException(error=UNAVAILABLE) from exc
+--- a/app/module/calendar/rrule/RecurrenceScopeProcessor.py
++++ b/app/module/calendar/rrule/RecurrenceScopeProcessor.py
+@@ -71,6 +71,13 @@
+         Returns a ScopeResult carrying the resulting CalEvent and the full list of
+         touched (CalEvent, EventAction) pairs persisted on the organizer's calendar.
+         """
++        atomic_result = source.process_scoped_update(original, event_update)
++        if atomic_result is not None:
++            return atomic_result
++        if event_update.recurrence_range == "ALL":
++            event_update.recurrence_id = original.recurrence_id
++            event_update.recurrence_range = original.recurrence_range
++
+         # Branch 1: "This and following events" - split the series at recurrence_id
+         if not original.is_detached and event_update.recurrence_id is not None and event_update.recurrence_range == "THISANDFUTURE":
+             if original.recurrence_rule is None:
+--- a/app/module/calendar/source/CalendarSource.py
++++ b/app/module/calendar/source/CalendarSource.py
+@@ -266,6 +266,10 @@
+         """
+         raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+ 
++    def process_scoped_update(self, original: CalEvent, event_update: CalEvent):
++        """Allow resource-backed sources to commit a scoped update atomically."""
++        return None
++
+     def insert_event(self, event: CalEvent) -> CalEvent:
+         """Persist a new event. Raises NOT_SUPPORTED on read-only sources."""
+         raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+--- /dev/null
++++ b/app/module/calendar/source/CalendarSourceDavEventsPilot.py
+@@ -0,0 +1,266 @@
++"""Disposable DAV recurrence adapter with atomic edits for bounded timed series."""
++from copy import deepcopy
++from dataclasses import fields, replace
++from datetime import datetime, timezone, timedelta
++from urllib.parse import urljoin
++from uuid import NAMESPACE_URL, uuid5
++import xml.etree.ElementTree as ET
++
++from icalendar import Calendar
++
++from app.module.calendar.model.CalEvent import CalEvent
++from app.module.calendar.rrule.RecurrenceScopeProcessor import ScopeResult, EventAction
++from app.module.calendar.serializer.CalEventDeserializerIcal import CalEventDeserializerIcal
++from app.module.calendar.serializer.CalEventSerializerIcal import CalEventSerializerIcal
++from app.module.calendar.source.CalendarSourceDavPilot import (
++    CalendarSourceDavPilot, DavEvent, REPORT, PROPERTIES, CONFLICT, UNAVAILABLE,
++)
++from app.utils.errors import ERROR_CALENDAR_NOT_SUPPORTED
++from app.utils.exceptions import RequestException
++
++EVENT_PROPERTIES = {**PROPERTIES, "date_end": "DTEND"}
++
++
++class CalendarSourceDavEventsPilot(CalendarSourceDavPilot):
++    collection = "http://radicale:5232/pilot/events/"
++
++    def _decode_events(self, data, href, etag):
++        document = Calendar.from_ical(data)
++        components = document.walk("VEVENT")
++        if not etag or etag.startswith("W/") or document.walk("VTODO") or not components:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if any("RECURRENCE-ID" in c and "RANGE" in c["RECURRENCE-ID"].params for c in components):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if len({str(c.get("UID")) for c in components}) != 1:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        result = []
++        for component in components:
++            parsed = CalEventDeserializerIcal().deserialize_vevent(component)
++            # Recurrence is wall-clock arithmetic, not arithmetic on the first UTC offset.
++            start = component["DTSTART"].dt
++            if isinstance(start, datetime) and start.tzinfo is not None:
++                parsed.date_start = start
++                parsed.date_end = parsed.require_date_end.astimezone(start.tzinfo)
++            event = DavEvent(**{f.name: getattr(parsed, f.name) for f in fields(CalEvent)},
++                             dav_document=data, dav_href=href, dav_etag=etag)
++            rid = event.recurrence_id.isoformat() if event.recurrence_id else "master"
++            event.key = str(uuid5(NAMESPACE_URL, href + "#" + event.require_uid + "#" + rid))
++            event.calendar_key = self.calendar.key
++            event.calendar_timezone = self.calendar.timezone
++            result.append(event)
++        return result
++
++    def _resources(self):
++        response = self.request("REPORT", self.collection, data=REPORT.replace(b"VTODO", b"VEVENT"),
++                                headers={"Depth": "1", "Content-Type": "application/xml"})
++        if response.status_code != 207:
++            raise RequestException(error=UNAVAILABLE)
++        result = []
++        for item in ET.fromstring(response.content).findall("{DAV:}response"):
++            href = urljoin(self.collection, item.findtext("{DAV:}href"))
++            for propstat in item.findall("{DAV:}propstat"):
++                if " 200 " not in propstat.findtext("{DAV:}status", ""):
++                    raise RequestException(error=UNAVAILABLE)
++                prop = propstat.find("{DAV:}prop")
++                data = prop.findtext("{urn:ietf:params:xml:ns:caldav}calendar-data")
++                if data is not None:
++                    result.extend(self._decode_events(data.encode(), href, prop.findtext("{DAV:}getetag")))
++        return result
++
++    def _fetch_events(self, start, end, search=None):
++        return self._resources()
++
++    def _fetch_tasks(self, start, end, search=None):
++        return []
++
++    def get_master_event_by_uid(self, uid):
++        return next((e for e in self._resources() if e.uid == uid and e.recurrence_id is None), None)
++
++    def get_event_by_recurrence_id(self, uid, recurrence_id):
++        return next((e for e in self._resources() if e.uid == uid and e.recurrence_id == recurrence_id), None)
++
++    def _write_occurrence(self, event, create):
++        if not isinstance(event, DavEvent) or event.recurrence_id is None or event.all_day:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if event.recurrence_range or event.recurrence_rule or event.attendees:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        originals = self._decode_events(event.dav_document, event.dav_href, event.dav_etag)
++        target = next((e for e in originals if e.recurrence_id == event.recurrence_id), None)
++        if create and target is not None:
++            raise RequestException(error=CONFLICT)
++        if not create and target is None:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        original = target or next(e for e in originals if e.recurrence_id is None)
++        changed = {f.name for f in fields(CalEvent) if getattr(event, f.name) != getattr(original, f.name)}
++        structural = {"key", "db_id", "recurrence_id", "recurrence_rule", "sequence"}
++        if changed - EVENT_PROPERTIES.keys() - structural:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        document = Calendar.from_ical(event.dav_document)
++        components = document.walk("VEVENT")
++        component = components[originals.index(original)]
++        if create:
++            # Copy the original ICS rather than flattening unknown properties/parameters/alarms.
++            component = deepcopy(component)
++            for prop in ("RRULE", "RDATE", "EXDATE", "RECURRENCE-ID"):
++                component.pop(prop, None)
++            document.add_component(component)
++        generated = CalEventSerializerIcal().to_vevent(event)
++        properties = {EVENT_PROPERTIES[f] for f in changed if f in EVENT_PROPERTIES}
++        if create:
++            properties.update(("DTSTART", "DTEND", "RECURRENCE-ID"))
++        for prop in properties:
++            component.pop(prop, None)
++            if prop in generated:
++                component[prop] = deepcopy(generated[prop])
++        if "DTEND" in properties:
++            component.pop("DURATION", None)
++        now = datetime.now(timezone.utc)
++        for prop in ("DTSTAMP", "LAST-MODIFIED"):
++            component.pop(prop, None)
++            component.add(prop, now)
++        component["SEQUENCE"] = original.sequence + 1
++        data = document.to_ical()
++        response = self.request("PUT", event.dav_href, data=data,
++                                headers={"If-Match": event.dav_etag, "Content-Type": "text/calendar"})
++        return next(e for e in self._decode_events(data, event.dav_href, response.headers.get("ETag"))
++                    if e.recurrence_id == event.recurrence_id)
++
++    def insert_event(self, event):
++        return self._write_occurrence(event, create=True)
++
++    def update_event(self, event):
++        saved = self._write_occurrence(event, create=False)
++        for f in fields(DavEvent):
++            setattr(event, f.name, getattr(saved, f.name))
++
++    def delete_event(self, uid):
++        raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++
++    def split_event(self, uid, until, from_dt):
++        raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++
++    def _bounded_occurrences(self, originals):
++        masters = [e for e in originals if e.recurrence_id is None]
++        if len(masters) != 1:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        master = masters[0]
++        rule = master.recurrence_rule
++        # Materialization must never silently truncate an unbounded or oversized series.
++        if (rule is None or rule.frequency.value not in {"daily", "weekly"}
++                or rule.count is None or not 1 <= rule.count <= 128
++                or len(rule.additional_dates) > 128 or master.all_day
++                or any(e.attendees or e.recurrence_range for e in originals)):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        last = self._rrule_engine.get_max_date(master)
++        if last is None or last - master.require_date_start > timedelta(days=366 * 5):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        start = min(e.require_date_start for e in originals) - timedelta(days=1)
++        end = max(last, *(e.require_date_end for e in originals)) + timedelta(days=1)
++        expanded = self._expand_recurring(originals, start, end)
++        if not expanded or len(expanded) > 256:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        return master, expanded
++
++    @staticmethod
++    def _touch(component):
++        now = datetime.now(timezone.utc)
++        for prop in ("DTSTAMP", "LAST-MODIFIED"):
++            component.pop(prop, None)
++            component.add(prop, now)
++        component["SEQUENCE"] = int(component.get("SEQUENCE", 0)) + 1
++
++    def process_scoped_update(self, original, event_update):
++        scope = event_update.recurrence_range
++        if scope not in {"ALL", "THISANDFUTURE"}:
++            if original.recurrence_id is not None or event_update.recurrence_id is not None:
++                return None
++            scope = "ALL"
++        if not isinstance(event_update, DavEvent):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        originals = self._decode_events(event_update.dav_document, event_update.dav_href, event_update.dav_etag)
++        master, occurrences = self._bounded_occurrences(originals)
++        snapshot_original = next((e for e in originals if e.key == original.key), None)
++        if snapshot_original is None:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        anchor = event_update.recurrence_id
++        selected = next((e for e in occurrences if e.recurrence_id == anchor), None) if anchor else master
++        if selected is None or (scope == "THISANDFUTURE" and anchor is None):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        changed = {f.name for f in fields(CalEvent)
++                   if getattr(event_update, f.name) != getattr(snapshot_original, f.name)}
++        structural = {"key", "db_id", "recurrence_id", "recurrence_range", "sequence"}
++        if changed - EVENT_PROPERTIES.keys() - structural:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        tz = master.require_date_start.tzinfo
++        new_start = event_update.require_date_start if "date_start" in changed else selected.require_date_start
++        new_end = event_update.require_date_end if "date_end" in changed else selected.require_date_end
++        shift = new_start.astimezone(tz) - selected.require_date_start.astimezone(tz)
++        duration_change = ((new_end.astimezone(tz) - new_start.astimezone(tz))
++                           - (selected.require_date_end.astimezone(tz) - selected.require_date_start.astimezone(tz)))
++        if new_end <= new_start:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        content = {f: getattr(event_update, f) for f in changed & EVENT_PROPERTIES.keys()
++                   if f not in {"date_start", "date_end"}}
++        document = Calendar.from_ical(event_update.dav_document)
++        components = document.walk("VEVENT")
++
++        def shift_dt(dt, delta):
++            return (dt.astimezone(tz) + delta).astimezone(dt.tzinfo)
++
++        def patch(component, model):
++            generated = CalEventSerializerIcal().to_vevent(replace(model, **content))
++            for field in content:
++                prop = EVENT_PROPERTIES[field]
++                component.pop(prop, None)
++                if prop in generated:
++                    component[prop] = deepcopy(generated[prop])
++            if shift or duration_change:
++                shifted_start = shift_dt(model.require_date_start, shift)
++                shifted_end = shift_dt(model.require_date_end, shift + duration_change)
++                if shifted_end <= shifted_start:
++                    raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++                for prop, value in (("DTSTART", shifted_start), ("DTEND", shifted_end)):
++                    component.pop(prop, None)
++                    component.add(prop, value)
++                component.pop("DURATION", None)
++            self._touch(component)
++
++        if scope == "ALL":
++            for component, model in zip(components, originals, strict=True):
++                patch(component, model)
++                if shift:
++                    if model.recurrence_id is not None:
++                        rid = component["RECURRENCE-ID"].dt
++                        component.pop("RECURRENCE-ID")
++                        component.add("RECURRENCE-ID", shift_dt(rid, shift))
++                    for prop in ("EXDATE", "RDATE"):
++                        old = component.pop(prop, None)
++                        for group in old if isinstance(old, list) else [old] if old is not None else []:
++                            component.add(prop, [shift_dt(d.dt, shift) for d in group.dts], parameters=dict(group.params))
++                    if "RRULE" in component and "UNTIL" in component["RRULE"]:
++                        raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++            result_rid = None
++        else:
++            # A suffix of detached components is one conditional PUT, not two non-atomic series writes.
++            suffix = [e for e in occurrences if e.require_recurrence_id >= anchor]
++            retained = [c for c, e in zip(components, originals, strict=True)
++                        if e.recurrence_id is None or e.recurrence_id < anchor]
++            document.subcomponents = [c for c in document.subcomponents if c.name != "VEVENT"] + retained
++            master_component = components[originals.index(master)]
++            for occurrence in suffix:
++                existing = next((i for i, e in enumerate(originals) if e.recurrence_id == occurrence.recurrence_id), None)
++                component = deepcopy(components[existing] if existing is not None else master_component)
++                for prop in ("RRULE", "RDATE", "EXDATE", "RECURRENCE-ID", "DTSTART", "DTEND", "DURATION"):
++                    component.pop(prop, None)
++                component.add("RECURRENCE-ID", occurrence.require_recurrence_id)
++                component.add("DTSTART", occurrence.require_date_start)
++                component.add("DTEND", occurrence.require_date_end)
++                patch(component, occurrence)
++                document.add_component(component)
++            result_rid = anchor
++        data = document.to_ical()
++        response = self.request("PUT", event_update.dav_href, data=data,
++                                headers={"If-Match": event_update.dav_etag, "Content-Type": "text/calendar"})
++        saved = self._decode_events(data, event_update.dav_href, response.headers.get("ETag"))
++        result = next(e for e in saved if e.recurrence_id == result_rid)
++        return ScopeResult(result=result, touched=[(e, EventAction.UPDATE) for e in saved])
+--- /dev/null
++++ b/app/module/calendar/source/CalendarSourceDavPilot.py
+@@ -0,0 +1,176 @@
++"""Disposable, single-user VTODO spike; not a general CalDAV backend."""
++from copy import deepcopy
++from dataclasses import dataclass, fields
++from datetime import datetime, timezone
++from http import HTTPStatus
++from urllib.parse import urljoin, urlsplit
++from uuid import NAMESPACE_URL, uuid4, uuid5
++import xml.etree.ElementTree as ET
++
++from base64 import b64encode
++from types import SimpleNamespace
++from urllib.request import Request, build_opener, HTTPRedirectHandler, ProxyHandler
++from urllib.error import HTTPError, URLError
++
++from icalendar import Calendar
++
++from app.module.calendar.model.CalEvent import CalEvent
++from app.module.calendar.model.enums.ComponentType import ComponentType
++from app.module.calendar.serializer.CalEventDeserializerIcal import CalEventDeserializerIcal
++from app.module.calendar.serializer.CalEventSerializerIcal import CalEventSerializerIcal
++from app.module.calendar.source.CalendarSource import CalendarSource
++from app.utils.errors import E, ERROR_CALENDAR_NOT_SUPPORTED
++from app.utils.exceptions import RequestException
++
++COLLECTION = "http://radicale:5232/pilot/tasks/"
++from app.module.auth.PilotDavAccess import CONFLICT, UNAVAILABLE
++PROPERTIES = {
++    "title": "SUMMARY", "description": "DESCRIPTION", "location": "LOCATION",
++    "url": "URL", "priority": "PRIORITY", "status": "STATUS",
++    "percent_complete": "PERCENT-COMPLETE", "completed_at": "COMPLETED",
++    "date_start": "DTSTART", "date_end": "DUE", "categories": "CATEGORIES",
++}
++REPORT = b'''<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
++<d:prop><d:getetag/><c:calendar-data/></d:prop>
++<c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/></c:comp-filter></c:filter>
++</c:calendar-query>'''
++
++
++@dataclass
++class DavEvent(CalEvent):
++    # Dataclass fields survive the API's dataclasses.replace() merge.
++    dav_document: bytes = b""
++    dav_etag: str = ""
++    dav_href: str = ""
++
++
++class NoRedirect(HTTPRedirectHandler):
++    def redirect_request(self, req, fp, code, msg, headers, newurl):
++        return None
++
++
++class CalendarSourceDavPilot(CalendarSource):
++    collection = COLLECTION
++
++    def __init__(self, calendar):
++        super().__init__(calendar)
++        self._seen = {}
++
++    @classmethod
++    def request(cls, method, url, **kwargs):
++        # Never follow redirects or send credentials to a server-supplied origin/path.
++        target, root = urlsplit(url), urlsplit(cls.collection)
++        if (target.scheme, target.netloc) != (root.scheme, root.netloc) or not target.path.startswith(root.path):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        headers = kwargs.pop("headers", {})
++        headers["Authorization"] = "Basic " + b64encode(b"pilot:pilot").decode()
++        request = Request(url, method=method, headers=headers, **kwargs)
++        try:
++            with build_opener(NoRedirect(), ProxyHandler({})).open(request, timeout=10) as response:
++                return SimpleNamespace(status_code=response.status, content=response.read(), headers=response.headers)
++        except HTTPError as exc:
++            raise RequestException(error=CONFLICT if exc.code == 412 else UNAVAILABLE) from exc
++        except (URLError, TimeoutError) as exc:
++            raise RequestException(error=UNAVAILABLE) from exc
++
++    def _decode(self, data, href, etag):
++        document = Calendar.from_ical(data)
++        todos = document.walk("VTODO")
++        if len(todos) != 1 or document.walk("VEVENT") or any(
++            name in todos[0] for name in ("RRULE", "RDATE", "RECURRENCE-ID", "EXDATE")
++        ):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if not etag or etag.startswith("W/"):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        parsed = CalEventDeserializerIcal().deserialize_vtodo(todos[0])
++        # Upstream substitutes DTSTART for absent DUE, which makes undated tasks overdue.
++        if "DUE" not in todos[0] and "DURATION" not in todos[0]:
++            parsed.date_end = None
++        event = DavEvent(**{f.name: getattr(parsed, f.name) for f in fields(CalEvent)},
++                         dav_document=data, dav_href=href, dav_etag=etag)
++        event.key = str(uuid5(NAMESPACE_URL, href + "#" + event.require_uid))
++        event.calendar_key = self.calendar.key
++        event.calendar_timezone = self.calendar.timezone
++        self._seen[event.require_uid] = event
++        return event
++
++    def _resources(self):
++        response = self.request("REPORT", self.collection, data=REPORT,
++                                headers={"Depth": "1", "Content-Type": "application/xml"})
++        if response.status_code != 207:
++            raise RequestException(error=UNAVAILABLE)
++        result = []
++        for item in ET.fromstring(response.content).findall("{DAV:}response"):
++            href = urljoin(self.collection, item.findtext("{DAV:}href"))
++            for propstat in item.findall("{DAV:}propstat"):
++                if " 200 " not in propstat.findtext("{DAV:}status", ""):
++                    raise RequestException(error=UNAVAILABLE)
++                prop = propstat.find("{DAV:}prop")
++                data = prop.findtext("{urn:ietf:params:xml:ns:caldav}calendar-data")
++                if data is not None:
++                    result.append(self._decode(data.encode(), href, prop.findtext("{DAV:}getetag")))
++        return result
++
++    def _fetch_events(self, start, end, search=None):
++        return []  # This collection is explicitly tasks-only.
++
++    def _fetch_tasks(self, start, end, search=None):
++        return self._resources()
++
++    def is_writable(self):
++        return True
++
++    def get_event(self, event_key):
++        return next((e for e in self._resources() if e.key == event_key), None)
++
++    def get_master_event_by_uid(self, uid):
++        return next((e for e in self._resources() if e.uid == uid), None)
++
++    def insert_event(self, event):
++        if event.component_type != ComponentType.TASK or event.recurrence_rule or event.recurrence_id:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        event.uid = event.uid or str(uuid4())
++        event.dtstamp = datetime.now(timezone.utc)
++        data = CalEventSerializerIcal().serialize(event).encode()
++        href = self.collection + str(uuid4()) + ".ics"
++        self.request("PUT", href, data=data,
++                     headers={"If-None-Match": "*", "Content-Type": "text/calendar"})
++        response = self.request("GET", href)
++        return self._decode(response.content, href, response.headers.get("ETag"))
++
++    def update_event(self, event):
++        if not isinstance(event, DavEvent):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        original = self._decode(event.dav_document, event.dav_href, event.dav_etag)
++        changed = {f.name for f in fields(CalEvent)
++                   if getattr(event, f.name) != getattr(original, f.name)}
++        if changed - PROPERTIES.keys():
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if not changed:
++            return
++        document = Calendar.from_ical(event.dav_document)
++        todo = document.walk("VTODO")[0]
++        generated = CalEventSerializerIcal().to_vtodo(event)
++        for field in changed:
++            prop = PROPERTIES[field]
++            todo.pop(prop, None)
++            if prop in generated:
++                todo[prop] = deepcopy(generated[prop])
++        if "date_end" in changed:
++            todo.pop("DURATION", None)
++        now = datetime.now(timezone.utc)
++        for prop in ("DTSTAMP", "LAST-MODIFIED"):
++            todo.pop(prop, None)
++            todo.add(prop, now)
++        todo["SEQUENCE"] = int(todo.get("SEQUENCE", 0)) + 1
++        data = document.to_ical()
++        response = self.request("PUT", event.dav_href, data=data,
++                                headers={"If-Match": event.dav_etag, "Content-Type": "text/calendar"})
++        event.dav_document = data
++        event.dav_etag = response.headers.get("ETag", "")
++
++    def delete_event(self, uid):
++        event = self._seen.get(uid)
++        if event is None:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        self.request("DELETE", event.dav_href, headers={"If-Match": event.dav_etag})
+--- /dev/null
++++ b/app/module/calendar/source/CalendarSourceLiveDav.py
+@@ -0,0 +1,133 @@
++"""Read-only single-user pilot against production DAV using the current OIDC token."""
++from datetime import datetime
++from urllib.parse import urljoin, urlsplit
++from uuid import uuid5, NAMESPACE_URL
++import xml.etree.ElementTree as ET
++
++from flask import g, has_request_context
++import requests
++from icalendar import Calendar
++
++from app.module.calendar.model.CalCalendar import CalCalendar
++from app.module.calendar.model.enums.CalendarSourceType import CalendarSourceType
++from app.module.calendar.model.enums.ComponentType import ComponentType
++from app.module.calendar.serializer.CalEventDeserializerIcal import CalEventDeserializerIcal
++from app.module.calendar.source.CalendarSource import CalendarSource
++from app.utils import errors as err
++from app.utils.exceptions import RequestException
++
++ROOT = 'https://dav.m7.rs/'
++D = '{DAV:}'
++C = '{urn:ietf:params:xml:ns:caldav}'
++
++
++def active(uid):
++    return (has_request_context() and getattr(g, 'user', None) is not None
++            and g.user.uid == uid == 'hi@m7.rs' and g.user.auth_kind == 'openid')
++
++
++def request(method, url, body, depth):
++    if method not in {'PROPFIND', 'REPORT'} or urlsplit(url).netloc != 'dav.m7.rs' or urlsplit(url).scheme != 'https':
++        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
++    try:
++        with requests.request(method, url, data=body, headers={
++            'Authorization':'Bearer '+g.user.password, 'Depth':str(depth), 'Content-Type':'application/xml',
++        }, timeout=20, allow_redirects=False, stream=True) as response:
++            if response.status_code != 207:
++                raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
++            chunks = []
++            size = 0
++            for chunk in response.iter_content(65536):
++                size += len(chunk)
++                if size > 16 * 1024 * 1024:
++                    raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
++                chunks.append(chunk)
++            return ET.fromstring(b''.join(chunks))
++    except requests.RequestException as exc:
++        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED) from exc
++
++
++def discover(uid):
++    if not active(uid):
++        return None
++    if hasattr(g, 'pilot_dav_sources'):
++        return g.pilot_dav_sources
++    root = request('PROPFIND', ROOT, b'<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>', 0)
++    href = root.find('.//'+D+'current-user-principal/'+D+'href')
++    if href is None or not href.text:
++        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
++    home = urljoin(ROOT, href.text)
++    root = request('PROPFIND', home, b'<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/></d:prop></d:propfind>', 1)
++    sources = []
++    for item in root.findall(D+'response'):
++        prop = item.find('.//'+D+'prop')
++        if prop is None or prop.find('.//'+C+'calendar') is None:
++            continue
++        url = urljoin(ROOT, item.findtext(D+'href'))
++        name = prop.findtext(D+'displayname') or urlsplit(url).path.rstrip('/').split('/')[-1]
++        cal = CalCalendar(user_uid=uid, name=name, key=str(uuid5(NAMESPACE_URL, url)),
++                          source_type=CalendarSourceType.ICS, timezone='America/Sao_Paulo')
++        from app.module.auth.PilotDavAccess import writable
++        if writable(url, 'tasks'):
++            from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveTasks
++            cal.source_type = CalendarSourceType.LOCAL
++            sources.append(CalendarSourceLiveTasks(cal))
++        elif writable(url, 'events'):
++            from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveEvents
++            cal.source_type = CalendarSourceType.LOCAL
++            sources.append(CalendarSourceLiveEvents(cal))
++        else:
++            sources.append(CalendarSourceLiveDav(cal, url))
++    g.pilot_dav_sources = sources
++    return sources
++
++
++class CalendarSourceLiveDav(CalendarSource):
++    def __init__(self, calendar, url):
++        super().__init__(calendar)
++        self.url = url
++        self._loaded = None
++
++    def _resources(self):
++        if self._loaded is not None:
++            return self._loaded
++        body = b'<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"/></c:filter></c:calendar-query>'
++        root = request('REPORT', self.url, body, 1)
++        result = []
++        parser = CalEventDeserializerIcal()
++        for item in root.findall(D+'response'):
++            data = item.findtext('.//'+C+'calendar-data')
++            if not data:
++                continue
++            href = urljoin(ROOT, item.findtext(D+'href'))
++            document = Calendar.from_ical(data)
++            for component in document.walk():
++                if component.name not in {'VEVENT', 'VTODO'}:
++                    continue
++                event = parser.deserialize_vevent(component) if component.name == 'VEVENT' else parser.deserialize_vtodo(component)
++                start = component.get('DTSTART')
++                if start is not None and isinstance(start.dt, datetime) and start.dt.tzinfo is not None:
++                    event.date_start = start.dt
++                    if event.date_end is not None:
++                        event.date_end = event.date_end.astimezone(start.dt.tzinfo)
++                if component.name == 'VTODO' and 'DUE' not in component and 'DURATION' not in component:
++                    event.date_end = None
++                rid = event.recurrence_id.isoformat() if event.recurrence_id else 'master'
++                event.key = str(uuid5(NAMESPACE_URL, href+'#'+event.require_uid+'#'+rid))
++                event.calendar_key = self.calendar.key
++                event.calendar_timezone = self.calendar.timezone
++                result.append(event)
++        self._loaded = result
++        return result
++
++    def _fetch_events(self, start, end, search=None):
++        return [e for e in self._resources() if e.component_type == ComponentType.EVENT]
++
++    def _fetch_tasks(self, start, end, search=None):
++        return [e for e in self._resources() if e.component_type == ComponentType.TASK]
++
++    def get_event(self, event_key):
++        return next((e for e in self._resources() if e.key == event_key), None)
++
++    def get_master_event_by_uid(self, uid):
++        return next((e for e in self._resources() if e.uid == uid and e.recurrence_id is None), None)
+--- /dev/null
++++ b/app/module/calendar/source/CalendarSourceLiveWritable.py
+@@ -0,0 +1,89 @@
++from copy import deepcopy
++from dataclasses import fields
++from datetime import datetime, timezone
++from uuid import uuid4
++from icalendar import Calendar
++from app.module.auth.PilotDavAccess import COLLECTIONS, request
++from app.module.calendar.source.CalendarSourceDavPilot import CalendarSourceDavPilot, DavEvent
++from app.module.calendar.source.CalendarSourceDavEventsPilot import CalendarSourceDavEventsPilot, EVENT_PROPERTIES
++from app.module.calendar.model.CalEvent import CalEvent
++from app.module.calendar.model.enums.ComponentType import ComponentType
++from app.module.calendar.serializer.CalEventSerializerIcal import CalEventSerializerIcal
++from app.utils.errors import ERROR_CALENDAR_NOT_SUPPORTED
++from app.utils.exceptions import RequestException
++
++class CalendarSourceLiveTasks(CalendarSourceDavPilot):
++    collection = COLLECTIONS['tasks']
++    def request(self, method, url, **kwargs):
++        return request(method, url, **kwargs)
++
++class CalendarSourceLiveEvents(CalendarSourceDavEventsPilot):
++    collection = COLLECTIONS['events']
++    def request(self, method, url, **kwargs):
++        return request(method, url, **kwargs)
++
++    @staticmethod
++    def _simple(event):
++        if (event.component_type != ComponentType.EVENT or event.recurrence_rule or event.recurrence_id
++                or event.attendees or event.all_day or event.require_date_end <= event.require_date_start):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++
++    def get_event(self, key):
++        event = super().get_event(key)
++        if event: self._seen[event.require_uid] = event
++        return event
++
++    def get_master_event_by_uid(self, uid):
++        event = super().get_master_event_by_uid(uid)
++        if event: self._seen[event.require_uid] = event
++        return event
++
++    def insert_event(self, event):
++        if event.recurrence_id is not None:
++            return super().insert_event(event)
++        self._simple(event)
++        event.uid = event.uid or str(uuid4())
++        event.dtstamp = datetime.now(timezone.utc)
++        data = CalEventSerializerIcal().serialize(event).encode()
++        href = self.collection + str(uuid4()) + '.ics'
++        self.request('PUT', href, data=data, headers={'If-None-Match':'*','Content-Type':'text/calendar'})
++        saved = self.request('GET', href)
++        return self._decode_events(saved.content, href, saved.headers.get('ETag'))[0]
++
++    def update_event(self, event):
++        if event.recurrence_id is not None:
++            return super().update_event(event)
++        self._simple(event)
++        if not isinstance(event, DavEvent):
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        originals = self._decode_events(event.dav_document,event.dav_href,event.dav_etag)
++        if len(originals)!=1:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        self._simple(originals[0])
++        changed = {f.name for f in fields(CalEvent) if getattr(event,f.name)!=getattr(originals[0],f.name)}
++        if changed - EVENT_PROPERTIES.keys() - {'sequence'}:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        if not changed: return
++        document=Calendar.from_ical(event.dav_document)
++        component=document.walk('VEVENT')[0]
++        generated=CalEventSerializerIcal().to_vevent(event)
++        for field in changed & EVENT_PROPERTIES.keys():
++            prop=EVENT_PROPERTIES[field];component.pop(prop,None)
++            if prop in generated: component[prop]=deepcopy(generated[prop])
++        if 'date_end' in changed: component.pop('DURATION',None)
++        self._touch(component)
++        data=document.to_ical()
++        response=self.request('PUT',event.dav_href,data=data,headers={'If-Match':event.dav_etag,'Content-Type':'text/calendar'})
++        event.dav_document=data;event.dav_etag=response.headers.get('ETag','')
++
++    def delete_event(self, uid):
++        event=self._seen.get(uid)
++        if event is None:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        self._simple(event)
++        self.request('DELETE',event.dav_href,headers={'If-Match':event.dav_etag})
++
++    def process_scoped_update(self, original, event_update):
++        if not original.recurrence_rule and original.recurrence_id is None:
++            return None
++        return super().process_scoped_update(original,event_update)
+--- a/app/module/calendar/source/CalendarSources.py
++++ b/app/module/calendar/source/CalendarSources.py
+@@ -12,6 +12,7 @@
+ from app.module.calendar.rrule.RecurrenceScopeProcessor import EventAction, ScopeResult
+ from app.module.calendar.source.CalendarSourceDb import CalendarSourceDb
+ from app.module.calendar.source.CalendarSourceIcsMirror import CalendarSourceIcsMirror
++from app.module.calendar.source.CalendarSourceLiveDav import discover, active
+ from app.utils import constants as cs
+ from app.utils import errors as err
+ from app.utils.exceptions import RequestException
+@@ -45,6 +46,17 @@
+         are read-only mirrors - their events are populated by the sync engine,
+         not by direct CRUD operations.
+         """
++        if active(calendar.user_uid):
++            raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
++
++        if calendar.id is not None and calendar.user_uid == "sogo-tests1@example.org" and calendar.name == "Radicale events (pilot)":
++            from app.module.calendar.source.CalendarSourceDavEventsPilot import CalendarSourceDavEventsPilot
++            return CalendarSourceDavEventsPilot(calendar)
++
++        if calendar.id is not None and calendar.user_uid == "sogo-tests1@example.org" and calendar.name == "Radicale tasks (pilot)":
++            from app.module.calendar.source.CalendarSourceDavPilot import CalendarSourceDavPilot
++            return CalendarSourceDavPilot(calendar)
++
+         if calendar.source_type == CalendarSourceType.LOCAL:
+             return CalendarSourceDb(self._db, calendar)
+ 
+@@ -86,6 +98,9 @@
+ 
+     def get_all(self, user_uid: str) -> list[CalendarSource]:
+         """Return a source for every calendar owned by, or shared with, user_uid."""
++        live = discover(user_uid)
++        if live is not None:
++            return live
+         owned: list[CalCalendar] = self._repo_calendar.find_all(user_uid)
+         shared: list[CalCalendar] = self._get_shared_calendars(user_uid)
+         return [self.get(cal) for cal in owned + shared]
+@@ -125,6 +140,9 @@
+         and calendars shared with "anyone" when user_uid shares the owner's mail domain
+         (see ShareCalendar.get_user_or_anyone).
+         """
++        live = discover(user_uid)
++        if live is not None:
++            return next((source for source in live if source.calendar.key == key), None)
+         cal = self._repo_calendar.find_by_key(user_uid, key)
+         if cal is None and self._share is not None:
+             candidate: CalCalendar | None = self._repo_calendar.find_by_key_only(key)
+--- a/app/module/contact/ModuleContact.py
++++ b/app/module/contact/ModuleContact.py
+@@ -116,6 +116,8 @@
+         """Resolve the source for an address book on which the acting user holds every one of ``rights``."""
+         source: ContactSource = self.get_addressbook(user, key, user_sources)
+         self._acl.check_permission(source.addressbook, user, *rights)
++        if not source.is_writable():
++            raise RequestException(error=err.ERROR_CONTACT_ADDRESSBOOK_NOT_SUPPORTED)
+         return source
+ 
+     def get_addressbook_rights(
+@@ -126,7 +128,10 @@
+         The owner has every right. Any other user gets the rights of their sogo6_acl entry (their own,
+         or the "anyone" one), each flag defaulting to False; no entry means no right at all.
+         """
+-        book: CardAddressBook = self.get_addressbook(user, key, user_sources).addressbook
++        source = self.get_addressbook(user, key, user_sources)
++        book: CardAddressBook = source.addressbook
++        if not source.is_writable():
++            return {name: name == RIGHT_VIEW for name in FULL_MODIFY_RIGHTS}
+         if book.user_uid == user.uid:
+             return dict(FULL_MODIFY_RIGHTS)
+         entry: AclEntry | None = self._share.get_user_or_anyone(user.uid, book.user_uid, key)
+@@ -321,7 +326,8 @@
+         contact.apply_defaults()
+         contact.addressbook_key = source.addressbook.require_key
+         contact.validate()
+-        contact.photos = self._save_files([], contact.photos)
++        if not getattr(source, 'inline_files', False):
++            contact.photos = self._save_files([], contact.photos)
+         try:
+             return source.insert_contact(contact)
+         except RequestException:
+@@ -340,7 +346,8 @@
+         contact_update.uid = existing.uid
+         contact_update.addressbook_key = existing.addressbook_key
+         contact_update.validate()
+-        contact_update.photos = self._save_files(existing.photos, contact_update.photos)
++        if not getattr(source, 'inline_files', False):
++            contact_update.photos = self._save_files(existing.photos, contact_update.photos)
+         try:
+             source.update_contact(contact_update)
+         except RequestException:
+@@ -348,7 +355,8 @@
+         except Exception as exc:
+             logger_contact.exception("Unexpected error updating contact %s", existing.key)
+             raise RequestException(error=err.ERROR_CONTACT_UPDATE_FAILED) from exc
+-        self._delete_dropped_files(existing.photos, contact_update.photos)
++        if not getattr(source, 'inline_files', False):
++            self._delete_dropped_files(existing.photos, contact_update.photos)
+ 
+     def create_contact(
+         self, user: User, addressbook_key: str, contact: CardContact,
+--- /dev/null
++++ b/app/module/contact/source/ContactSourceLiveDav.py
+@@ -0,0 +1,158 @@
++"""Direct CardDAV pilot; only the disposable validation book permits writes."""
++from copy import deepcopy
++from dataclasses import fields
++from datetime import datetime, timezone
++from uuid import uuid4, uuid5, NAMESPACE_URL
++from urllib.parse import urljoin
++import xml.etree.ElementTree as ET
++from flask import g
++from app.module.auth.PilotDavAccess import ROOT, HOME, active, request, writable, DENIED, UNAVAILABLE
++from app.module.contact.source.ContactSource import ContactSource
++from app.module.contact.model.CardAddressBook import CardAddressBook
++from app.module.contact.model.CardContact import CardContact
++from app.module.contact.model.enums.CardSourceType import CardSourceType
++from app.module.contact.serializer.CardContactDeserializerVcard import CardContactDeserializerVcard
++from app.module.contact.serializer.CardContactDeserializerVcard3 import CardContactDeserializerVcard3
++from app.module.contact.serializer.CardContactDeserializerVcard4 import CardContactDeserializerVcard4
++from app.module.contact.serializer.CardContactSerializerVcard3 import CardContactSerializerVcard3
++from app.module.contact.serializer.CardContactSerializerVcard4 import CardContactSerializerVcard4
++from app.module.contact.format.vcard.FormatEngineVcard import FormatEngineVcard as Codec
++from app.utils.db.Condition import Order
++from app.utils.exceptions import RequestException
++
++D='{DAV:}'; A='{urn:ietf:params:xml:ns:carddav}'
++PROPERTIES={
++    'display_name':'FN','first_name':'N','last_name':'N','middle_name':'N','prefix':'N','suffix':'N',
++    'nickname':'NICKNAME','organization':'ORG','department':'ORG','job_title':'TITLE','role':'ROLE',
++    'emails':'EMAIL','phones':'TEL','addresses':'ADR','urls':'URL','impp':'IMPP','photos':'PHOTO',
++    'categories':'CATEGORIES','birthday':'BDAY','birthday_yearless':'BDAY',
++    'anniversary':'ANNIVERSARY','anniversary_yearless':'ANNIVERSARY','geo':'GEO','note':'NOTE',
++    'public_key':'KEY','sound':'SOUND','timezone':'TZ',
++}
++MULTI={'EMAIL','TEL','ADR','URL','IMPP','PHOTO'}
++
++def discover(uid):
++    if not active(uid): return None
++    if hasattr(g,'pilot_carddav_sources'): return g.pilot_carddav_sources
++    response=request('PROPFIND',HOME,headers={'Depth':'1','Content-Type':'application/xml'},
++        data='<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/></d:prop></d:propfind>')
++    sources=[]
++    for item in ET.fromstring(response.content).findall(D+'response'):
++        prop=item.find('.//'+D+'prop')
++        if prop is None or prop.find('.//'+A+'addressbook') is None: continue
++        url=urljoin(ROOT,item.findtext(D+'href'))
++        book=CardAddressBook(user_uid=uid,name=prop.findtext(D+'displayname') or 'CardDAV',
++            key=str(uuid5(NAMESPACE_URL,url)),source_type=CardSourceType.CARDDAV,
++            is_default=writable(url,'contacts'))
++        sources.append(ContactSourceLiveDav(book,url))
++    g.pilot_carddav_sources=sources
++    return sources
++
++class ContactSourceLiveDav(ContactSource):
++    inline_files=True
++    def __init__(self,book,url):
++        super().__init__(book); self.url=url; self._seen={}; self._loaded=None
++
++    def is_writable(self): return writable(self.url,'contacts')
++    def _deny(self,*args,**kwargs): raise RequestException(error=DENIED)
++    save_addressbook=_deny
++    update_addressbook=_deny
++    delete_addressbook=_deny
++    insert_list=_deny
++    update_list=_deny
++    delete_list=_deny
++    def get_lists(self,*args,**kwargs): return []
++    def count_lists(self,*args,**kwargs): return 0
++    def get_list_by_key(self,*args,**kwargs): return None
++    def get_list_by_uid(self,*args,**kwargs): return None
++
++    def _decode(self,raw,href,etag):
++        if not etag or etag.startswith('W/') or len(Codec.split_items(raw))!=1:
++            raise RequestException(error=UNAVAILABLE)
++        if CardContactDeserializerVcard.is_group_card(raw): return None
++        version=CardContactDeserializerVcard.detect_version(raw)
++        parser=CardContactDeserializerVcard3() if version=='3.0' else CardContactDeserializerVcard4()
++        contact=parser.deserialize(raw)
++        if not contact.uid: raise RequestException(error=UNAVAILABLE)
++        contact.key=str(uuid5(NAMESPACE_URL,href+'#'+contact.uid))
++        contact.addressbook_key=self.addressbook.key
++        self._seen[contact.key]=(deepcopy(contact),raw,href,etag)
++        return contact
++
++    def _resources(self):
++        if self._loaded is not None: return self._loaded
++        response=request('REPORT',self.url,headers={'Depth':'1','Content-Type':'application/xml'},
++            data='<a:addressbook-query xmlns:d="DAV:" xmlns:a="urn:ietf:params:xml:ns:carddav"><d:prop><d:getetag/><a:address-data/></d:prop><a:filter/></a:addressbook-query>')
++        result=[]
++        for item in ET.fromstring(response.content).findall(D+'response'):
++            raw=item.findtext('.//'+A+'address-data')
++            if raw is None: continue
++            href=urljoin(self.url,item.findtext(D+'href'))
++            contact=self._decode(raw,href,item.findtext('.//'+D+'getetag'))
++            if contact is not None: result.append(contact)
++        self._loaded=result
++        return result
++
++    def get_contacts(self,search=None,offset=0,limit=0,sort_by=None,order=Order.ASC):
++        contacts=self._resources()
++        if search:
++            term=search.casefold()
++            contacts=[c for c in contacts if term in ' '.join(filter(None,[c.display_name,c.organization,c.note]+[e.value for e in c.emails])).casefold()]
++        field=sort_by if sort_by in ('display_name','first_name','last_name','organization') else 'display_name'
++        contacts=sorted(contacts,key=lambda c:(getattr(c,field) or '').casefold(),reverse=order==Order.DESC)
++        return contacts[offset:offset+limit] if limit else contacts[offset:]
++    def count_contacts(self,search=None): return len(self.get_contacts(search))
++    def get_contact_by_key(self,key): return next((c for c in self._resources() if c.key==key),None)
++    def get_contact_by_uid(self,uid): return next((c for c in self._resources() if c.uid==uid),None)
++
++    @staticmethod
++    def _serialize(contact):
++        serializer=CardContactSerializerVcard3() if contact.version=='3.0' else CardContactSerializerVcard4()
++        return serializer.serialize(contact)
++
++    def insert_contact(self,contact):
++        if not self.is_writable(): self._deny()
++        contact.apply_defaults(); contact.rev=datetime.now(timezone.utc)
++        href=self.url+str(uuid4())+'.vcf'
++        request('PUT',href,data=self._serialize(contact).encode(),headers={'If-None-Match':'*','Content-Type':'text/vcard; charset=utf-8'})
++        saved=request('GET',href)
++        self._loaded=None
++        return self._decode(saved.content.decode(),href,saved.headers.get('ETag'))
++
++    def update_contact(self,contact):
++        if not self.is_writable() or contact.key not in self._seen: self._deny()
++        original,raw,href,etag=self._seen[contact.key]
++        ignored={'addressbook_name','rev','updated_at'}
++        changed={f.name for f in fields(CardContact) if f.name not in ignored and getattr(contact,f.name)!=getattr(original,f.name)}
++        if changed-PROPERTIES.keys(): self._deny()
++        if not changed: return
++        properties={PROPERTIES[f] for f in changed}
++        if original.version=='3.0' and 'ANNIVERSARY' in properties:
++            properties.update({'X-ANNIVERSARY'})
++        generated=Codec.parse_item(self._serialize(contact))
++        lines=Codec.unfold(raw)
++        parsed=[Codec.parse_line(line) for line in lines]
++        result=[]
++        for prop in properties:
++            old=[line for line in parsed if line.name==prop]
++            # The UI cannot represent grouped labels/opaque parameters on edited list fields.
++            if prop in MULTI and any(line.group or set(line.params)-{'TYPE','PREF','VALUE','ENCODING','CHARSET'} for line in old):
++                self._deny()
++            if prop not in MULTI and len(old)>1: self._deny()
++            for line in generated:
++                if line.name!=prop: continue
++                line=deepcopy(line)
++                if prop not in MULTI and old:
++                    line.params={**old[0].params,**line.params};line.group=old[0].group
++                result.append(Codec.emit_line(line))
++        kept=[line for line,parsed_line in zip(lines,parsed) if parsed_line.name not in properties|{'REV','END'}]
++        kept.extend(result)
++        kept.extend(['REV:'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),'END:VCARD',''])
++        request('PUT',href,data='\r\n'.join(kept).encode(),headers={'If-Match':etag,'Content-Type':'text/vcard; charset=utf-8'})
++        self._loaded=None
++
++    def delete_contact(self,key):
++        if not self.is_writable() or key not in self._seen: self._deny()
++        _,_,href,etag=self._seen[key]
++        request('DELETE',href,headers={'If-Match':etag})
++        self._loaded=None;self._seen.pop(key,None)
+--- a/app/module/contact/source/ContactSources.py
++++ b/app/module/contact/source/ContactSources.py
+@@ -8,6 +8,7 @@
+ from app.module.contact.repository.RepositoryContact import RepositoryContact
+ from app.module.contact.repository.RepositoryContactList import RepositoryContactList
+ from app.module.contact.source.ContactSourceDb import SORTABLE_COLUMNS, ContactSourceDb
++from app.module.contact.source.ContactSourceLiveDav import discover, active
+ from app.utils import constants as cs
+ from app.utils import errors as err
+ from app.utils.db.Condition import Order
+@@ -64,6 +65,11 @@
+         Local books are served from the DB; user_sources is reserved for building the directory
+         source of a directory address book (the matching US_IS_ADDRESSBOOK source is picked from it).
+         """
++        if active(addressbook.user_uid):
++            source = next((s for s in discover(addressbook.user_uid) if s.addressbook.key == addressbook.key), None)
++            if source is None:
++                raise RequestException(error=err.ERROR_CONTACT_ADDRESSBOOK_NOT_SUPPORTED)
++            return source
+         if addressbook.source_type == CardSourceType.LOCAL:
+             return ContactSourceDb(self._db, addressbook)
+         # TODO directory: a non-LOCAL source builds a read-only ContactSourceDirectory from the
+@@ -103,11 +109,17 @@
+ 
+     def get_all(self, user_uid: str, user_sources: dict[str, UserSourceSettingsObj] | None = None) -> list[ContactSource]:
+         """Return a source for every address book owned by, or shared with, user_uid (directory later)."""
++        live = discover(user_uid)
++        if live is not None:
++            return live
+         owned: list[CardAddressBook] = self._repo_addressbook.find_all(user_uid)
+         return [self.get(book, user_sources) for book in owned + self._get_shared_addressbooks(user_uid)]
+ 
+     def get_default(self, user_uid: str) -> ContactSource | None:
+         """Return the default address book source for user_uid, or None if the user has none."""
++        live = discover(user_uid)
++        if live is not None:
++            return next((s for s in live if s.addressbook.is_default), None)
+         book: CardAddressBook | None = self._repo_addressbook.get_default_for_user(user_uid)
+         return self.get(book) if book is not None else None
+ 
+@@ -124,6 +136,9 @@
+         # prefix (a raw UUID never starts with it), so the branch is unambiguous: strip the prefix,
+         # look the source_uid up in user_sources, build a synthetic directory book. A plain UUID
+         # falls through to the DB lookup below. Blocked on the user source query primitive.
++        live = discover(user_uid)
++        if live is not None:
++            return next((s for s in live if s.addressbook.key == key), None)
+         book = self._repo_addressbook.find_by_key(user_uid, key)
+         if book is None and self._share is not None:
+             candidate: CardAddressBook | None = self._repo_addressbook.find_by_key_only(key)

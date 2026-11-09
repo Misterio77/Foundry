@@ -12,6 +12,8 @@ in {
   jj-hunk-tool = pkgs.callPackage ./jj-hunk-tool {};
   jellyfin-oidc = pkgs.callPackage ./jellyfin-oidc {};
   seerr-oidc = pkgs.callPackage ./seerr-oidc {};
+  sogo6-server = pkgs.callPackage ./sogo6/server.nix {};
+  sogo6-ui = pkgs.callPackage ./sogo6/ui.nix {};
   robohash = pkgs.callPackage ./robohash {};
   jellyfin-web-foundry = pkgs.callPackage ./jellyfin-web {};
   hax = pkgs.callPackage ./hax {};

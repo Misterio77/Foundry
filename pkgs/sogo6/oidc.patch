@@ -1,0 +1,2878 @@
+--- a/app/__init__.py
++++ b/app/__init__.py
+@@ -22,7 +22,7 @@
+ from app.utils.api.ApiBaseResponse import create_api_base_response, ApiBaseResponse
+ from app.utils import constants as cs
+ from app.utils.logger.logger import logger, logger_api
+-from app.utils.exceptions import AggravatedException
++from app.utils.exceptions import AggravatedException, RequestException
+ 
+ #Apis
+ from app.api import all_apis
+@@ -38,6 +38,9 @@
+     """
+     app = Flask(__name__)
+     app.config.from_object(process_config)
++    app.config.update(SESSION_COOKIE_NAME="sogo_oidc_pilot", SESSION_COOKIE_HTTPONLY=True,
++                      SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=False,
++                      TRUSTED_HOSTS=["localhost", "127.0.0.1", "proxy", "server"])
+     # Hard cap on HTTP request body size, applied at the WSGI layer (Werkzeug). Protects
+     # the server from oversized uploads before any application code reads the body into
+     # memory. See app.utils.constants.MAX_HTTP_REQUEST_BYTES for the rationale.
+@@ -54,7 +57,7 @@
+     register_route(flask_api, cs.API_BASIC, sogo_state)
+     register_route(admin_api, cs.API_ADMIN, sogo_state)
+ 
+-    CORS(app, resources={r"/api/*": {"origins": "*",
++    CORS(app, resources={r"/api/*": {"origins": "http://localhost:18081",
+                                      "allow_headers": ["authorization", "content-type"],
+                                         "expose_headers": ["X-Pagination"]}})
+     #TODO: remove CORS policy when we have a proper frontend
+@@ -185,7 +188,7 @@
+             anon_endpoints = {
+                 "user#Auth.v1_Auth.Auth.ApiAuthUserMode", 
+                 "user#Auth.v1_Auth.Auth.ApiAuthUserLogin",
+-                "user#Auth.v1_Auth.Auth.ApiAuthUserCallback",
++                "user#Auth.v1_Auth.Auth.ApiAuthUserCallbackOpenid",
+                 "user#System.v1_System.System.ApiSystem",
+             }
+             if (isinstance(g.user, UserAnonymous)
+@@ -255,7 +258,12 @@
+                     else:
+                         g.user_domain_settings = init_get_user_domain_settings(user)
+                         inter = InterfaceAuthUser(process_config, system_settings, g.user_domain_settings)
+-                        creds_ok, new_user = inter.check_user_and_fill_info(user)
++                        if request.endpoint == "user#Auth.v1_Auth.Auth.ApiAuthUserLogout":
++                            return None  # Logout must work even after upstream expiry/revocation.
++                        try:
++                            creds_ok, new_user = inter.check_user_and_fill_info(user)
++                        except RequestException as exc:
++                            return create_api_base_response(None, exc.error)
+                         if not creds_ok:
+                             return create_api_base_response(error=err.ERROR_USER_CREDS_NOT_VALID)
+                         else:
+--- a/app/api/v1/auth/AuthUserApi.py
++++ b/app/api/v1/auth/AuthUserApi.py
+@@ -1,7 +1,7 @@
+ from __future__ import annotations
+ from typing import TYPE_CHECKING, cast
+ 
+-from flask import g, request, Response
++from flask import g, redirect as flask_redirect, request, url_for, Response
+ from flask.views import MethodView
+ from flask.typing import ResponseReturnValue
+ from flask_smorest import Blueprint
+@@ -17,6 +17,29 @@
+ 
+ 
+ blp = Blueprint("Auth", __name__, url_prefix="/auth")
++
++#Endpoint of the SSO callback, by SOGO_D_AUTH_TYPE
++SSO_CALLBACK_ENDPOINTS = {
++    "openid": ".ApiAuthUserCallbackOpenid",
++}
++
++
++def build_sso_callback_url(kind:str, domain:str) -> str:
++    """
++    Return the full url of the SSO callback for this kind and domain.
++    This is the redirect_uri given to the identity provider.
++
++    :param kind: SOGO_D_AUTH_TYPE of the domain
++    :type kind: str
++    :param domain: Domain of the user
++    :type domain: str
++    :return: The callback url, empty if this kind has no callback (plain)
++    :rtype: str
++    """
++    endpoint = SSO_CALLBACK_ENDPOINTS.get(kind)
++    if endpoint is None:
++        return ""
++    return "http://localhost:18081" + url_for(endpoint, domain=domain, _external=False)
+ 
+ 
+ @blp.before_request
+@@ -44,10 +67,13 @@
+     def get(self, username:str, redirect:str) -> ResponseReturnValue:
+         """
+         Action, return the url location of the login system for this username.
+-        redirect is only useful for SSO that needs callback.
++        redirect is only useful for SSO that needs callback: UI url where the user is sent back after the login,
++        its origin must be in SOGO_D_OPENID_ALLOW_REDIRECT.
+         """
+         interface_api: InterfaceAuthUser = g.inter
+-        return interface_api.get_login_mech(username, redirect)
++        # build_sso_callback_url is the function used to construct the full SSO callback URL for the given kind and domain
++        # It is determined by the kind of SSO and the domain, ensuring the correct callback URL is used.
++        return interface_api.get_login_mech(username, redirect, build_sso_callback_url)
+ 
+ 
+ @blp.route("/login")
+@@ -62,24 +88,46 @@
+         """
+         Action, Authenticate the user for plain mode
+         """
+-        interface_api : InterfaceAuthUser = g.inter
+-        return interface_api.plain_login(new_data)
++        return {"error": "This pilot accepts OIDC only"}, 405
+ 
+ 
+-@blp.route("/callback/<string:domain>")
+-class ApiAuthUserCallback(MethodView):
++@blp.route("/callback/openid/<string:domain>")
++class ApiAuthUserCallbackOpenid(MethodView):
+     """
+-    Action, is the callback for SSO
++    Action, is the callback for openid SSO
+     """
+ 
+-    @blp.response(200)
+-    def get(self, new_data:dict) -> ResponseReturnValue:
++    @blp.response(302)
++    def get(self, domain:str) -> ResponseReturnValue:
+         """
+-        Action, Callback for this domain when doing SSO.
+-        The query parameters 
++        Action, Callback for this domain when doing openid SSO.
++        The query parameters are given by the openid server (code, or error and error_description)
++        Redirect to the UI url given to /mode with #token=<jwt token>, or #error=<error code>.
++        If the UI url is unknown (invalid state), return the error.
+         """
+         interface_api : InterfaceAuthUser = g.inter
+-        raise NotImplementedError("Not implemented yet")
++        ret = interface_api.sso_callback("openid", domain, request.args.to_dict(), build_sso_callback_url)
++        if isinstance(ret, str):
++            return flask_redirect(ret, 302)
++        return ret
++
++
++@blp.route("/complete")
++class ApiAuthPilotComplete(MethodView):
++    public_access = True
++
++    def post(self):
++        from app.module.auth.PilotSsoTicket import redeem
++        from app.utils.api.ApiBaseResponse import create_api_base_response
++        from app.utils.exceptions import RequestException
++        from app.utils import errors as err
++        if request.headers.get("Origin") != "http://localhost:18081":
++            return create_api_base_response(None, err.ERROR_SSO_INVALID_STATE)
++        try:
++            voucher = redeem((request.get_json(silent=True) or {}).get("ticket"))
++            return create_api_base_response({"jwt_token": voucher})
++        except RequestException as exc:
++            return create_api_base_response(None, exc.error)
+ 
+ 
+ @blp.route("/logout")
+--- a/app/api/v1/auth/schema/authUser.py
++++ b/app/api/v1/auth/schema/authUser.py
+@@ -5,9 +5,10 @@
+ 
+ class AuthUserGetMechSchema(Schema):
+     """
+-    Data schema of the result for /dynamic-form
++    Data schema of the query for /mode
+     """
+-    username = fields.String(required=True)
++    username = fields.String(load_default="", dump_default="")
++    #UI url where the user is sent back after a SSO login, its origin must be in SOGO_D_OPENID_ALLOW_REDIRECT
+     redirect = fields.String(load_default="", dump_default="")
+ 
+ class AuthUserBasicPostSchema(Schema):
+--- a/app/auth/User.py
++++ b/app/auth/User.py
+@@ -80,6 +80,8 @@
+         user.mail = user_session[cs.USER_EMAIL]
+         user.source_id = user_session[cs.USER_SRC_ID]
+         user.unit = user_session[cs.USER_UNIT]
++        user.auth_kind = user_session.get(cs.USER_AUTH_KIND, cs.AUTH_KIND_PLAIN)
++        user.oidc = user_session.get("oidc", {})
+         return user
+ 
+     def __init__(self, uid:str, password:str= "", cn:str= "", domain:str= "", is_domainless:bool = False):
+@@ -98,6 +100,7 @@
+         :type is_domainless: bool, optional
+         """
+         self.uid = uid
++        self.oidc: dict = {}
+         self.cn = cn
+         self.password = password
+         self.is_domainless = is_domainless
+@@ -105,6 +108,7 @@
+         self.anonymous = False
+         self.user_class = cs.USER_CLASS_USER
+         self.unit = "" # Depends on US_UNIT_FIELD, user will see others users with the same unit
++        self.auth_kind = cs.AUTH_KIND_PLAIN #SOGO_D_AUTH_TYPE used to log in. For SSO, password is the access token of the identity provider
+ 
+         uid_domain = get_domain_from_mail(uid)
+ 
+@@ -153,7 +157,9 @@
+             cs.USER_DOMAIN: self.domain,
+             cs.USER_EMAIL:  self.mail,
+             cs.USER_SRC_ID: self.source_id,
+-            cs.USER_UNIT: self.unit
++            cs.USER_UNIT: self.unit,
++            cs.USER_AUTH_KIND: self.auth_kind,
++            "oidc": self.oidc,
+         }
+ 
+         return ret
+--- a/app/auth/service/VoucherUserService.py
++++ b/app/auth/service/VoucherUserService.py
+@@ -237,32 +237,23 @@
+             raise BugException("sensitive data for user session is not a json") from e
+ 
+         user = User.init_from_user_session(user_data)
+-        # Update the last activity timestamp in both the hash and the sorted set
+-        new_last_seen = int(time.time())
+-        logger.debug("Updating last_activity for session %s: %s -> %s", session_id, user_session_data.get(cs.SESSION_LAST_SEEN), new_last_seen)
+-        cache.hashset(
+-            f"user_session:{session_id}",
+-            {cs.SESSION_LAST_SEEN: new_last_seen},
+-            ttl=0
+-        )
+-        cache.zset_add(
+-            cs.ZSET_USER_SESSIONS_ACTIVITY,
+-            f"user_session:{session_id}",
+-            new_last_seen,
+-        )
+-        # Keep the uid score index in sync.
+-        cache.zset_add(
+-            cs.ZSET_USER_SESSIONS_UID,
+-            f"user_session:{session_id}",
+-            string_to_sort_score(user.uid),
+-        )
+-        # Keep the domain score index in sync.
+-        cache.zset_add(
+-            cs.ZSET_USER_SESSIONS_DOMAIN,
+-            f"user_session:{session_id}",
+-            string_to_sort_score(user.domain),
+-        )
+-        logger.info("From voucher get user: %s", user)
++        redis_key = f"user_session:{session_id}"
++        # HSET alone could recreate a session deleted by a concurrent logout.
++        touched = cache.redis.eval('''
++            if redis.call('HGET', KEYS[1], ARGV[1]) ~= ARGV[2]
++                or redis.call('TTL', KEYS[1]) <= 0 then return 0 end
++            redis.call('HSET', KEYS[1], ARGV[3], ARGV[4])
++            redis.call('ZADD', KEYS[2], ARGV[4], KEYS[1])
++            redis.call('ZADD', KEYS[3], ARGV[5], KEYS[1])
++            redis.call('ZADD', KEYS[4], ARGV[6], KEYS[1])
++            return 1
++        ''', 4, redis_key, cs.ZSET_USER_SESSIONS_ACTIVITY, cs.ZSET_USER_SESSIONS_UID,
++            cs.ZSET_USER_SESSIONS_DOMAIN, cs.USER_UID, user.uid, cs.SESSION_LAST_SEEN,
++            int(time.time()), string_to_sort_score(user.uid), string_to_sort_score(user.domain))
+         cache.close()
+-
++        if not touched:
++            return UserAnonymous()
++        # Transient handles: excluded from both the encrypted payload and browser voucher.
++        user._session_redis_key = redis_key
++        user._session_fernet = session_fernet
+         return user
+--- a/app/config/settings/DomainSettings.py
++++ b/app/config/settings/DomainSettings.py
+@@ -81,7 +81,7 @@
+     SOGO_D_OPENID_REFRESH_ENABLE       = fields.Boolean(load_default=True, dump_default=True) # Allowed or not sogo to refresh token if the openid server has the mechanism
+     SOGO_D_OPENID_ENDSESSION_ENABLED   = fields.Boolean(load_default=False, dump_default=False) # Allowed or not sogo to logout from the openid server instead of just the webmail
+     SOGO_D_OPENID_FETCH_USER_PROFILE   = fields.Boolean(load_default=True, dump_default=True) # sogo will fetch the user profile to get the user's email. If no, directly fetch from the token.
+-    SOGO_D_OPENID_ALLOW_REDIRECT       = fields.List(fields.Url()) #List of UI redirect link that are allowed after the obtention of access_token. See openid flow pdf.
++    SOGO_D_OPENID_ALLOW_REDIRECT       = fields.List(fields.Url(schemes={'http','https'}, require_tld=False)) #List of UI origins (scheme://host[:port]) allowed as redirection after a SSO login.
+ 
+     #IF SOGO_D_AUTH_TYPE = 'saml2'
+     SOGO_D_SAML2_URL  = fields.Url(schemes={'http','https'}, require_tld=False) #TODO saml2 configuration....
+@@ -94,7 +94,7 @@
+     SOGO_D_LOGIN_CHECK_TIME_SPAN   = fields.Integer(load_default=600, dump_default=600,validate=validate.Range(min=5)) #Time span when user can do SOGO_D_LOGIN_CHECK_MAX_ATTEMPT failed login attempt
+     SOGO_D_LOGIN_CHECK_BLOCK_TIME  = fields.Integer(load_default=300, dump_default=300,validate=validate.Range(min=5)) #Time span where a user is forbidden to login after too many fail attempt.
+ 
+-    SOGO_D_PWD_RECOVERY = fields.Boolean(load_default=True, dump_default=True) #Enable or not users to set a method for password recovery
++    SOGO_D_PWD_RECOVERY = fields.Boolean(load_default=False, dump_default=False) #Enable or not users to set a method for password recovery
+     SOGO_D_PWD_RECOVERY_METHOD = fields.List(fields.String(), validate=validate.ContainsOnly(('secretQuestion', 'secondaryEmail', 'apiCall')))
+     SOGO_D_PWD_RECOVERY_FORCE = fields.Boolean(load_default=False, dump_default=False) #Force users to set a recovery method, overwrite SOGO_D_PWD_RECOVERY
+     SOGO_D_PWD_RECOVERY_DELAY = fields.Integer(load_default=86400, dump_default=86400,validate=validate.Range(min=0)) #Delay in seconds before the user can ask again for a password recovery, 0 means there's no limit
+@@ -125,7 +125,7 @@
+     SOGO_D_LOGIN_CHECK_MAX_ATTEMPT: int = 0
+     SOGO_D_LOGIN_CHECK_TIME_SPAN: int = 600
+     SOGO_D_LOGIN_CHECK_BLOCK_TIME: int = 300
+-    SOGO_D_PWD_RECOVERY: bool = True
++    SOGO_D_PWD_RECOVERY: bool = False
+     SOGO_D_PWD_RECOVERY_METHOD: list[str] = []
+     SOGO_D_PWD_RECOVERY_FORCE: bool = False
+     SOGO_D_PWD_RECOVERY_DELAY: int = 86400
+--- a/app/config/settings/ProcessSetting.py
++++ b/app/config/settings/ProcessSetting.py
+@@ -24,6 +24,10 @@
+ 
+     #Set you own secret key for production
+     SECRET_KEY: str = "90777fd15f122afad7f16f65895feaec5394b053847cb8beab51a7969b2ac75c"
++
++
++    #Flas CORS
++    CORS_ORIGINS: str = "*" #comma-separated list of allowed origins
+ 
+ 
+     #Flask smorest
+--- a/app/config/settings/UserSettings.py
++++ b/app/config/settings/UserSettings.py
+@@ -28,7 +28,7 @@
+     #Language #TODO do we need to validate available language here? Or this is just frontend work?
+     SOGO_U_LANGUAGE = fields.String(load_default="English", dump_default="English")
+     #Timezone #TODO the timezones depends of the OS system and may be incomplete -> read https://docs.python.org/3/library/zoneinfo.html
+-    SOGO_U_TIMEZONE = fields.String(load_default="UTC", dump_default="UTC", validate=validate.OneOf(TIMEZONES))
++    SOGO_U_TIMEZONE = fields.String(load_default="America/Sao_Paulo", dump_default="America/Sao_Paulo", validate=validate.OneOf(TIMEZONES))
+     #Python format -> https://docs.python.org/3.6/library/datetime.html#strftime-strptime-behavior
+     #React format -> https://tc39.es/ecma262/multipage/numbers-and-dates.html#sec-date-time-string-format 
+     SOGO_U_TIME_FORMAT = fields.String(load_default="HH:mm", dump_default="HH:mm") #Value must be react-ready format
+--- a/app/gunicorn.conf.py
++++ b/app/gunicorn.conf.py
+@@ -6,12 +6,13 @@
+ import os
+ 
+ workers = int(os.environ.get("GUNICORN_WORKERS", "4"))
++timeout = 120
+ bind = os.environ.get("GUNICORN_BIND", "0.0.0.0:5000")
+ loglevel = os.environ.get("GUNICORN_LOGLEVEL", "warning")
+ 
+ 
+ # Enable access logging
+-accesslog = "-"  # Log to stdout
++accesslog = None  # Authorization codes must not appear in access logs.
+ errorlog = "-"   # Log errors to stdout
+ 
+ access_log_format = '%(t)s: pid=%(p)s %(h)s %(l)s "%(r)s" code=%(s)s size(bytes)=%(B)s time(ms)=%(M)s "%(a)s"'
+--- a/app/interface/auth/InterfaceAuthUser.py
++++ b/app/interface/auth/InterfaceAuthUser.py
+@@ -1,11 +1,13 @@
+ from __future__ import annotations
+-from typing import TYPE_CHECKING
++from typing import TYPE_CHECKING, Callable
+ 
+ from app.auth.User import UserAnonymous
+ from app.config.settings.SystemSettings import SystemSettingsObj, SystemSettings
+ from app.config.settings.DomainSettings import AuthSettingsObj, AuthSettings, UserSourceSettings, UserSourceSettingsObj, MailSettings, MailSettingsObj
+ from app.config.settings.UserSettings import UserGeneralSettings
+-from app.module.auth.ModuleAuth import ModuleAuth
++from app.module.admin.ModuleAdminConfig import ModuleAdminConfig
++from app.module.auth.ModuleAuth import ModuleAuth, build_ui_redirect_url
++from app.module.auth.PilotSsoTicket import issue
+ from app.module.auth.ModuleUserSource import ModuleUserSource
+ from app.module.calendar.ModuleCalendar import ModuleCalendar
+ from app.module.contact.ModuleContact import ModuleContact
+@@ -44,19 +46,21 @@
+         self._module_calendar: ModuleCalendar = ModuleCalendar(process)
+         self._module_contact: ModuleContact = ModuleContact(process)
+ 
+-    def get_login_mech(self, user_uid:str, redirect:str) -> tuple[dict, int]:
++    def get_login_mech(self, user_uid:str, redirect:str, callback_url_builder:Callable[[str, str], str]) -> tuple[dict, int]:
+         """
+         Get the login mech from a uid
+ 
+         :param user_uid: The user unique ID
+         :type user_uid: str
+-        :param redirect: The redirect URL after authentication
++        :param redirect: UI url where the user is sent back after a SSO login, must match SOGO_D_OPENID_ALLOW_REDIRECT
+         :type redirect: str
++        :param callback_url_builder: Function (kind, domain) -> url of the API callback for SSO
++        :type callback_url_builder: Callable[[str, str], str]
+         :return: Tuple containing the API response dict and HTTP status code
+         :rtype: tuple[dict, int]
+         """
+         try:
+-            ret = self.module_auth.get_login_mech(user_uid)
++            ret = self.module_auth.get_login_mech(user_uid, redirect, callback_url_builder)
+         except RequestException as e:
+             return create_api_base_response(str(e), e.error)
+         return create_api_base_response(ret)
+@@ -97,26 +101,78 @@
+         if not success:
+             return create_api_base_response(None, err.ERROR_LOGIN_FAILED)
+ 
+-        # Generate the voucher for the authenticated user
+-        ret = self.module_auth.generate_voucher_from_user(user)
+-
+-        try:
+-            if not self.module_user_profile.is_user_profile_present(uid):
+-                self.module_user_profile.create_user_profile(user)
+-                raw_gen: dict = self.module_user_profile.get_partial_user_preferences(uid, UserGeneralSettings.subparent.lower())
+-                user_tz: str = raw_gen.get(UserGeneralSettings.subparent, {}).get("SOGO_U_TIMEZONE", "UTC")
+-                personal_calendar = self._module_calendar.create_personal_calendar(uid, tz=user_tz)
+-                personal_addressbook = self._module_contact.create_personal_addressbook(uid)
+-                # Update the folders column with the personal calendar and addressbook keys
+-                if personal_calendar.key and personal_addressbook.key:
+-                    self.module_user_profile.update_user_folders(uid, personal_calendar.key, personal_addressbook.key)
+-                module_mail = ModuleMail(user, MailSettingsObj(self.default_domain[MailSettings.subparent]), self.process)
+-                module_mail.create_special_folders_if_not_exist(cs.DEFAULT_IDENTITY_KEY_VALUE)
++        try:
++            self._onboard_user_if_needed(user)
+         except RequestException as ex:
+             logger_api.error("Request exception when onboarding user %s: %s", uid, str(ex))
+             return create_api_base_response(None, ex.error)
+ 
++        # Generate the voucher once the user is onboarded: no session is created if the onboarding failed
++        ret = self.module_auth.generate_voucher_from_user(user)
+         return create_api_base_response(ret)
++
++    def _onboard_user_if_needed(self, user:User) -> None:
++        """
++        On first login, create the user profile, personal calendar, personal addressbook and special mail folders
++
++        :param user: Authenticated user
++        :type user: User
++        :raises RequestException: If the onboarding failed
++        """
++        uid = user.uid
++        if self.module_user_profile.is_user_profile_present(uid):
++            return
++        #Settings of the user's domain (default ones if the domain has none): profile defaults, mail server...
++        user_domain_settings: dict = ModuleAdminConfig(self.process).get_one_domain_setting(user.domain)["settings"]
++        module_user_profile = ModuleUserProfile(self.process, user_domain_settings)
++        module_user_profile.create_user_profile(user)
++        raw_gen: dict = module_user_profile.get_partial_user_preferences(uid, UserGeneralSettings.subparent.lower())
++        user_tz: str = raw_gen.get(UserGeneralSettings.subparent, {}).get("SOGO_U_TIMEZONE", "UTC")
++        personal_calendar = self._module_calendar.create_personal_calendar(uid, tz=user_tz)
++        personal_addressbook = self._module_contact.create_personal_addressbook(uid)
++        # Update the folders column with the personal calendar and addressbook keys
++        if personal_calendar.key and personal_addressbook.key:
++            module_user_profile.update_user_folders(uid, personal_calendar.key, personal_addressbook.key)
++        # This pilot must not provision folders in the real mailbox during first login.
++        if user.auth_kind == cs.AUTH_KIND_PLAIN:
++            module_mail = ModuleMail(user, MailSettingsObj(user_domain_settings[MailSettings.subparent]), self.process)
++            module_mail.create_special_folders_if_not_exist(cs.DEFAULT_IDENTITY_KEY_VALUE)
++
++    def sso_callback(self, kind:str, domain:str, callback_data:dict, callback_url_builder:Callable[[str, str], str]) -> str|tuple[dict, int]:
++        """
++        Authenticate the user with the data sent by the identity provider, then send the user back to the UI url
++        given to /auth/mode (kept with the state), with the result in the fragment:
++        - success: <ui url>#token=<jwt token>
++        - failure: <ui url>#error=<error code>
++        If the UI url is unknown (state missing, expired, already used...), the error is returned as an API response.
++
++        :param kind: Kind of SSO of the callback (openid, saml2...)
++        :type kind: str
++        :param domain: Domain given in the callback url
++        :type domain: str
++        :param callback_data: Data received on the callback
++        :type callback_data: dict
++        :param callback_url_builder: Function (kind, domain) -> url of the API callback for SSO
++        :type callback_url_builder: Callable[[str, str], str]
++        :return: The UI url to redirect to, or the API response and HTTP status code
++        :rtype: str|tuple[dict, int]
++        """
++        try:
++            user, _ = self.module_auth.get_user_from_sso_callback(kind, domain, callback_data, callback_url_builder)
++            try:
++                self._onboard_user_if_needed(user)
++            except RequestException as ex:
++                logger_api.error("Request exception when onboarding user %s: %s", user.uid, str(ex))
++                raise
++            #Generated once the user is onboarded: no session is created if the onboarding failed
++            ret = self.module_auth.generate_voucher_from_user(user)
++        except RequestException as e:
++            ui_redirect = self.module_auth.sso_ui_redirect
++            if not ui_redirect:
++                return create_api_base_response(str(e), e.error)
++            return build_ui_redirect_url(ui_redirect, {"error": e.error.c})
++
++        return build_ui_redirect_url(self.module_auth.sso_ui_redirect, {"ticket": issue(ret["jwt_token"])})
+ 
+     def check_user_and_fill_info(self, user:User) -> tuple[bool, User]:
+         """
+@@ -128,7 +184,16 @@
+         :return: True if the user credentials are ok
+         :rtype: bool
+         """
+-        success, user_found, module_us = self._check_login(user.uid, user.password)
++        if user.auth_kind != cs.AUTH_KIND_PLAIN:
++            #SSO: the access token must still be valid on the identity provider, then the user must still exist in its user source.
++            #default_domain is the settings of the domain of the user here (see before_request)
++            auth_settings = AuthSettingsObj(self.default_domain[AuthSettings.subparent])
++            module_us = ModuleUserSource.init_from_domain_settings(self.default_domain)
++            success = (self.module_auth.check_sso_access_token(user, auth_settings)
++                       and module_us.check_user_without_password(user))
++            user_found = user
++        else:
++            success, user_found, module_us = self._check_login(user.uid, user.password)
+         if success:
+             self.module_user_profile.get_user_profile(user_found)
+             return True, user_found
+@@ -147,5 +212,8 @@
+             self.module_auth.logout_user(voucher_data)
+         except RequestException as e:
+             return create_api_base_response(None, e.error)
+-        return create_api_base_response(None)
+-
++        # This pilot has one fixed IdP. No token hints or redirect parameters enter the URL.
++        return create_api_base_response({
++            "logout_url": "https://auth.m7.rs/application/o/sogo6-oidc-pilot/end-session/",
++        })
++
+--- a/app/interface/user/InterfaceUserProfile.py
++++ b/app/interface/user/InterfaceUserProfile.py
+@@ -6,6 +6,7 @@
+ from app.config.db import tables as tbl
+ from app.config.settings.DomainSettings import get_all_domain_schemas, UserSourceSettings
+ from app.module.user.ModuleUserProfile import ModuleUserProfile
++from app.module.auth.PilotOidcPicture import oidc_picture
+ from app.utils.api.ApiBaseResponse import create_api_base_response
+ from app.utils.exceptions import BugException, RequestException
+ from app.utils import errors as err
+@@ -41,7 +42,7 @@
+         :return: 
+         :rtype: tuple[dict, int]
+         """
+-        data: dict = {}
++        data: dict = {"picture": oidc_picture(self.user.oidc.get("picture"))}
+ 
+         #User accounts
+         try:
+--- a/app/manager/cache/ClientRedis.py
++++ b/app/manager/cache/ClientRedis.py
+@@ -150,6 +150,32 @@
+         logger_cache.info("Get no value for key '%s'", key)
+         return None
+ 
++    def pop(self, key: str, expected_type: Type[str]|Type[list]|Type[dict]) -> str|list|dict|None:
++        """
++        Get the value stored in redis and delete it, atomically (GETDEL, needs REDIS 6.2).
++        Useful for single use values, only one caller can get it.
++
++        :param key: key name of the value
++        :type key: str
++        :param expected_type: type of value expected
++        :type expected_type: Type[str] | Type[list] | Type[dict]
++        :raises BugException: If expecting a list or dict but the value is not a json
++        :return: The value or None if the key does not exist.
++        :rtype: str|list|dict|None
++        """
++        result_str = cast(str|None, self.redis.getdel(key))
++        if result_str is None:
++            logger_cache.info("Pop no value for key '%s'", key)
++            return None
++        logger_cache.info("Pop cached value '%s' for key '%s'", result_str, key)
++        if expected_type == str:
++            return result_str
++        try:
++            result: list|dict = json_loads(result_str)
++        except (TypeError, JSONDecodeError) as e:
++            raise BugException("list/dict stored in redis is not a Json", err.ERROR_CACHE_DATA_NOT_JSON) from e
++        return result
++
+     def hashset(self, key:str, data: dict, ttl: int) -> bool:
+         """
+         Create or update a hash in redis.
+--- a/app/manager/ldap/ClientLdap.py
++++ b/app/manager/ldap/ClientLdap.py
+@@ -291,6 +291,9 @@
+ 
+     def check_login(self, username: str, password: str, domain:str) -> tuple[bool, dict, dict[str, list[str]]]:
+         """Check the user credentials"""
++        #An empty password is an unauthenticated bind, refused by the server with an error instead of invalid credentials
++        if not password:
++            return False, {}, {}
+ 
+         #Create the base dn
+         base_dn = self._get_dn_for_user(username, domain)
+--- a/app/manager/mail/ClientImap.py
++++ b/app/manager/mail/ClientImap.py
+@@ -9,7 +9,7 @@
+ from logging import WARNING
+ import re
+ from socket import timeout as sock_timeout, gaierror
+-from ssl import SSLError
++from ssl import SSLError, create_default_context
+ 
+ from app.utils.exceptions import RequestException, BugException
+ from app.utils.logger.logger import logger_imap
+@@ -365,10 +365,10 @@
+ 
+             elif self.encryption == cs.SOCKET_ENC_EXPLICIT_TLS:
+                 self.connection = imaplib.IMAP4(self.server, self.port)
+-                self.connection.starttls()
++                self.connection.starttls(ssl_context=create_default_context())
+ 
+             elif self.encryption == cs.SOCKET_ENC_IMPLICIT_TLS:
+-                self.connection = imaplib.IMAP4_SSL(self.server, self.port)
++                self.connection = imaplib.IMAP4_SSL(self.server, self.port, ssl_context=create_default_context())
+             else:
+                 raise BugException(f"Unknown encryption given {self.encryption}")
+             self.connected = True
+--- a/app/manager/outgoing/ClientSmtp.py
++++ b/app/manager/outgoing/ClientSmtp.py
+@@ -3,7 +3,7 @@
+ import smtplib
+ from email.message import Message
+ from socket import timeout as sock_timeout, gaierror
+-from ssl import SSLError
++from ssl import SSLError, create_default_context
+ import base64
+ from logging import WARNING
+ 
+@@ -44,15 +44,13 @@
+                 self.connection = smtplib.SMTP(self.server, self.port)
+             elif self.encryption == cs.SOCKET_ENC_EXPLICIT_TLS:
+                 self.connection = smtplib.SMTP(self.server, self.port)
+-                self.connection.starttls()
++                self.connection.starttls(context=create_default_context())
+             elif self.encryption == cs.SOCKET_ENC_IMPLICIT_TLS:
+-                self.connection = smtplib.SMTP_SSL(self.server, self.port) #TODO check
++                self.connection = smtplib.SMTP_SSL(self.server, self.port, context=create_default_context())
+             else:
+                 raise BugException(f"Unknown encryption given: {self.encryption}")
+ 
+             if self.connection:
+-                if logger_mail_outgoing.level < WARNING:
+-                    self.connection.set_debuglevel(1) #Add smtplib log only if the logger is below warning
+                 self.connection.ehlo()
+                 logger_mail_outgoing.info(self.connection.esmtp_features)
+ 
+@@ -84,6 +82,7 @@
+         if self.connection is None:
+             raise BugException("Cannot login: not connected to SMTP server", err.ERROR_SMTP_FAILED)
+ 
++        self.authenticated = False
+         logger_mail_outgoing.info("Logging in as %s using auth_mech=%s", username, self.auth_mech)
+ 
+         try:
+@@ -96,17 +95,20 @@
+                 credentials = base64.b64encode(
+                     f"{username}\x00{authcid}\x00{password}".encode()
+                 ).decode()
+-                self.connection.docmd("AUTH", f"PLAIN {credentials}") #TODO add SecretString (in ldap branche) to protect crendetials to be logged
++                code, reply = self.connection.docmd("AUTH", f"PLAIN {credentials}")
++                if code != 235:
++                    raise smtplib.SMTPAuthenticationError(code, reply)
+ 
+             elif self.auth_mech == "xoauth2":
+                 auth_string = f"user={username}\x01auth=Bearer {password}\x01\x01"
+-                credentials = base64.b64encode(auth_string.encode()).decode()
+-                self.connection.docmd("AUTH", f"XOAUTH2 {credentials}")
++                # Long JWTs can fail in the SMTP command's initial-response form.
++                self.connection.auth("XOAUTH2", lambda challenge: auth_string if not challenge else "",
++                                     initial_response_ok=False)
+ 
+             elif self.auth_mech == "oauthbearer":
+                 auth_string = f"n,a={username},\x01host={self.server}\x01port={self.port}\x01auth=Bearer {password}\x01\x01"
+-                credentials = base64.b64encode(auth_string.encode()).decode()
+-                self.connection.docmd("AUTH", f"OAUTHBEARER {credentials}")
++                self.connection.auth("OAUTHBEARER", lambda challenge: auth_string if not challenge else "\x01",
++                                     initial_response_ok=False)
+ 
+             else:
+                 raise BugException(f"Unsupported SMTP authentication mechanism: {self.auth_mech}", err.ERROR_SMTP_UNKNWON_AUTH_MECH)
+@@ -115,8 +117,9 @@
+             logger_mail_outgoing.info("Successfully authenticated to SMTP server as %s", username)
+ 
+         except smtplib.SMTPAuthenticationError as e:
+-            logger_mail_outgoing.error("SMTP authentication error for %s: %s", username, e)
+-            raise RequestException(str(e), err.ERROR_SMTP_UNAUTHORIZED) from e
++            self.authenticated = False
++            logger_mail_outgoing.error("SMTP authentication rejected (code %s)", e.smtp_code)
++            raise RequestException(error=err.ERROR_SMTP_UNAUTHORIZED) from e
+         except smtplib.SMTPResponseException as e:
+             logger_mail_outgoing.error("SMTP response error for %s: %s", username, e)
+             raise RequestException(str(e), err.ERROR_SMTP_RESPONSE_ERROR) from e
+--- /dev/null
++++ b/app/module/auth/IdentityProvider.py
+@@ -0,0 +1,86 @@
++from __future__ import annotations
++from abc import ABC, abstractmethod
++from dataclasses import dataclass, field
++from typing import TYPE_CHECKING
++
++if TYPE_CHECKING:
++    from app.config.settings.DomainSettings import AuthSettingsObj
++
++
++@dataclass
++class IdentityProviderUserInfo:
++    """
++    Identity of a user, as returned by an identity provider after a successful authentication
++    """
++    mail: str #Mail of the user, used to match the user in the user sources
++    claims: dict = field(default_factory=dict) #Raw data given by the identity provider (openid user info, saml attributes...)
++    access_token: str = "" #Token given by the identity provider, used to authenticate on the mail servers (xoauth2)
++    oidc: dict = field(default_factory=dict) #Server-side token lifecycle metadata; never a voucher claim.
++
++
++class IdentityProvider(ABC):
++    """
++    Abstract class for all SSO identity providers (openid, saml...).
++
++    The flow is always the same:
++    1. get_login_location: url where the UI must send the user to log in
++    2. The identity provider calls back the API (see /auth/callback/<kind>/<domain>)
++    3. authenticate_from_callback: check the callback data and return the user identity
++    4. check_access_token: on every request of the user, check the token given at the login is still valid
++
++    The provider generates the anti CSRF state in get_login_location and checks it in authenticate_from_callback.
++    The UI url given in get_login_location is kept with the state, ui_redirect gives it back once the state is read
++    on the callback, even if the authentication then failed.
++    """
++
++    kind: str = "" #Must match SOGO_D_AUTH_TYPE
++
++    def __init__(self, auth_settings: AuthSettingsObj, callback_url: str):
++        """
++        Initialize the identity provider
++
++        :param auth_settings: Authentication settings of the domain
++        :type auth_settings: AuthSettingsObj
++        :param callback_url: API url called by the identity provider after the user logged in
++        :type callback_url: str
++        """
++        self.auth_settings = auth_settings
++        self.callback_url = callback_url
++        self.ui_redirect = "" #UI url kept with the state, set by authenticate_from_callback once the state is read
++
++    @abstractmethod
++    def get_login_location(self, ui_redirect: str) -> str:
++        """
++        Return the url of the identity provider where the user must log in.
++        The state the identity provider must send back on the callback is generated and kept here, with ui_redirect.
++
++        :param ui_redirect: UI url where the user is sent back after the callback, already checked
++        :type ui_redirect: str
++        :return: The login url
++        :rtype: str
++        """
++
++    @abstractmethod
++    def authenticate_from_callback(self, callback_data: dict) -> IdentityProviderUserInfo:
++        """
++        Check the data sent by the identity provider on the callback (state included) and return the user identity.
++        Set ui_redirect as soon as the state is read.
++
++        :param callback_data: Data received on the callback (query parameters, form...)
++        :type callback_data: dict
++        :raises RequestException: If the state is invalid or the authentication failed
++        :return: The user identity
++        :rtype: IdentityProviderUserInfo
++        """
++
++    @abstractmethod
++    def check_access_token(self, access_token: str) -> bool:
++        """
++        Check that the access token given by authenticate_from_callback is still valid on the identity provider
++        (not expired, not revoked, user not disabled...).
++
++        :param access_token: Access token of the user
++        :type access_token: str
++        :return: True if the token is still valid
++        :rtype: bool
++        """
+--- a/app/module/auth/ModuleAuth.py
++++ b/app/module/auth/ModuleAuth.py
+@@ -1,24 +1,74 @@
+ from __future__ import annotations
+-from typing import TYPE_CHECKING
++from typing import TYPE_CHECKING, Callable, Type
++from urllib.parse import urlencode, urlsplit, urlunsplit
++import json
++from app.utils import constants as cs
+ 
+ 
+ from app.auth.User import User
+ from app.auth.service.VoucherUserService import VoucherUserService
+ from app.config.db import tables as tbl
+ from app.config.settings.DomainSettings import AuthSettings, AuthSettingsObj, UserSourceSettings, UserSourceSettingsObj
++from app.utils.module.importManager import import_and_instantiate_manager
++from app.utils.logger.logger import logger_auth
++from app.module.auth.IdentityProvider import IdentityProvider
++from app.module.auth.ModuleUserSource import ModuleUserSource
++from app.module.auth.OpenIDProvider import OpenIDProvider
+ from app.service import sogo_cache
+ from app.utils.db.Condition import EqualCondition
++from app.utils import errors as err
+ from app.utils.exceptions import RequestException
++from app.utils.logger.logger import logger_auth
+ from app.utils.strings import get_domain_from_mail
+-from app.utils.module.importManager import import_and_instantiate_manager
+ 
+ if TYPE_CHECKING:
+-    from app.config.settings.DomainSettings import AuthSettingsObj, UserSourceSettingsObj
+     from app.config.settings.SystemSettings import SystemSettingsObj
+     from app.config.settings.ProcessSetting import ProcessSetting
+     from app.manager.db.ClientSQL import ClientSQL
+ 
+-class ModuleAuth:
++#Identity providers for SSO, by SOGO_D_AUTH_TYPE
++IDENTITY_PROVIDERS: dict[str, Type[IdentityProvider]] = {
++    OpenIDProvider.kind: OpenIDProvider,
++}
++#Domain used in the SSO callback url when there is no domain (SOGO_S_DOMAINLESS_LOGIN)
++SSO_NO_DOMAIN = "none"
++
++
++def _get_origin(url:str) -> str:
++    """
++    Return the origin (scheme://host[:port]) of an url, lower case, empty if the url is not http(s)
++
++    :param url: The url
++    :type url: str
++    :return: The origin or empty string
++    :rtype: str
++    """
++    try:
++        parts = urlsplit(url.strip())
++    except ValueError:
++        return ""
++    if parts.scheme.lower() not in ("http", "https") or not parts.netloc:
++        return ""
++    return f"{parts.scheme}://{parts.netloc}".lower()
++
++
++def build_ui_redirect_url(ui_redirect:str, params:dict) -> str:
++    """
++    Put the parameters in the fragment of the UI url (its own fragment is replaced, its query is kept).
++    The fragment is never sent to a server nor in the Referer header, so the jwt token does not end in access logs.
++
++    :param ui_redirect: UI url
++    :type ui_redirect: str
++    :param params: Parameters to put in the fragment
++    :type params: dict
++    :return: The full url
++    :rtype: str
++    """
++    parts = urlsplit(ui_redirect)
++    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, urlencode(params)))
++
++
++class ModuleAuth:  # pylint: disable=too-many-instance-attributes
+     """
+     Module to handle authentication. Thos module only take one user source.
+     """
+@@ -44,6 +94,9 @@
+         self.domainless     = system.SOGO_S_DOMAINLESS_LOGIN
+         self.known_domains  = system.SOGO_S_KNOWN_DOMAIN
+         self.reject_unknown = system.SOGO_S_REJECT_UNKNOWN_DOMAIN
++
++        #UI url of the last SSO callback, known once the identity provider has read its state, even if the login failed
++        self.sso_ui_redirect = ""
+ 
+         self.default_auth = default_auth_settings
+         self.default_us = default_us_source
+@@ -81,12 +134,11 @@
+         domain_auth_settings = self.default_auth
+         domain_user_source = self.default_us
+         if domain and self.do_domains:
+-            fake_process_settings_db = self.process_settings.SOGO_P_DB_TYPE
+-            sogo_db_type = f"Client{fake_process_settings_db}"
+-
+-            sogo_db_manager: ClientSQL = import_and_instantiate_manager(module_path="app.manager.db",
+-                                                            module_and_class_name=sogo_db_type,
+-                                                            module_args=self.process_settings.get_db_settings())
++            sogo_db_manager: ClientSQL = import_and_instantiate_manager(
++                module_path="app.manager.db",
++                module_and_class_name=f"Client{self.process_settings.SOGO_P_DB_TYPE}",
++                module_args=self.process_settings.get_db_settings(),
++            )
+             condition = EqualCondition(tbl.COL_DOMAIN_NAME.name, domain)
+             sogo_db_manager.connect()
+             result = list(sogo_db_manager.select_from_table(tbl.TABLE_DOMAIN,
+@@ -101,25 +153,181 @@
+ 
+         return domain_auth_settings, domain_user_source
+ 
+-    def get_login_mech(self, uid:str) -> dict:
++    def _check_callback_domain(self, domain:str) -> str:
++        """
++        Check the domain given in a SSO callback url, the same way _check_domain does for a uid
++
++        :param domain: The domain from the callback url
++        :type domain: str
++        :raises RequestException: When domain is not in known domains and unknown domains are rejected
++        :return: empty string or the domain
++        :rtype: str
++        """
++        if self.domainless:
++            return ""
++        if self.reject_unknown and domain not in self.known_domains:
++            raise RequestException("Domain given for auth is not registered in SOGO_S_REJECT_UNKNOWN_DOMAIN")
++        return domain
++
++    @staticmethod
++    def is_ui_redirect_allowed(ui_redirect:str, auth_settings:AuthSettingsObj) -> bool:
++        """
++        Check that the origin of the UI url is exactly one of SOGO_D_OPENID_ALLOW_REDIRECT of the domain
++
++        :param ui_redirect: UI url given by the UI
++        :type ui_redirect: str
++        :param auth_settings: Authentication settings of the domain
++        :type auth_settings: AuthSettingsObj
++        :return: True if the UI url can be used as redirection
++        :rtype: bool
++        """
++        allowed_origins = {_get_origin(url) for url in auth_settings.SOGO_D_OPENID_ALLOW_REDIRECT} - {""}
++        origin = _get_origin(ui_redirect)
++        return bool(origin) and origin in allowed_origins
++
++    @staticmethod
++    def _get_identity_provider(auth_settings:AuthSettingsObj, callback_url:str) -> IdentityProvider|None:
++        """
++        Return the identity provider for this domain, None if the authentication is not a SSO (plain)
++
++        :param auth_settings: Authentication settings of the domain
++        :type auth_settings: AuthSettingsObj
++        :param callback_url: API url called by the identity provider after the user logged in
++        :type callback_url: str
++        :return: The identity provider or None
++        :rtype: IdentityProvider|None
++        """
++        provider_class = IDENTITY_PROVIDERS.get(auth_settings.SOGO_D_AUTH_TYPE)
++        if provider_class is None:
++            return None
++        return provider_class(auth_settings, callback_url)
++
++    def get_login_mech(self, uid:str, ui_redirect:str, callback_url_builder:Callable[[str, str], str]) -> dict:
+         """
+         Get the login mechanism for this uid
+ 
+         :param uid: username/mail/uid of the user
+         :type uid: str
++        :param ui_redirect: UI url where the user is sent back after a SSO login, ignored for plain
++        :type ui_redirect: str
++        :param callback_url_builder: Function (kind, domain) -> url of the API callback for SSO
++        :type callback_url_builder: Callable[[str, str], str]
++        :raises RequestException: If the domain is invalid or ui_redirect is not allowed for a SSO
+         :return: Dictionary containing the authentication kind and location
+         :rtype: dict
+         """
+-        domain = self._check_domain(uid)
++        if uid:
++            domain = self._check_domain(uid)
++        elif self.domainless:
++            domain = ""
++        elif self.reject_unknown and len(self.known_domains) == 1:
++            domain = self.known_domains[0]
++        else:
++            raise RequestException("Direct SSO requires one configured authentication domain")
+         domain_auth_settings, _ = self._get_domain_auth_and_user_source_settings(domain)
+-
+-        #TODO Only work for plain login, do it properly for openid,cas...
++        kind = domain_auth_settings.SOGO_D_AUTH_TYPE
++        if not uid and kind != "openid":
++            raise RequestException("Direct SSO requires an OIDC provider")
++
++        location = ""
++        callback_url = callback_url_builder(kind, domain) # or SSO_NO_DOMAIN)
++        provider = self._get_identity_provider(domain_auth_settings, callback_url)
++        if provider:
++            if not self.is_ui_redirect_allowed(ui_redirect, domain_auth_settings):
++                logger_auth.warning("SSO login asked with a redirect not in SOGO_D_OPENID_ALLOW_REDIRECT: %s", ui_redirect)
++                raise RequestException(error=err.ERROR_SSO_REDIRECT_NOT_ALLOWED)
++            location = provider.get_login_location(ui_redirect)
++
+         ret = {
+-            "kind": domain_auth_settings.SOGO_D_AUTH_TYPE,
++            "kind": kind,
+             "SOGO_D_PWD_RECOVERY": domain_auth_settings.SOGO_D_PWD_RECOVERY,
+-            "location": ""
++            "location": location
+         }
+         return ret
++
++    def get_user_from_sso_callback(self, kind:str, domain:str, callback_data:dict,
++                                   callback_url_builder:Callable[[str, str], str]) -> tuple[User, dict[str, UserSourceSettingsObj]]:
++        """
++        Authenticate a user with the data sent by the identity provider on the SSO callback
++
++        :param kind: Kind of SSO of the callback (openid, saml2...)
++        :type kind: str
++        :param domain: Domain given in the callback url
++        :type domain: str
++        :param callback_data: Data received on the callback (query parameters for openid)
++        :type callback_data: dict
++        :param callback_url_builder: Function (kind, domain) -> url of the API callback for SSO
++        :type callback_url_builder: Callable[[str, str], str]
++        :raises RequestException: If the state is invalid, the domain is not configured for this SSO or the authentication failed
++        After the call, sso_ui_redirect is the UI url kept with the state if it could be read (and is still allowed).
++        :return: Tuple of (authenticated User, domain user sources settings)
++        :rtype: tuple[User, dict[str, UserSourceSettingsObj]]
++        """
++        callback_domain = domain
++        domain = self._check_callback_domain(domain)
++        domain_auth_settings, domain_user_sources = self._get_domain_auth_and_user_source_settings(domain)
++        if domain_auth_settings.SOGO_D_AUTH_TYPE != kind:
++            raise RequestException(error=err.ERROR_SSO_WRONG_AUTH_TYPE)
++
++        #redirect_uri must be exactly the same as the one given in get_login_mech, the state is bound to it
++        provider = self._get_identity_provider(domain_auth_settings, callback_url_builder(kind, callback_domain))
++        if provider is None:
++            raise RequestException(error=err.ERROR_SSO_WRONG_AUTH_TYPE)
++        try:
++            identity = provider.authenticate_from_callback(callback_data)
++        finally:
++            #Checked again: SOGO_D_OPENID_ALLOW_REDIRECT may have changed since get_login_mech
++            if self.is_ui_redirect_allowed(provider.ui_redirect, domain_auth_settings):
++                self.sso_ui_redirect = provider.ui_redirect
++            elif provider.ui_redirect:
++                logger_auth.warning("SSO state with a redirect not in SOGO_D_OPENID_ALLOW_REDIRECT anymore: %s", provider.ui_redirect)
++
++        #The access token is kept as password to authenticate on the mail servers (xoauth2)
++        if self.domainless:
++            user = User(identity.mail, identity.access_token, is_domainless=True)
++        else:
++            user = User(identity.mail, identity.access_token, domain=domain)
++        user.mail = identity.mail
++        user.auth_kind = kind
++        user.oidc = identity.oidc
++
++        #The identity provider authenticated the user, the user sources give its uid, cn, source_id...
++        module_us = ModuleUserSource(domain_user_sources)
++        if not module_us.check_user_without_password(user):
++            logger_auth.info("SSO user %s not found in the user sources", identity.mail)
++            raise RequestException(error=err.ERROR_SSO_USER_NOT_FOUND)
++        if domain and user.domain != domain:
++            logger_auth.warning("SSO user %s found with domain %s but the callback is for domain %s", identity.mail, user.domain, domain)
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++
++        return user, domain_user_sources
++
++    def check_sso_access_token(self, user:User, auth_settings:AuthSettingsObj) -> bool:
++        """
++        Check that the access token of a SSO user (kept as password) is still valid on its identity provider.
++        Refresh-enabled sessions rotate server-side before access-token expiry.
++
++        :param user: User logged in with a SSO
++        :type user: User
++        :param auth_settings: Authentication settings of the domain of the user
++        :type auth_settings: AuthSettingsObj
++        :return: True if the domain still uses this SSO and the token is still valid.
++                 False for rejected credentials; refresh infrastructure outages raise a 503 error.
++        :rtype: bool
++        """
++        if auth_settings.SOGO_D_AUTH_TYPE != user.auth_kind:
++            logger_auth.info("SSO user %s logged in with %s but its domain now uses %s", user.uid, user.auth_kind, auth_settings.SOGO_D_AUTH_TYPE)
++            return False
++        provider = self._get_identity_provider(auth_settings, "") #No callback needed to check a token
++        if provider is None:
++            return False
++        if auth_settings.SOGO_D_OPENID_REFRESH_ENABLE and user.oidc.get("refresh_token"):
++            from app.module.auth.PilotOidcRefresh import ensure_access
++            return ensure_access(user, provider)
++        try:
++            return provider.check_access_token(user.password)
++        except RequestException:
++            return False
+ 
+     def get_user_and_domain_user_sources(self, username:str, password:str) -> tuple[User, dict[str, UserSourceSettingsObj]]:
+         """
+@@ -166,7 +374,23 @@
+         """
+         voucher_user_service = VoucherUserService(self.process_settings)
+         redis_key = voucher_user_service.get_redis_session_key_from_voucher(voucher_data)
+-
++        user = voucher_user_service.generate_user_from_voucher(voucher_data)
+         cache = sogo_cache()
+-        cache.revoke_user_sessions_by_key([redis_key])
+-        cache.close()
++        try:
++            # Atomically take the latest credentials while deleting the session and its indexes.
++            encrypted = cache.redis.eval('''
++                local value = redis.call('HGET', KEYS[1], ARGV[1])
++                redis.call('DEL', KEYS[1])
++                for i = 2, 4 do redis.call('ZREM', KEYS[i], KEYS[1]) end
++                return value
++            ''', 4, redis_key, cs.ZSET_USER_SESSIONS_ACTIVITY, cs.ZSET_USER_SESSIONS_UID,
++                cs.ZSET_USER_SESSIONS_DOMAIN, cs.SESSION_SENSITIVE)
++        finally:
++            cache.close()
++        if encrypted and hasattr(user, "_session_fernet"):
++            latest = User.init_from_user_session(json.loads(user._session_fernet.decrypt(encrypted)))
++            if latest.auth_kind == "openid" and latest.oidc:
++                settings, _ = self._get_domain_auth_and_user_source_settings(latest.domain)
++                provider = self._get_identity_provider(settings, "")
++                if provider is not None:
++                    provider.revoke_session_tokens(latest.password, latest.oidc)
+--- a/app/module/auth/ModuleUserSource.py
++++ b/app/module/auth/ModuleUserSource.py
+@@ -174,6 +174,54 @@
+         self.fill_user_with_contact_info(user, raw_contact)
+         self.fill_user_with_source_info(user, raw_contact)
+         return auth
++
++    def check_user_without_password(self, user:User) -> bool:
++        """
++        Find a user already authenticated by an identity provider (SSO), no password is checked.
++        If user.source_id is set, only this user source is checked and the user is matched on its uid.
++        Otherwise all user sources that can authenticate are checked and the user is matched on its mail (user.mail).
++
++        :param user: User authenticated by the identity provider
++        :type user: User
++        :return: True if the user is found, user is then filled with the user source info
++        :rtype: bool
++        """
++        if user.source_id:
++            if user.source_id not in self.all_user_sources:
++                logger.warning("User source %s of user %s does not exist anymore", user.source_id, user.uid)
++                return False
++            sources = {user.source_id: self.all_user_sources[user.source_id]}
++        else:
++            sources = self.all_user_sources
++
++        for source_uid, source_settings in sources.items():
++            if not source_settings.US_CAN_AUTH:
++                continue
++            if source_settings.US_TYPE == "ldap" and source_settings.US_LDAP_BIND_AS_USER:
++                #Cannot search without the user password
++                logger.warning("User source %s has US_LDAP_BIND_AS_USER, it cannot be used with SSO", source_uid)
++                continue
++
++            search_cond: Condition.Condition
++            if user.source_id:
++                search_cond = Condition.EqualCondition(source_settings.US_FIELD_UID, user.uid)
++            else:
++                mail_conds: list[Condition.Condition] = [Condition.EqualCondition(field, user.mail) for field in source_settings.US_MAIL]
++                search_cond = mail_conds[0] if len(mail_conds) == 1 else Condition.OrCondition(*mail_conds)
++
++            client_us = self._get_manager_for_user_source(source_settings)
++            record = client_us.get_user_info(user.uid, search_cond, user.uid, user.domain, "")
++            if not record:
++                continue
++
++            user.uid = record[source_settings.US_FIELD_UID][0]
++            user.source_id = source_uid
++            user.authenticated = True
++            self.fill_user_with_contact_info(user, record)
++            self.fill_user_with_source_info(user, record)
++            return True
++
++        return False
+ 
+ 
+     def _build_condition_for_search(self, search:str, user:User, us:UserSourceSettingsObj) -> Condition.Condition|None:
+--- /dev/null
++++ b/app/module/auth/OpenIDProvider.py
+@@ -0,0 +1,388 @@
++from __future__ import annotations
++from typing import TYPE_CHECKING
++from hashlib import sha256
++from secrets import token_urlsafe, compare_digest
++import time
++import math
++
++import requests
++from authlib.common.errors import AuthlibBaseError
++from authlib.integrations.base_client import MismatchingStateError, OAuthError
++from authlib.integrations.flask_client import FlaskIntegration
++from authlib.integrations.flask_client.apps import FlaskOAuth2App
++from flask import session as flask_session
++from joserfc.errors import JoseError
++from redis import exceptions as rexc
++
++from app.module.auth.IdentityProvider import IdentityProvider, IdentityProviderUserInfo
++from app.module.auth.PilotOidcPicture import oidc_picture
++from app.service import sogo_cache
++from app.utils import constants as cs
++from app.utils import errors as err
++from app.utils.exceptions import RequestException
++from app.utils.logger.logger import logger_auth
++
++if TYPE_CHECKING:
++    from flask.sessions import SessionMixin
++    from app.config.settings.DomainSettings import AuthSettingsObj
++
++OPENID_TIMEOUT = 10 #Timeout in seconds for every request made to the openid server
++
++
++class _RedisStateIntegration(FlaskIntegration):
++    """
++    authlib stores the state data (redirect_uri, nonce, and code_verifier with pkce) in the flask session by default.
++    It is stored in redis instead, under sso_state:<name>:<state>, with a TTL of cs.SSO_STATE_TTL.
++    The name is bound to the callback url, so a state can only be used on the callback of its kind and domain.
++    The flask session given by authlib is ignored.
++    If redis is unreachable, raise RequestException(ERROR_SSO_STATE_STORAGE_UNREACHABLE).
++    The last state data read is kept in read_state_data: authlib does not give it back.
++    """
++
++    read_state_data: dict | None = None
++
++    def _get_key(self, state: str) -> str:
++        return f"{cs.SSO_STATE_KEY_PREFIX}{self.name}:{state}"
++
++    def set_state_data(self, session: SessionMixin, state: str, data: dict) -> None:
++        binding = session.get("sogo_oidc_binding")
++        if not binding:
++            binding = token_urlsafe(32)
++            session["sogo_oidc_binding"] = binding
++        data = {**data, "browser_binding": sha256(binding.encode()).hexdigest()}
++        key = self._get_key(state)
++        cache = sogo_cache()
++        try:
++            cache.set(key, data, self.expires_in)
++        except (rexc.ConnectionError, rexc.TimeoutError) as e:
++            logger_auth.error("Cannot save the openid state in redis: %s", repr(e))
++            raise RequestException(error=err.ERROR_SSO_STATE_STORAGE_UNREACHABLE) from e
++        finally:
++            cache.close()
++
++    def get_state_data(self, session: SessionMixin, state: str | None) -> dict | None:
++        """
++        Read and delete the state data (GETDEL): the state is single use, even with concurrent callbacks.
++        None if the state is missing, unknown, expired (TTL) or already used -> authlib raises MismatchingStateError
++        """
++        if not state:
++            return None
++        key = self._get_key(state)
++        cache = sogo_cache()
++        try:
++            binding = session.get("sogo_oidc_binding", "")
++            pending = cache.get(key, dict)
++            if not binding or not isinstance(pending, dict) or not compare_digest(
++                pending.get("browser_binding", ""), sha256(binding.encode()).hexdigest()
++            ):
++                return None
++            data = cache.pop(key, dict)
++        except (rexc.ConnectionError, rexc.TimeoutError) as e:
++            logger_auth.error("Cannot read the openid state from redis: %s", repr(e))
++            raise RequestException(error=err.ERROR_SSO_STATE_STORAGE_UNREACHABLE) from e
++        finally:
++            cache.close()
++        self.read_state_data = data if isinstance(data, dict) else None
++        return self.read_state_data
++
++    def clear_state_data(self, session: SessionMixin, state: str | None) -> None:
++        """Nothing to do, get_state_data already deleted the state"""
++
++
++class OpenIDProvider(IdentityProvider):
++    """
++    OpenID Connect identity provider, authorization code flow, using the flask integration of authlib.
++
++    The state (and the nonce, generated by authlib because of the 'openid' scope) is stored in redis
++    (see _RedisStateIntegration), under a key bound to the callback url: the callback must be made
++    for the same kind and domain, within cs.SSO_STATE_TTL, and only once.
++    The UI url is stored with them (cs.SSO_STATE_UI_REDIRECT), authlib ignores the extra keys of the state data.
++    TODO pkce: add code_challenge_method="S256" in client_kwargs, authlib does the rest.
++    """
++
++    kind = "openid"
++
++    def __init__(self, auth_settings: AuthSettingsObj, callback_url: str):
++        """
++        Initialize the openid provider
++
++        :param auth_settings: Authentication settings of the domain, SOGO_D_AUTH_TYPE must be 'openid'
++        :type auth_settings: AuthSettingsObj
++        :param callback_url: API url called by the openid server after the user logged in (redirect_uri)
++        :type callback_url: str
++        """
++        super().__init__(auth_settings, callback_url)
++        self._framework = _RedisStateIntegration(f"{self.kind}:{self.callback_url}")
++        self._framework.expires_in = cs.SSO_STATE_TTL
++        self._client = self._create_client()
++
++    def _create_client(self) -> FlaskOAuth2App:
++        """
++        Create the authlib client for this domain.
++        The settings are per domain and read from the database, so the client is built directly
++        instead of being registered once in an authlib OAuth registry.
++        #TODO cache the server metadata, authlib only caches it in this instance
++
++        :return: The authlib flask client
++        :rtype: FlaskOAuth2App
++        """
++        #The name is in the redis key of the state, it binds the state to this callback (kind and domain)
++        name = self._framework.name
++        return FlaskOAuth2App(self._framework,
++                              name=name,
++                              client_id=self.auth_settings.SOGO_D_OPENID_CLIENT_NAME,
++                              client_secret=self.auth_settings.SOGO_D_OPENID_CLIENT_SECRET,
++                              server_metadata_url=self.auth_settings.SOGO_D_OPENID_CONFIG_URL,
++                              client_kwargs={"scope": self.auth_settings.SOGO_D_OPENID_SCOPE,
++                                             "code_challenge_method": "S256",
++                                             "default_timeout": OPENID_TIMEOUT})
++
++    def get_login_location(self, ui_redirect: str) -> str:
++        """
++        Return the authorization url of the openid server.
++        authlib generates the state and the nonce, they are kept in redis for the callback with ui_redirect.
++
++        :param ui_redirect: UI url where the user is sent back after the callback, already checked
++        :type ui_redirect: str
++        :raises RequestException: If the openid server is unreachable or its configuration is invalid
++        :return: The authorization url
++        :rtype: str
++        """
++        try:
++            rv = self._client.create_authorization_url(self.callback_url)
++        except (requests.RequestException, ValueError, RuntimeError) as e:
++            logger_auth.error("Cannot get openid configuration from %s: %s", self.auth_settings.SOGO_D_OPENID_CONFIG_URL, str(e))
++            raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE) from e
++        url = rv.pop("url") #Not needed for the callback
++        #Same as authlib authorize_redirect, but the UI does the redirection
++        rv[cs.SSO_STATE_UI_REDIRECT] = ui_redirect
++        self._client.save_authorize_data(redirect_uri=self.callback_url, **rv)
++        return url
++
++    def authenticate_from_callback(self, callback_data: dict) -> IdentityProviderUserInfo:
++        """
++        Check the state, exchange the authorization code against the tokens, then get the user info.
++        authlib reads the callback from the flask request, check the state against redis
++        and validates the id_token (signature, issuer, audience, nonce) if there is one.
++        ui_redirect is set as soon as the state is read, even if the authentication then fails.
++
++        :param callback_data: Query parameters of the callback (code and state, or error and error_description)
++        :type callback_data: dict
++        :raises RequestException: If the state is invalid or the authentication failed
++        :return: The user identity
++        :rtype: IdentityProviderUserInfo
++        """
++        if "error" in callback_data or not callback_data.get("code"):
++            #authlib fails before reading the state: read (and consume) it here to know where to send the user back
++            state_data = self._framework.get_state_data(flask_session, callback_data.get("state"))
++            if state_data is None:
++                logger_auth.info("Openid callback with a missing, unknown, expired or already used state")
++                raise RequestException(error=err.ERROR_SSO_INVALID_STATE)
++            self.ui_redirect = state_data.get(cs.SSO_STATE_UI_REDIRECT, "")
++            logger_auth.info("Openid server returned an error: %s - %s", callback_data.get("error"), callback_data.get("error_description"))
++            raise RequestException("No authorization code given in openid callback", err.ERROR_SSO_LOGIN_FAILED)
++
++        try:
++            try:
++                token = self._client.authorize_access_token()
++            finally:
++                #The state is read before the code exchange: the UI url is known even if the exchange fails
++                self.ui_redirect = (self._framework.read_state_data or {}).get(cs.SSO_STATE_UI_REDIRECT, "")
++            if self.auth_settings.SOGO_D_OPENID_FETCH_USER_PROFILE:
++                user_info = dict(self._client.userinfo())
++            else:
++                user_info = dict(token.get("userinfo") or {}) #Claims of the validated id_token
++        except MismatchingStateError as e:
++            logger_auth.info("Openid callback with a missing, unknown, expired or already used state")
++            raise RequestException(error=err.ERROR_SSO_INVALID_STATE) from e
++        except OAuthError as e:
++            logger_auth.info("Openid server returned an error: %s - %s", e.error, e.description)
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED) from e
++        except (AuthlibBaseError, JoseError) as e:
++            logger_auth.info("Openid authentication refused: %s", str(e))
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED) from e
++        except (requests.RequestException, ValueError, RuntimeError) as e:
++            logger_auth.error("Cannot get tokens or user info from openid server: %s", str(e))
++            raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE) from e
++
++        mail_field = self.auth_settings.SOGO_D_OPENID_EMAIL
++        mail = user_info.get(mail_field)
++        if not mail or not isinstance(mail, str):
++            logger_auth.warning("Openid user info has no field %s (see SOGO_D_OPENID_EMAIL)", mail_field)
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++        metadata = self._client.load_server_metadata()
++        oidc = {
++            "subject": user_info.get("sub"), "issuer": metadata["issuer"],
++            "picture": oidc_picture(user_info.get("picture")),
++            "client_id": self.auth_settings.SOGO_D_OPENID_CLIENT_NAME,
++            "scope": token.get("scope", self.auth_settings.SOGO_D_OPENID_SCOPE),
++            "nonce": (self._framework.read_state_data or {}).get("nonce"),
++            "access_expires_at": time.time() + self._expires_in(token),
++            "refresh_token": token.get("refresh_token", ""),
++        }
++        if not oidc["subject"] or not token.get("access_token"):
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++        if self.auth_settings.SOGO_D_OPENID_REFRESH_ENABLE and not oidc["refresh_token"]:
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++        return IdentityProviderUserInfo(mail=mail, claims=user_info, access_token=token["access_token"], oidc=oidc)
++
++    @staticmethod
++    def _expires_in(token):
++        try:
++            value = float(token.get("expires_in", 0))
++        except (TypeError, ValueError) as exc:
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED) from exc
++        if not math.isfinite(value) or not 0 < value <= 86400:
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++        return value
++
++    def refresh_session_tokens(self, user):
++        """One attempt only: a lost token response may already have rotated the refresh token."""
++        metadata = self._client.load_server_metadata()
++        if (metadata.get("issuer") != user.oidc.get("issuer")
++                or self.auth_settings.SOGO_D_OPENID_CLIENT_NAME != user.oidc.get("client_id")):
++            raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++        token = None
++        try:
++            issued_at = time.time()
++            response = requests.post(metadata["token_endpoint"], data={
++                "grant_type": "refresh_token", "refresh_token": user.oidc["refresh_token"],
++                "scope": user.oidc["scope"],
++            }, auth=(self.auth_settings.SOGO_D_OPENID_CLIENT_NAME, self.auth_settings.SOGO_D_OPENID_CLIENT_SECRET),
++                timeout=OPENID_TIMEOUT, allow_redirects=False)
++            if response.status_code != 200:
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            token = response.json()
++            if not token.get("access_token") or token.get("token_type", "").lower() != "bearer":
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            expires = self._expires_in(token)
++            if set(token.get("scope", user.oidc["scope"]).split()) != set(user.oidc["scope"].split()):
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            claims = self._client.parse_id_token(token, nonce=None)
++            if claims is not None and (claims.get("sub") != user.oidc["subject"]
++                    or (claims.get("nonce") is not None and claims["nonce"] != user.oidc.get("nonce"))):
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            info = dict(self._client.userinfo(token=token))
++            if (info.get("sub") != user.oidc["subject"]
++                    or info.get(self.auth_settings.SOGO_D_OPENID_EMAIL) != user.mail):
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            if not self.check_access_token(token["access_token"]):
++                raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
++            return token["access_token"], {
++                **user.oidc, "refresh_token": token.get("refresh_token") or user.oidc["refresh_token"],
++                "scope": token.get("scope", user.oidc["scope"]),
++                "picture": oidc_picture(info.get("picture")),
++                "access_expires_at": issued_at + expires,
++            }
++        except Exception:
++            if isinstance(token, dict):
++                self.revoke_session_tokens(token.get("access_token", ""), {
++                    **user.oidc, "refresh_token": token.get("refresh_token") or user.oidc.get("refresh_token", ""),
++                })
++            raise
++
++    def revoke_session_tokens(self, access_token, oidc):
++        """Local deletion is authoritative even when provider revocation is unavailable."""
++        try:
++            metadata = self._client.load_server_metadata()
++            if (metadata.get("issuer") != oidc.get("issuer")
++                    or self.auth_settings.SOGO_D_OPENID_CLIENT_NAME != oidc.get("client_id")):
++                return
++            endpoint = metadata.get("revocation_endpoint")
++            if not endpoint:
++                return
++            for token, hint in ((oidc.get("refresh_token"), "refresh_token"), (access_token, "access_token")):
++                if token:
++                    response = requests.post(endpoint, data={"token": token, "token_type_hint": hint},
++                        auth=(self.auth_settings.SOGO_D_OPENID_CLIENT_NAME, self.auth_settings.SOGO_D_OPENID_CLIENT_SECRET),
++                        timeout=OPENID_TIMEOUT, allow_redirects=False)
++                    if response.status_code != 200:
++                        logger_auth.warning("OIDC provider revocation did not succeed")
++        except Exception:
++            logger_auth.warning("OIDC provider revocation unavailable; local session remains revoked")
++
++    def check_access_token(self, access_token: str) -> bool:
++        """
++        Check that the access token is still valid on the openid server.
++        The introspection endpoint (RFC 7662) is used if the server has one, else the userinfo endpoint:
++        the token is valid if the server accepts it.
++        Once valid, the token is not checked again for SOGO_D_OPENID_TOKEN_CHECK_INTERVAL seconds (0: always checked),
++        the last valid check is kept in redis. If redis is unreachable, the token is checked every time.
++
++        :param access_token: Access token of the user
++        :type access_token: str
++        :raises RequestException: If the openid server is unreachable or its configuration is invalid
++        :return: True if the token is still valid
++        :rtype: bool
++        """
++        if not access_token:
++            return False
++        interval = self.auth_settings.SOGO_D_OPENID_TOKEN_CHECK_INTERVAL
++        #The token is hashed: it is the password of the user for the mail servers, it must not be readable in redis
++        key = f"{cs.SSO_TOKEN_CHECK_KEY_PREFIX}{self.kind}:{sha256(access_token.encode('utf-8')).hexdigest()}"
++        if interval and self._get_token_check(key):
++            return True
++
++        try:
++            metadata = self._client.load_server_metadata()
++            introspection_url = metadata.get("introspection_endpoint")
++            if introspection_url:
++                resp = requests.post(introspection_url,
++                                     data={"token": access_token, "token_type_hint": "access_token"},
++                                     auth=(self.auth_settings.SOGO_D_OPENID_CLIENT_NAME, self.auth_settings.SOGO_D_OPENID_CLIENT_SECRET),
++                                     timeout=OPENID_TIMEOUT)
++                resp.raise_for_status()
++                is_valid = resp.json().get("active") is True
++            else:
++                resp = requests.get(metadata["userinfo_endpoint"],
++                                    headers={"Authorization": f"Bearer {access_token}"},
++                                    timeout=OPENID_TIMEOUT)
++                is_valid = resp.status_code not in (401, 403)
++                if is_valid:
++                    resp.raise_for_status()
++        except (requests.RequestException, ValueError, KeyError, RuntimeError) as e:
++            logger_auth.error("Cannot check the access token on openid server: %s", str(e))
++            raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE) from e
++
++        if not is_valid:
++            logger_auth.info("Openid access token is not valid anymore")
++        elif interval:
++            self._set_token_check(key, interval)
++        return is_valid
++
++    @staticmethod
++    def _get_token_check(key: str) -> bool:
++        """
++        Return True if the access token has been checked valid less than SOGO_D_OPENID_TOKEN_CHECK_INTERVAL seconds ago
++
++        :param key: Redis key of the token check
++        :type key: str
++        :return: True if the token check is still in redis
++        :rtype: bool
++        """
++        cache = sogo_cache()
++        try:
++            return cache.get(key, str) is not None
++        except (rexc.ConnectionError, rexc.TimeoutError) as e:
++            logger_auth.warning("Cannot read the openid token check from redis: %s", repr(e))
++            return False
++        finally:
++            cache.close()
++
++    @staticmethod
++    def _set_token_check(key: str, interval: int) -> None:
++        """
++        Keep in redis that the access token is valid, for SOGO_D_OPENID_TOKEN_CHECK_INTERVAL seconds
++
++        :param key: Redis key of the token check
++        :type key: str
++        :param interval: SOGO_D_OPENID_TOKEN_CHECK_INTERVAL
++        :type interval: int
++        """
++        cache = sogo_cache()
++        try:
++            cache.set(key, "1", interval)
++        except (rexc.ConnectionError, rexc.TimeoutError) as e:
++            logger_auth.warning("Cannot save the openid token check in redis: %s", repr(e))
++        finally:
++            cache.close()
+--- /dev/null
++++ b/app/module/auth/PilotOidcPicture.py
+@@ -0,0 +1,15 @@
++from urllib.parse import urlsplit
++
++
++def oidc_picture(value):
++    """The pilot only renders public Foundry avatar URLs; it never proxies arbitrary URLs."""
++    if not isinstance(value, str) or len(value) > 2048 or any(ord(c) <= 32 or ord(c) == 127 for c in value):
++        return None
++    try:
++        url = urlsplit(value)
++    except ValueError:
++        return None
++    if (url.scheme != 'https' or url.netloc != 'avatars.m7.rs'
++            or not url.path.startswith('/') or url.query or url.fragment):
++        return None
++    return value
+--- /dev/null
++++ b/app/module/auth/PilotOidcRefresh.py
+@@ -0,0 +1,123 @@
++"""Encrypted, session-scoped refresh rotation with fail-closed crash recovery."""
++import json
++import time
++from http import HTTPStatus
++
++from redis.exceptions import RedisError, LockError
++from app.auth.User import User
++from app.service import sogo_cache
++from app.utils import constants as cs
++from app.utils.errors import E
++from app.utils.exceptions import RequestException
++
++UNAVAILABLE = E('S999503', 'Session refresh temporarily unavailable', HTTPStatus.SERVICE_UNAVAILABLE)
++PENDING = 'oidc_refresh_pending'
++MARK = '''
++if redis.call('HGET', KEYS[1], ARGV[1]) ~= ARGV[2] or redis.call('TTL', KEYS[1]) <= 0 then return 0 end
++if redis.call('HEXISTS', KEYS[1], ARGV[3]) == 1 then return 0 end
++redis.call('HSET', KEYS[1], ARGV[3], '1')
++return 1
++'''
++COMMIT = '''
++if redis.call('HGET', KEYS[1], ARGV[1]) ~= ARGV[2] or redis.call('TTL', KEYS[1]) <= 0 then return 0 end
++if redis.call('HGET', KEYS[1], ARGV[3]) ~= '1' then return 0 end
++redis.call('HSET', KEYS[1], ARGV[1], ARGV[4])
++redis.call('HDEL', KEYS[1], ARGV[3])
++redis.call('HINCRBY', KEYS[1], 'oidc_refresh_count', 1)
++redis.call('HSET', KEYS[1], 'oidc_refreshed_at', ARGV[5])
++return 1
++'''
++READ = "return {redis.call('HGET', KEYS[1], ARGV[1]), redis.call('HGET', KEYS[1], ARGV[2])}"
++
++
++def ensure_access(user, provider):
++    key = getattr(user, '_session_redis_key', None)
++    fernet = getattr(user, '_session_fernet', None)
++    if not key or fernet is None:
++        return False
++    cache = sogo_cache()
++    lock = None
++    locked = False
++
++    def load():
++        raw, pending = cache.redis.eval(READ, 1, key, cs.SESSION_SENSITIVE, PENDING)
++        if not raw:
++            return None, None, None
++        data = json.loads(fernet.decrypt(raw))
++        canonical = User.init_from_user_session(data)
++        if canonical.uid != user.uid or canonical.auth_kind != 'openid':
++            return None, None, None
++        if pending:
++            # An abandoned attempt may have spent the rotating token. Never retry it.
++            invalidate(canonical)
++            return None, None, None
++        return canonical, data, raw
++
++    def invalidate(canonical):
++        cache.revoke_user_sessions_by_key([key])
++        provider.revoke_session_tokens(canonical.password, canonical.oidc)
++
++    def check(canonical):
++        try:
++            return provider.check_access_token(canonical.password)
++        except RequestException as exc:
++            raise RequestException(error=UNAVAILABLE) from exc
++
++    def adopt(canonical):
++        user.password = canonical.password
++        user.oidc = canonical.oidc
++
++    try:
++        # Only read pending under the lock: another worker may still be completing its attempt.
++        lock = cache.redis.lock('oidc_refresh_lock:' + key, timeout=120, blocking_timeout=10)
++        locked = lock.acquire(blocking=True)
++        if not locked:
++            raise RequestException(error=UNAVAILABLE)
++        canonical, data, raw = load()
++        if canonical is None:
++            return False
++        now = time.time()
++        expires = canonical.oidc.get('access_expires_at', 0)
++        valid = check(canonical)
++        if not valid and now < expires:
++            # Revocation is not expiration. Do not use refresh to resurrect an early-revoked token.
++            invalidate(canonical)
++            return False
++        if expires > now + 45 or not canonical.oidc.get('refresh_token'):
++            if valid:
++                adopt(canonical)
++            return valid
++        if not cache.redis.eval(MARK, 1, key, cs.SESSION_SENSITIVE, raw, PENDING):
++            return False
++        new_access = None
++        new_oidc = None
++        try:
++            new_access, new_oidc = provider.refresh_session_tokens(canonical)
++            data[cs.USER_PWD] = new_access
++            data['oidc'] = new_oidc
++            encrypted = fernet.encrypt(json.dumps(data).encode())
++            committed = cache.redis.eval(COMMIT, 1, key, cs.SESSION_SENSITIVE, raw,
++                                         PENDING, encrypted, int(time.time()))
++            if not committed:
++                # Logout/expiry won the race. Revoke the newly issued credentials too.
++                provider.revoke_session_tokens(new_access, new_oidc)
++                return False
++        except Exception:
++            if new_access is not None:
++                provider.revoke_session_tokens(new_access, new_oidc)
++            # Unknown HTTP outcome, worker interruption marker, or failed persistence means re-login.
++            # If Redis is down, the marker remains and the next request fails closed.
++            invalidate(canonical)
++            return False
++        user.password = new_access
++        user.oidc = new_oidc
++        return True
++    except RedisError as exc:
++        raise RequestException(error=UNAVAILABLE) from exc
++    finally:
++        if locked:
++            try:
++                lock.release()
++            except (RedisError, LockError):
++                pass
++        cache.close()
+--- /dev/null
++++ b/app/module/auth/PilotSsoTicket.py
+@@ -0,0 +1,43 @@
++"""Short-lived, browser-bound exchange; never put a usable session voucher in a URL."""
++from hashlib import sha256
++from secrets import token_urlsafe, compare_digest
++
++from flask import session
++from app.service import sogo_cache
++from app.utils import errors as err
++from app.utils.exceptions import RequestException
++
++
++def issue(voucher):
++    binding = session.get('sogo_oidc_binding')
++    if not binding:
++        raise RequestException(error=err.ERROR_SSO_INVALID_STATE)
++    ticket = token_urlsafe(32)
++    cache = sogo_cache()
++    try:
++        cache.set('pilot_sso_ticket:' + ticket, {
++            'binding': sha256(binding.encode()).hexdigest(), 'voucher': voucher,
++        }, 60)
++    finally:
++        cache.close()
++    return ticket
++
++
++def redeem(ticket):
++    if not isinstance(ticket, str) or len(ticket) > 128:
++        raise RequestException(error=err.ERROR_SSO_INVALID_STATE)
++    binding = session.get('sogo_oidc_binding', '')
++    cache = sogo_cache()
++    try:
++        key = 'pilot_sso_ticket:' + ticket
++        value = cache.get(key, dict)
++        if not binding or not isinstance(value, dict) or not compare_digest(
++            value.get('binding', ''), sha256(binding.encode()).hexdigest()
++        ):
++            raise RequestException(error=err.ERROR_SSO_INVALID_STATE)
++        value = cache.pop(key, dict)
++        if not value:
++            raise RequestException(error=err.ERROR_SSO_INVALID_STATE)
++        return value['voucher']
++    finally:
++        cache.close()
+--- a/app/module/user/ModuleUserProfile.py
++++ b/app/module/user/ModuleUserProfile.py
+@@ -735,7 +735,15 @@
+         :rtype: dict
+         """
+ 
+-        return self._get_user_column(uid, tbl.COL_USER_DEFAULTS)
++        prefs = self._get_user_column(uid, tbl.COL_USER_DEFAULTS)
++        return self._enforce_oidc_picture(prefs)
++
++    @staticmethod
++    def _enforce_oidc_picture(prefs: dict) -> dict:
++        # This OIDC-only pilot does not allow a saved preference to override the IdP.
++        return {**prefs, "USER_GENERAL": {
++            **(prefs.get("USER_GENERAL") or {}), "SOGO_U_PROFILE_PICTURE": "usersource",
++        }}
+ 
+     def get_user_folders(self, uid: str) -> dict:
+         """
+@@ -768,7 +776,7 @@
+         if subparent.lower() not in user_settings_dict:
+             raise RequestException(f"Preferences asked {subparent} does not exist", err.ERROR_PREF_UNKNOWN_SUB)
+ 
+-        prefs = self._get_user_column(uid, tbl.COL_USER_DEFAULTS)
++        prefs = self.get_user_preferences(uid)
+         real_subparent = user_settings_dict[subparent.lower()].subparent
+         ret = {
+             real_subparent: prefs.get(real_subparent, {})
+@@ -799,6 +807,7 @@
+         merge_patch(patch, current_data)
+ 
+         new_data = check_data_for_sogo_schemas(current_data, get_all_user_settings_schema)
++        new_data = self._enforce_oidc_picture(new_data)
+ 
+         self._update_user_column(uid, tbl.COL_USER_DEFAULTS.name, new_data)
+ 
+--- a/app/utils/constants.py
++++ b/app/utils/constants.py
+@@ -22,6 +22,8 @@
+ USER_SRC_ID = "source_id"
+ USER_UNIT   = "unit"
+ USER_CN     = "cn"
++USER_AUTH_KIND = "auth_kind" #SOGO_D_AUTH_TYPE used to log in (plain, openid...)
++AUTH_KIND_PLAIN = "plain"
+ SESSION_KEY = "session_key"
+ SESSION_LAST_SEEN = "last_activity"
+ SESSION_SENSITIVE = "sensitive_data"
+@@ -44,6 +46,14 @@
+ # Each member is a ``user_session:<uuid>`` key and its score is derived
+ # from the domain string so that sessions can be sorted / filtered by domain.
+ ZSET_USER_SESSIONS_DOMAIN = "user_sessions:domain"
++# SSO state: ``sso_state:<kind>:<callback url>:<state>`` keeps what the callback needs (redirect_uri, nonce...)
++# between the redirection to the identity provider and its callback. Single use (GETDEL).
++SSO_STATE_KEY_PREFIX = "sso_state:"
++SSO_STATE_TTL = 600 #Time given to the user to log in on the identity provider, in seconds
++SSO_STATE_UI_REDIRECT = "ui_redirect" #Key of the UI url in the SSO state data
++# SSO token check: ``sso_token_check:<kind>:<sha256 of the access token>`` is set once the access token is checked valid
++# on the identity provider, it is not checked again until its TTL expires (SOGO_D_OPENID_TOKEN_CHECK_INTERVAL)
++SSO_TOKEN_CHECK_KEY_PREFIX = "sso_token_check:"
+ 
+ JWT_ISS = "iss"
+ JWT_EXP = "exp"
+--- a/app/utils/errors.py
++++ b/app/utils/errors.py
+@@ -71,6 +71,13 @@
+ ERROR_VALIDITY_TIME_BELOW_0    = E("S000206", "Voucher Validity Time Below 0", HTTPStatus.INTERNAL_SERVER_ERROR)
+ ERROR_USER_CREDS_NOT_VALID     = E("S000207", "User credentials stores in session are not valid anymore", HTTPStatus.UNAUTHORIZED)
+ ERROR_LOGIN_FAILED             = E("S000208", "Login Failed: Invalid Credentials", HTTPStatus.UNAUTHORIZED)
++ERROR_SSO_WRONG_AUTH_TYPE      = E("S000209", "Domain Authentication Type Does Not Match This SSO. See SOGO_D_AUTH_TYPE", HTTPStatus.BAD_REQUEST)
++ERROR_SSO_PROVIDER_UNREACHABLE = E("S000210", "SSO Identity Provider Unreachable Or Answered An Invalid Response", HTTPStatus.BAD_GATEWAY)
++ERROR_SSO_LOGIN_FAILED         = E("S000211", "SSO Login Failed", HTTPStatus.UNAUTHORIZED)
++ERROR_SSO_USER_NOT_FOUND       = E("S000212", "SSO Login Failed: User Not Found In User Sources", HTTPStatus.UNAUTHORIZED)
++ERROR_SSO_INVALID_STATE        = E("S000213", "SSO Login Failed: State Missing, Expired Or Already Used", HTTPStatus.UNAUTHORIZED)
++ERROR_SSO_STATE_STORAGE_UNREACHABLE = E("S000214", "SSO Login Failed: Cache Server Storing The State Is Unreachable", HTTPStatus.SERVICE_UNAVAILABLE)
++ERROR_SSO_REDIRECT_NOT_ALLOWED = E("S000215", "SSO Redirect Url Not Allowed. See SOGO_D_OPENID_ALLOW_REDIRECT", HTTPStatus.BAD_REQUEST)
+ 
+ 
+ #API
+--- a/app/utils/logger/logger.py
++++ b/app/utils/logger/logger.py
+@@ -60,9 +60,10 @@
+ logger_ldap = getLogger("sogolog.ldap")
+ 
+ logger_imap.setLevel(WARNING)
++logger_mail_outgoing.setLevel(WARNING)
+ # logger_cache.setLevel(DEBUG)
+-logger_sql.setLevel(DEBUG)
++logger_sql.setLevel(ERROR)
+ # logger_sql.setLevel(ERROR)
+ logger_cache.setLevel(WARNING)
+-logger_api.setLevel(DEBUG)
++logger_api.setLevel(WARNING)
+ logger_ldap.setLevel(WARNING)
+--- a/tests/test_interface/test_auth/test_InterfaceAuthUser.py
++++ b/tests/test_interface/test_auth/test_InterfaceAuthUser.py
+@@ -21,15 +21,16 @@
+         self.get_user_and_domain_user_sources_args = None
+         self.generate_voucher_from_user_args = None
+         self.logout_user_args = None
++        self.sso_ui_redirect = ""
+ 
+         # Results
+         self.get_login_mech_result = {"mechanism": "plain", "redirect": None}
+         self.get_user_and_domain_user_sources_result = (None, {})
+         self.generate_voucher_from_user_result = {"voucher": "test-voucher-123", "expiry": "2026-02-13"}
+ 
+-    def get_login_mech(self, user_uid):
++    def get_login_mech(self, user_uid, ui_redirect, callback_url_builder):
+         """Get login mechanism for user."""
+-        self.get_login_mech_args = user_uid
++        self.get_login_mech_args = (user_uid, ui_redirect)
+         return self.get_login_mech_result
+ 
+     def get_user_and_domain_user_sources(self, uid, password):
+@@ -149,16 +150,36 @@
+         self.uid = uid
+         self.password = password
+         self.mail = uid
++        self.domain = uid.split("@")[-1]
+         self.source_id = "source1"
++
++
++USER_DOMAIN_SETTINGS = {"USER_MODULE": {}, "MAIL_SETTINGS": {"SOGO_D_IMAP_AUTH_MECH": "xoauth2"}}
++
++
++class FakeModuleAdminConfig:
++    """Fake ModuleAdminConfig for testing, returns USER_DOMAIN_SETTINGS for every domain."""
++    get_one_domain_setting_args = None
++
++    def __init__(self, process):
++        self.process = process
++
++    def get_one_domain_setting(self, domain_id):
++        """Return the settings of the domain."""
++        FakeModuleAdminConfig.get_one_domain_setting_args = domain_id
++        return {"domain_name": domain_id, "settings": USER_DOMAIN_SETTINGS, "origin": {}}
+ 
+ 
+ class FakeModuleMail:
+     """Fake ModuleMail for testing."""
++    last_instance = None
++
+     def __init__(self, user, mail_settings, process):
+         self.user = user
+         self.mail_settings = mail_settings
+         self.process = process
+         self.create_special_folders_args = None
++        FakeModuleMail.last_instance = self
+ 
+     def create_special_folders_if_not_exist(self, account_id):
+         """Create special folders if they don't exist."""
+@@ -191,6 +212,10 @@
+         "app.interface.auth.InterfaceAuthUser.ModuleMail",
+         FakeModuleMail
+     )
++    monkeypatch.setattr(
++        "app.interface.auth.InterfaceAuthUser.ModuleAdminConfig",
++        FakeModuleAdminConfig
++    )
+ 
+ 
+ # ========== Tests for get_login_mech ==========
+@@ -208,17 +233,17 @@
+         default_domain={"AUTH_SETTINGS": {"test": "value"}, "USER_SOURCE": {}}
+     )
+ 
+-    result, status_code = interface.get_login_mech(user_uid="testuser@example.com", redirect="/dashboard")
++    result, status_code = interface.get_login_mech(user_uid="testuser@example.com", redirect="/dashboard", callback_url_builder=lambda kind, domain: "")
+ 
+     assert status_code == 200
+     assert result["data"]["mechanism"] == "plain"
+-    assert fake_auth.get_login_mech_args == "testuser@example.com"
++    assert fake_auth.get_login_mech_args == ("testuser@example.com", "/dashboard")
+ 
+ 
+ def test_get_login_mech_request_exception(monkeypatch):
+     """Test error handling when getting login mechanism fails."""
+     fake_auth = FakeModuleAuth(None, None, None, None)
+-    fake_auth.get_login_mech = lambda x: (_ for _ in ()).throw(
++    fake_auth.get_login_mech = lambda x, y, z: (_ for _ in ()).throw(
+         RequestException("Domain not found", err.ERROR_DOMAIN_NAME_NOT_FOUND)
+     )
+     fake_profile = FakeModuleUserProfile(None, None)
+@@ -231,7 +256,7 @@
+         default_domain={"AUTH_SETTINGS": {"test": "value"}, "USER_SOURCE": {}}
+     )
+ 
+-    result, status_code = interface.get_login_mech(user_uid="unknown@example.com", redirect="/dashboard")
++    result, status_code = interface.get_login_mech(user_uid="unknown@example.com", redirect="/dashboard", callback_url_builder=lambda kind, domain: "")
+ 
+     assert status_code == 404
+     assert result["error_code"] == err.ERROR_DOMAIN_NAME_NOT_FOUND.c
+@@ -360,6 +385,36 @@
+     # RequestException should set the http_status
+     assert status_code >= 500
+     assert result["error_code"] == err.ERROR_USER_PROFILE_CREATION_FAILED.c
++    # No session is created when the onboarding failed
++    assert fake_auth.generate_voucher_from_user_args is None
++
++
++def test_plain_login_onboarding_uses_user_domain_settings(monkeypatch):
++    """The onboarding uses the settings of the user's domain, not the default domain ones"""
++    fake_auth = FakeModuleAuth(None, None, None, None)
++    fake_user = FakeUser("newuser@example.com", "secret123")
++    fake_auth.get_user_and_domain_user_sources_result = (fake_user, {"source1": {}})
++    fake_profile = FakeModuleUserProfile(None, None)
++    fake_profile.is_user_profile_present_result = False
++    profile_settings = []
++    patch_modules_on_interface(monkeypatch, fake_auth, fake_profile, lambda sources: FakeModuleUserSource({}))
++    monkeypatch.setattr("app.interface.auth.InterfaceAuthUser.ModuleUserProfile",
++                        lambda process, domain_settings: profile_settings.append(domain_settings) or fake_profile)
++    monkeypatch.setattr("app.interface.auth.InterfaceAuthUser.MailSettingsObj", lambda settings: settings)
++
++    interface = InterfaceAuthUser(
++        process={"test": "config"},
++        system={"SYSTEM_SETTINGS": {"test": "value"}},
++        default_domain={"AUTH_SETTINGS": {"test": "value"}, "USER_SOURCE": {}, "MAIL_SETTINGS": {"SOGO_D_IMAP_AUTH_MECH": "login"}},
++        user=ANONYMOUS_USER
++    )
++
++    _result, status_code = interface.plain_login({"username": "newuser@example.com", "password": "secret123"})
++
++    assert status_code == 200
++    assert FakeModuleAdminConfig.get_one_domain_setting_args == "example.com"
++    assert profile_settings[-1] is USER_DOMAIN_SETTINGS
++    assert FakeModuleMail.last_instance.mail_settings == USER_DOMAIN_SETTINGS["MAIL_SETTINGS"]
+ 
+ 
+ def test_plain_login_profile_creation_bug_exception(monkeypatch):
+@@ -478,3 +533,157 @@
+ 
+     assert status_code == err.ERROR_WRONG_AUTHORIZATION_TYPE.h
+     assert result["error_code"] == err.ERROR_WRONG_AUTHORIZATION_TYPE.c
++
++
++# ========== Tests for sso_callback ==========
++
++UI_REDIRECT = "http://localhost:3001/en/auth/login/sso"
++
++
++def get_sso_interface(monkeypatch, ui_redirect=UI_REDIRECT, error=None):
++    """Interface whose ModuleAuth authenticates a SSO user, or raises error. The UI url is known from the state."""
++    fake_auth = FakeModuleAuth(None, None, None, None)
++    fake_auth.generate_voucher_from_user_result = {"jwt_token": "jwt"}
++
++    def get_user_from_sso_callback(kind, domain, callback_data, callback_url_builder):
++        fake_auth.sso_ui_redirect = ui_redirect
++        if error:
++            raise RequestException(error=error)
++        return FakeUser("user@example.com", "token"), {}
++
++    fake_auth.get_user_from_sso_callback = get_user_from_sso_callback
++    fake_profile = FakeModuleUserProfile(None, None)
++    fake_profile.is_user_profile_present_result = True
++    patch_modules_on_interface(monkeypatch, fake_auth, fake_profile, FakeModuleUserSource)
++
++    interface = InterfaceAuthUser(
++        process={"test": "config"},
++        system={"SYSTEM_SETTINGS": {"test": "value"}},
++        default_domain={"AUTH_SETTINGS": {"test": "value"}, "USER_SOURCE": {}},
++        user=ANONYMOUS_USER
++    )
++    return interface, fake_auth
++
++
++def test_sso_callback_redirects_with_token(monkeypatch):
++    """Success: redirection to the UI with the jwt token in the fragment, never in the query"""
++    interface, _ = get_sso_interface(monkeypatch)
++
++    result = interface.sso_callback("openid", "example.com", {"code": "abc", "state": "s"}, lambda kind, domain: "")
++
++    assert result == f"{UI_REDIRECT}#token=jwt"
++
++
++def test_sso_callback_redirects_with_error(monkeypatch):
++    """Failure after the state is read: redirection to the UI with the error code"""
++    interface, _ = get_sso_interface(monkeypatch, error=err.ERROR_SSO_USER_NOT_FOUND)
++
++    result = interface.sso_callback("openid", "example.com", {"code": "abc", "state": "s"}, lambda kind, domain: "")
++
++    assert result == f"{UI_REDIRECT}#error={err.ERROR_SSO_USER_NOT_FOUND.c}"
++
++
++def test_sso_callback_unknown_ui_redirect(monkeypatch):
++    """Invalid state: the UI url is unknown, the error is returned as an API response"""
++    interface, _ = get_sso_interface(monkeypatch, ui_redirect="", error=err.ERROR_SSO_INVALID_STATE)
++
++    result, status_code = interface.sso_callback("openid", "example.com", {"code": "abc", "state": "s"}, lambda kind, domain: "")
++
++    assert status_code == err.ERROR_SSO_INVALID_STATE.h
++    assert result["error_code"] == err.ERROR_SSO_INVALID_STATE.c
++
++
++
++def test_sso_callback_onboarding_failure_no_session(monkeypatch):
++    """Onboarding failure: redirection to the UI with the error, and no session is created"""
++    interface, fake_auth = get_sso_interface(monkeypatch)
++    fake_profile = interface.module_user_profile
++    fake_profile.is_user_profile_present_result = False
++    fake_profile.create_user_profile = lambda *args: (_ for _ in ()).throw(
++        RequestException(error=err.ERROR_IMAP_UNAIVALABLE)
++    )
++
++    result = interface.sso_callback("openid", "example.com", {"code": "abc", "state": "s"}, lambda kind, domain: "")
++
++    assert result == f"{UI_REDIRECT}#error={err.ERROR_IMAP_UNAIVALABLE.c}"
++    assert fake_auth.generate_voucher_from_user_args is None
++
++
++# ========== Tests for check_user_and_fill_info (SSO) ==========
++
++SSO_DOMAIN_SETTINGS = {"AUTH_SETTINGS": {"SOGO_D_AUTH_TYPE": "openid"}, "USER_SOURCE": {}}
++
++
++class FakeSsoModuleUserSource(FakeModuleUserSource):
++    """Fake ModuleUserSource for a SSO user, found or not"""
++    user_found = True
++    checked_users: list = []
++
++    @staticmethod
++    def init_from_domain_settings(domain_settings):
++        return FakeSsoModuleUserSource(domain_settings["USER_SOURCE"])
++
++    def check_user_without_password(self, user):
++        FakeSsoModuleUserSource.checked_users.append(user)
++        return FakeSsoModuleUserSource.user_found
++
++
++def get_sso_check_interface(monkeypatch, token_valid=True, user_found=True):
++    """Interface built with the domain settings of a SSO user, as the before_request does"""
++    fake_auth = FakeModuleAuth(None, None, None, None)
++    fake_auth.check_sso_access_token_args = None
++
++    def check_sso_access_token(user, auth_settings):
++        fake_auth.check_sso_access_token_args = (user, auth_settings)
++        return token_valid
++
++    fake_auth.check_sso_access_token = check_sso_access_token
++    fake_profile = FakeModuleUserProfile(None, None)
++    fake_profile.get_user_profile = lambda user: None
++    FakeSsoModuleUserSource.user_found = user_found
++    FakeSsoModuleUserSource.checked_users = []
++    patch_modules_on_interface(monkeypatch, fake_auth, fake_profile, FakeSsoModuleUserSource)
++
++    user = FakeUser("user@example.com", "token", authenticated=True)
++    user.auth_kind = "openid"
++    interface = InterfaceAuthUser(
++        process={"test": "config"},
++        system={"SYSTEM_SETTINGS": {"test": "value"}},
++        default_domain=SSO_DOMAIN_SETTINGS,
++        user=user
++    )
++    return interface, fake_auth, user
++
++
++def test_check_user_and_fill_info_sso(monkeypatch):
++    """Valid access token and user still in its user source"""
++    interface, fake_auth, user = get_sso_check_interface(monkeypatch)
++
++    success, user_found = interface.check_user_and_fill_info(user)
++
++    assert success
++    assert user_found is user
++    checked_user, auth_settings = fake_auth.check_sso_access_token_args
++    assert checked_user is user
++    assert auth_settings.SOGO_D_AUTH_TYPE == "openid"
++    assert FakeSsoModuleUserSource.checked_users == [user]
++
++
++def test_check_user_and_fill_info_sso_token_not_valid(monkeypatch):
++    """Access token expired or revoked on the identity provider: the user is not authenticated anymore"""
++    interface, _, user = get_sso_check_interface(monkeypatch, token_valid=False)
++
++    success, user_found = interface.check_user_and_fill_info(user)
++
++    assert not success
++    assert user_found.anonymous
++    assert FakeSsoModuleUserSource.checked_users == []
++
++
++def test_check_user_and_fill_info_sso_user_not_found(monkeypatch):
++    """Valid access token but the user is not in its user source anymore"""
++    interface, _, user = get_sso_check_interface(monkeypatch, user_found=False)
++
++    success, _ = interface.check_user_and_fill_info(user)
++
++    assert not success
+--- a/tests/test_module/test_auth/test_moduleAuth.py
++++ b/tests/test_module/test_auth/test_moduleAuth.py
+@@ -5,8 +5,11 @@
+ import pytest
+ from unittest import mock
+ 
+-from app.module.auth.ModuleAuth import ModuleAuth
++from app.module.auth.ModuleAuth import ModuleAuth, IDENTITY_PROVIDERS, build_ui_redirect_url
++from app.module.auth.IdentityProvider import IdentityProviderUserInfo
+ from app.utils.exceptions import RequestException
++from app.utils import constants as cs
++from app.utils import errors as err
+ 
+ 
+ class FakeClientSQL:
+@@ -66,6 +69,7 @@
+     def __init__(self, auth_type="plain", pwd_recovery=False):
+         self.SOGO_D_AUTH_TYPE = auth_type
+         self.SOGO_D_PWD_RECOVERY = pwd_recovery
++        self.SOGO_D_OPENID_ALLOW_REDIRECT = ["http://localhost:3001", "https://mail.example.com/"]
+ 
+ 
+ class FakeUserSourceSettings:
+@@ -319,6 +323,13 @@
+ 
+ # ========== Tests for get_login_mech ==========
+ 
++UI_REDIRECT = "http://localhost:3001/en/auth/login/sso"
++
++def fake_callback_url_builder(kind, domain):
++    """Fake builder of the SSO callback url."""
++    return f"http://api/auth/callback/{kind}/{domain}"
++
++
+ def test_get_login_mech_plain(monkeypatch):
+     """Test getting login mechanism for plain authentication."""
+     fake_client = FakeClientSQL()
+@@ -331,7 +342,7 @@
+ 
+     module = ModuleAuth(process, system, auth_settings, user_sources)
+ 
+-    result = module.get_login_mech("user@example.com")
++    result = module.get_login_mech("user@example.com", UI_REDIRECT, fake_callback_url_builder)
+ 
+     assert result['kind'] == "plain"
+     assert result['location'] == ""
+@@ -347,7 +358,7 @@
+     module = ModuleAuth(process, system, auth_settings, user_sources)
+ 
+     with pytest.raises(RequestException):
+-        module.get_login_mech("user@unknown.com")
++        module.get_login_mech("user@unknown.com", UI_REDIRECT, fake_callback_url_builder)
+ 
+ 
+ def test_get_login_mech_domainless():
+@@ -360,7 +371,7 @@
+ 
+     module = ModuleAuth(process, system, auth_settings, user_sources)
+ 
+-    result = module.get_login_mech("username")
++    result = module.get_login_mech("username", UI_REDIRECT, fake_callback_url_builder)
+ 
+     assert result['kind'] == "plain"
+     assert result['location'] == ""
+@@ -492,7 +503,7 @@
+     module = ModuleAuth(process, system, auth_settings, user_sources)
+ 
+     # Step 1: Get login mechanism
+-    login_mech = module.get_login_mech("user@example.com")
++    login_mech = module.get_login_mech("user@example.com", UI_REDIRECT, fake_callback_url_builder)
+     assert login_mech['kind'] == "plain"
+ 
+     # Step 2: Get user and sources
+@@ -519,7 +530,7 @@
+     module = ModuleAuth(process, system, auth_settings, user_sources)
+ 
+     # Step 1: Get login mechanism
+-    login_mech = module.get_login_mech("username")
++    login_mech = module.get_login_mech("username", UI_REDIRECT, fake_callback_url_builder)
+     assert login_mech['kind'] == "plain"
+ 
+     # Step 2: Get user and sources
+@@ -634,3 +645,247 @@
+ 
+         with pytest.raises(RequestException, match="Wrong data type for voucher"):
+             module.logout_user("")
++
++
++# ========== Tests for SSO ==========
++
++class FakeIdentityProvider:
++    """Fake identity provider, records the callback url it was built with and the UI url it was given."""
++    kind = "openid"
++    callback_urls: list = []
++    ui_redirects: list = []
++    state_ui_redirect = UI_REDIRECT #UI url read from the state on the callback
++    error = None #Error raised on the callback, after the state is read
++
++    def __init__(self, auth_settings, callback_url):
++        FakeIdentityProvider.callback_urls.append(callback_url)
++        self.ui_redirect = ""
++
++    def get_login_location(self, ui_redirect):
++        FakeIdentityProvider.ui_redirects.append(ui_redirect)
++        return "http://idp/auth?client_id=myClient&state=my-state"
++
++    def authenticate_from_callback(self, callback_data):
++        self.ui_redirect = FakeIdentityProvider.state_ui_redirect
++        if FakeIdentityProvider.error:
++            raise RequestException(error=FakeIdentityProvider.error)
++        return IdentityProviderUserInfo(mail="user@example.com", claims={"name": "John Doe"}, access_token="token")
++
++
++def fake_check_user_without_password(found=True, mail_domain="example.com"):
++    """Return a fake ModuleUserSource.check_user_without_password filling the user like a user source"""
++    def check(self, user):
++        if not found:
++            return False
++        user.uid = f"user@{mail_domain}"
++        user.mail = f"user@{mail_domain}"
++        user.domain = mail_domain
++        user.cn = "John Doe"
++        user.source_id = "us_db"
++        user.authenticated = True
++        return True
++    return check
++
++
++def get_sso_module(monkeypatch, auth_type="openid"):
++    """Return a ModuleAuth whose default auth is a fake SSO"""
++    FakeIdentityProvider.callback_urls = []
++    FakeIdentityProvider.ui_redirects = []
++    FakeIdentityProvider.state_ui_redirect = UI_REDIRECT
++    FakeIdentityProvider.error = None
++    monkeypatch.setitem(IDENTITY_PROVIDERS, "openid", FakeIdentityProvider)
++    system = FakeSystemSettings()
++    system.SOGO_S_DO_DOMAIN = False
++    return ModuleAuth(FakeProcessSettings(), system, FakeAuthSettings(auth_type=auth_type), get_default_user_sources())
++
++
++def test_get_login_mech_openid(monkeypatch):
++    """The location is the authorization url of the identity provider (the provider keeps the state)"""
++    module = get_sso_module(monkeypatch)
++
++    result = module.get_login_mech("user@example.com", UI_REDIRECT, fake_callback_url_builder)
++
++    assert result["kind"] == "openid"
++    assert FakeIdentityProvider.callback_urls == ["http://api/auth/callback/openid/example.com"]
++    assert result["location"] == "http://idp/auth?client_id=myClient&state=my-state"
++    assert FakeIdentityProvider.ui_redirects == [UI_REDIRECT]
++
++
++@pytest.mark.parametrize("ui_redirect", [
++    "",
++    "/en/auth/login/sso",
++    "http://localhost:3002/en/auth/login/sso",
++    "https://localhost:3001/en/auth/login/sso",
++    "http://localhost:3001.evil.com/en/auth/login/sso",
++    "http://evil.com/?http://localhost:3001",
++    "http://user@localhost:3001/",
++    "javascript://localhost:3001/%0aalert(1)",
++])
++def test_get_login_mech_openid_redirect_not_allowed(monkeypatch, ui_redirect):
++    """The origin of the UI url must be exactly one of SOGO_D_OPENID_ALLOW_REDIRECT of the domain, no state is created otherwise"""
++    module = get_sso_module(monkeypatch)
++
++    with pytest.raises(RequestException) as e:
++        module.get_login_mech("user@example.com", ui_redirect, fake_callback_url_builder)
++    assert e.value.error == err.ERROR_SSO_REDIRECT_NOT_ALLOWED
++    assert FakeIdentityProvider.ui_redirects == []
++
++
++@pytest.mark.parametrize("ui_redirect", [
++    "http://localhost:3001",
++    "http://LOCALHOST:3001/fr/auth/login/sso?x=1",
++    "https://mail.example.com/en/auth/login/sso",
++])
++def test_get_login_mech_openid_redirect_allowed(monkeypatch, ui_redirect):
++    """Any path of an allowed origin, case insensitive host, allowed entry with a trailing slash"""
++    module = get_sso_module(monkeypatch)
++
++    module.get_login_mech("user@example.com", ui_redirect, fake_callback_url_builder)
++    assert FakeIdentityProvider.ui_redirects == [ui_redirect]
++
++
++def test_get_login_mech_plain_ignores_redirect(monkeypatch):
++    """No SSO: the UI url is not checked"""
++    module = get_sso_module(monkeypatch, auth_type="plain")
++
++    result = module.get_login_mech("user@example.com", "", fake_callback_url_builder)
++    assert result["kind"] == "plain"
++
++
++def test_get_user_from_sso_callback(monkeypatch):
++    """The callback url is the same as for get_login_mech and the user is authenticated"""
++    module = get_sso_module(monkeypatch)
++    monkeypatch.setattr("app.module.auth.ModuleAuth.ModuleUserSource.check_user_without_password", fake_check_user_without_password())
++
++    user, sources = module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++
++    assert FakeIdentityProvider.callback_urls == ["http://api/auth/callback/openid/example.com"]
++    assert user.uid == "user@example.com"
++    assert user.mail == "user@example.com"
++    assert user.domain == "example.com"
++    assert user.cn == "John Doe"
++    assert user.source_id == "us_db"
++    assert user.password == "token"
++    assert user.auth_kind == "openid"
++    assert user.authenticated
++    assert sources == module.default_us
++    assert module.sso_ui_redirect == UI_REDIRECT
++
++
++def test_get_user_from_sso_callback_error_keeps_ui_redirect(monkeypatch):
++    """The identity provider read the state then failed: the UI url is known to send the error back"""
++    module = get_sso_module(monkeypatch)
++    FakeIdentityProvider.error = err.ERROR_SSO_LOGIN_FAILED
++
++    with pytest.raises(RequestException):
++        module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++    assert module.sso_ui_redirect == UI_REDIRECT
++
++
++def test_get_user_from_sso_callback_ui_redirect_not_allowed_anymore(monkeypatch):
++    """SOGO_D_OPENID_ALLOW_REDIRECT changed between the login and the callback"""
++    module = get_sso_module(monkeypatch)
++    monkeypatch.setattr("app.module.auth.ModuleAuth.ModuleUserSource.check_user_without_password", fake_check_user_without_password())
++    FakeIdentityProvider.state_ui_redirect = "http://old-ui.example.com/en/auth/login/sso"
++
++    module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++    assert module.sso_ui_redirect == ""
++
++
++def test_get_user_from_sso_callback_user_not_found(monkeypatch):
++    """The identity provider authenticated the user but it is in no user source"""
++    module = get_sso_module(monkeypatch)
++    monkeypatch.setattr("app.module.auth.ModuleAuth.ModuleUserSource.check_user_without_password", fake_check_user_without_password(found=False))
++    with pytest.raises(RequestException) as e:
++        module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++    assert e.value.error == err.ERROR_SSO_USER_NOT_FOUND
++
++
++def test_get_user_from_sso_callback_other_domain(monkeypatch):
++    """The user found in the user sources is not in the domain of the callback"""
++    module = get_sso_module(monkeypatch)
++    monkeypatch.setattr("app.module.auth.ModuleAuth.ModuleUserSource.check_user_without_password", fake_check_user_without_password(mail_domain="other.com"))
++    with pytest.raises(RequestException) as e:
++        module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++    assert e.value.error == err.ERROR_SSO_LOGIN_FAILED
++
++
++def test_get_user_from_sso_callback_wrong_auth_type(monkeypatch):
++    """Callback for openid on a plain domain"""
++    module = get_sso_module(monkeypatch, auth_type="plain")
++    with pytest.raises(RequestException) as e:
++        module.get_user_from_sso_callback("openid", "example.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++    assert e.value.error == err.ERROR_SSO_WRONG_AUTH_TYPE
++
++
++def test_get_user_from_sso_callback_unknown_domain(monkeypatch):
++    """Callback with a domain rejected by SOGO_S_REJECT_UNKNOWN_DOMAIN"""
++    module = get_sso_module(monkeypatch)
++
++    with pytest.raises(RequestException):
++        module.get_user_from_sso_callback("openid", "unknown.com", {"code": "abc", "state": "my-state"}, fake_callback_url_builder)
++
++
++def test_get_login_mech_openid_redirect_from_domain_settings(monkeypatch):
++    """SOGO_D_OPENID_ALLOW_REDIRECT is read from the settings of the domain of the user, not the default ones"""
++    module = get_sso_module(monkeypatch)
++    domain_auth = FakeAuthSettings(auth_type="openid")
++    domain_auth.SOGO_D_OPENID_ALLOW_REDIRECT = ["https://other-ui.example.com"]
++    monkeypatch.setattr(module, "_get_domain_auth_and_user_source_settings", lambda domain: (domain_auth, {}))
++
++    with pytest.raises(RequestException) as e:
++        module.get_login_mech("user@example.com", UI_REDIRECT, fake_callback_url_builder)
++    assert e.value.error == err.ERROR_SSO_REDIRECT_NOT_ALLOWED
++
++    module.get_login_mech("user@example.com", "https://other-ui.example.com/en/auth/login/sso", fake_callback_url_builder)
++    assert FakeIdentityProvider.ui_redirects == ["https://other-ui.example.com/en/auth/login/sso"]
++
++
++# ========== Tests for check_sso_access_token ==========
++
++def get_sso_user(auth_kind="openid"):
++    """Return a user logged in with a SSO, the access token is its password"""
++    user = FakeUser(uid="user@example.com", password="token")
++    user.auth_kind = auth_kind
++    return user
++
++
++@pytest.mark.parametrize("token_valid", [True, False])
++def test_check_sso_access_token(monkeypatch, token_valid):
++    """The identity provider of the domain checks the access token"""
++    module = get_sso_module(monkeypatch)
++    checked = []
++    def check_access_token(self, access_token):
++        checked.append(access_token)
++        return token_valid
++    monkeypatch.setattr(FakeIdentityProvider, "check_access_token", check_access_token, raising=False)
++
++    assert module.check_sso_access_token(get_sso_user(), FakeAuthSettings(auth_type="openid")) is token_valid
++    assert checked == ["token"]
++
++
++def test_check_sso_access_token_domain_auth_type_changed(monkeypatch):
++    """The domain does not use the SSO the user logged in with anymore"""
++    module = get_sso_module(monkeypatch)
++    assert not module.check_sso_access_token(get_sso_user(), FakeAuthSettings(auth_type="plain"))
++
++
++def test_check_sso_access_token_provider_unreachable(monkeypatch):
++    """The token cannot be checked: it is not trusted"""
++    module = get_sso_module(monkeypatch)
++    def check_access_token(self, access_token):
++        raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE)
++    monkeypatch.setattr(FakeIdentityProvider, "check_access_token", check_access_token, raising=False)
++
++    assert not module.check_sso_access_token(get_sso_user(), FakeAuthSettings(auth_type="openid"))
++
++
++# ========== Tests for build_ui_redirect_url ==========
++
++@pytest.mark.parametrize("ui_redirect, expected", [
++    ("http://localhost:3001/en/auth/login/sso", "http://localhost:3001/en/auth/login/sso#token=a%2Fb"),
++    ("http://localhost:3001/sso?x=1#frag", "http://localhost:3001/sso?x=1#token=a%2Fb"),
++])
++def test_build_ui_redirect_url(ui_redirect, expected):
++    """The parameters go in the fragment (replaced), the query of the UI url is kept, the values are encoded"""
++    assert build_ui_redirect_url(ui_redirect, {"token": "a/b"}) == expected
+--- /dev/null
++++ b/tests/test_module/test_auth/test_openid_provider.py
+@@ -0,0 +1,433 @@
++"""
++Unit tests for OpenIDProvider. The openid server and redis are mocked.
++"""
++from urllib.parse import urlparse, parse_qs
++
++import pytest
++import requests
++from redis import exceptions as rexc
++from flask import Flask
++
++from app.module.auth import OpenIDProvider as op
++from app.module.auth.OpenIDProvider import OpenIDProvider
++from app.utils.exceptions import RequestException
++from app.utils import constants as cs
++from app.utils import errors as err
++
++CALLBACK_URL = "http://127.0.0.1:5000/api/user/v1/auth/callback/openid/example.com"
++OTHER_CALLBACK_URL = "http://127.0.0.1:5000/api/user/v1/auth/callback/openid/other.com"
++UI_REDIRECT = "http://localhost:3001/en/auth/login/sso"
++METADATA = {
++    "issuer": "http://idp",
++    "authorization_endpoint": "http://idp/auth",
++    "token_endpoint": "http://idp/token",
++    "userinfo_endpoint": "http://idp/userinfo",
++}
++
++
++class FakeAuthSettings:
++    """Fake AuthSettingsObj for openid."""
++    def __init__(self, fetch_user_profile=True, token_check_interval=0):
++        self.SOGO_D_AUTH_TYPE = "openid"
++        self.SOGO_D_OPENID_CONFIG_URL = "http://idp/.well-known/openid-configuration"
++        self.SOGO_D_OPENID_CLIENT_NAME = "myClient"
++        self.SOGO_D_OPENID_CLIENT_SECRET = "secret"
++        self.SOGO_D_OPENID_SCOPE = "openid profile email"
++        self.SOGO_D_OPENID_EMAIL = "email"
++        self.SOGO_D_OPENID_FETCH_USER_PROFILE = fetch_user_profile
++        self.SOGO_D_OPENID_TOKEN_CHECK_INTERVAL = token_check_interval
++
++
++class FakeCache:
++    """Fake ClientRedis, the TTL is only recorded"""
++    def __init__(self):
++        self.data: dict = {}
++        self.ttl: dict = {}
++        self.down = False #Simulate an unreachable redis
++
++    def _check(self):
++        if self.down:
++            raise rexc.ConnectionError("down")
++
++    def set(self, key, value, ttl, nx=False):
++        self._check()
++        self.data[key] = value
++        self.ttl[key] = ttl
++        return True
++
++    def get(self, key, expected_type):
++        self._check()
++        return self.data.get(key)
++
++    def pop(self, key, expected_type):
++        self._check()
++        return self.data.pop(key, None)
++
++    def close(self):
++        pass
++
++
++@pytest.fixture
++def app():
++    """Flask app, without secret key: the flask session must not be used"""
++    return Flask(__name__)
++
++
++@pytest.fixture
++def cache(monkeypatch):
++    """Mock redis"""
++    fake_cache = FakeCache()
++    monkeypatch.setattr(op, "sogo_cache", lambda: fake_cache)
++    return fake_cache
++
++
++@pytest.fixture
++def idp(monkeypatch, cache):
++    """Mock the openid server, return the calls made to it"""
++    calls = {"fetch_token": [], "parse_id_token": [], "userinfo": {"email": "user@example.com", "name": "John Doe"},
++             "id_token_claims": {"email": "id@example.com"}}
++
++    def fake_load_server_metadata(self):
++        return METADATA
++
++    def fake_fetch_access_token(self, **kwargs):
++        calls["fetch_token"].append(kwargs)
++        return {"access_token": "at", "token_type": "Bearer", "id_token": "jwt"}
++
++    def fake_parse_id_token(self, token, nonce, **kwargs):
++        calls["parse_id_token"].append(nonce)
++        return calls["id_token_claims"]
++
++    def fake_userinfo(self):
++        return calls["userinfo"]
++
++    monkeypatch.setattr(op.FlaskOAuth2App, "load_server_metadata", fake_load_server_metadata)
++    monkeypatch.setattr(op.FlaskOAuth2App, "fetch_access_token", fake_fetch_access_token)
++    monkeypatch.setattr(op.FlaskOAuth2App, "parse_id_token", fake_parse_id_token)
++    monkeypatch.setattr(op.FlaskOAuth2App, "userinfo", fake_userinfo)
++    return calls
++
++
++def state_key(state, callback_url=CALLBACK_URL) -> str:
++    return f"{cs.SSO_STATE_KEY_PREFIX}openid:{callback_url}:{state}"
++
++
++def login(app, callback_url=CALLBACK_URL) -> dict:
++    """Call get_login_location, return the query of the authorization url"""
++    with app.test_request_context("/auth/mode"):
++        url = OpenIDProvider(FakeAuthSettings(), callback_url).get_login_location(UI_REDIRECT)
++        return parse_qs(urlparse(url).query)
++
++
++def callback(app, query_string: dict, callback_url=CALLBACK_URL, fetch_user_profile=True, providers: list|None = None):
++    """Call authenticate_from_callback with this query string, return the identity. The provider is added to providers."""
++    with app.test_request_context("/auth/callback", query_string=query_string):
++        provider = OpenIDProvider(FakeAuthSettings(fetch_user_profile), callback_url)
++        if providers is not None:
++            providers.append(provider)
++        return provider.authenticate_from_callback(query_string)
++
++
++def test_get_login_location(app, idp, cache):
++    """Authorization url has the client info, a state and a nonce, both kept in redis with the UI url"""
++    with app.test_request_context("/auth/mode"):
++        url = OpenIDProvider(FakeAuthSettings(), CALLBACK_URL).get_login_location(UI_REDIRECT)
++
++    parsed = urlparse(url)
++    query = parse_qs(parsed.query)
++    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == METADATA["authorization_endpoint"]
++    assert query["response_type"] == ["code"]
++    assert query["client_id"] == ["myClient"]
++    assert query["redirect_uri"] == [CALLBACK_URL]
++    assert query["scope"] == ["openid profile email"]
++    assert "code_challenge" not in query
++
++    state = query["state"][0]
++    assert len(state) >= 30 #authlib generate_token(30)
++    key = state_key(state)
++    assert cache.data == {key: {"redirect_uri": CALLBACK_URL, "nonce": query["nonce"][0], cs.SSO_STATE_UI_REDIRECT: UI_REDIRECT}}
++    assert cache.ttl[key] == cs.SSO_STATE_TTL
++
++
++def test_get_login_location_state_is_random(app, idp):
++    """Each login has its own state"""
++    query1 = login(app)
++    query2 = login(app)
++    assert query1["state"] != query2["state"]
++
++
++def test_get_login_location_idp_unreachable(app, monkeypatch):
++    """Discovery url not reachable"""
++    def fail(self):
++        raise requests.ConnectionError("down")
++    monkeypatch.setattr(op.FlaskOAuth2App, "load_server_metadata", fail)
++
++    with app.test_request_context("/auth/mode"), pytest.raises(RequestException) as e:
++        OpenIDProvider(FakeAuthSettings(), CALLBACK_URL).get_login_location(UI_REDIRECT)
++    assert e.value.error == err.ERROR_SSO_PROVIDER_UNREACHABLE
++
++
++def test_authenticate_from_callback(app, idp, cache):
++    """State is checked and consumed, code is exchanged and the mail is read from user info"""
++    query = login(app)
++    providers: list = []
++
++    identity = callback(app, {"code": "abc", "state": query["state"][0]}, providers=providers)
++
++    assert providers[0].ui_redirect == UI_REDIRECT
++    assert identity.mail == "user@example.com"
++    assert identity.claims["name"] == "John Doe"
++    assert identity.access_token == "at"
++    assert idp["fetch_token"] == [{"code": "abc", "state": query["state"][0], "redirect_uri": CALLBACK_URL}]
++    assert idp["parse_id_token"] == query["nonce"]
++    assert cache.data == {}
++
++
++def test_authenticate_from_callback_id_token_claims(app, idp):
++    """SOGO_D_OPENID_FETCH_USER_PROFILE=False: the mail is read from the validated id_token"""
++    query = login(app)
++
++    identity = callback(app, {"code": "abc", "state": query["state"][0]}, fetch_user_profile=False)
++
++    assert identity.mail == "id@example.com"
++
++
++def test_authenticate_from_callback_replay(app, idp):
++    """The state is single use, the same callback can't be replayed"""
++    query = login(app)
++    query_string = {"code": "abc", "state": query["state"][0]}
++    callback(app, query_string)
++
++    with pytest.raises(RequestException) as e:
++        callback(app, query_string)
++    assert e.value.error == err.ERROR_SSO_INVALID_STATE
++    assert len(idp["fetch_token"]) == 1
++
++
++@pytest.mark.parametrize("state", [None, "", "unknown"])
++def test_authenticate_from_callback_invalid_state(app, idp, cache, state):
++    """No state, empty state or state not in redis (forged)"""
++    login(app)
++    query_string = {"code": "abc"} if state is None else {"code": "abc", "state": state}
++
++    with pytest.raises(RequestException) as e:
++        callback(app, query_string)
++    assert e.value.error == err.ERROR_SSO_INVALID_STATE
++    assert idp["fetch_token"] == []
++    assert len(cache.data) == 1 #The real state is untouched
++
++
++def test_authenticate_from_callback_other_domain(app, idp, cache):
++    """State created for the callback of another domain"""
++    query = login(app, OTHER_CALLBACK_URL)
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"code": "abc", "state": query["state"][0]})
++    assert e.value.error == err.ERROR_SSO_INVALID_STATE
++    assert state_key(query["state"][0], OTHER_CALLBACK_URL) in cache.data
++
++
++def test_authenticate_from_callback_expired_state(app, idp, cache):
++    """State older than cs.SSO_STATE_TTL, removed by redis"""
++    query = login(app)
++    cache.data.clear()
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"code": "abc", "state": query["state"][0]})
++    assert e.value.error == err.ERROR_SSO_INVALID_STATE
++
++
++@pytest.mark.parametrize("query_string", [{}, {"error": "access_denied", "error_description": "no"}])
++def test_authenticate_from_callback_no_code(app, idp, cache, query_string):
++    """Error or missing code in callback: the state is consumed and the UI url known to send the error back"""
++    query = login(app)
++    providers: list = []
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {**query_string, "state": query["state"][0]}, providers=providers)
++    assert e.value.error == err.ERROR_SSO_LOGIN_FAILED
++    assert idp["fetch_token"] == []
++    assert providers[0].ui_redirect == UI_REDIRECT
++    assert cache.data == {}
++
++
++def test_authenticate_from_callback_error_invalid_state(app, idp, cache):
++    """Error in callback with an unknown state: the UI url is unknown"""
++    login(app)
++    providers: list = []
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"error": "access_denied", "state": "unknown"}, providers=providers)
++    assert e.value.error == err.ERROR_SSO_INVALID_STATE
++    assert providers[0].ui_redirect == ""
++    assert len(cache.data) == 1
++
++
++def test_authenticate_from_callback_failure_keeps_ui_redirect(app, idp, monkeypatch):
++    """The state is read, then the code exchange fails: the UI url is known to send the error back"""
++    def fail(self, **kwargs):
++        raise requests.ConnectionError("down")
++    monkeypatch.setattr(op.FlaskOAuth2App, "fetch_access_token", fail)
++    query = login(app)
++    providers: list = []
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"code": "abc", "state": query["state"][0]}, providers=providers)
++    assert e.value.error == err.ERROR_SSO_PROVIDER_UNREACHABLE
++    assert providers[0].ui_redirect == UI_REDIRECT
++
++
++def test_authenticate_from_callback_no_mail(app, idp):
++    """User info has no SOGO_D_OPENID_EMAIL field"""
++    idp["userinfo"] = {"sub": "123"}
++    query = login(app)
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"code": "abc", "state": query["state"][0]})
++    assert e.value.error == err.ERROR_SSO_LOGIN_FAILED
++
++
++def test_get_login_location_redis_unreachable(app, idp, cache):
++    """Redis down when saving the state"""
++    cache.down = True
++
++    with app.test_request_context("/auth/mode"), pytest.raises(RequestException) as e:
++        OpenIDProvider(FakeAuthSettings(), CALLBACK_URL).get_login_location(UI_REDIRECT)
++    assert e.value.error == err.ERROR_SSO_STATE_STORAGE_UNREACHABLE
++
++
++def test_authenticate_from_callback_redis_unreachable(app, idp, cache):
++    """Redis down when reading the state on the callback"""
++    query = login(app)
++    cache.down = True
++
++    with pytest.raises(RequestException) as e:
++        callback(app, {"code": "abc", "state": query["state"][0]})
++    assert e.value.error == err.ERROR_SSO_STATE_STORAGE_UNREACHABLE
++    assert idp["fetch_token"] == []
++
++
++# ========== Tests for check_access_token ==========
++
++class FakeResponse:
++    """Fake requests response"""
++    def __init__(self, status_code=200, json_data=None):
++        self.status_code = status_code
++        self._json = json_data or {}
++
++    def json(self):
++        return self._json
++
++    def raise_for_status(self):
++        if self.status_code >= 400:
++            raise requests.HTTPError(f"{self.status_code}")
++
++
++@pytest.fixture
++def token_server(monkeypatch, idp):
++    """Mock the introspection and userinfo endpoints, return the calls made to them"""
++    calls = {"introspect": [], "userinfo": [], "introspect_response": FakeResponse(json_data={"active": True}),
++             "userinfo_response": FakeResponse()}
++
++    def fake_post(url, data, auth, timeout):
++        calls["introspect"].append({"url": url, "data": data, "auth": auth})
++        return calls["introspect_response"]
++
++    def fake_get(url, headers, timeout):
++        calls["userinfo"].append({"url": url, "headers": headers})
++        return calls["userinfo_response"]
++
++    monkeypatch.setattr(op.requests, "post", fake_post)
++    monkeypatch.setattr(op.requests, "get", fake_get)
++    return calls
++
++
++def with_introspection(monkeypatch):
++    """The openid server has an introspection endpoint"""
++    metadata = dict(METADATA, introspection_endpoint="http://idp/introspect")
++    monkeypatch.setattr(op.FlaskOAuth2App, "load_server_metadata", lambda self: metadata)
++
++
++@pytest.mark.parametrize("active, expected", [(True, True), (False, False), (None, False)])
++def test_check_access_token_introspection(monkeypatch, token_server, cache, active, expected):
++    """The introspection endpoint is used with the client credentials, the token is valid only if active is true"""
++    with_introspection(monkeypatch)
++    token_server["introspect_response"] = FakeResponse(json_data={} if active is None else {"active": active})
++
++    assert OpenIDProvider(FakeAuthSettings(), "").check_access_token("at") is expected
++    assert token_server["introspect"] == [{"url": "http://idp/introspect",
++                                           "data": {"token": "at", "token_type_hint": "access_token"},
++                                           "auth": ("myClient", "secret")}]
++    assert token_server["userinfo"] == []
++    assert cache.data == {}
++
++
++@pytest.mark.parametrize("status_code, expected", [(200, True), (401, False), (403, False)])
++def test_check_access_token_userinfo(token_server, status_code, expected):
++    """No introspection endpoint: the token is valid if the userinfo endpoint accepts it"""
++    token_server["userinfo_response"] = FakeResponse(status_code=status_code)
++
++    assert OpenIDProvider(FakeAuthSettings(), "").check_access_token("at") is expected
++    assert token_server["userinfo"] == [{"url": "http://idp/userinfo", "headers": {"Authorization": "Bearer at"}}]
++
++
++def test_check_access_token_empty(token_server):
++    """No token, nothing is asked to the openid server"""
++    assert not OpenIDProvider(FakeAuthSettings(), "").check_access_token("")
++    assert token_server["userinfo"] == []
++
++
++@pytest.mark.parametrize("response", [FakeResponse(status_code=500), FakeResponse(status_code=502)])
++def test_check_access_token_server_error(token_server, response):
++    """The openid server answered an error that does not say the token is invalid"""
++    token_server["userinfo_response"] = response
++
++    with pytest.raises(RequestException) as e:
++        OpenIDProvider(FakeAuthSettings(), "").check_access_token("at")
++    assert e.value.error == err.ERROR_SSO_PROVIDER_UNREACHABLE
++
++
++def test_check_access_token_idp_unreachable(monkeypatch, cache):
++    """Discovery url not reachable"""
++    def fail(self):
++        raise requests.ConnectionError("down")
++    monkeypatch.setattr(op.FlaskOAuth2App, "load_server_metadata", fail)
++
++    with pytest.raises(RequestException) as e:
++        OpenIDProvider(FakeAuthSettings(), "").check_access_token("at")
++    assert e.value.error == err.ERROR_SSO_PROVIDER_UNREACHABLE
++
++
++def test_check_access_token_interval(token_server, cache):
++    """Once valid, the token is not checked again during SOGO_D_OPENID_TOKEN_CHECK_INTERVAL, the token is not in redis"""
++    provider = OpenIDProvider(FakeAuthSettings(token_check_interval=300), "")
++
++    assert provider.check_access_token("at")
++    assert provider.check_access_token("at")
++    assert len(token_server["userinfo"]) == 1
++    [key] = cache.data
++    assert key.startswith(f"{cs.SSO_TOKEN_CHECK_KEY_PREFIX}openid:")
++    assert "at" not in key.removeprefix(f"{cs.SSO_TOKEN_CHECK_KEY_PREFIX}openid:")
++    assert cache.ttl[key] == 300
++
++    #Another token is checked
++    assert provider.check_access_token("other")
++    assert len(token_server["userinfo"]) == 2
++
++
++def test_check_access_token_interval_invalid_not_cached(token_server, cache):
++    """An invalid token is never kept as checked"""
++    token_server["userinfo_response"] = FakeResponse(status_code=401)
++
++    assert not OpenIDProvider(FakeAuthSettings(token_check_interval=300), "").check_access_token("at")
++    assert cache.data == {}
++
++
++def test_check_access_token_interval_redis_unreachable(token_server, cache):
++    """Redis down: the token is checked on the openid server every time"""
++    cache.down = True
++    provider = OpenIDProvider(FakeAuthSettings(token_check_interval=300), "")
++
++    assert provider.check_access_token("at")
++    assert provider.check_access_token("at")
++    assert len(token_server["userinfo"]) == 2

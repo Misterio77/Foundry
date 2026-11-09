@@ -12,6 +12,7 @@
     ./git-remote.nix
     ./headscale.nix
     ./mail.nix
+    ./sogo6.nix
     ./prometheus.nix
     ./radicale.nix
     ./firefly.nix

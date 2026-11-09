@@ -1,0 +1,1931 @@
+--- a/src/app/[locale]/(auth)/auth/login/__tests__/layout.test.tsx
++++ b/src/app/[locale]/(auth)/auth/login/__tests__/layout.test.tsx
+@@ -12,7 +12,7 @@
+ }))
+ 
+ const mockPush = jest.fn()
+-jest.mock('next/navigation', () => ({
++jest.mock('@/lib/i18n/navigation', () => ({
+   useRouter: () => ({ push: mockPush }),
+ }))
+ 
+@@ -25,6 +25,7 @@
+   afterEach(() => {
+     jest.mocked(useAppSelector).mockReturnValue(false)
+     mockPush.mockClear()
++    window.history.replaceState(null, '', '/en/auth/login')
+   })
+ 
+   it('renders children correctly', () => {
+@@ -97,4 +98,18 @@
+     expect(mockPush).toHaveBeenCalledWith('/u/0/INBOX')
+     expect(screen.queryByTestId('test-content')).not.toBeInTheDocument()
+   })
++
++  it('keeps the callback mounted when a token is already in the hash', () => {
++    jest.mocked(useAppSelector).mockReturnValue(true)
++    window.history.replaceState(null, '', '/en/auth/login/sso#token=abc')
++
++    render(
++      <Layout>
++        <div data-testid="test-content">Test Content</div>
++      </Layout>
++    )
++
++    expect(screen.getByTestId('test-content')).toBeInTheDocument()
++    expect(mockPush).not.toHaveBeenCalled()
++  })
+ })
+--- a/src/app/[locale]/(auth)/auth/login/layout.tsx
++++ b/src/app/[locale]/(auth)/auth/login/layout.tsx
+@@ -2,13 +2,14 @@
+ 
+ import LoginShell from '@/features/auth/components/login-shell'
+ import { selectIsAuthenticated } from '@/features/auth/components/store/auth.slice'
++import { hasSsoCallbackResult } from '@/features/auth/utils'
++import { useRouter } from '@/lib/i18n/navigation'
+ import { useAppSelector } from '@/lib/redux/hooks'
+-import { useRouter } from 'next/navigation'
+ import React, { startTransition, useEffect, useState } from 'react'
+ 
+ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+   const isAuthenticated = useAppSelector(selectIsAuthenticated)
+-  const router = useRouter()
++  const { push } = useRouter()
+   const [isHydrated, setIsHydrated] = useState(false)
+ 
+   useEffect(() => {
+@@ -17,13 +18,16 @@
+     })
+   }, [])
+ 
++  const ssoResultPending =
++    isHydrated && hasSsoCallbackResult(window.location.hash)
++
+   useEffect(() => {
+-    if (isHydrated && isAuthenticated) {
+-      router.push('/u/0/INBOX')
++    if (isHydrated && isAuthenticated && !ssoResultPending) {
++      push('/u/0/INBOX')
+     }
+-  }, [isHydrated, isAuthenticated, router])
++  }, [isHydrated, isAuthenticated, ssoResultPending, push])
+ 
+-  if (!isHydrated || isAuthenticated) return null
++  if (!isHydrated || (isAuthenticated && !ssoResultPending)) return null
+ 
+   return <LoginShell>{children}</LoginShell>
+ }
+--- /dev/null
++++ b/src/app/[locale]/(auth)/auth/login/sso/page.tsx
+@@ -0,0 +1,7 @@
++'use client'
++
++import { LoginSsoCallback } from '@/features/auth/components/login-sso-callback'
++
++export default function LoginSsoPage() {
++  return <LoginSsoCallback />
++}
+--- a/src/components/ui/__tests__/header-dropdown.test.tsx
++++ b/src/components/ui/__tests__/header-dropdown.test.tsx
+@@ -30,9 +30,8 @@
+ 
+ const mockPush = jest.fn()
+ const mockDispatch = jest.fn()
+-const mockRevokeSession = jest.fn(() => ({
+-  unwrap: () => Promise.resolve(),
+-}))
++const mockRevokeSession = jest.fn()
++const mockLogoutRedirect = jest.fn()
+ let mockPendingCount = 0
+ 
+ jest.mock('@/features/auth/components/store/auth.api', () => ({
+@@ -60,7 +59,7 @@
+ }))
+ 
+ jest.mock('@/features/offline/auth/redirect-after-logout', () => ({
+-  redirectAfterLogout: (push: (href: string) => void) => push('/auth/login'),
++  redirectAfterLogout: (...args: unknown[]) => mockLogoutRedirect(...args),
+ }))
+ 
+ jest.mock('@/features/offline/hooks/use-offline-draft-sync', () => ({
+@@ -426,6 +425,8 @@
+     mockPush.mockReset()
+     mockDispatch.mockReset()
+     mockRevokeSession.mockClear()
++    mockLogoutRedirect.mockReset()
++    mockLogoutRedirect.mockImplementation((push) => push('/auth/login'))
+     mockRevokeSession.mockImplementation(() => ({
+       unwrap: () => Promise.resolve(),
+     }))
+@@ -488,6 +489,30 @@
+     })
+   })
+ 
++  it('clears local data and credentials before forwarding the successful logout URL', async () => {
++    const endpoint = 'https://auth.m7.rs/application/o/sogo6-oidc-pilot/end-session/'
++    mockRevokeSession.mockReturnValue({ unwrap: () => Promise.resolve({ data: { logout_url: endpoint } }) })
++    let finishWipe!: () => void
++    ;(wipeOnLogout as jest.Mock).mockImplementationOnce(() => new Promise<void>((resolve) => { finishWipe = resolve }))
++    render(<HeaderDropdown />)
++    fireEvent.click(screen.getByTestId('header-dropdown-trigger'))
++    fireEvent.click(screen.getByText('logout.string'))
++    await waitFor(() => expect(wipeOnLogout).toHaveBeenCalled())
++    expect(mockLogoutRedirect).not.toHaveBeenCalled()
++    finishWipe()
++    await waitFor(() => expect(mockLogoutRedirect).toHaveBeenCalledWith(mockPush, undefined, endpoint))
++    expect(mockDispatch.mock.invocationCallOrder[0]).toBeLessThan(mockLogoutRedirect.mock.invocationCallOrder[0])
++  })
++
++  it('still clears local credentials when server logout fails', async () => {
++    mockRevokeSession.mockReturnValue({ unwrap: () => Promise.reject(new Error('unavailable')) })
++    render(<HeaderDropdown />)
++    fireEvent.click(screen.getByTestId('header-dropdown-trigger'))
++    fireEvent.click(screen.getByText('logout.string'))
++    await waitFor(() => expect(mockLogoutRedirect).toHaveBeenCalledWith(mockPush, undefined, undefined))
++    expect(mockDispatch).toHaveBeenCalled()
++  })
++
+   it('warns before logout when the outbox has pending messages', async () => {
+     mockPendingCount = 2
+     render(<HeaderDropdown />)
+--- a/src/components/ui/header-dropdown.tsx
++++ b/src/components/ui/header-dropdown.tsx
+@@ -32,7 +32,7 @@
+ import { useOfflineNav } from '@/features/offline/offline-nav-context'
+ import { ProfileAvatar } from '@/features/user-profile/components/profile-avatar'
+ import { useProfile } from '@/features/user-profile/hooks/use-profile'
+-import { PP_DEFAULT } from '@/features/user-settings/store/user-preferences-api-types'
++import { PP_USERSOURCE } from '@/features/user-settings/store/user-preferences-api-types'
+ import { useIsMobile } from '@/hooks/use-mobile'
+ import { useRouter } from '@/lib/i18n/navigation'
+ import { useAppDispatch, useAppSelector } from '@/lib/redux/hooks'
+@@ -56,7 +56,7 @@
+   const dispatch = useAppDispatch()
+   const { push } = useRouter()
+   const { navigateApp } = useOfflineNav()
+-  const { user, isLoading, isError, preferences } = useProfile()
++  const { user, isLoading, isError, profile } = useProfile()
+   const { pendingCount } = useOutboxList()
+   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
+   const [revokeSession] = useLogoutMutation()
+@@ -68,15 +68,11 @@
+   const userName = displayUser?.cn || t('account.defaultUser.string')
+   const userEmail = displayUser?.email || ''
+ 
+-  // Get profile picture source from user preferences (defaults to PP_DEFAULT)
+-  const profilePictureSource =
+-    preferences?.USER_GENERAL?.SOGO_U_PROFILE_PICTURE || PP_DEFAULT
+-
+   const performLogout = useCallback(() => {
+-    const finishLocalLogout = () => {
++    const finishLocalLogout = (logoutUrl?: string) => {
+       void wipeOnLogout(authUser?.uid).finally(() => {
+         dispatch(logout())
+-        redirectAfterLogout(push)
++        redirectAfterLogout(push, undefined, logoutUrl)
+       })
+     }
+ 
+@@ -89,8 +85,8 @@
+ 
+     void revokeSession()
+       .unwrap()
+-      .catch(() => undefined)
+-      .finally(finishLocalLogout)
++      .then((response) => finishLocalLogout(response?.data?.logout_url))
++      .catch(() => finishLocalLogout())
+   }, [authUser?.uid, dispatch, push, revokeSession])
+ 
+   const handleLogoutClick = async () => {
+@@ -134,7 +130,8 @@
+             className="flex items-center gap-4 space-x-2 pl-4"
+           >
+             <ProfileAvatar
+-              pictureSource={profilePictureSource}
++              pictureSource={PP_USERSOURCE}
++              userSourceBase64={profile?.picture || undefined}
+               email={userEmail}
+               fallbackUsername={displayUser?.cn}
+               useInitialsFallback={true}
+--- /dev/null
++++ b/src/features/auth/__tests__/utils.test.ts
+@@ -0,0 +1,98 @@
++import { getSsoErrorMessage } from '../sso-error-message'
++import {
++  decodeJwtPayload,
++  hasSsoCallbackResult,
++  isAbsoluteHttpUrl,
++} from '../utils'
++
++function payloadSegment(payload: object): string {
++  const bytes = new TextEncoder().encode(JSON.stringify(payload))
++  let binary = ''
++  bytes.forEach((byte) => {
++    binary += String.fromCharCode(byte)
++  })
++  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
++}
++
++describe('decodeJwtPayload', () => {
++  it('decodes an unpadded base64url payload', () => {
++    const payload = {
++      uid: 'user',
++      cn: 'John Do',
++      email: 'user@example.com',
++    }
++    const segment = payloadSegment(payload)
++    expect(segment.length % 4).not.toBe(0)
++
++    expect(decodeJwtPayload(`h.${segment}.s`)).toEqual(payload)
++  })
++
++  it('decodes a display name with an accent', () => {
++    const payload = {
++      uid: 'user',
++      cn: 'Élise André',
++      email: 'elise@example.com',
++    }
++
++    expect(decodeJwtPayload(`h.${payloadSegment(payload)}.s`)).toEqual(payload)
++  })
++
++  it('rejects a token that is not a jwt', () => {
++    expect(() => decodeJwtPayload('not-a-jwt')).toThrow()
++  })
++
++  it('rejects a payload missing the user fields', () => {
++    expect(() =>
++      decodeJwtPayload(`h.${payloadSegment({ uid: 'user' })}.s`)
++    ).toThrow()
++  })
++})
++
++describe('isAbsoluteHttpUrl', () => {
++  it('accepts absolute http and https urls', () => {
++    expect(isAbsoluteHttpUrl('https://idp.example/auth')).toBe(true)
++    expect(isAbsoluteHttpUrl('http://localhost:8080/auth')).toBe(true)
++  })
++
++  it('rejects empty, relative, and non-http urls', () => {
++    expect(isAbsoluteHttpUrl('')).toBe(false)
++    expect(isAbsoluteHttpUrl('/auth')).toBe(false)
++    expect(isAbsoluteHttpUrl('javascript:alert(1)')).toBe(false)
++  })
++})
++
++describe('hasSsoCallbackResult', () => {
++  it('detects a token or an error in the fragment', () => {
++    expect(hasSsoCallbackResult('#token=abc')).toBe(true)
++    expect(hasSsoCallbackResult('#error=S000212')).toBe(true)
++    expect(hasSsoCallbackResult('')).toBe(false)
++    expect(hasSsoCallbackResult('#other=1')).toBe(false)
++  })
++})
++
++describe('getSsoErrorMessage', () => {
++  const t = jest.fn((key: string, values?: { code: string }) =>
++    values?.code ? `${key}:${values.code}` : key
++  )
++
++  beforeEach(() => {
++    t.mockClear()
++  })
++
++  it('maps known SSO codes', () => {
++    expect(getSsoErrorMessage(t, 'S000215')).toBe(
++      'error.sso_redirect_not_allowed.string'
++    )
++  })
++
++  it('keeps the code for an unknown error', () => {
++    expect(getSsoErrorMessage(t, 'S000299')).toBe(
++      'error.sso_failed.string:S000299'
++    )
++  })
++
++  it('uses the generic message when there is no code', () => {
++    expect(getSsoErrorMessage(t, '')).toBe('error.generic.string')
++    expect(getSsoErrorMessage(t, null)).toBe('error.generic.string')
++  })
++})
+--- a/src/features/auth/components/__tests__/login-form.test.tsx
++++ b/src/features/auth/components/__tests__/login-form.test.tsx
+@@ -1,114 +1,131 @@
++import { redirectToExternalLogin } from '@/features/auth/utils'
+ import '@testing-library/jest-dom'
+-import { render, screen } from '@testing-library/react'
++import { render, screen, waitFor } from '@testing-library/react'
++import { StrictMode } from 'react'
++import userEvent from '@testing-library/user-event'
+ import { LoginForm } from '../login-form'
+ 
+-jest.mock('next-intl', () => ({
+-  useTranslations: () => (key: string) => key,
+-  useLocale: () => 'en',
++jest.mock('@/features/auth/utils', () => ({
++  ...jest.requireActual('@/features/auth/utils'), redirectToExternalLogin: jest.fn(),
+ }))
++jest.mock('next-intl', () => ({ useTranslations: () => (key: string) => key, useLocale: () => 'en' }))
++jest.mock('@/lib/i18n/config', () => ({ getLocales: () => ['en', 'fr', 'de', 'es'] }))
++const mockPush = jest.fn()
++const mockGetAuthMode = jest.fn()
++let mockQuery = ''
++let mockSystemLoading = false
++let mockSystemError = false
++jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }))
++jest.mock('@/lib/i18n/navigation', () => ({
++  useRouter: () => ({ push: mockPush }), usePathname: () => '/en/auth/login',
++  Link: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
++}))
++jest.mock('@/features/auth/components/store/auth.api', () => ({
++  useGetSystemQuery: () => ({ isLoading: mockSystemLoading, isError: mockSystemError, refetch: jest.fn() }),
++  useLazyGetAuthModeQuery: () => [mockGetAuthMode],
++}))
++const originalOnLine = navigator.onLine
++const originalUrl = window.location.href
++beforeEach(() => {
++  jest.clearAllMocks()
++  mockQuery = ''
++  mockSystemLoading = false
++  mockSystemError = false
++  mockGetAuthMode.mockReturnValue({ unwrap: () => Promise.resolve({ data: { kind: 'openid', location: 'https://idp.example/auth' } }) })
++  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
++})
++afterEach(() => {
++  Object.defineProperty(navigator, 'onLine', { configurable: true, value: originalOnLine })
++  window.history.replaceState(null, '', originalUrl)
++})
+ 
+-jest.mock('@/lib/i18n/config', () => ({
+-  getLocales: () => ['en', 'fr', 'de', 'es'],
+-}))
++async function submit() {
++  render(<LoginForm />)
++  await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in with Authentik' }))
++}
++it('offers explicit SSO without an email/password prompt or automatic redirect', () => {
++  const { container } = render(<LoginForm />)
++  expect(container.querySelector('input[type=email], input[type=password]')).toBeNull()
++  expect(screen.getByText('language.label.string')).toBeInTheDocument()
++  expect(screen.getByRole('button', { name: 'Sign in with Authentik' })).toHaveAttribute('type', 'submit')
++  expect(mockGetAuthMode).not.toHaveBeenCalled()
++  expect(redirectToExternalLogin).not.toHaveBeenCalled()
++})
++it('requests the configured IdP without supplying or hardcoding an identity', async () => {
++  mockGetAuthMode.mockReturnValue({ unwrap: () => Promise.resolve({ data: { kind: 'openid', location: 'https://idp.example/auth' } }) })
++  await submit()
++  expect(mockGetAuthMode).toHaveBeenCalledWith({ redirect: `${window.location.origin}/en/auth/login/sso` })
++  expect(redirectToExternalLogin).toHaveBeenCalledWith('https://idp.example/auth')
++  expect(mockPush).not.toHaveBeenCalled()
++})
++it.each([
++  ['openid', '/relative'], ['plain', ''], ['cas', 'https://idp.example/auth'],
++])('rejects unsupported mode/location %s %s', async (kind, location) => {
++  mockGetAuthMode.mockReturnValue({ unwrap: () => Promise.resolve({ data: { kind, location } }) })
++  await submit()
++  expect(redirectToExternalLogin).not.toHaveBeenCalled()
++  expect(mockPush).not.toHaveBeenCalled()
++  expect(screen.getByText('error.unknown_provider.string')).toBeInTheDocument()
++})
++it('keeps the offline banner and disables SSO while offline', () => {
++  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
++  render(<LoginForm />)
++  expect(screen.getByTestId('login-offline-banner')).toBeInTheDocument()
++  expect(screen.getByRole('button', { name: 'Sign in with Authentik' })).toBeDisabled()
++  expect(mockGetAuthMode).not.toHaveBeenCalled()
++})
++it('shows a useful error without retrying or starting a redirect loop', async () => {
++  mockGetAuthMode.mockReturnValue({ unwrap: () => Promise.reject({ status: 400, data: { error_code: 'S000215', error_msg: 'SSO Redirect Url Not Allowed' } }) })
++  await submit()
++  expect(screen.getByText('error.sso_redirect_not_allowed.string')).toBeInTheDocument()
++  expect(mockGetAuthMode).toHaveBeenCalledTimes(1)
++  expect(redirectToExternalLogin).not.toHaveBeenCalled()
++})
+ 
+-const mockPush = jest.fn()
+-const mockPathname = '/en/auth/login'
+-
+-jest.mock('next/navigation', () => ({
+-  useSearchParams: () => new URLSearchParams(),
+-}))
+-
+-jest.mock('@/lib/i18n/navigation', () => ({
+-  useRouter: () => ({ push: mockPush }),
+-  usePathname: () => mockPathname,
+-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
+-    <a href={href}>{children}</a>
+-  ),
+-}))
+-
+-jest.mock('@/features/auth/components/store/auth.api', () => ({
+-  useGetSystemQuery: () => ({
+-    data: { data: { system: { SOGO_S_DIRECT_LOGIN: false } } },
+-    isLoading: false,
+-    isError: false,
+-  }),
+-  useLazyGetAuthModeQuery: () => [jest.fn()],
+-}))
+-
+-describe('LoginForm - Step 1 (Email + Language)', () => {
+-  const originalOnLine = navigator.onLine
+-
+-  beforeEach(() => {
+-    jest.clearAllMocks()
+-    Object.defineProperty(navigator, 'onLine', {
+-      configurable: true,
+-      value: true,
+-    })
+-  })
+-
+-  afterEach(() => {
+-    Object.defineProperty(navigator, 'onLine', {
+-      configurable: true,
+-      value: originalOnLine,
+-    })
+-  })
+-
+-  it('renders email input field', () => {
++it('auto-launches once under StrictMode and consumes only the opt-in flag', async () => {
++  mockQuery = 'autoLaunch=1&keep=yes'
++  window.history.replaceState(null, '', '/en/auth/login?' + mockQuery)
++  const { rerender } = render(<StrictMode><LoginForm /></StrictMode>)
++  await waitFor(() => expect(redirectToExternalLogin).toHaveBeenCalledTimes(1))
++  rerender(<StrictMode><LoginForm /></StrictMode>)
++  expect(mockGetAuthMode).toHaveBeenCalledTimes(1)
++  expect(window.location.search).toBe('?keep=yes')
++})
++it.each(['autoLaunch=0', 'autoLaunch=true', 'autoLaunch=', 'autoLaunch=1&reason=session', 'autoLaunch=1&error=denied'])(
++  'does not auto-launch for %s', (query) => {
++    mockQuery = query
+     render(<LoginForm />)
+-    const emailInput = screen.getByLabelText(/email.label.string/i)
+-    expect(emailInput).toBeInTheDocument()
+-    expect(emailInput).toHaveAttribute('type', 'email')
+-  })
+-
+-  it('renders language selector', () => {
+-    render(<LoginForm />)
+-    const languageLabel = screen.getByText(/language.label.string/i)
+-    expect(languageLabel).toBeInTheDocument()
+-  })
+-
+-  it('renders submit button with correct text', () => {
+-    render(<LoginForm />)
+-    const submitButton = screen.getByRole('button', { name: /next.string/i })
+-    expect(submitButton).toBeInTheDocument()
+-    expect(submitButton).toHaveAttribute('type', 'submit')
+-  })
+-
+-  it('does not render password field', () => {
+-    render(<LoginForm />)
+-    const passwordInputs = screen.queryAllByLabelText(/password/i)
+-    expect(passwordInputs).toHaveLength(0)
+-  })
+-
+-  it('does not render remember me checkbox', () => {
+-    render(<LoginForm />)
+-    const checkbox = screen.queryByRole('checkbox')
+-    expect(checkbox).not.toBeInTheDocument()
+-  })
+-
+-  it('renders without crashing', () => {
+-    const { container } = render(<LoginForm />)
+-    expect(container).toBeTruthy()
+-  })
+-
+-  it('renders email placeholder', () => {
+-    render(<LoginForm />)
+-    const emailInput = screen.getByPlaceholderText(/email.placeholder.string/i)
+-    expect(emailInput).toBeInTheDocument()
+-  })
+-
+-  it('renders language selector with all locales', () => {
+-    render(<LoginForm />)
+-    const languageLabel = screen.getByText(/language.label.string/i)
+-    expect(languageLabel).toBeInTheDocument()
+-  })
+-
+-  it('shows an offline banner and disables submit while offline', () => {
+-    Object.defineProperty(navigator, 'onLine', {
+-      configurable: true,
+-      value: false,
+-    })
+-    render(<LoginForm />)
+-    expect(screen.getByTestId('login-offline-banner')).toBeInTheDocument()
+-    expect(screen.getByRole('button', { name: /next.string/i })).toBeDisabled()
+-  })
++    expect(mockGetAuthMode).not.toHaveBeenCalled()
++  }
++)
++it('waits for system readiness before auto-launching', async () => {
++  mockQuery = 'autoLaunch=1'
++  mockSystemLoading = true
++  const { rerender } = render(<LoginForm />)
++  expect(mockGetAuthMode).not.toHaveBeenCalled()
++  mockSystemLoading = false
++  rerender(<LoginForm />)
++  await waitFor(() => expect(redirectToExternalLogin).toHaveBeenCalledTimes(1))
+ })
++it('does not auto-launch offline or with a system error', () => {
++  mockQuery = 'autoLaunch=1'
++  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
++  const { rerender } = render(<LoginForm />)
++  expect(mockGetAuthMode).not.toHaveBeenCalled()
++  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
++  mockSystemError = true
++  rerender(<LoginForm />)
++  expect(mockGetAuthMode).not.toHaveBeenCalled()
++})
++it('does not automatically retry a failed launch, but allows manual retry', async () => {
++  mockQuery = 'autoLaunch=1'
++  window.history.replaceState(null, '', '/en/auth/login?' + mockQuery)
++  mockGetAuthMode.mockReturnValue({ unwrap: () => Promise.reject({ status: 400, data: { error_code: 'S000215', error_msg: 'SSO Redirect Url Not Allowed' } }) })
++  const { rerender } = render(<LoginForm />)
++  await screen.findByText('error.sso_redirect_not_allowed.string')
++  rerender(<LoginForm />)
++  expect(mockGetAuthMode).toHaveBeenCalledTimes(1)
++  expect(window.location.search).toBe('')
++  await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in with Authentik' }))
++  expect(mockGetAuthMode).toHaveBeenCalledTimes(2)
++})
+--- /dev/null
++++ b/src/features/auth/components/__tests__/login-sso-callback.test.tsx
+@@ -0,0 +1,140 @@
++import '@testing-library/jest-dom'
++import { render, screen } from '@testing-library/react'
++import { LoginSsoCallback } from '../login-sso-callback'
++
++const mockTranslate = jest.fn((key: string) => key)
++jest.mock('next-intl', () => ({
++  useTranslations: () => mockTranslate,
++}))
++
++const mockPush = jest.fn()
++jest.mock('@/lib/i18n/navigation', () => ({
++  useRouter: () => ({ push: mockPush }),
++}))
++
++const mockDispatch = jest.fn()
++jest.mock('@/lib/redux/hooks', () => ({
++  useAppDispatch: () => mockDispatch,
++}))
++
++// header.payload.signature, payload = {"uid":"user","cn":"John Doe","email":"user@example.com"}
++const TOKEN = `h.${btoa(
++  JSON.stringify({ uid: 'user', cn: 'John Doe', email: 'user@example.com' })
++)}.s`
++
++const setHash = (hash: string) => {
++  window.history.replaceState(null, '', `/en/auth/login/sso${hash}`)
++}
++
++describe('LoginSsoCallback', () => {
++  beforeEach(() => {
++    jest.clearAllMocks()
++  })
++
++  it('stores the token from the fragment and goes to the inbox', () => {
++    setHash(`#token=${encodeURIComponent(TOKEN)}`)
++
++    render(<LoginSsoCallback />)
++
++    expect(mockDispatch).toHaveBeenCalledWith(
++      expect.objectContaining({
++        payload: {
++          token: TOKEN,
++          user: { uid: 'user', cn: 'John Doe', email: 'user@example.com' },
++          rememberMe: false,
++        },
++      })
++    )
++    expect(mockPush).toHaveBeenCalledWith('/u/0/INBOX')
++  })
++
++  it('removes the token from the url', () => {
++    setHash(`#token=${encodeURIComponent(TOKEN)}`)
++
++    render(<LoginSsoCallback />)
++
++    expect(window.location.hash).toBe('')
++    expect(window.location.pathname).toBe('/en/auth/login/sso')
++  })
++
++  it('shows the loader while the token is stored', () => {
++    setHash(`#token=${encodeURIComponent(TOKEN)}`)
++
++    const { container } = render(<LoginSsoCallback />)
++
++    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
++  })
++
++  it('shows a mapped error instead of the loader', () => {
++    setHash('#error=S000212')
++
++    const { container } = render(<LoginSsoCallback />)
++
++    expect(mockDispatch).not.toHaveBeenCalled()
++    expect(mockTranslate).toHaveBeenCalledWith(
++      'error.sso_user_not_found.string'
++    )
++    expect(container.querySelector('.animate-spin')).not.toBeInTheDocument()
++    expect(
++      screen.getByText('error.sso_user_not_found.string')
++    ).toBeInTheDocument()
++    expect(screen.getByText('sso_back_to_login.string')).toBeInTheDocument()
++  })
++
++  it('keeps the code for an unknown SSO error', () => {
++    setHash('#error=S000299')
++
++    render(<LoginSsoCallback />)
++
++    expect(mockTranslate).toHaveBeenCalledWith('error.sso_failed.string', {
++      code: 'S000299',
++    })
++  })
++
++  it('shows a generic error without token nor error', () => {
++    setHash('')
++
++    render(<LoginSsoCallback />)
++
++    expect(mockDispatch).not.toHaveBeenCalled()
++    expect(screen.getByText('error.generic.string')).toBeInTheDocument()
++  })
++
++  it('shows a generic error with an invalid token', () => {
++    setHash('#token=not-a-jwt')
++
++    render(<LoginSsoCallback />)
++
++    expect(mockDispatch).not.toHaveBeenCalled()
++    expect(screen.getByText('error.generic.string')).toBeInTheDocument()
++  })
++
++  it('stores an unpadded token and clears the fragment', () => {
++    const payload = { uid: 'user', cn: 'John Do', email: 'user@example.com' }
++    const bytes = new TextEncoder().encode(JSON.stringify(payload))
++    let binary = ''
++    bytes.forEach((byte) => {
++      binary += String.fromCharCode(byte)
++    })
++    const segment = btoa(binary)
++      .replace(/\+/g, '-')
++      .replace(/\//g, '_')
++      .replace(/=+$/, '')
++    const token = `h.${segment}.s`
++    expect(segment.length % 4).not.toBe(0)
++    setHash(`#token=${encodeURIComponent(token)}`)
++
++    render(<LoginSsoCallback />)
++
++    expect(mockDispatch).toHaveBeenCalledWith(
++      expect.objectContaining({
++        payload: {
++          token,
++          user: payload,
++          rememberMe: false,
++        },
++      })
++    )
++    expect(window.location.hash).toBe('')
++  })
++})
+--- a/src/features/auth/components/login-auth-form.tsx
++++ b/src/features/auth/components/login-auth-form.tsx
+@@ -6,6 +6,7 @@
+ import { Label } from '@/components/ui/label'
+ import { useLoginMutation } from '@/features/auth/components/store/auth.api'
+ import { setCredentials } from '@/features/auth/components/store/auth.slice'
++import { decodeJwtPayload } from '@/features/auth/utils'
+ import LoginOfflineBanner from '@/features/offline/components/login-offline-banner'
+ import { useLazyGetUserPreferencesQuery } from '@/features/user-settings/store/user-preferences-api'
+ import { useEnvVars } from '@/lib/env-service'
+@@ -21,19 +22,6 @@
+ import { useForm } from 'react-hook-form'
+ import { z } from 'zod'
+ 
+-interface JwtPayload {
+-  uid: string
+-  cn: string
+-  email: string
+-}
+-
+-function decodeJwtPayload(token: string): JwtPayload {
+-  const [, payloadB64] = token.split('.')
+-  // Convertir base64url → base64 standard
+-  const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/')
+-  return JSON.parse(atob(base64)) as JwtPayload
+-}
+-
+ const createPasswordSchema = (t: (key: string) => string) =>
+   z.object({
+     password: z
+@@ -53,7 +41,6 @@
+   const { push } = useRouter()
+   const searchParams = useSearchParams()
+   const email = searchParams.get('email')
+-  const mode = searchParams.get('mode') // 'ldap' ou null
+ 
+   const dispatch = useAppDispatch()
+   const [login] = useLoginMutation()
+@@ -180,11 +167,6 @@
+           </Label>
+         </div>
+         <p className="text-primary-foreground text-sm font-medium">{email}</p>
+-        {mode === 'ldap' && (
+-          <p className="text-primary-foreground/60 text-xs">
+-            {t('auth_mode.ldap.string')}
+-          </p>
+-        )}
+       </div>
+ 
+       <div className="mb-6 grid gap-2">
+--- a/src/features/auth/components/login-form.tsx
++++ b/src/features/auth/components/login-form.tsx
+@@ -1,7 +1,6 @@
+ 'use client'
+ 
+ import { Button } from '@/components/ui/button'
+-import { Input } from '@/components/ui/input'
+ import { Label } from '@/components/ui/label'
+ import {
+   Select,
+@@ -14,19 +13,23 @@
+   useGetSystemQuery,
+   useLazyGetAuthModeQuery,
+ } from '@/features/auth/components/store/auth.api'
++import {
++  isSsoErrorCode,
++  useSsoErrorMessage,
++} from '@/features/auth/sso-error-message'
++import {
++  isAbsoluteHttpUrl,
++  redirectToExternalLogin,
++} from '@/features/auth/utils'
+ import LoginOfflineBanner from '@/features/offline/components/login-offline-banner'
+-import { useEnvVars } from '@/lib/env-service'
+ import { getLocales } from '@/lib/i18n/config'
+ import { usePathname, useRouter } from '@/lib/i18n/navigation'
+-import { getErrorMessage } from '@/lib/redux/api/error-handlers'
++import { getErrorCode, getErrorMessage } from '@/lib/redux/api/error-handlers'
+ import { cn } from '@/lib/utils'
+-import { zodResolver } from '@hookform/resolvers/zod'
+ import { AlertCircle, Languages, Loader2 } from 'lucide-react'
+ import { useLocale, useTranslations } from 'next-intl'
+ import { useSearchParams } from 'next/navigation'
+ import React from 'react'
+-import { useForm } from 'react-hook-form'
+-import { z } from 'zod'
+ 
+ const localeLabels: Record<string, string> = {
+   en: 'English',
+@@ -40,21 +43,12 @@
+ 
+ const SYSTEM_LOAD_TIMEOUT_MS = 15_000
+ 
+-const createLoginSchema = (t: (key: string) => string) =>
+-  z.object({
+-    email: z
+-      .string()
+-      .min(1, t('email.error.required.string'))
+-      .email(t('email.error.invalid.string')),
+-  })
+-
+-type LoginFormData = z.infer<ReturnType<typeof createLoginSchema>>
+-
+ export function LoginForm({
+   className,
+   ...props
+ }: React.ComponentPropsWithoutRef<'form'>) {
+   const t = useTranslations('AUTH')
++  const ssoErrorMessage = useSsoErrorMessage()
+   const { push } = useRouter()
+   const pathname = usePathname()
+   const locale = useLocale()
+@@ -63,17 +57,15 @@
+   const [serverError, setServerError] = React.useState<string | null>(null)
+   const [systemTimedOut, setSystemTimedOut] = React.useState(false)
+   const searchParams = useSearchParams()
++  const autoLaunchAttempted = React.useRef(false)
++  const loginInFlight = React.useRef(false)
+ 
+   const {
+-    data: systemData,
+     isLoading: systemLoading,
+     isError: systemError,
+     refetch: refetchSystem,
+   } = useGetSystemQuery()
+   const [getAuthMode] = useLazyGetAuthModeQuery()
+-  const { envVars } = useEnvVars()
+-
+-  const loginSchema = React.useMemo(() => createLoginSchema(t), [t])
+ 
+   React.useEffect(() => {
+     if (searchParams.get('reason') === 'session') {
+@@ -81,25 +73,6 @@
+     }
+   }, [searchParams, t])
+ 
+-  const {
+-    register,
+-    handleSubmit,
+-    setValue,
+-    formState: { errors },
+-  } = useForm<LoginFormData>({
+-    resolver: zodResolver(loginSchema),
+-    defaultValues: {
+-      email: '',
+-    },
+-  })
+-
+-  React.useEffect(() => {
+-    const pre = envVars?.LOGIN_PREFILL_EMAIL?.trim()
+-    if (pre) {
+-      setValue('email', pre)
+-    }
+-  }, [envVars, setValue])
+-
+   React.useEffect(() => {
+     if (!systemLoading) {
+       setSystemTimedOut(false)
+@@ -113,47 +86,44 @@
+     return () => window.clearTimeout(timer)
+   }, [systemLoading])
+ 
+-  // If SOGO_S_DIRECT_LOGIN → skip email step, go directly to password
+-  React.useEffect(() => {
+-    if (systemData?.data?.system?.SOGO_S_DIRECT_LOGIN) {
+-      push('/auth/login/pwd')
+-    }
+-  }, [systemData, push])
+-
+   const handleLocaleChange = (newLocale: string) => {
+     const newPathname = pathname.replace(`/${locale}`, `/${newLocale}`)
+     push(newPathname)
+   }
+ 
+-  const onSubmit = async (data: LoginFormData) => {
+-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
++  const startLogin = React.useCallback(async () => {
++    if (loginInFlight.current || (typeof navigator !== 'undefined' && navigator.onLine === false)) return
++    loginInFlight.current = true
+     setIsLoading(true)
+     setServerError(null)
+ 
+     try {
+-      const result = await getAuthMode({ username: data.email }).unwrap()
++      const result = await getAuthMode({
++        redirect: `${window.location.origin}/${locale}/auth/login/sso`,
++      }).unwrap()
+       const { kind, location } = result.data
+ 
+-      switch (kind) {
+-        case 'plain':
+-          push(`/auth/login/pwd?email=${encodeURIComponent(data.email)}`)
+-          break
+-        case 'ldap':
+-          push(
+-            `/auth/login/pwd?email=${encodeURIComponent(data.email)}&mode=ldap`
+-          )
+-          break
+-        case 'sso':
+-          window.location.href = location
+-          break
+-        default:
+-          setServerError(t('error.unknown_provider.string'))
++      if (kind === 'openid' && isAbsoluteHttpUrl(location)) {
++        redirectToExternalLogin(location)
++        return
+       }
++      setServerError(t('error.unknown_provider.string'))
+     } catch (error) {
+-      setServerError(getErrorMessage(error) || t('error.generic.string'))
++      const code = getErrorCode(error)
++      setServerError(
++        isSsoErrorCode(code)
++          ? ssoErrorMessage(code)
++          : getErrorMessage(error) || t('error.generic.string')
++      )
+     } finally {
++      loginInFlight.current = false
+       setIsLoading(false)
+     }
++  }, [getAuthMode, locale, ssoErrorMessage, t])
++
++  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
++    event.preventDefault()
++    void startLogin()
+   }
+ 
+   const handleRetrySystem = () => {
+@@ -165,6 +135,18 @@
+     typeof navigator !== 'undefined' && navigator.onLine === false
+   const isSystemBlocked =
+     !isOffline && systemLoading && !systemTimedOut && !systemError
++
++  React.useEffect(() => {
++    if (autoLaunchAttempted.current || searchParams.get('autoLaunch') !== '1' ||
++        searchParams.has('reason') || searchParams.has('error') || isOffline ||
++        systemLoading || systemError || systemTimedOut) return
++    autoLaunchAttempted.current = true
++    // Consume the opt-in before leaving, so Back/reload cannot restart a failed login.
++    const url = new URL(window.location.href)
++    url.searchParams.delete('autoLaunch')
++    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
++    void startLogin()
++  }, [searchParams, isOffline, systemLoading, systemError, systemTimedOut, startLogin])
+ 
+   if (isSystemBlocked) {
+     return (
+@@ -192,7 +174,7 @@
+     <form
+       className={cn('mx-auto flex w-full max-w-xs flex-col', className)}
+       {...props}
+-      onSubmit={handleSubmit(onSubmit)}
++      onSubmit={onSubmit}
+     >
+       {isOffline && <LoginOfflineBanner />}
+       {serverError && (
+@@ -201,34 +183,6 @@
+           <p>{serverError}</p>
+         </div>
+       )}
+-      {/* Email field group */}
+-      <div className="mb-6 grid gap-2">
+-        <Label
+-          htmlFor="email"
+-          className="text-primary-foreground text-sm leading-none font-medium"
+-        >
+-          {t('email.label.string')}
+-        </Label>
+-        <Input
+-          id="email"
+-          type="email"
+-          placeholder={t('email.placeholder.string')}
+-          className={cn(
+-            'border-primary-foreground/60 text-primary-foreground placeholder:text-primary-foreground/70 focus-visible:ring-ring autofill:text-primary-foreground bg-transparent autofill:bg-transparent focus-visible:ring-2',
+-            errors.email && 'border-destructive focus-visible:ring-destructive'
+-          )}
+-          disabled={isLoading}
+-          aria-invalid={errors.email ? 'true' : 'false'}
+-          aria-describedby={errors.email ? 'email-error' : undefined}
+-          {...register('email')}
+-        />
+-        {errors.email && (
+-          <p id="email-error" className="text-destructive text-sm">
+-            {errors.email.message}
+-          </p>
+-        )}
+-      </div>
+-
+       {/* Language selector group */}
+       <div className="mb-6 grid gap-2">
+         <Label
+@@ -265,7 +219,7 @@
+         disabled={isLoading || isOffline}
+         className="bg-background border-primary-foreground/20 text-foreground hover:bg-primary-foreground/10 hover:border-primary-foreground/40 focus-visible:ring-ring w-full border-2 shadow-md transition-all hover:shadow-lg focus-visible:ring-2 focus-visible:ring-offset-2 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-100 dark:hover:text-neutral-950"
+       >
+-        {isLoading ? t('next.loading.string') : t('next.string')}
++        {isLoading ? t('next.loading.string') : 'Sign in with Authentik'}
+       </Button>
+     </form>
+   )
+--- /dev/null
++++ b/src/features/auth/components/login-sso-callback.tsx
+@@ -0,0 +1,51 @@
++'use client'
++
++import { Button } from '@/components/ui/button'
++import { setCredentials } from '@/features/auth/components/store/auth.slice'
++import { useSsoErrorMessage } from '@/features/auth/sso-error-message'
++import { decodeJwtPayload } from '@/features/auth/utils'
++import { useRouter } from '@/lib/i18n/navigation'
++import { useAppDispatch } from '@/lib/redux/hooks'
++import React from 'react'
++
++export function LoginSsoCallback() {
++  const dispatch = useAppDispatch()
++  const { push } = useRouter()
++  const message = useSsoErrorMessage()
++  const [error, setError] = React.useState<string | null>(null)
++  const handled = React.useRef(false)
++
++  React.useEffect(() => {
++    if (handled.current) return
++    handled.current = true
++    const params = new URLSearchParams(window.location.hash.slice(1))
++    window.history.replaceState(null, '', window.location.pathname + window.location.search)
++    const ticket = params.get('ticket')
++    if (!ticket) {
++      setError(params.get('error') ?? '')
++      return
++    }
++    void (async () => {
++      try {
++        const response = await fetch('/api/user/v1/auth/complete', {
++          method: 'POST', credentials: 'same-origin',
++          headers: { 'Content-Type': 'application/json' },
++          body: JSON.stringify({ ticket }),
++        })
++        if (!response.ok) throw new Error('SSO ticket rejected')
++        const result = await response.json()
++        const token = result.data?.jwt_token
++        const payload = decodeJwtPayload(token)
++        dispatch(setCredentials({ token,
++          user: { uid: payload.uid, cn: payload.cn, email: payload.email }, rememberMe: false }))
++        push('/u/0/INBOX')
++      } catch {
++        setError('')
++      }
++    })()
++  }, [dispatch, push])
++
++  if (error === null) return <p>Completing sign-in…</p>
++  return <div><p>{message(error)}</p>
++    <Button onClick={() => push('/auth/login')}>Back to login</Button></div>
++}
+--- a/src/features/auth/components/store/auth.api.ts
++++ b/src/features/auth/components/store/auth.api.ts
+@@ -11,8 +11,10 @@
+   error_msg: string
+ }
+ 
++export type AuthKind = 'plain' | 'openid' | 'cas' | 'saml2'
++
+ export interface AuthModeResponse {
+-  data: { kind: 'plain' | 'sso' | 'ldap'; location: string }
++  data: { kind: AuthKind; location: string }
+   error_code: string
+   error_msg: string
+ }
+@@ -24,7 +26,7 @@
+ }
+ 
+ export interface LogoutResponse {
+-  data: null
++  data: { logout_url?: string } | null
+   error_code: string
+   error_msg: string
+ }
+@@ -39,10 +41,14 @@
+       }),
+     }),
+ 
+-    getAuthMode: builder.query<AuthModeResponse, { username: string }>({
+-      query: ({ username }) => ({
++    // redirect: page where the API sends the user back after a SSO login (see login-sso-callback)
++    getAuthMode: builder.query<
++      AuthModeResponse,
++      { username?: string; redirect?: string }
++    >({
++      query: ({ username, redirect }) => ({
+         url: 'auth/mode',
+-        params: { username },
++        params: { username, redirect },
+       }),
+       // Pas de cache — l'email change à chaque tentative de login
+       keepUnusedDataFor: 0,
+--- /dev/null
++++ b/src/features/auth/sso-error-message.ts
+@@ -0,0 +1,57 @@
++'use client'
++
++import { useTranslations } from 'next-intl'
++
++const SSO_ERROR_MESSAGES = {
++  S000210: 'error.sso_provider_unreachable.string',
++  S000211: 'error.sso_exchange_failed.string',
++  S000212: 'error.sso_user_not_found.string',
++  S000213: 'error.sso_state_invalid.string',
++  S000214: 'error.sso_state_storage.string',
++  S000215: 'error.sso_redirect_not_allowed.string',
++} as const
++
++type SsoErrorCode = keyof typeof SSO_ERROR_MESSAGES
++
++type SsoErrorTranslator = (
++  key:
++    | (typeof SSO_ERROR_MESSAGES)[SsoErrorCode]
++    | 'error.sso_failed.string'
++    | 'error.generic.string',
++  values?: { code: string }
++) => string
++
++export function isSsoErrorCode(
++  code: string | null | undefined
++): code is SsoErrorCode {
++  return typeof code === 'string' && code in SSO_ERROR_MESSAGES
++}
++
++export function getSsoErrorMessage(
++  t: SsoErrorTranslator,
++  code: string | null | undefined
++): string {
++  switch (code) {
++    case 'S000210':
++      return t('error.sso_provider_unreachable.string')
++    case 'S000211':
++      return t('error.sso_exchange_failed.string')
++    case 'S000212':
++      return t('error.sso_user_not_found.string')
++    case 'S000213':
++      return t('error.sso_state_invalid.string')
++    case 'S000214':
++      return t('error.sso_state_storage.string')
++    case 'S000215':
++      return t('error.sso_redirect_not_allowed.string')
++    default:
++      return code
++        ? t('error.sso_failed.string', { code })
++        : t('error.generic.string')
++  }
++}
++
++export function useSsoErrorMessage() {
++  const t = useTranslations('AUTH')
++  return (code: string | null | undefined) => getSsoErrorMessage(t, code)
++}
+--- /dev/null
++++ b/src/features/auth/utils.ts
+@@ -0,0 +1,53 @@
++export interface JwtPayload {
++  uid: string
++  cn: string
++  email: string
++}
++
++function isJwtPayload(value: unknown): value is JwtPayload {
++  if (typeof value !== 'object' || value === null) return false
++  const payload = value as Record<string, unknown>
++  return (
++    typeof payload.uid === 'string' &&
++    typeof payload.cn === 'string' &&
++    typeof payload.email === 'string'
++  )
++}
++
++export function decodeJwtPayload(token: string): JwtPayload {
++  const [, payloadB64] = token.split('.')
++  if (!payloadB64) {
++    throw new Error('Invalid JWT')
++  }
++
++  const base64 = payloadB64.replace(/-/g, '+').replace(/_/g, '/')
++  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
++  const binary = atob(padded)
++  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
++  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
++
++  if (!isJwtPayload(parsed)) {
++    throw new Error('Invalid JWT payload')
++  }
++
++  return parsed
++}
++
++export function isAbsoluteHttpUrl(location: string): boolean {
++  try {
++    const url = new URL(location)
++    return url.protocol === 'http:' || url.protocol === 'https:'
++  } catch {
++    return false
++  }
++}
++
++export function redirectToExternalLogin(location: string): void {
++  window.location.assign(location)
++}
++
++export function hasSsoCallbackResult(hash: string): boolean {
++  const raw = hash.startsWith('#') ? hash.slice(1) : hash
++  const params = new URLSearchParams(raw)
++  return params.has('ticket') || params.has('error')
++}
+--- a/src/features/calendars/utils/__tests__/recurrence-scope-mutation.test.ts
++++ b/src/features/calendars/utils/__tests__/recurrence-scope-mutation.test.ts
+@@ -4,10 +4,16 @@
+ } from '../recurrence-scope-mutation'
+ 
+ describe('recurrenceScopeToMutationFields', () => {
+-  it('returns empty fields for ALL scope', () => {
++  it('keeps ALL scope and the selected occurrence anchor explicit', () => {
+     expect(
+       recurrenceScopeToMutationFields('ALL', '2026-01-01T10:00:00Z')
+-    ).toEqual({})
++    ).toEqual({
++      recurrence_range: 'ALL',
++      recurrence_id: '2026-01-01T10:00:00Z',
++    })
++    expect(recurrenceScopeToMutationFields('ALL')).toEqual({
++      recurrence_range: 'ALL',
++    })
+   })
+ 
+   it('returns recurrence_id only for ONE scope', () => {
+--- a/src/features/calendars/utils/recurrence-scope-mutation.ts
++++ b/src/features/calendars/utils/recurrence-scope-mutation.ts
+@@ -2,7 +2,7 @@
+ 
+ export type RecurrenceScopeMutationFields = {
+   recurrence_id?: string
+-  recurrence_range?: 'THISANDFUTURE'
++  recurrence_range?: 'THISANDFUTURE' | 'ALL'
+ }
+ 
+ /** Maps UI recurrence scope to backend PATCH/DELETE fields. */
+@@ -11,7 +11,10 @@
+   recurrenceId?: string | null
+ ): RecurrenceScopeMutationFields {
+   if (scope === 'ALL') {
+-    return {}
++    return {
++      recurrence_range: 'ALL',
++      ...(recurrenceId ? { recurrence_id: recurrenceId } : {}),
++    }
+   }
+ 
+   const fields: RecurrenceScopeMutationFields = {}
+--- a/src/features/offline/auth/__tests__/redirect-after-logout.test.ts
++++ b/src/features/offline/auth/__tests__/redirect-after-logout.test.ts
+@@ -4,6 +4,25 @@
+ } from '../redirect-after-logout'
+ 
+ describe('resolveLogoutRedirect', () => {
++  const endpoint = 'https://auth.m7.rs/application/o/sogo6-oidc-pilot/end-session/'
++
++  it('uses the pinned IdP endpoint for explicit online logout only', () => {
++    expect(resolveLogoutRedirect(false, '', undefined, endpoint)).toEqual({
++      mode: 'external', href: endpoint,
++    })
++    expect(resolveLogoutRedirect(true, '', undefined, endpoint).mode).toBe('replace-login')
++    expect(resolveLogoutRedirect(false, '', 'session', endpoint).mode).toBe('push')
++  })
++
++  it.each([
++    'https://evil.invalid/', 'javascript:alert(1)',
++    endpoint + '?post_logout_redirect_uri=https://evil.invalid/',
++    endpoint + '#token=secret', endpoint.replace('https:', 'http:'),
++  ])('rejects an unapproved external logout URL: %s', (url) => {
++    expect(resolveLogoutRedirect(false, '', undefined, url)).toEqual({
++      mode: 'push', href: '/auth/login',
++    })
++  })
+   it('pushes login when document navigation is allowed', () => {
+     expect(resolveLogoutRedirect(false)).toEqual({
+       mode: 'push',
+--- a/src/features/offline/auth/redirect-after-logout.ts
++++ b/src/features/offline/auth/redirect-after-logout.ts
+@@ -6,6 +6,7 @@
+ export type LogoutRedirect =
+   | { mode: 'push'; href: string }
+   | { mode: 'replace-login'; href: string }
++  | { mode: 'external'; href: string }
+ 
+ /**
+  * Client-side `router.push('/auth/login')` while offline is an RSC flight
+@@ -23,8 +24,13 @@
+ export function resolveLogoutRedirect(
+   skipDocumentNav: boolean,
+   currentUrl = '',
+-  reason?: typeof SESSION_EXPIRED_REASON
++  reason?: typeof SESSION_EXPIRED_REASON,
++  logoutUrl?: string
+ ): LogoutRedirect {
++  if (!skipDocumentNav && !reason && logoutUrl ===
++      'https://auth.m7.rs/application/o/sogo6-oidc-pilot/end-session/') {
++    return { mode: 'external', href: logoutUrl }
++  }
+   if (skipDocumentNav) {
+     return { mode: 'replace-login', href: offlineLoginPath(currentUrl) }
+   }
+@@ -33,13 +39,18 @@
+ 
+ export function redirectAfterLogout(
+   push: (href: string) => void,
+-  reason?: typeof SESSION_EXPIRED_REASON
++  reason?: typeof SESSION_EXPIRED_REASON,
++  logoutUrl?: string
+ ): void {
+   const skip =
+     typeof navigator !== 'undefined' &&
+     shouldSkipDocumentNav(navigator.onLine, false)
+   const currentUrl = typeof window !== 'undefined' ? window.location.href : ''
+-  const target = resolveLogoutRedirect(skip, currentUrl, reason)
++  const target = resolveLogoutRedirect(skip, currentUrl, reason, logoutUrl)
++  if (target.mode === 'external') {
++    window.location.replace(target.href)
++    return
++  }
+   if (target.mode === 'replace-login') {
+     window.history.replaceState(window.history.state, '', target.href)
+     return
+--- a/src/features/user-profile/hooks/__tests__/use-profile.test.ts
++++ b/src/features/user-profile/hooks/__tests__/use-profile.test.ts
+@@ -41,7 +41,8 @@
+ 
+   describe('Profile API integration', () => {
+     it('should call useGetUserProfileQuery', () => {
+-      expect(fileContent).toContain('useGetUserProfileQuery()')
++      expect(fileContent).toContain('useGetUserProfileQuery(undefined, {')
++      expect(fileContent).toContain('pollingInterval: 300_000')
+     })
+ 
+     it('should destructure data as profile', () => {
+--- a/src/features/user-profile/hooks/use-profile.ts
++++ b/src/features/user-profile/hooks/use-profile.ts
+@@ -13,7 +13,10 @@
+     isError,
+     error,
+     refetch,
+-  } = useGetUserProfileQuery()
++  } = useGetUserProfileQuery(undefined, {
++    pollingInterval: 300_000,
++    skipPollingIfUnfocused: true,
++  })
+ 
+   // Get user info from Redux auth state
+   const authUser = useAppSelector((state) => state.auth.user)
+--- a/src/features/user-profile/profile-types.ts
++++ b/src/features/user-profile/profile-types.ts
+@@ -11,6 +11,7 @@
+ // Raw API response structure
+ export interface ProfileApiResponse {
+   data: {
++    picture?: string | null
+     mailboxes: Mailbox[]
+     prefs: UserPreferences
+     ui: DomainUISettings
+@@ -165,6 +166,7 @@
+ 
+ // Simplified type for component usage
+ export interface ProfileData {
++  picture?: string | null
+   mailboxes: Mailbox[]
+   prefs: UserPreferences
+   ui: DomainUISettings
+--- a/src/features/user-settings/profile/components/__tests__/basic-info-tab.test.tsx
++++ b/src/features/user-settings/profile/components/__tests__/basic-info-tab.test.tsx
+@@ -1,198 +1,48 @@
+ import { render, screen } from '@testing-library/react'
+-import userEvent from '@testing-library/user-event'
+ import { useForm } from 'react-hook-form'
+ import { Form } from '@/components/ui/form'
+ import { BasicInfoTab } from '../basic-info-tab'
+-import {
+-  PP_DEFAULT,
+-  PP_GRAVATAR,
+-  PP_LIBRAVATAR,
+-  PP_USERSOURCE,
+-} from '../../../store/user-preferences-api-types'
+ 
+-// ── Mocks ─────────────────────────────────────────────────────────────────────
+-
+-jest.mock('next-intl', () => ({
+-  useTranslations: () => (key: string) => key,
++let mockPicture: string | null = 'https://avatars.m7.rs/gabriel.png'
++jest.mock('next-intl', () => ({ useTranslations: () => (key: string) => key }))
++jest.mock('@/features/user-profile/hooks/use-profile', () => ({
++  useProfile: () => ({ profile: { picture: mockPicture } }),
+ }))
+-
+ jest.mock('@/features/user-profile/components/profile-avatar', () => ({
+-  ProfileAvatar: ({ pictureSource }: { pictureSource: string }) => (
+-    <div data-testid="profile-avatar" data-picture-source={pictureSource} />
++  ProfileAvatar: ({ pictureSource, userSourceBase64 }: { pictureSource: string; userSourceBase64?: string }) => (
++    <div data-testid="profile-avatar" data-picture-source={pictureSource} data-picture={userSourceBase64} />
+   ),
+ }))
+-
+-// ── Helpers ───────────────────────────────────────────────────────────────────
+-
+-const DEFAULT_VALUES = {
+-  profilePictureSource: PP_DEFAULT,
+-  mail: 'john@example.com',
+-  uid: 'jdoe',
+-  cn: 'John Doe',
+-  team: 'Engineering',
+-  company: 'Acme Corp',
+-  aliases: [] as string[],
++const defaults = {
++  profilePictureSource: 'default', mail: 'john@example.com', uid: 'jdoe',
++  cn: 'John Doe', team: 'Engineering', company: 'Acme Corp', aliases: [] as string[],
+ }
+-
+-function Wrapper(defaultValues: Partial<typeof DEFAULT_VALUES> = {}) {
+-  const form = useForm({ defaultValues: { ...DEFAULT_VALUES, ...defaultValues } })
+-  return (
+-    <Form {...form}>
+-      <BasicInfoTab form={form as any} />
+-    </Form>
+-  )
++function Wrapper(values: Partial<typeof defaults>) {
++  const form = useForm({ defaultValues: { ...defaults, ...values } })
++  return <Form {...form}><BasicInfoTab form={form as any} /></Form>
+ }
+-
+-// ── Tests ─────────────────────────────────────────────────────────────────────
+-
+-describe('BasicInfoTab', () => {
+-  describe('read-only fields', () => {
+-    it('displays uid', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('jdoe')).toBeInTheDocument()
+-    })
+-
+-    it('displays "-" when uid is empty', () => {
+-      render(<Wrapper uid="" />)
+-      // There may be multiple "-" so just confirm at least one exists
+-      expect(screen.getAllByText('-').length).toBeGreaterThan(0)
+-    })
+-
+-    it('displays mail', () => {
+-      render(<Wrapper />)
+-      // mail appears both in the read-only field and the avatar — use getAllBy
+-      expect(screen.getAllByText('john@example.com').length).toBeGreaterThan(0)
+-    })
+-
+-    it('displays cn (full name)', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('John Doe')).toBeInTheDocument()
+-    })
+-
+-    it('displays team', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('Engineering')).toBeInTheDocument()
+-    })
+-
+-    it('displays company', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('Acme Corp')).toBeInTheDocument()
+-    })
+-
+-    it('displays "-" for empty optional fields', () => {
+-      render(<Wrapper uid="" mail="" cn="" team="" company="" />)
+-      const dashes = screen.getAllByText('-')
+-      // uid, mail, cn, team, company → at least 5 dashes
+-      expect(dashes.length).toBeGreaterThanOrEqual(5)
+-    })
+-  })
+-
+-  describe('aliases', () => {
+-    it('does not render aliases section when list is empty', () => {
+-      render(<Wrapper aliases={[]} />)
+-      expect(screen.queryByText('basicInfo.aliases')).not.toBeInTheDocument()
+-    })
+-
+-    it('renders aliases when list is not empty', () => {
+-      render(<Wrapper aliases={['alias1@example.com', 'alias2@example.com']} />)
+-      expect(screen.getByText('alias1@example.com')).toBeInTheDocument()
+-      expect(screen.getByText('alias2@example.com')).toBeInTheDocument()
+-    })
+-
+-    it('renders the aliases label when aliases exist', () => {
+-      render(<Wrapper aliases={['alias@example.com']} />)
+-      expect(screen.getByText('basicInfo.aliases')).toBeInTheDocument()
+-    })
+-  })
+-
+-  describe('profile picture source selection', () => {
+-    it('renders all four radio options', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByLabelText('profilePictureSource.useDefault')).toBeInTheDocument()
+-      expect(screen.getByLabelText('profilePictureSource.useGravatar')).toBeInTheDocument()
+-      expect(screen.getByLabelText('profilePictureSource.useLibravatar')).toBeInTheDocument()
+-      expect(screen.getByLabelText('profilePictureSource.useCustom')).toBeInTheDocument()
+-    })
+-
+-    it('selects PP_DEFAULT radio by default', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByLabelText('profilePictureSource.useDefault')).toBeChecked()
+-    })
+-
+-    it('selects PP_GRAVATAR radio when initial value is PP_GRAVATAR', () => {
+-      render(<Wrapper profilePictureSource={PP_GRAVATAR} />)
+-      expect(screen.getByLabelText('profilePictureSource.useGravatar')).toBeChecked()
+-    })
+-
+-    it('changes selection when a radio is clicked', async () => {
+-      render(<Wrapper />)
+-      await userEvent.click(screen.getByLabelText('profilePictureSource.useGravatar'))
+-      expect(screen.getByLabelText('profilePictureSource.useGravatar')).toBeChecked()
+-      expect(screen.getByLabelText('profilePictureSource.useDefault')).not.toBeChecked()
+-    })
+-  })
+-
+-  describe('selected source display text', () => {
+-    it('shows useDefault text when PP_DEFAULT is selected', () => {
+-      render(<Wrapper profilePictureSource={PP_DEFAULT} />)
+-      // The label text appears both in the radio label and the display text
+-      expect(screen.getAllByText('profilePictureSource.useDefault').length).toBeGreaterThanOrEqual(2)
+-    })
+-
+-    it('shows useGravatar text when PP_GRAVATAR is selected', () => {
+-      render(<Wrapper profilePictureSource={PP_GRAVATAR} />)
+-      expect(screen.getAllByText('profilePictureSource.useGravatar').length).toBeGreaterThanOrEqual(2)
+-    })
+-
+-    it('shows useLibravatar text when PP_LIBRAVATAR is selected', () => {
+-      render(<Wrapper profilePictureSource={PP_LIBRAVATAR} />)
+-      expect(screen.getAllByText('profilePictureSource.useLibravatar').length).toBeGreaterThanOrEqual(2)
+-    })
+-
+-    it('shows useCustom text when PP_USERSOURCE is selected', () => {
+-      render(<Wrapper profilePictureSource={PP_USERSOURCE} />)
+-      expect(screen.getAllByText('profilePictureSource.useCustom').length).toBeGreaterThanOrEqual(2)
+-    })
+-  })
+-
+-  describe('ProfileAvatar', () => {
+-    it('renders the ProfileAvatar component', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByTestId('profile-avatar')).toBeInTheDocument()
+-    })
+-
+-    it('passes the selected pictureSource to ProfileAvatar', () => {
+-      render(<Wrapper profilePictureSource={PP_GRAVATAR} />)
+-      expect(screen.getByTestId('profile-avatar')).toHaveAttribute(
+-        'data-picture-source',
+-        PP_GRAVATAR
+-      )
+-    })
+-
+-    it('updates ProfileAvatar pictureSource when radio selection changes', async () => {
+-      render(<Wrapper profilePictureSource={PP_DEFAULT} />)
+-      await userEvent.click(screen.getByLabelText('profilePictureSource.useLibravatar'))
+-      expect(screen.getByTestId('profile-avatar')).toHaveAttribute(
+-        'data-picture-source',
+-        PP_LIBRAVATAR
+-      )
+-    })
+-  })
+-
+-  describe('section headings', () => {
+-    it('renders the profile picture section title', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('profilePictureSource.title')).toBeInTheDocument()
+-    })
+-
+-    it('renders the basic info section title', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('basicInfo.title')).toBeInTheDocument()
+-    })
+-
+-    it('renders the extra info section title', () => {
+-      render(<Wrapper />)
+-      expect(screen.getByText('extraInfo.title')).toBeInTheDocument()
+-    })
+-  })
+-})
+\ No newline at end of file
++beforeEach(() => { mockPicture = 'https://avatars.m7.rs/gabriel.png' })
++it.each(['default', 'gravatar', 'libravatar', 'usersource'])('enforces OIDC over saved %s preference', (source) => {
++  render(<Wrapper profilePictureSource={source} />)
++  expect(screen.getByTestId('profile-avatar')).toHaveAttribute('data-picture-source', 'usersource')
++  expect(screen.getByTestId('profile-avatar')).toHaveAttribute('data-picture', mockPicture)
++  expect(screen.queryByRole('radio')).not.toBeInTheDocument()
++  expect(screen.getByText('Authentik (OIDC)')).toBeInTheDocument()
++})
++it('does not switch to another service when the OIDC picture is missing', () => {
++  mockPicture = null
++  render(<Wrapper profilePictureSource="gravatar" />)
++  expect(screen.getByTestId('profile-avatar')).toHaveAttribute('data-picture-source', 'usersource')
++  expect(screen.getByTestId('profile-avatar')).not.toHaveAttribute('data-picture')
++})
++it('preserves read-only identity fields and aliases', () => {
++  render(<Wrapper aliases={['alias@example.com']} />)
++  for (const text of ['jdoe', 'john@example.com', 'John Doe', 'Engineering', 'Acme Corp', 'alias@example.com']) {
++    expect(screen.getByText(text)).toBeInTheDocument()
++  }
++})
++it('preserves empty-field fallbacks and hides absent aliases', () => {
++  render(<Wrapper uid="" mail="" cn="" team="" company="" />)
++  expect(screen.getAllByText('-')).toHaveLength(5)
++  expect(screen.queryByText('basicInfo.aliases')).not.toBeInTheDocument()
++})
+--- a/src/features/user-settings/profile/components/basic-info-tab.tsx
++++ b/src/features/user-settings/profile/components/basic-info-tab.tsx
+@@ -1,17 +1,11 @@
+ 'use client'
+ 
+-import { FormControl, FormItem, FormLabel } from '@/components/ui/form'
+-import { Label } from '@/components/ui/label'
+-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
++import { FormItem, FormLabel } from '@/components/ui/form'
+ import { ProfileAvatar } from '@/features/user-profile/components/profile-avatar'
++import { useProfile } from '@/features/user-profile/hooks/use-profile'
+ import { useTranslations } from 'next-intl'
+-import { Controller, UseFormReturn } from 'react-hook-form'
+-import {
+-  PP_DEFAULT,
+-  PP_GRAVATAR,
+-  PP_LIBRAVATAR,
+-  PP_USERSOURCE,
+-} from '../../store/user-preferences-api-types'
++import { UseFormReturn } from 'react-hook-form'
++import { PP_USERSOURCE } from '../../store/user-preferences-api-types'
+ import { ProfileFormData } from '../form/profile-schema'
+ 
+ interface BasicInfoTabProps {
+@@ -21,184 +15,77 @@
+ 
+ export function BasicInfoTab({ form }: BasicInfoTabProps) {
+   const t = useTranslations('FORM_PROFILE')
+-  const { control, watch } = form
+-
+-  const selectedPictureSource = watch('profilePictureSource') || PP_DEFAULT
+-  const userEmail = watch('mail')
++  const { watch } = form
++  const { profile } = useProfile()
+ 
+   return (
+     <div className="space-y-8">
+-      {/* Main Content: Basic Info (Left) + Profile Picture (Right) */}
+       <div className="grid gap-8 lg:grid-cols-2">
+-        {/* LEFT*/}
+         <div className="space-y-6">
+-          <div>
+-            <h3 className="mb-4 text-lg font-semibold">
+-              {t('profilePictureSource.title')}
+-            </h3>
+-
+-            {/* Profile Picture Preview */}
+-            <div className="mb-6 flex flex-col items-center space-y-4">
+-              <div className="bg-muted/45 flex items-center justify-center rounded-lg p-4">
+-                <ProfileAvatar
+-                  pictureSource={selectedPictureSource}
+-                  email={userEmail}
+-                  fallbackUsername={watch('cn') || 'U'}
+-                  useInitialsFallback={true}
+-                  size="lg"
+-                />
++          <h3 className="mb-4 text-lg font-semibold">
++            {t('profilePictureSource.title')}
++          </h3>
++          <div className="mb-6 flex flex-col items-center space-y-4">
++            <div className="bg-muted/45 flex items-center justify-center rounded-lg p-4">
++              <ProfileAvatar
++                pictureSource={PP_USERSOURCE}
++                userSourceBase64={profile?.picture || undefined}
++                email={watch('mail')}
++                fallbackUsername={watch('cn') || 'U'}
++                useInitialsFallback={true}
++                size="lg"
++              />
++            </div>
++            <p className="text-muted-foreground text-sm">Authentik (OIDC)</p>
++          </div>
++        </div>
++        <div className="space-y-6">
++          <h3 className="mb-4 text-lg font-semibold">{t('basicInfo.title')}</h3>
++          <div className="grid gap-4">
++            <FormItem>
++              <FormLabel>{t('basicInfo.uid')}</FormLabel>
++              <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
++                <span className="text-sm">{watch('uid') || '-'}</span>
+               </div>
+-
+-              {/* Selected Source Display */}
+-              <div className="text-center">
+-                <p className="text-muted-foreground text-sm font-medium">
+-                  {selectedPictureSource === PP_DEFAULT &&
+-                    t('profilePictureSource.useDefault')}
+-                  {selectedPictureSource === PP_GRAVATAR &&
+-                    t('profilePictureSource.useGravatar')}
+-                  {selectedPictureSource === PP_LIBRAVATAR &&
+-                    t('profilePictureSource.useLibravatar')}
+-                  {selectedPictureSource === PP_USERSOURCE &&
+-                    t('profilePictureSource.useCustom')}
+-                </p>
++            </FormItem>
++            <FormItem>
++              <FormLabel>{t('basicInfo.email')}</FormLabel>
++              <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
++                <span className="text-sm">{watch('mail') || '-'}</span>
+               </div>
+-            </div>
+-
+-            {/* Picture Source Description */}
+-            <p className="text-muted-foreground mb-4 text-sm">
+-              {t('profilePictureSource.description')}
+-            </p>
+-
+-            {/* Picture Source Selection */}
+-            <Controller
+-              name="profilePictureSource"
+-              control={control}
+-              render={({ field }) => (
++            </FormItem>
++            <FormItem>
++              <FormLabel>{t('basicInfo.fullName')}</FormLabel>
++              <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
++                <span className="text-sm">{watch('cn') || '-'}</span>
++              </div>
++            </FormItem>
++            <div className="space-y-6">
++              <h3 className="mb-4 text-lg font-semibold">{t('extraInfo.title')}</h3>
++              <FormItem>
++                <FormLabel>{t('extraInfo.team')}</FormLabel>
++                <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
++                  <span className="text-sm">{watch('team') || '-'}</span>
++                </div>
++              </FormItem>
++              <FormItem>
++                <FormLabel>{t('extraInfo.company')}</FormLabel>
++                <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
++                  <span className="text-sm">{watch('company') || '-'}</span>
++                </div>
++              </FormItem>
++              {watch('aliases') && watch('aliases').length > 0 && (
+                 <FormItem>
+-                  <FormControl>
+-                    <RadioGroup
+-                      value={field.value}
+-                      onValueChange={field.onChange}
+-                    >
+-                      <div className="space-y-3">
+-                        <div className="flex items-center space-x-2">
+-                          <RadioGroupItem value={PP_DEFAULT} id="pic-default" />
+-                          <Label
+-                            htmlFor="pic-default"
+-                            className="cursor-pointer font-normal"
+-                          >
+-                            {t('profilePictureSource.useDefault')}
+-                          </Label>
+-                        </div>
+-                        <div className="flex items-center space-x-2">
+-                          <RadioGroupItem
+-                            value={PP_GRAVATAR}
+-                            id="pic-gravatar"
+-                          />
+-                          <Label
+-                            htmlFor="pic-gravatar"
+-                            className="cursor-pointer font-normal"
+-                          >
+-                            {t('profilePictureSource.useGravatar')}
+-                          </Label>
+-                        </div>
+-                        <div className="flex items-center space-x-2">
+-                          <RadioGroupItem
+-                            value={PP_LIBRAVATAR}
+-                            id="pic-libravatar"
+-                          />
+-                          <Label
+-                            htmlFor="pic-libravatar"
+-                            className="cursor-pointer font-normal"
+-                          >
+-                            {t('profilePictureSource.useLibravatar')}
+-                          </Label>
+-                        </div>
+-                        <div className="flex items-center space-x-2">
+-                          <RadioGroupItem
+-                            value={PP_USERSOURCE}
+-                            id="pic-upload"
+-                          />
+-                          <Label
+-                            htmlFor="pic-upload"
+-                            className="cursor-pointer font-normal"
+-                          >
+-                            {t('profilePictureSource.useCustom')}
+-                          </Label>
+-                        </div>
+-                      </div>
+-                    </RadioGroup>
+-                  </FormControl>
++                  <FormLabel>{t('basicInfo.aliases')}</FormLabel>
++                  <div className="border-input bg-muted rounded-md border p-3">
++                    <div className="space-y-1">
++                      {watch('aliases').map((alias, index) => (
++                        <div key={index} className="text-sm">{alias}</div>
++                      ))}
++                    </div>
++                  </div>
+                 </FormItem>
+               )}
+-            />
+-          </div>
+-        </div>
+-
+-        {/* RIGHT*/}
+-        <div className="space-y-6">
+-          <h3 className="mb-4 text-lg font-semibold">{t('basicInfo.title')}</h3>
+-          <div>
+-            <div className="grid gap-4">
+-              {/* UID */}
+-              <FormItem>
+-                <FormLabel>{t('basicInfo.uid')}</FormLabel>
+-                <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
+-                  <span className="text-sm">{watch('uid') || '-'}</span>
+-                </div>
+-              </FormItem>
+-
+-              {/* Email */}
+-              <FormItem>
+-                <FormLabel>{t('basicInfo.email')}</FormLabel>
+-                <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
+-                  <span className="text-sm">{watch('mail') || '-'}</span>
+-                </div>
+-              </FormItem>
+-
+-              {/* Full Name */}
+-              <FormItem>
+-                <FormLabel>{t('basicInfo.fullName')}</FormLabel>
+-                <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
+-                  <span className="text-sm">{watch('cn') || '-'}</span>
+-                </div>
+-              </FormItem>
+-              <div className="space-y-6">
+-                <h3 className="mb-4 text-lg font-semibold">
+-                  {t('extraInfo.title')}
+-                </h3>
+-                {/* Team */}
+-                <FormItem>
+-                  <FormLabel>{t('extraInfo.team')}</FormLabel>
+-                  <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
+-                    <span className="text-sm">{watch('team') || '-'}</span>
+-                  </div>
+-                </FormItem>
+-
+-                {/* Company */}
+-                <FormItem>
+-                  <FormLabel>{t('extraInfo.company')}</FormLabel>
+-                  <div className="border-input bg-muted flex items-center rounded-md border px-3 py-2">
+-                    <span className="text-sm">{watch('company') || '-'}</span>
+-                  </div>
+-                </FormItem>
+-
+-                {/* Aliases List */}
+-                {watch('aliases') && watch('aliases').length > 0 && (
+-                  <FormItem>
+-                    <FormLabel>{t('basicInfo.aliases')}</FormLabel>
+-                    <div className="border-input bg-muted rounded-md border p-3">
+-                      <div className="space-y-1">
+-                        {watch('aliases').map((alias, index) => (
+-                          <div key={index} className="text-sm">
+-                            {alias}
+-                          </div>
+-                        ))}
+-                      </div>
+-                    </div>
+-                  </FormItem>
+-                )}
+-              </div>
+             </div>
+           </div>
+         </div>
+--- a/src/messages/en/auth.json
++++ b/src/messages/en/auth.json
+@@ -85,12 +85,6 @@
+       "string": "Forgot password?",
+       "context": "Link to reset password"
+     },
+-    "auth_mode": {
+-      "ldap": {
+-        "string": "LDAP authentication",
+-        "context": "Badge shown on password step when LDAP mode is active"
+-      }
+-    },
+     "error": {
+       "generic": {
+         "string": "An error occurred. Please try again.",
+@@ -115,7 +109,39 @@
+       "session_expired": {
+         "string": "Your session has expired. Please sign in again.",
+         "context": "Shown on the login form after the API returns 401"
++      },
++      "sso_failed": {
++        "string": "Single sign-on failed (error {code}). Please try again.",
++        "context": "Shown on the SSO landing page when the API redirects back with an error code"
++      },
++      "sso_provider_unreachable": {
++        "string": "The sign-in server is unreachable. Please try again.",
++        "context": "SSO error S000210 when the OpenID provider cannot be reached"
++      },
++      "sso_exchange_failed": {
++        "string": "Single sign-on failed. Please try again.",
++        "context": "SSO error S000211 when the authorization code exchange fails"
++      },
++      "sso_user_not_found": {
++        "string": "No account matches this sign-in. Contact your administrator.",
++        "context": "SSO error S000212 when the user is missing from the user sources"
++      },
++      "sso_state_invalid": {
++        "string": "The sign-in session expired. Please try again.",
++        "context": "SSO error S000213 when the state is missing, expired, or already used"
++      },
++      "sso_state_storage": {
++        "string": "Sign-in is temporarily unavailable. Please try again.",
++        "context": "SSO error S000214 when the state cache is unreachable"
++      },
++      "sso_redirect_not_allowed": {
++        "string": "This sign-in return address is not allowed. Contact your administrator.",
++        "context": "SSO error S000215 when the UI origin is missing from the allowed redirect list"
+       }
++    },
++    "sso_back_to_login": {
++      "string": "Back to login",
++      "context": "Button on the SSO landing page after a failed single sign-on"
+     },
+     "system_retry": {
+       "string": "Retry",

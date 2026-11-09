@@ -1,0 +1,1947 @@
+--- a/app/api/v1/calendar/ApiCalendar.py
++++ b/app/api/v1/calendar/ApiCalendar.py
+@@ -11,6 +11,8 @@
+ from app.config.settings.DomainSettings import UserModuleSettings
+ from app.interface.calendar.InterfaceApiCalendarCalendar import InterfaceApiCalendarCalendar
+ from app.utils.api.ApiBaseResponse import create_api_base_response
++from app.module.auth.PilotDavAccess import enforce_api_capabilities
++from app.utils.exceptions import RequestException
+ from app.utils.api.is_async import async_endpoint
+ from app.utils.api.share import is_share_any_auth_forbidden
+ from app.utils.errors import ERROR_CALENDAR_IMPORT_NO_FILE, ERROR_CALENDAR_SHARING_DISABLED, ERROR_SHARE_ANY_AUTH_DISABLED
+@@ -65,6 +67,10 @@
+ 
+ @blp.before_request
+ def init_calendar_config() -> ResponseReturnValue | None:  # pylint: disable=missing-function-docstring
++    try:
++        enforce_api_capabilities()
++    except RequestException as exc:
++        return create_api_base_response(None, exc.error)
+     if request.path.endswith("/share"):
+         user_domain_settings: dict = g.user_domain_settings
+         user_module_settings: dict = user_domain_settings.get(UserModuleSettings.subparent, {})
+--- a/app/api/v1/calendar/schemas/calendar.py
++++ b/app/api/v1/calendar/schemas/calendar.py
+@@ -63,6 +63,7 @@
+     timezone           = fields.String()
+     is_default         = fields.Boolean()
+     source_type        = fields.String()
++    supported_components = fields.List(fields.String(), allow_none=True, dump_only=True)
+     ctag               = fields.Integer()
+     include_in_freebusy        = fields.Boolean()
+     default_event_duration_min = fields.Integer(allow_none=True)
+--- a/app/api/v1/calendar/schemas/event.py
++++ b/app/api/v1/calendar/schemas/event.py
+@@ -89,6 +89,7 @@
+     """
+ 
+     key = fields.String(allow_none=True)
++    etag = fields.String(allow_none=True, dump_only=True)
+     calendar_key = fields.String(allow_none=True)
+     uid = fields.String()
+     title = fields.String()
+--- a/app/api/v1/calendar/schemas/task.py
++++ b/app/api/v1/calendar/schemas/task.py
+@@ -25,6 +25,7 @@
+     """Representation of a single VTODO in API responses."""
+ 
+     key = fields.String(allow_none=True)
++    etag = fields.String(allow_none=True, dump_only=True)
+     calendar_key = fields.String(allow_none=True)
+     uid = fields.String()
+     title = fields.String()
+--- a/app/api/v1/contact/ApiContact.py
++++ b/app/api/v1/contact/ApiContact.py
+@@ -12,6 +12,8 @@
+ from app.module.contact.ContactConst import IMPORT_MAX_BYTES
+ from app.module.contact.source.ContactSourceDb import LIST_SORTABLE_COLUMNS, SORTABLE_COLUMNS
+ from app.utils.api.ApiBaseResponse import create_api_base_response
++from app.module.auth.PilotDavAccess import enforce_api_capabilities
++from app.utils.exceptions import RequestException
+ from app.utils.api.paginate_sort_filter import collection_paginate, CustomPaginateResponse
+ from app.utils.api.share import is_share_any_auth_forbidden
+ from app.utils.errors import (
+@@ -79,6 +81,10 @@
+ 
+ @blp.before_request
+ def init_contact_config() -> ResponseReturnValue | None:  # pylint: disable=missing-function-docstring
++    try:
++        enforce_api_capabilities()
++    except RequestException as exc:
++        return create_api_base_response(None, exc.error)
+     if request.path.endswith("/share"):
+         user_domain_settings: dict = g.user_domain_settings
+         user_module_settings: dict = user_domain_settings.get(UserModuleSettings.subparent, {})
+--- a/app/api/v1/contact/schemas/contact.py
++++ b/app/api/v1/contact/schemas/contact.py
+@@ -88,6 +88,7 @@
+     """Representation of a contact in API responses (vCard, RFC 6350)."""
+ 
+     key            = fields.String()
++    etag           = fields.String(allow_none=True, dump_only=True)
+     addressbook_key = fields.String(allow_none=True)
+     uid            = fields.String(allow_none=True)
+     version        = fields.String()
+--- a/app/config/init_config.py
++++ b/app/config/init_config.py
+@@ -3,6 +3,7 @@
+ 
+ import importlib
+ import json
++import os
+ import os
+ 
+ import app.module
+@@ -54,7 +55,7 @@
+     config_module = ModuleAdminConfig(process_config)
+     system_settings = config_module.get_system_settings()
+     default_domain_settings = config_module.get_default_domain_settings()
+-    if system_settings and default_domain_settings:
++    if system_settings and default_domain_settings and os.environ.get('SOGO_FOUNDRY_AUTHORITATIVE_CONFIG') != '1':
+         return True
+ 
+     # Settings are missing – try to auto-initialize from JSON files if paths are set
+@@ -81,16 +82,16 @@
+     errors: list[str] = []
+ 
+     try:
+-        config_module.update_system_settings(system_data["settings"])
++        config_module.update_system_settings(system_data["settings"], replace=True)
+         logger.info("System settings written from %s", system_path)
+     except (ValidationError, AggravatedException, BugException) as e:
+-        errors.append(f"System settings invalid or could not be written: {e}")
++        errors.append("System settings invalid or could not be written")
+ 
+     try:
+-        config_module.update_domain_default_settings(domain_data["settings"])
++        config_module.update_domain_default_settings(domain_data["settings"], replace=True)
+         logger.info("Default domain settings written from %s", domain_path)
+     except (ValidationError, AggravatedException, BugException) as e:
+-        errors.append(f"Default domain settings invalid or could not be written: {e}")
++        errors.append("Default domain settings invalid or could not be written")
+ 
+     if errors:
+         for err_msg in errors:
+@@ -134,6 +135,8 @@
+     #No errors, check if SOGo already has a configuration
+     if check_basic_config():
+         sogo_state = cs.SOGO_OK
++    elif os.environ.get('SOGO_FOUNDRY_AUTHORITATIVE_CONFIG') == '1':
++        raise AggravatedException('Authoritative SOGo configuration could not be applied')
+ 
+     return sogo_state, cache_client, agent_client
+ 
+--- a/app/interface/auth/InterfaceAuthUser.py
++++ b/app/interface/auth/InterfaceAuthUser.py
+@@ -126,6 +126,9 @@
+         user_domain_settings: dict = ModuleAdminConfig(self.process).get_one_domain_setting(user.domain)["settings"]
+         module_user_profile = ModuleUserProfile(self.process, user_domain_settings)
+         module_user_profile.create_user_profile(user)
++        # OIDC onboarding owns preferences, not remote Mail/DAV provisioning or SQL content mirrors.
++        if user.auth_kind == 'openid':
++            return
+         raw_gen: dict = module_user_profile.get_partial_user_preferences(uid, UserGeneralSettings.subparent.lower())
+         user_tz: str = raw_gen.get(UserGeneralSettings.subparent, {}).get("SOGO_U_TIMEZONE", "UTC")
+         personal_calendar = self._module_calendar.create_personal_calendar(uid, tz=user_tz)
+@@ -133,7 +136,6 @@
+         # Update the folders column with the personal calendar and addressbook keys
+         if personal_calendar.key and personal_addressbook.key:
+             module_user_profile.update_user_folders(uid, personal_calendar.key, personal_addressbook.key)
+-        # This pilot must not provision folders in the real mailbox during first login.
+         if user.auth_kind == cs.AUTH_KIND_PLAIN:
+             module_mail = ModuleMail(user, MailSettingsObj(user_domain_settings[MailSettings.subparent]), self.process)
+             module_mail.create_special_folders_if_not_exist(cs.DEFAULT_IDENTITY_KEY_VALUE)
+--- a/app/interface/calendar/InterfaceApiCalendarCalendar.py
++++ b/app/interface/calendar/InterfaceApiCalendarCalendar.py
+@@ -364,13 +364,20 @@
+         calendar counts as subscribed regardless of which group (owned, shared, external) it lives in.
+         """
+         calendar_groups: dict[str, Any] = self.user.folders.get("CALENDAR", {})
+-        return {
++        subscribed = {
+             calendar_key
+             for group in calendar_groups.values()
+             if isinstance(group, dict)
+             for calendar_key, is_subscribed in group.items()
+             if is_subscribed is True
+         }
++        if self.user.auth_kind == "openid":
++            from app.module.calendar.source.CalendarSourceLiveDav import discover
++            explicit = {key for group in calendar_groups.values() if isinstance(group, dict) for key in group}
++            # Discovered DAV calendars have no SQL onboarding subscription; match the UI's default selection.
++            subscribed.update(source.calendar.key for source in (discover(self.user.uid) or [])
++                              if source.calendar.key not in explicit)
++        return subscribed
+ 
+     #
+     # Tasks
+--- a/app/interface/mail/InterfaceApiMailMail.py
++++ b/app/interface/mail/InterfaceApiMailMail.py
+@@ -91,6 +91,9 @@
+         text/calendar part. Processing is best-effort: a failure must never prevent the mail from
+         being displayed.
+         """
++        # Reading mail must not accept invitations or mutate authoritative DAV storage.
++        if self.user.auth_kind == 'openid':
++            return
+         if "event" not in mail_detail.get("mail_type", []):
+             return
+         ics_payloads: list[str] = [
+--- a/app/interface/user/InterfaceUserProfile.py
++++ b/app/interface/user/InterfaceUserProfile.py
+@@ -64,9 +64,11 @@
+             subparent = domain_schema.subparent
+             domain_sub: dict = self.user_domain[subparent]
+             if domain_schema == UserSourceSettings:
+-                domain_sub = domain_sub[self.user.source_id]
++                domain_sub = {} if self.user.auth_kind == "openid" else domain_sub[self.user.source_id]
+             for setting_needed in domain_schema.is_needed_by_ui:
+                 admin_param[setting_needed] = domain_sub.get(setting_needed, None)
++        admin_param["SOGO_D_DAV_COLLECTION_MANAGEMENT"] = self.user.auth_kind != "openid"
++        admin_param["SOGO_D_CONTACT_LIST_MANAGEMENT"] = self.user.auth_kind != "openid"
+         data["ui"] = admin_param
+ 
+         return create_api_base_response(data)
+--- a/app/manager/cache/ClientRedis.py
++++ b/app/manager/cache/ClientRedis.py
+@@ -52,17 +52,16 @@
+ 
+         redis_url = URL(url_str)
+         redis_url = redis_url.update_query(decode_responses="Yes")
+-        self.cache = False
++        # redis-py's client-side cache proxy assumes TCP host/port attributes.
++        self.cache = resp3 and redis_url.scheme != 'unix'
+         if resp3:
+             redis_url = redis_url.update_query(protocol=3)
+-            self.cache = True
+-            redis_connstring = str(redis_url)
+-            logger_cache.info("Setting Redis client with cache for %s", redis_connstring)
+-            self.redis = Redis.from_url(redis_connstring, cache_config=CacheConfig())
+-        else:
+-            redis_connstring = str(redis_url)
+-            logger_cache.info("Setting Redis client for %s", redis_connstring)
+-            self.redis = Redis.from_url(redis_connstring)
++        redis_connstring = str(redis_url)
++        # yarl serializes an authority-less Unix URL as unix:/path; redis-py requires unix:///path.
++        if redis_url.scheme == 'unix':
++            redis_connstring = 'unix://' + redis_url.raw_path + '?' + redis_url.raw_query_string
++        logger_cache.info("Setting Redis client")
++        self.redis = Redis.from_url(redis_connstring, **({'cache_config': CacheConfig()} if self.cache else {}))
+ 
+     def ping(self) -> None:
+         """
+--- a/app/manager/db/ClientPostgreSQL.py
++++ b/app/manager/db/ClientPostgreSQL.py
+@@ -237,7 +237,10 @@
+         Init the PostgreSQL client.
+         It shouldn't raise any Exception as SOGo will instantiate the object but not necessarily use it right on spot
+         """
+-        self.conn_string: str      = f"postgresql://{quote_plus(db_user)}:{quote_plus(db_pwd)}@{db_host}:{db_port}/{db_name}?client_encoding={db_enc}"
++        self.conn_string = psycopg.conninfo.make_conninfo(
++            user=db_user, password=db_pwd, host=db_host, port=db_port,
++            dbname=db_name, client_encoding=db_enc, sslmode='require' if db_ssl else 'prefer',
++        )
+         self.safe_conn_string: str = f"postgresql://SOGO_P_DB_USER:SOGO_P_DB_PWD@{db_host}:{db_port}/{db_name}?client_encoding={db_enc}"
+         self.db_conn: psycopg.Connection | None = None
+ 
+@@ -251,7 +254,7 @@
+         try:
+             self.db_conn = psycopg.connect(self.conn_string, connect_timeout=5)
+         except (OperationalError, Error) as e:
+-            logger.error("Cannot connect to %s reason: %s", self.safe_conn_string, repr(e))
++            logger.error("Cannot connect to configured PostgreSQL database")
+             raise RequestException("Postgresql database connection error") from e
+ 
+ 
+--- a/app/module/admin/ModuleAdminConfig.py
++++ b/app/module/admin/ModuleAdminConfig.py
+@@ -220,7 +220,7 @@
+ 
+         return ret
+ 
+-    def _update_setting_in_table_settings(self, new_param: dict, column: Column, get_schema: Callable) -> tuple[str, dict]:
++    def _update_setting_in_table_settings(self, new_param: dict, column: Column, get_schema: Callable, *, replace: bool = False) -> tuple[str, dict]:
+         """
+         new_param is expected to be of JSON merge patch.
+         If the subparent allows multiple entrees, it should be a dict key=uid, value=dict of param
+@@ -287,7 +287,7 @@
+                                                values_tuple=[values_tuple])
+         if size == 1:
+             #Merge the new data and check it
+-            current_settings: dict = result[0][0]
++            current_settings: dict = {} if replace else result[0][0]
+             merge_patch(new_param, current_settings)
+ 
+             values = check_data_for_sogo_schemas(current_settings, get_schema)
+@@ -306,7 +306,7 @@
+         return err.ERROR_NO_ERROR.c, values
+ 
+ 
+-    def update_system_settings(self, new_param: dict) -> tuple[str, dict]:
++    def update_system_settings(self, new_param: dict, *, replace: bool = False) -> tuple[str, dict]:
+         """
+         Method to update/insert the system settings
+ 
+@@ -316,9 +316,9 @@
+         :rtype: tuple[int, dict]
+         """
+ 
+-        return self._update_setting_in_table_settings(new_param, tbl.COL_SETTINGS_SYSTEM, get_all_system_schemas)
+-
+-    def update_domain_default_settings(self, new_param: dict) -> tuple[str, dict]:
++        return self._update_setting_in_table_settings(new_param, tbl.COL_SETTINGS_SYSTEM, get_all_system_schemas, replace=replace)
++
++    def update_domain_default_settings(self, new_param: dict, *, replace: bool = False) -> tuple[str, dict]:
+         """
+         Method to update/insert the default domain settings
+ 
+@@ -328,7 +328,7 @@
+         :rtype: tuple[int, dict]
+         """
+ 
+-        return self._update_setting_in_table_settings(new_param, tbl.COL_SETTINGS_DOMAIN_DEFAULT, get_all_domain_schemas)
++        return self._update_setting_in_table_settings(new_param, tbl.COL_SETTINGS_DOMAIN_DEFAULT, get_all_domain_schemas, replace=replace)
+ 
+     def create_domain_settings(self, new_param: dict) -> tuple[str, dict]:
+         """
+--- a/app/module/auth/FoundryIdentity.py
++++ b/app/module/auth/FoundryIdentity.py
+@@ -49,8 +49,17 @@
+     return True
+ 
+ 
++def authorized_claims(info, user=None):
++    if (not isinstance(info, dict) or info.get('foundry_sogo_access') is not True
++            or not isinstance(info.get('sub'), str) or not info['sub']
++            or not isinstance(info.get('mail_account'), str) or not info['mail_account']):
++        return False
++    return user is None or (info['sub'] == user.oidc.get('subject') and info['mail_account'] == user.mail)
++
++
+ def bind_identity(user, identity):
+-    if (identity.claims.get("mail_account") != identity.mail
++    if (not authorized_claims(identity.claims)
++            or identity.claims.get("mail_account") != identity.mail
+             or identity.claims.get("sub") != identity.oidc.get("subject")):
+         raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+     user.source_id = "oidc"
+--- a/app/module/auth/ModuleAuth.py
++++ b/app/module/auth/ModuleAuth.py
+@@ -322,7 +322,7 @@
+             from app.module.auth.PilotOidcRefresh import ensure_access
+             return ensure_access(user, provider)
+         try:
+-            return provider.check_access_token(user.password)
++            return provider.check_access_token(user.password, expected_user=user)
+         except RequestException:
+             return False
+ 
+--- a/app/module/auth/OpenIDProvider.py
++++ b/app/module/auth/OpenIDProvider.py
+@@ -269,7 +269,7 @@
+             if (info.get("sub") != user.oidc["subject"]
+                     or info.get(self.auth_settings.SOGO_D_OPENID_EMAIL) != user.mail):
+                 raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+-            if not self.check_access_token(token["access_token"]):
++            if not self.check_access_token(token["access_token"], expected_user=user):
+                 raise RequestException(error=err.ERROR_SSO_LOGIN_FAILED)
+             from app.module.auth.FoundryIdentity import display_name
+             return token["access_token"], {
+@@ -306,7 +306,7 @@
+         except Exception:
+             logger_auth.warning("OIDC provider revocation unavailable; local session remains revoked")
+ 
+-    def check_access_token(self, access_token: str) -> bool:
++    def check_access_token(self, access_token: str, expected_user=None) -> bool:
+         """
+         Check that the access token is still valid on the openid server.
+         The introspection endpoint (RFC 7662) is used if the server has one, else the userinfo endpoint:
+@@ -325,8 +325,6 @@
+         interval = self.auth_settings.SOGO_D_OPENID_TOKEN_CHECK_INTERVAL
+         #The token is hashed: it is the password of the user for the mail servers, it must not be readable in redis
+         key = f"{cs.SSO_TOKEN_CHECK_KEY_PREFIX}{self.kind}:{sha256(access_token.encode('utf-8')).hexdigest()}"
+-        if interval and self._get_token_check(key):
+-            return True
+ 
+         try:
+             metadata = self._client.load_server_metadata()
+@@ -335,16 +333,22 @@
+                 resp = requests.post(introspection_url,
+                                      data={"token": access_token, "token_type_hint": "access_token"},
+                                      auth=(self.auth_settings.SOGO_D_OPENID_CLIENT_NAME, self.auth_settings.SOGO_D_OPENID_CLIENT_SECRET),
+-                                     timeout=OPENID_TIMEOUT)
++                                     timeout=OPENID_TIMEOUT, allow_redirects=False)
+                 resp.raise_for_status()
+                 is_valid = resp.json().get("active") is True
+             else:
++                is_valid = True
++            if is_valid:
+                 resp = requests.get(metadata["userinfo_endpoint"],
+                                     headers={"Authorization": f"Bearer {access_token}"},
+-                                    timeout=OPENID_TIMEOUT)
+-                is_valid = resp.status_code not in (401, 403)
+-                if is_valid:
+-                    resp.raise_for_status()
++                                    timeout=OPENID_TIMEOUT, allow_redirects=False)
++                if resp.status_code in (401, 403):
++                    is_valid = False
++                elif resp.status_code != 200:
++                    raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE)
++                else:
++                    from app.module.auth.FoundryIdentity import authorized_claims
++                    is_valid = authorized_claims(resp.json(), expected_user)
+         except (requests.RequestException, ValueError, KeyError, RuntimeError) as e:
+             logger_auth.error("Cannot check the access token on openid server: %s", str(e))
+             raise RequestException(error=err.ERROR_SSO_PROVIDER_UNREACHABLE) from e
+--- a/app/module/auth/PilotDavAccess.py
++++ b/app/module/auth/PilotDavAccess.py
+@@ -1,70 +1,207 @@
+-"""Production DAV transport; writes are fenced to three disposable validation collections."""
++"""Token-scoped DAV discovery and conditional resource writes."""
++import os
++import re
++import xml.etree.ElementTree as ET
++from dataclasses import dataclass
++from http import HTTPStatus
+ from types import SimpleNamespace
+-from urllib.parse import urlsplit, unquote
+-from http import HTTPStatus
+-from flask import g, has_request_context
++from urllib.parse import urljoin, urlsplit, unquote
++
++from flask import g, has_request_context, request as browser_request
+ import requests
+ from app.utils.errors import E
+ from app.utils.exceptions import RequestException
+ 
+-ROOT = 'https://dav.m7.rs/'
+-HOME = ROOT + 'hi%40m7.rs/'
+-COLLECTIONS = {kind: HOME + 'sogo6-validation-0ec52f81e1eb-' + kind + '/' for kind in ('events','tasks','contacts')}
+-DENIED = E('S999403','DAV operation outside the validation scope',HTTPStatus.FORBIDDEN)
+-CONFLICT = E('S999409','DAV resource changed; reload before retrying',HTTPStatus.CONFLICT)
+-UNAVAILABLE = E('S999502','DAV request failed',HTTPStatus.BAD_GATEWAY)
++ROOT = os.environ.get('SOGO_DAV_URL', 'https://dav.m7.rs/')
++D = '{DAV:}'
++C = '{urn:ietf:params:xml:ns:caldav}'
++A = '{urn:ietf:params:xml:ns:carddav}'
++DENIED = E('S999403', 'DAV operation not permitted', HTTPStatus.FORBIDDEN)
++CONFLICT = E('S999409', 'DAV resource changed; reload before retrying', HTTPStatus.CONFLICT)
++UNAVAILABLE = E('S999502', 'DAV request failed', HTTPStatus.BAD_GATEWAY)
++PRECONDITION = E('S999428', 'Reload the resource before editing', HTTPStatus.PRECONDITION_REQUIRED)
++UNSUPPORTED = E('S999501', 'Operation is not supported by direct DAV', HTTPStatus.NOT_IMPLEMENTED)
++STRONG_ETAG = re.compile(r'"[\x21\x23-\x7e\x80-\xff]*"')
++CREATE_ROUTE = re.compile(r'/api/user/v1/(?:calendars/[^/]+/(?:events|tasks)|addressbooks/[^/]+/contacts)')
++EDIT_ROUTE = re.compile(r'/api/user/v1/(?:events/[^/]+|tasks/[^/]+|addressbooks/[^/]+/contacts/[^/]+)')
++
++
++@dataclass(frozen=True)
++class Collection:
++    url: str
++    name: str
++    kind: str
++    components: frozenset[str]
++    writable: bool
++
+ 
+ def active(uid):
+-    return (has_request_context() and getattr(g,'user',None) is not None
+-            and g.user.uid == uid == 'hi@m7.rs' and g.user.auth_kind == 'openid')
++    return (has_request_context() and getattr(g, 'user', None) is not None
++            and g.user.uid == uid and g.user.auth_kind == 'openid')
++
++
++def enforce_api_capabilities():
++    user = getattr(g, 'user', None)
++    route = browser_request.path
++    if route.startswith('/api/user/v1/public/calendars/'):
++        raise RequestException(error=UNSUPPORTED)
++    if not active(getattr(user, 'uid', None)):
++        return
++    method = browser_request.method
++    if method == 'OPTIONS':
++        return
++    if (route.endswith('/export') or route == '/api/user/v1/reminders'
++            or route.startswith('/api/user/v1/external-calendars')):
++        raise RequestException(error=UNSUPPORTED)
++    if method in ('GET', 'HEAD'):
++        return
++    if method == 'POST' and CREATE_ROUTE.fullmatch(route):
++        body = browser_request.get_json(silent=True) or {}
++        if not isinstance(body, dict) or any(body.get(k) for k in ('attendees', 'reminders')):
++            raise RequestException(error=UNSUPPORTED)
++        return
++    if method in ('PATCH', 'DELETE') and EDIT_ROUTE.fullmatch(route):
++        # Upstream DELETE ignores recurrence query arguments; never turn a scoped delete into a whole-resource delete.
++        if method == 'DELETE' and any(k in browser_request.args for k in ('recurrence_id', 'recurrence_range')):
++            raise RequestException(error=UNSUPPORTED)
++        if not STRONG_ETAG.fullmatch(browser_request.headers.get('If-Match', '')):
++            raise RequestException(error=PRECONDITION)
++        return
++    raise RequestException(error=UNSUPPORTED)
++
+ 
+ def path(url):
+-    p=urlsplit(url)
+-    decoded=unquote(p.path)
+-    if (p.scheme!='https' or p.netloc!='dav.m7.rs' or p.query or p.fragment
+-            or not decoded.startswith('/') or '%' in decoded or '\\' in decoded
+-            or any(ord(c)<32 for c in decoded) or any(c in ('.','..') for c in decoded.split('/'))):
++    try:
++        p, root = urlsplit(url), urlsplit(ROOT)
++        decoded = unquote(p.path, errors='strict')
++        base = unquote(root.path, errors='strict')
++    except (ValueError, UnicodeError):
++        raise RequestException(error=DENIED) from None
++    if (root.scheme != 'https' or root.username or root.password or root.query or root.fragment
++            or not base.endswith('/') or p.scheme != root.scheme or p.netloc != root.netloc
++            or p.query or p.fragment or not decoded.startswith(base)
++            or '%' in decoded or '\\' in decoded or any(ord(c) <= 32 or ord(c) == 127 for c in decoded)
++            or any(c in ('.', '..') for c in decoded.split('/'))):
+         raise RequestException(error=DENIED)
+     return decoded
+ 
++
++def _properties(item):
++    props = {}
++    for stat in item.findall(D+'propstat'):
++        if ' 200 ' in stat.findtext(D+'status', ''):
++            for prop in stat.find(D+'prop') or []:
++                props[prop.tag] = prop
++    return props
++
++
++def _propfind(url, depth, properties):
++    body = ('<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
++            'xmlns:a="urn:ietf:params:xml:ns:carddav"><d:prop>'+properties+'</d:prop></d:propfind>')
++    response = request('PROPFIND', url, headers={'Depth': str(depth), 'Content-Type': 'application/xml'}, data=body)
++    try:
++        return ET.fromstring(response.content)
++    except ET.ParseError as exc:
++        raise RequestException(error=UNAVAILABLE) from exc
++
++
++def collections():
++    if not active(getattr(getattr(g, 'user', None), 'uid', None)):
++        raise RequestException(error=DENIED)
++    if hasattr(g, 'foundry_dav_collections'):
++        return g.foundry_dav_collections
++    root = _propfind(ROOT, 0, '<d:current-user-principal/>')
++    href = root.findtext('.//'+D+'current-user-principal/'+D+'href')
++    if not href:
++        raise RequestException(error=DENIED)
++    principal = urljoin(ROOT, href)
++    path(principal)
++    tree = _propfind(principal, 0, '<c:calendar-home-set/><a:addressbook-home-set/>')
++    homes = set()
++    for tag in (C+'calendar-home-set', A+'addressbook-home-set'):
++        for node in tree.findall('.//'+tag+'/'+D+'href'):
++            home = urljoin(ROOT, node.text or '')
++            if path(home) == path(ROOT) or not path(home).endswith('/'):
++                raise RequestException(error=DENIED)
++            homes.add(home)
++    if not homes:
++        raise RequestException(error=UNAVAILABLE)
++    found = {}
++    for home in sorted(homes):
++        tree = _propfind(home, 1, '<d:resourcetype/><d:displayname/><d:current-user-privilege-set/><c:supported-calendar-component-set/>')
++        for item in tree.findall(D+'response'):
++            props = _properties(item)
++            types = props.get(D+'resourcetype')
++            if types is None:
++                continue
++            kind = 'calendar' if types.find(C+'calendar') is not None else 'contacts' if types.find(A+'addressbook') is not None else None
++            if kind is None:
++                continue
++            url = urljoin(home, item.findtext(D+'href') or '')
++            relative = path(url).removeprefix(path(home))
++            if not path(url).startswith(path(home)) or not relative.endswith('/') or '/' in relative[:-1] or not relative[:-1]:
++                raise RequestException(error=DENIED)
++            privileges = props.get(D+'current-user-privilege-set')
++            permitted = set() if privileges is None else {child.tag for p in privileges.findall(D+'privilege') for child in p}
++            writable = bool(permitted & {D+'all', D+'write'}) or {D+'write-content', D+'bind', D+'unbind'} <= permitted
++            component_set = props.get(C+'supported-calendar-component-set')
++            components = frozenset(x.get('name') for x in component_set) if component_set is not None else frozenset({'VEVENT', 'VTODO'})
++            name = props.get(D+'displayname')
++            found[path(url)] = Collection(url, name.text if name is not None and name.text else relative[:-1], kind, components, writable)
++    g.foundry_dav_collections = tuple(found.values())
++    return g.foundry_dav_collections
++
++
+ def writable(url, kind=None):
+-    target=path(url)
+-    return any(target==path(collection) for name,collection in COLLECTIONS.items() if kind is None or name==kind)
+-
+-def validate(method,url,headers):
+-    target=path(url)
+-    if method in ('GET','REPORT','PROPFIND'):
+-        return
+-    for kind,collection in COLLECTIONS.items():
+-        root=path(collection)
+-        suffix=target[len(root):] if target.startswith(root) else ''
+-        if (suffix and '/' not in suffix and suffix.endswith('.vcf' if kind=='contacts' else '.ics')
+-                and method in ('PUT','DELETE')):
+-            etag=headers.get('If-Match')
+-            if etag and etag!='*' and not etag.startswith('W/'):
+-                return
+-            if method=='PUT' and headers.get('If-None-Match')=='*':
+-                return
++    expected = 'calendar' if kind in ('tasks', 'events') else kind
++    return any(path(url) == path(c.url) and c.writable and (expected is None or expected == c.kind) for c in collections())
++
++
++def validate(method, url, headers):
++    target = path(url)
++    if method in ('GET', 'REPORT', 'PROPFIND'):
++        return
++    for c in collections():
++        root = path(c.url)
++        suffix = target[len(root):] if target.startswith(root) else ''
++        if not (c.writable and suffix and '/' not in suffix and suffix.endswith('.vcf' if c.kind == 'contacts' else '.ics')):
++            continue
++        if method == 'PUT' and headers.get('If-None-Match') == '*' and not headers.get('If-Match'):
++            if browser_request.method != 'POST' or not CREATE_ROUTE.fullmatch(browser_request.path):
++                raise RequestException(error=DENIED)
++            return
++        if method not in ('PUT', 'DELETE'):
++            break
++        if browser_request.method not in ('PATCH', 'DELETE') or not EDIT_ROUTE.fullmatch(browser_request.path):
++            raise RequestException(error=DENIED)
++        etag = headers.get('If-Match', '')
++        expected = browser_request.headers.get('If-Match', '')
++        if not STRONG_ETAG.fullmatch(etag) or not STRONG_ETAG.fullmatch(expected):
++            raise RequestException(error=PRECONDITION)
++        if etag != expected:
++            raise RequestException(error=CONFLICT)
++        return
+     raise RequestException(error=DENIED)
+ 
+-def request(method,url,*,headers=None,data=None):
+-    if not active(getattr(getattr(g,'user',None),'uid',None)):
+-        raise RequestException(error=DENIED)
+-    headers=dict(headers or {})
+-    validate(method,url,headers)
+-    headers['Authorization']='Bearer '+g.user.password
++
++def request(method, url, *, headers=None, data=None):
++    if not active(getattr(getattr(g, 'user', None), 'uid', None)):
++        raise RequestException(error=DENIED)
++    headers = dict(headers or {})
++    validate(method, url, headers)
++    headers['Authorization'] = 'Bearer '+g.user.password
+     try:
+-        with requests.request(method,url,headers=headers,data=data,timeout=20,allow_redirects=False,stream=True) as r:
+-            if r.status_code==412:
++        with requests.request(method, url, headers=headers, data=data, timeout=20, allow_redirects=False, stream=True) as response:
++            if response.status_code == 412:
+                 raise RequestException(error=CONFLICT)
+-            if r.status_code not in (200,201,204,207):
++            if response.status_code not in (200, 201, 204, 207):
+                 raise RequestException(error=UNAVAILABLE)
+-            chunks=[]; size=0
+-            for chunk in r.iter_content(65536):
+-                size+=len(chunk)
+-                if size>16*1024*1024:
++            chunks, size = [], 0
++            for chunk in response.iter_content(65536):
++                size += len(chunk)
++                if size > 16*1024*1024:
+                     raise RequestException(error=UNAVAILABLE)
+                 chunks.append(chunk)
+-            return SimpleNamespace(status_code=r.status_code,content=b''.join(chunks),headers=r.headers)
++            return SimpleNamespace(status_code=response.status_code, content=b''.join(chunks), headers=response.headers)
+     except requests.RequestException as exc:
+         raise RequestException(error=UNAVAILABLE) from exc
+--- a/app/module/auth/PilotOidcRefresh.py
++++ b/app/module/auth/PilotOidcRefresh.py
+@@ -59,7 +59,7 @@
+ 
+     def check(canonical):
+         try:
+-            return provider.check_access_token(canonical.password)
++            return provider.check_access_token(canonical.password, expected_user=canonical)
+         except RequestException as exc:
+             raise RequestException(error=UNAVAILABLE) from exc
+ 
+--- a/app/module/calendar/ModuleCalendar.py
++++ b/app/module/calendar/ModuleCalendar.py
+@@ -289,6 +289,8 @@
+                 result=created, touched=[(created, EventAction.INSERT)],
+             ))
+             return created
++        except RequestException:
++            raise
+         except Exception as exc:
+             logger_calendar.exception("Unexpected error creating event in calendar %s", calendar_key)
+             raise RequestException(error=err.ERROR_CALENDAR_EVENT_INSERT_FAILED) from exc
+--- a/app/module/calendar/model/CalCalendar.py
++++ b/app/module/calendar/model/CalCalendar.py
+@@ -51,6 +51,7 @@
+     is_default: bool = False
+     # Internal - discriminates calendar backend: local, ics, caldav
+     source_type: CalendarSourceType = CalendarSourceType.UNDEFINED
++    supported_components: list[str] | None = None
+     # CalDAV CS:getctag extension (draft-daboo-caldav-extensions) - opaque token incremented
+     # by the service layer on every event mutation (insert / update / delete).
+     # CalDAV clients compare it against their cached value to detect changes without
+--- a/app/module/calendar/serializer/CalCalendarSerializerDict.py
++++ b/app/module/calendar/serializer/CalCalendarSerializerDict.py
+@@ -22,6 +22,7 @@
+             "timezone": data.timezone,
+             "is_default": data.is_default,
+             "source_type": data.source_type.value,
++            "supported_components": data.supported_components,
+             "ctag": data.ctag,
+             "include_in_freebusy": data.include_in_freebusy,
+             "default_event_duration_min": data.default_event_duration_min,
+--- a/app/module/calendar/serializer/CalEventDeserializerDict.py
++++ b/app/module/calendar/serializer/CalEventDeserializerDict.py
+@@ -59,7 +59,7 @@
+             title=data.get("title"),
+             description=data.get("description"),
+             location=data.get("location"),
+-            date_start=self._parse_dt(data["date_start"]) if "date_start" in data else None,
++            date_start=self._parse_dt_opt(data.get("date_start")),
+             date_end=self._parse_dt_opt(data.get("date_end")),
+             all_day=data.get("all_day", False),
+             timezone=data.get("timezone") or "UTC",
+@@ -113,9 +113,7 @@
+             return self._recurrence_deserializer.deserialize(value) if value else None
+         if key == "recurrence_exceptions":
+             return [self._parse_dt(d) for d in value]
+-        if key == "date_start":
+-            return self._parse_dt(value)
+-        if key in ("date_end", "completed_at", "recurrence_id"):
++        if key in ("date_start", "date_end", "completed_at", "recurrence_id"):
+             return self._parse_dt_opt(value)
+         if key == "attendees":
+             return [self._attendee_deserializer.deserialize(a) for a in value]
+--- a/app/module/calendar/serializer/CalEventDeserializerIcal.py
++++ b/app/module/calendar/serializer/CalEventDeserializerIcal.py
+@@ -289,26 +289,22 @@
+ 
+         return date_start, date_end, all_day, timezone_str
+ 
+-    def _extract_dates_todo(self, vtodo: Any) -> tuple[datetime, datetime, bool, str]:
++    def _extract_dates_todo(self, vtodo: Any) -> tuple[datetime | None, datetime | None, bool, str]:
+         """Extract DTSTART and DUE / DURATION for a VTODO component.
+ 
+-        DTSTART is optional for VTODO (RFC 5545 §3.6.2); defaults to epoch.
++        DTSTART and DUE are optional for VTODO (RFC 5545 §3.6.2).
+         DUE is the VTODO equivalent of DTEND.
+         """
+         date_start, all_day, tzid = self._parse_dt_prop(vtodo, "dtstart")
+-        if date_start is None:
+-            date_start, all_day, tzid = _EMPTY_START, False, None
+ 
+         timezone_str = tzid or "UTC"
+ 
+         date_end, _, _ = self._parse_dt_prop(vtodo, "due")
+         if date_end is None:
+             duration_prop = vtodo.get("duration")
+-            if duration_prop is not None:
++            if duration_prop is not None and date_start is not None:
+                 delta: timedelta = duration_prop.dt
+                 date_end = date_start + delta
+-            else:
+-                date_end = date_start
+ 
+         return date_start, date_end, all_day, timezone_str
+ 
+--- a/app/module/calendar/serializer/CalEventSerializerDict.py
++++ b/app/module/calendar/serializer/CalEventSerializerDict.py
+@@ -38,12 +38,13 @@
+         """Convert a CalEvent to its plain dict representation."""
+         return {
+             "key": data.key,
++            "etag": getattr(data, "dav_etag", None),
+             "calendar_key": data.calendar_key,
+             "uid": data.uid,
+             "title": data.title,
+             "description": data.description,
+             "location": data.location,
+-            "date_start": fmt_dt(data.require_date_start),
++            "date_start": fmt_dt(data.date_start) if data.date_start is not None else None,
+             "date_end": fmt_dt(data.date_end) if data.date_end is not None else None,
+             "all_day": data.all_day,
+             "timezone": data.timezone,
+@@ -80,8 +81,8 @@
+         event_tz = event.timezone
+         cal_tz = event.calendar_timezone
+         return {
+-            "date_start_tz_event": apply_tz(event.require_date_start, event_tz) if event_tz else None,
++            "date_start_tz_event": apply_tz(event.date_start, event_tz) if (event_tz and event.date_start is not None) else None,
+             "date_end_tz_event": apply_tz(event.date_end, event_tz) if (event_tz and event.date_end is not None) else None,
+-            "date_start_tz_calendar": apply_tz(event.require_date_start, cal_tz) if cal_tz else None,
++            "date_start_tz_calendar": apply_tz(event.date_start, cal_tz) if (cal_tz and event.date_start is not None) else None,
+             "date_end_tz_calendar": apply_tz(event.date_end, cal_tz) if (cal_tz and event.date_end is not None) else None,
+         }
+--- a/app/module/calendar/serializer/CalEventSerializerIcal.py
++++ b/app/module/calendar/serializer/CalEventSerializerIcal.py
+@@ -230,11 +230,13 @@
+         A VTODO may have no DUE (a task without a due date); the property is then omitted.
+         """
+         if event.all_day:
+-            vtodo.add("dtstart", event.require_date_start.date())
++            if event.date_start is not None:
++                vtodo.add("dtstart", event.date_start.date())
+             if event.date_end is not None:
+                 vtodo.add("due", event.date_end.date())
+         else:
+-            vtodo.add("dtstart", event.date_start)
++            if event.date_start is not None:
++                vtodo.add("dtstart", event.date_start)
+             if event.date_end is not None:
+                 vtodo.add("due", event.date_end)
+         vtodo.add("dtstamp", datetime.now(timezone.utc))
+--- a/app/module/calendar/serializer/CalTaskDeserializerDict.py
++++ b/app/module/calendar/serializer/CalTaskDeserializerDict.py
+@@ -1,6 +1,5 @@
+ from __future__ import annotations
+ 
+-from datetime import datetime, timezone
+ from typing import Any
+ 
+ from app.module.calendar.model.CalEvent import CalEvent
+@@ -13,8 +12,7 @@
+     """Deserializes a task API dict into a VTODO CalEvent (component_type=task).
+ 
+     Thin wrapper over CalEventDeserializerDict mapping the task-only ``date_due`` onto the model's
+-    date_end. On creation a VTODO with no explicit start defaults to now, so the component always
+-    carries an anchor date.
++    date_end. Missing start and due dates remain absent.
+     """
+ 
+     def __init__(self) -> None:
+@@ -22,7 +20,6 @@
+ 
+     def deserialize(self, data: dict[str, Any]) -> CalEvent:
+         body: dict[str, Any] = self._map_task_fields(data)
+-        body["date_start"] = body.get("date_start") or datetime.now(timezone.utc).isoformat()
+         body["component_type"] = ComponentType.TASK.value
+         return self._event_deserializer.deserialize(body)
+ 
+--- a/app/module/calendar/source/CalendarSource.py
++++ b/app/module/calendar/source/CalendarSource.py
+@@ -173,7 +173,7 @@
+ 
+     def _filter_date_end(self, events: list[CalEvent], end: datetime) -> list[CalEvent]:
+         """Keep events that start at or before end (not in the future)."""
+-        return [e for e in events if e.require_date_start <= end]
++        return [e for e in events if e.date_start is None or e.date_start <= end]
+ 
+     def search(self, events: list[CalEvent], query: str) -> list[CalEvent]:
+         """Keep events matching query in title, description or location.
+--- a/app/module/calendar/source/CalendarSourceLiveDav.py
++++ b/app/module/calendar/source/CalendarSourceLiveDav.py
+@@ -1,11 +1,11 @@
+-"""Read-only single-user pilot against production DAV using the current OIDC token."""
++"""Discover calendars using the current token, independently of mailbox identity."""
+ from datetime import datetime
+ from urllib.parse import urljoin, urlsplit
+ from uuid import uuid5, NAMESPACE_URL
+ import xml.etree.ElementTree as ET
+ 
+-from flask import g, has_request_context
+-import requests
++from flask import g
++from app.module.auth.PilotDavAccess import ROOT, active, collections, request as dav_request
+ from icalendar import Calendar
+ 
+ from app.module.calendar.model.CalCalendar import CalCalendar
+@@ -16,35 +16,15 @@
+ from app.utils import errors as err
+ from app.utils.exceptions import RequestException
+ 
+-ROOT = 'https://dav.m7.rs/'
+ D = '{DAV:}'
+ C = '{urn:ietf:params:xml:ns:caldav}'
+ 
+ 
+-def active(uid):
+-    return (has_request_context() and getattr(g, 'user', None) is not None
+-            and g.user.uid == uid == 'hi@m7.rs' and g.user.auth_kind == 'openid')
+-
+-
+ def request(method, url, body, depth):
+-    if method not in {'PROPFIND', 'REPORT'} or urlsplit(url).netloc != 'dav.m7.rs' or urlsplit(url).scheme != 'https':
+-        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+-    try:
+-        with requests.request(method, url, data=body, headers={
+-            'Authorization':'Bearer '+g.user.password, 'Depth':str(depth), 'Content-Type':'application/xml',
+-        }, timeout=20, allow_redirects=False, stream=True) as response:
+-            if response.status_code != 207:
+-                raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+-            chunks = []
+-            size = 0
+-            for chunk in response.iter_content(65536):
+-                size += len(chunk)
+-                if size > 16 * 1024 * 1024:
+-                    raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+-                chunks.append(chunk)
+-            return ET.fromstring(b''.join(chunks))
+-    except requests.RequestException as exc:
+-        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED) from exc
++    response = dav_request(method, url, data=body, headers={
++        'Depth': str(depth), 'Content-Type': 'application/xml',
++    })
++    return ET.fromstring(response.content)
+ 
+ 
+ def discover(uid):
+@@ -52,32 +32,18 @@
+         return None
+     if hasattr(g, 'pilot_dav_sources'):
+         return g.pilot_dav_sources
+-    root = request('PROPFIND', ROOT, b'<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>', 0)
+-    href = root.find('.//'+D+'current-user-principal/'+D+'href')
+-    if href is None or not href.text:
+-        raise RequestException(error=err.ERROR_CALENDAR_NOT_SUPPORTED)
+-    home = urljoin(ROOT, href.text)
+-    root = request('PROPFIND', home, b'<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/></d:prop></d:propfind>', 1)
++    from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveMixed
+     sources = []
+-    for item in root.findall(D+'response'):
+-        prop = item.find('.//'+D+'prop')
+-        if prop is None or prop.find('.//'+C+'calendar') is None:
++    for collection in collections():
++        if collection.kind != 'calendar':
+             continue
+-        url = urljoin(ROOT, item.findtext(D+'href'))
+-        name = prop.findtext(D+'displayname') or urlsplit(url).path.rstrip('/').split('/')[-1]
+-        cal = CalCalendar(user_uid=uid, name=name, key=str(uuid5(NAMESPACE_URL, url)),
+-                          source_type=CalendarSourceType.ICS, timezone='America/Sao_Paulo')
+-        from app.module.auth.PilotDavAccess import writable
+-        if writable(url, 'tasks'):
+-            from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveTasks
+-            cal.source_type = CalendarSourceType.LOCAL
+-            sources.append(CalendarSourceLiveTasks(cal))
+-        elif writable(url, 'events'):
+-            from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveEvents
+-            cal.source_type = CalendarSourceType.LOCAL
+-            sources.append(CalendarSourceLiveEvents(cal))
++        cal = CalCalendar(user_uid=uid, name=collection.name, key=str(uuid5(NAMESPACE_URL, collection.url)),
++                          source_type=CalendarSourceType.CALDAV if collection.writable else CalendarSourceType.ICS,
++                          timezone='America/Sao_Paulo', supported_components=sorted(collection.components))
++        if collection.writable:
++            sources.append(CalendarSourceLiveMixed(cal, collection.url, collection.components))
+         else:
+-            sources.append(CalendarSourceLiveDav(cal, url))
++            sources.append(CalendarSourceLiveDav(cal, collection.url))
+     g.pilot_dav_sources = sources
+     return sources
+ 
+--- a/app/module/calendar/source/CalendarSourceLiveWritable.py
++++ b/app/module/calendar/source/CalendarSourceLiveWritable.py
+@@ -3,7 +3,7 @@
+ from datetime import datetime, timezone
+ from uuid import uuid4
+ from icalendar import Calendar
+-from app.module.auth.PilotDavAccess import COLLECTIONS, request
++from app.module.auth.PilotDavAccess import request, writable
+ from app.module.calendar.source.CalendarSourceDavPilot import CalendarSourceDavPilot, DavEvent
+ from app.module.calendar.source.CalendarSourceDavEventsPilot import CalendarSourceDavEventsPilot, EVENT_PROPERTIES
+ from app.module.calendar.model.CalEvent import CalEvent
+@@ -13,12 +13,22 @@
+ from app.utils.exceptions import RequestException
+ 
+ class CalendarSourceLiveTasks(CalendarSourceDavPilot):
+-    collection = COLLECTIONS['tasks']
++    def __init__(self, calendar, url):
++        super().__init__(calendar)
++        self.collection = url
++
++    def is_writable(self):
++        return writable(self.collection, 'tasks')
+     def request(self, method, url, **kwargs):
+         return request(method, url, **kwargs)
+ 
+ class CalendarSourceLiveEvents(CalendarSourceDavEventsPilot):
+-    collection = COLLECTIONS['events']
++    def __init__(self, calendar, url):
++        super().__init__(calendar)
++        self.collection = url
++
++    def is_writable(self):
++        return writable(self.collection, 'events')
+     def request(self, method, url, **kwargs):
+         return request(method, url, **kwargs)
+ 
+@@ -87,3 +97,47 @@
+         if not original.recurrence_rule and original.recurrence_id is None:
+             return None
+         return super().process_scoped_update(original,event_update)
++
++
++class CalendarSourceLiveMixed(CalendarSourceLiveEvents):
++    def __init__(self, calendar, url, components):
++        super().__init__(calendar, url)
++        self.components = components
++        self.tasks = CalendarSourceLiveTasks(calendar, url)
++
++    def _fetch_events(self, start, end, search=None):
++        return super()._fetch_events(start, end, search) if 'VEVENT' in self.components else []
++
++    def _fetch_tasks(self, start, end, search=None):
++        return self.tasks._fetch_tasks(start, end, search) if 'VTODO' in self.components else []
++
++    def get_event(self, key):
++        event = super().get_event(key) if 'VEVENT' in self.components else None
++        return event or (self.tasks.get_event(key) if 'VTODO' in self.components else None)
++
++    def get_master_event_by_uid(self, uid):
++        event = super().get_master_event_by_uid(uid) if 'VEVENT' in self.components else None
++        return event or (self.tasks.get_master_event_by_uid(uid) if 'VTODO' in self.components else None)
++
++    def insert_event(self, event):
++        component = 'VTODO' if event.component_type == ComponentType.TASK else 'VEVENT'
++        if component not in self.components:
++            raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++        return self.tasks.insert_event(event) if component == 'VTODO' else super().insert_event(event)
++
++    def update_event(self, event):
++        if event.component_type == ComponentType.TASK:
++            return self.tasks.update_event(event)
++        return super().update_event(event)
++
++    def delete_event(self, uid):
++        if uid in self.tasks._seen:
++            if uid in self._seen:
++                raise RequestException(error=ERROR_CALENDAR_NOT_SUPPORTED)
++            return self.tasks.delete_event(uid)
++        return super().delete_event(uid)
++
++    def process_scoped_update(self, original, event_update):
++        if original.component_type == ComponentType.TASK:
++            return None
++        return super().process_scoped_update(original, event_update)
+--- a/app/module/calendar/source/CalendarSources.py
++++ b/app/module/calendar/source/CalendarSources.py
+@@ -229,7 +229,7 @@
+         tasks: list[CalEvent] = []
+         for source in self.get_all(user_uid):
+             tasks.extend(source.get_all_tasks(start, end, search))
+-        tasks.sort(key=lambda e: e.require_date_start)
++        tasks.sort(key=lambda e: (e.date_start is not None, e.date_start))
+         return tasks
+ 
+     def update_sync_config(self, calendar: CalCalendar) -> None:
+--- a/app/module/contact/model/CardContact.py
++++ b/app/module/contact/model/CardContact.py
+@@ -105,6 +105,7 @@
+     # Transient - parent address book display name, stamped at fetch time for the response (e.g.
+     # recipient autocompletion provenance). Not persisted, not a mutable field.
+     addressbook_name: str | None = None
++    dav_etag: str | None = None
+ 
+     _MUTABLE_FIELDS: ClassVar[frozenset[str]] = frozenset({
+         "display_name", "first_name", "last_name", "middle_name", "prefix", "suffix", "nickname",
+--- a/app/module/contact/serializer/CardContactSerializerDict.py
++++ b/app/module/contact/serializer/CardContactSerializerDict.py
+@@ -35,6 +35,7 @@
+         """Convert a CardContact to its plain dict representation."""
+         return {
+             "key": data.key,
++            "etag": data.dav_etag,
+             "addressbook_key": data.addressbook_key,
+             "uid": data.uid,
+             "version": data.version,
+--- a/app/module/contact/source/ContactSourceLiveDav.py
++++ b/app/module/contact/source/ContactSourceLiveDav.py
+@@ -1,4 +1,4 @@
+-"""Direct CardDAV pilot; only the disposable validation book permits writes."""
++"""Direct CardDAV with discovered privileges and loss-preserving partial writes."""
+ from copy import deepcopy
+ from dataclasses import fields
+ from datetime import datetime, timezone
+@@ -6,7 +6,7 @@
+ from urllib.parse import urljoin
+ import xml.etree.ElementTree as ET
+ from flask import g
+-from app.module.auth.PilotDavAccess import ROOT, HOME, active, request, writable, DENIED, UNAVAILABLE
++from app.module.auth.PilotDavAccess import active, collections, request, writable, DENIED, UNAVAILABLE
+ from app.module.contact.source.ContactSource import ContactSource
+ from app.module.contact.model.CardAddressBook import CardAddressBook
+ from app.module.contact.model.CardContact import CardContact
+@@ -34,17 +34,13 @@
+ def discover(uid):
+     if not active(uid): return None
+     if hasattr(g,'pilot_carddav_sources'): return g.pilot_carddav_sources
+-    response=request('PROPFIND',HOME,headers={'Depth':'1','Content-Type':'application/xml'},
+-        data='<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/></d:prop></d:propfind>')
+     sources=[]
+-    for item in ET.fromstring(response.content).findall(D+'response'):
+-        prop=item.find('.//'+D+'prop')
+-        if prop is None or prop.find('.//'+A+'addressbook') is None: continue
+-        url=urljoin(ROOT,item.findtext(D+'href'))
+-        book=CardAddressBook(user_uid=uid,name=prop.findtext(D+'displayname') or 'CardDAV',
+-            key=str(uuid5(NAMESPACE_URL,url)),source_type=CardSourceType.CARDDAV,
+-            is_default=writable(url,'contacts'))
+-        sources.append(ContactSourceLiveDav(book,url))
++    for collection in collections():
++        if collection.kind != 'contacts': continue
++        book=CardAddressBook(user_uid=uid,name=collection.name,
++            key=str(uuid5(NAMESPACE_URL,collection.url)),source_type=CardSourceType.CARDDAV,
++            is_default=collection.writable and not any(s.is_writable() for s in sources))
++        sources.append(ContactSourceLiveDav(book,collection.url))
+     g.pilot_carddav_sources=sources
+     return sources
+ 
+@@ -76,6 +72,7 @@
+         if not contact.uid: raise RequestException(error=UNAVAILABLE)
+         contact.key=str(uuid5(NAMESPACE_URL,href+'#'+contact.uid))
+         contact.addressbook_key=self.addressbook.key
++        contact.dav_etag=etag
+         self._seen[contact.key]=(deepcopy(contact),raw,href,etag)
+         return contact
+ 
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_dav.py
+@@ -0,0 +1,354 @@
++import os
++import socket
++import subprocess
++import time
++from contextlib import contextmanager
++from urllib.parse import urlsplit
++
++import requests
++from types import SimpleNamespace
++from uuid import uuid4
++
++import pytest
++from flask import Flask, g
++
++from app.module.auth import PilotDavAccess as dav
++from app.utils.exceptions import RequestException
++
++
++@contextmanager
++def context(method='PATCH', route='/api/user/v1/tasks/task-key', etag='"one"'):
++    headers = {'If-Match': etag} if etag is not None else {}
++    with Flask(__name__).test_request_context(route, method=method, headers=headers):
++        g.user = SimpleNamespace(uid='mailbox@example.test', auth_kind='openid', password='test-token')
++        yield
++
++
++def registry(writable=True):
++    collection = dav.Collection(dav.ROOT+'storage-owner/mixed/', 'Mixed', 'calendar', frozenset({'VEVENT', 'VTODO'}), writable)
++    g.foundry_dav_collections = (collection,)
++    return collection.url+'resource.ics'
++
++
++def multistatus(href, properties):
++    return ('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
++            'xmlns:a="urn:ietf:params:xml:ns:carddav"><d:response><d:href>'+href+
++            '</d:href><d:propstat><d:prop>'+properties+
++            '</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>').encode()
++
++
++@pytest.mark.parametrize('principal', [str(uuid4()), 'hi%40m7.rs'])
++def test_principal_is_discovered_not_derived_from_mailbox(principal, mocker):
++    home = '/'+principal+'/'
++    answers = [
++        multistatus('/', '<d:current-user-principal><d:href>'+home+'</d:href></d:current-user-principal>'),
++        multistatus(home, '<c:calendar-home-set><d:href>'+home+'</d:href></c:calendar-home-set>'
++                    '<a:addressbook-home-set><d:href>'+home+'</d:href></a:addressbook-home-set>'),
++        multistatus(home+'mixed/', '<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>'
++                    '<d:displayname>Mixed</d:displayname><d:current-user-privilege-set>'
++                    '<d:privilege><d:write/></d:privilege></d:current-user-privilege-set>'
++                    '<c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set>'),
++    ]
++    remote = mocker.patch.object(dav, 'request', side_effect=[SimpleNamespace(content=x) for x in answers])
++    with context():
++        found = dav.collections()
++        assert found[0].url == dav.ROOT+principal+'/mixed/'
++        assert found[0].writable
++        assert found[0].components == {'VEVENT', 'VTODO'}
++        assert dav.collections() is found
++    assert [c.args[1] for c in remote.call_args_list] == [dav.ROOT, dav.ROOT+principal+'/', dav.ROOT+principal+'/']
++
++
++@pytest.mark.parametrize('etag', [None, 'W/"one"', '*', '"one", "two"'])
++def test_missing_or_invalid_browser_version_is_rejected(etag):
++    with context(etag=etag):
++        url = registry()
++        with pytest.raises(RequestException) as exc:
++            dav.validate('PUT', url, {'If-Match': '"one"'})
++        assert exc.value.error.h == 428
++
++
++def test_old_browser_version_cannot_overwrite_new_server_snapshot():
++    with context(etag='"old-form"'):
++        url = registry()
++        with pytest.raises(RequestException) as exc:
++            dav.validate('PUT', url, {'If-Match': '"new-server"'})
++        assert exc.value.error.h == 409
++
++
++@pytest.mark.parametrize('method', ['PUT', 'DELETE'])
++def test_matching_browser_and_server_versions_are_accepted(method):
++    with context(method='DELETE' if method == 'DELETE' else 'PATCH'):
++        url = registry()
++        dav.validate(method, url, {'If-Match': '"one"'})
++
++
++def test_creation_is_create_only_and_bulk_operations_fail_closed():
++    with context(method='POST', route='/api/user/v1/calendars/calendar-key/tasks'):
++        url = registry()
++        dav.validate('PUT', url, {'If-None-Match': '*'})
++        with pytest.raises(RequestException):
++            dav.validate('PUT', url, {})
++    with context(method='POST', route='/api/user/v1/calendars/calendar-key/import'):
++        url = registry()
++        with pytest.raises(RequestException):
++            dav.validate('PUT', url, {'If-None-Match': '*'})
++
++
++def test_read_only_and_undiscovered_collections_reject_writes():
++    with context():
++        url = registry(writable=False)
++        for target in (url, dav.ROOT+'other-owner/mixed/resource.ics'):
++            with pytest.raises(RequestException) as exc:
++                dav.validate('PUT', target, {'If-Match': '"one"'})
++            assert exc.value.error.h == 403
++
++
++@pytest.mark.parametrize('url', [
++    'http://dav.m7.rs/storage-owner/mixed/a.ics',
++    'https://evil.test/storage-owner/mixed/a.ics',
++    'https://dav.m7.rs/storage-owner/mixed/../a.ics',
++    'https://dav.m7.rs/storage-owner/mixed/%2e%2e/a.ics',
++    'https://dav.m7.rs/storage-owner/mixed/%252e%252e/a.ics',
++    'https://dav.m7.rs/storage-owner/mixed/a.ics?query=1',
++    'https://dav.m7.rs/storage-owner/mixed/a.ics#fragment',
++    'https://dav.m7.rs/storage-owner/mixed/a%0d.ics',
++])
++def test_url_fence(url):
++    with pytest.raises(RequestException):
++        dav.path(url)
++
++
++def test_server_etag_race_is_reported_as_conflict(mocker):
++    remote = mocker.patch.object(dav.requests, 'request')
++    remote.return_value.__enter__.return_value.status_code = 412
++    with context():
++        url = registry()
++        with pytest.raises(RequestException) as exc:
++            dav.request('PUT', url, headers={'If-Match': '"one"'}, data=b'fixture')
++        assert exc.value.error.h == 409
++    assert remote.call_args.kwargs['allow_redirects'] is False
++    assert remote.call_args.kwargs['headers']['Authorization'] == 'Bearer test-token'
++
++
++def test_mixed_collection_reads_and_routes_both_components(mocker):
++    from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveMixed
++    from app.module.calendar.model.CalCalendar import CalCalendar
++    calendar = CalCalendar('mailbox@example.test', 'Mixed')
++    source = CalendarSourceLiveMixed(calendar, dav.ROOT+'storage-owner/mixed/', {'VEVENT', 'VTODO'})
++    event = SimpleNamespace(key='event-key', uid='event', require_uid='event')
++    task = SimpleNamespace(key='task-key', uid='task', require_uid='task')
++    mocker.patch.object(source, '_resources', return_value=[event])
++    mocker.patch.object(source.tasks, '_resources', return_value=[task])
++    assert source._fetch_events(None, None) == [event]
++    assert source._fetch_tasks(None, None) == [task]
++    assert source.get_event('event-key') is event
++    assert source.get_event('task-key') is task
++
++
++def test_versions_survive_contact_merge_and_response_schema():
++    from app.module.contact.model.CardContact import CardContact
++    from app.module.contact.serializer.CardContactDeserializerDict import CardContactDeserializerDict
++    from app.module.contact.serializer.CardContactSerializerDict import CardContactSerializerDict
++    from app.api.v1.contact.schemas.contact import ContactSchema
++    from app.api.v1.calendar.schemas.event import CalendarEventSchema
++    from app.api.v1.calendar.schemas.task import CalendarTaskSchema
++    contact = CardContact(display_name='Fixture', dav_etag='"one"')
++    merged = CardContactDeserializerDict().deserialize_with_update(contact, {'note': 'edited'})
++    assert merged.dav_etag == '"one"'
++    assert ContactSchema().dump(CardContactSerializerDict().serialize(merged))['etag'] == '"one"'
++    for schema in (CalendarEventSchema(), CalendarTaskSchema()):
++        assert schema.dump({'etag': '"one"'})['etag'] == '"one"'
++
++
++@pytest.fixture
++def radicale(tmp_path, mocker):
++    with socket.socket() as listener:
++        listener.bind(('127.0.0.1', 0))
++        port = listener.getsockname()[1]
++    config = tmp_path/'radicale.conf'
++    config.write_text(f'[server]\nhosts = 127.0.0.1:{port}\n[auth]\ntype = http_x_remote_user\n'
++                      f'[rights]\ntype = owner_only\n[storage]\nfilesystem_folder = {tmp_path}/data\n')
++    process = subprocess.Popen([os.environ['RADICALE_TEST_SERVER'], '--config', str(config)],
++                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++    origin = f'http://127.0.0.1:{port}'
++    original_request = requests.request
++    principal = '4950638e-0534-41bd-b509-a44abb0477a8'
++    def remote(method, url, **kwargs):
++        headers = dict(kwargs.pop('headers', {}))
++        headers['X-Remote-User'] = principal
++        return original_request(method, origin+urlsplit(url).path, headers=headers, **kwargs)
++    try:
++        for _ in range(100):
++            assert process.poll() is None, 'Radicale exited during startup'
++            try:
++                remote('GET', dav.ROOT, timeout=1)
++                break
++            except requests.ConnectionError:
++                time.sleep(.05)
++        else:
++            pytest.fail('Radicale did not start')
++        mocker.patch.object(dav.requests, 'request', side_effect=remote)
++        yield principal, remote
++    finally:
++        process.terminate()
++        process.wait(timeout=10)
++
++
++def test_real_radicale_discovery_mixed_calendar_and_stale_form(radicale, mocker):
++    from app.module.calendar.source.CalendarSourceLiveDav import discover
++    principal, remote = radicale
++    collection = dav.ROOT+principal+'/mixed/'
++    result = remote('MKCALENDAR', collection, data=b'''<c:mkcalendar xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:set><d:prop><d:displayname>Mixed</d:displayname><c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set></d:prop></d:set></c:mkcalendar>''', headers={'Content-Type': 'application/xml'})
++    assert result.status_code == 201
++    task_url = collection+'task.ics'
++    task_data = (b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Foundry//TEST//EN\r\n'
++                 b'BEGIN:VTODO\r\nUID:fixture-task\r\nDTSTAMP:20261101T120000Z\r\n'
++                 b'SUMMARY:Original\r\nX-OPAQUE;X-PARAM=retained:preserve\r\n'
++                 b'END:VTODO\r\nEND:VCALENDAR\r\n')
++    assert remote('PUT', task_url, data=task_data, headers={'Content-Type': 'text/calendar'}).status_code == 201
++    event_data = (b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Foundry//TEST//EN\r\n'
++                  b'BEGIN:VEVENT\r\nUID:fixture-event\r\nDTSTAMP:20261101T120000Z\r\n'
++                  b'DTSTART:20261110T120000Z\r\nDTEND:20261110T130000Z\r\nSUMMARY:Event\r\n'
++                  b'END:VEVENT\r\nEND:VCALENDAR\r\n')
++    assert remote('PUT', collection+'event.ics', data=event_data, headers={'Content-Type': 'text/calendar'}).status_code == 201
++    with context():
++        source, = discover('mailbox@example.test')
++        assert source.is_writable()
++        from app.api.v1.calendar.schemas.calendar import CalendarSchema
++        from app.module.calendar.serializer.CalCalendarSerializerDict import CalCalendarSerializerDict
++        calendar = CalendarSchema().dump(CalCalendarSerializerDict().serialize(source.calendar))
++        assert calendar['supported_components'] == ['VEVENT', 'VTODO']
++        event, = source._fetch_events(None, None)
++        task, = source._fetch_tasks(None, None)
++        assert event.title == 'Event'
++        assert task.title == 'Original'
++        from app.module.calendar.serializer.CalTaskSerializerDict import CalTaskSerializerDict
++        from app.api.v1.calendar.schemas.task import CalendarTaskSchema
++        payload = CalendarTaskSchema().dump(CalTaskSerializerDict().serialize(task))
++        assert payload['date_start'] is None and payload['date_due'] is None
++        assert task in source.get_all_tasks()
++        from app.module.calendar.source.CalendarSources import CalendarSources
++        sources = object.__new__(CalendarSources)
++        mocker.patch.object(sources, 'get_all', return_value=[source])
++        assert task in sources.get_all_tasks('mailbox@example.test')
++        old_etag = task.dav_etag
++    changed = remote('PUT', task_url, data=task_data.replace(b'Original', b'Independent writer'),
++                     headers={'If-Match': old_etag, 'Content-Type': 'text/calendar'})
++    assert changed.status_code in (201, 204)
++    with context(etag=old_etag):
++        source, = discover('mailbox@example.test')
++        updated = source.get_event(task.key)
++        assert updated.dav_etag != old_etag
++        updated.title = 'Stale browser'
++        with pytest.raises(RequestException) as exc:
++            source.update_event(updated)
++        assert exc.value.error.h == 409
++    current = remote('GET', task_url)
++    assert b'Independent writer' in current.content
++    with context(etag=current.headers['ETag']):
++        source, = discover('mailbox@example.test')
++        updated = source.get_event(task.key)
++        updated.title = 'Fresh browser'
++        source.update_event(updated)
++    saved = remote('GET', task_url)
++    assert b'Fresh browser' in saved.content
++    assert b'X-OPAQUE;X-PARAM=retained:preserve' in saved.content
++    assert b'DUE:' not in saved.content and b'DTSTART:' not in saved.content
++    assert saved.headers['ETag'] != current.headers['ETag']
++
++
++@pytest.mark.parametrize('kind', ['events', 'contacts'])
++def test_real_event_and_contact_conflicts_preservation_and_delete(radicale, kind):
++    from app.module.calendar.source.CalendarSourceLiveDav import discover as calendars
++    from app.module.contact.source.ContactSourceLiveDav import discover as books
++    principal, remote = radicale
++    collection = dav.ROOT+principal+'/'+kind+'/'
++    if kind == 'events':
++        response = remote('MKCALENDAR', collection)
++        data = (b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Foundry//TEST//EN\r\n'
++                b'BEGIN:VEVENT\r\nUID:fixture-event\r\nDTSTAMP:20261101T120000Z\r\n'
++                b'DTSTART:20261110T120000Z\r\nDTEND:20261110T130000Z\r\nSUMMARY:Original\r\n'
++                b'X-OPAQUE;X-PARAM=retained:preserve\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\n'
++                b'TRIGGER:-PT10M\r\nDESCRIPTION:Reminder\r\nEND:VALARM\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n')
++        url, content_type = collection+'event.ics', 'text/calendar'
++        route = '/api/user/v1/events/key'
++    else:
++        response = remote('MKCOL', collection, headers={'Content-Type': 'application/xml'}, data=b'<d:mkcol xmlns:d="DAV:" xmlns:a="urn:ietf:params:xml:ns:carddav"><d:set><d:prop><d:resourcetype><d:collection/><a:addressbook/></d:resourcetype></d:prop></d:set></d:mkcol>')
++        data = (b'BEGIN:VCARD\r\nVERSION:4.0\r\nUID:fixture-contact\r\nFN:Fixture\r\nNOTE:Original\r\n'
++                b'item1.EMAIL;TYPE=HOME:fixture@example.test\r\nitem1.X-ABLabel:Fixture\r\n'
++                b'X-OPAQUE;X-PARAM=retained:preserve\r\nBDAY:--0315\r\nEND:VCARD\r\n')
++        url, content_type = collection+'contact.vcf', 'text/vcard'
++        route = '/api/user/v1/addressbooks/book/contacts/key'
++    assert response.status_code == 201
++    assert remote('PUT', url, data=data, headers={'Content-Type': content_type}).status_code == 201
++
++    def load():
++        source, = calendars('mailbox@example.test') if kind == 'events' else books('mailbox@example.test')
++        if kind == 'events':
++            item, = source._fetch_events(None, None)
++            return source, source.get_event(item.key)
++        item, = source.get_contacts()
++        return source, item
++
++    def update(source, item, value):
++        if kind == 'events':
++            item.title = value
++            source.update_event(item)
++        else:
++            item.note = value
++            source.update_contact(item)
++
++    with context(route=route):
++        _, original = load()
++        old = original.dav_etag
++    assert remote('PUT', url, data=data.replace(b'Original', b'Independent'), headers={'If-Match': old, 'Content-Type': content_type}).status_code in (201, 204)
++    with context(route=route, etag=old):
++        source, item = load()
++        with pytest.raises(RequestException) as exc:
++            update(source, item, 'Stale')
++        assert exc.value.error.h == 409
++    current = remote('GET', url)
++    assert b'Independent' in current.content
++    with context(route=route, etag=current.headers['ETag']):
++        source, item = load()
++        update(source, item, 'Fresh')
++    saved = remote('GET', url)
++    assert b'Fresh' in saved.content and b'X-OPAQUE;X-PARAM=retained:preserve' in saved.content
++    if kind == 'events':
++        assert b'BEGIN:VALARM' in saved.content
++    else:
++        assert b'item1.x-ablabel:fixture' in saved.content.lower()
++        assert b'BDAY:--0315' in saved.content or b'BDAY:--03-15' in saved.content
++    with context(method='DELETE', route=route, etag=saved.headers['ETag']):
++        source, item = load()
++        source.delete_event(item.uid) if kind == 'events' else source.delete_contact(item.key)
++    assert remote('GET', url).status_code == 404
++
++
++@pytest.mark.parametrize('start,due', [
++    (None, None), ('2026-11-10T12:00:00Z', None),
++    (None, '2026-11-10T13:00:00Z'), ('2026-11-10T12:00:00Z', '2026-11-10T13:00:00Z'),
++])
++def test_optional_task_dates_survive_api_and_ical_roundtrip(start, due):
++    from app.module.calendar.serializer.CalTaskDeserializerDict import CalTaskDeserializerDict
++    from app.module.calendar.serializer.CalTaskSerializerDict import CalTaskSerializerDict
++    from app.module.calendar.serializer.CalEventDeserializerIcal import CalEventDeserializerIcal
++    from app.module.calendar.serializer.CalEventSerializerIcal import CalEventSerializerIcal
++    api = CalTaskDeserializerDict()
++    task = api.deserialize({'uid': 'optional-dates', 'title': 'Fixture', 'date_start': start, 'date_due': due})
++    component = CalEventSerializerIcal().to_vtodo(task)
++    assert ('DTSTART' in component) is (start is not None)
++    assert ('DUE' in component) is (due is not None)
++    parsed = CalEventDeserializerIcal().deserialize_vtodo(component)
++    parsed.calendar_timezone = 'America/Sao_Paulo'
++    payload = CalTaskSerializerDict().serialize(parsed)
++    assert (payload['date_start'] is None) is (start is None)
++    assert (payload['date_due'] is None) is (due is None)
++    if start is None:
++        assert payload['dates_with_tz']['date_start_tz_event'] is None
++        assert payload['dates_with_tz']['date_start_tz_calendar'] is None
++    edited = api.deserialize_with_update(parsed, {'title': 'Edited', 'date_start': None, 'date_due': None})
++    assert edited.date_start is None and edited.date_end is None
++    saved = CalEventSerializerIcal().to_vtodo(edited)
++    assert 'DTSTART' not in saved and 'DUE' not in saved
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_dav_capabilities.py
+@@ -0,0 +1,95 @@
++from types import SimpleNamespace
++
++import pytest
++from flask import Flask, g
++
++from app.module.auth import PilotDavAccess as dav
++from app.utils.exceptions import RequestException
++
++
++@pytest.mark.parametrize('method,route', [
++    ('POST', '/calendars'), ('PATCH', '/calendars/key'), ('DELETE', '/calendars/key'),
++    ('POST', '/calendars/key/import'), ('POST', '/calendars/key/subscription'),
++    ('PATCH', '/calendars/key/share'), ('PUT', '/calendars/key/share'),
++    ('POST', '/external-calendars'), ('GET', '/external-calendars/key/sync'),
++    ('POST', '/freebusy'), ('GET', '/reminders'), ('POST', '/events/key/attendance'),
++    ('DELETE', '/events/key?recurrence_id=2026-11-10T12:00:00Z'),
++    ('DELETE', '/events/key?recurrence_range=THISANDFUTURE'),
++    ('POST', '/addressbooks'), ('DELETE', '/addressbooks/key'),
++    ('POST', '/addressbooks/key/lists'), ('PATCH', '/addressbooks/key/lists/list'),
++    ('POST', '/addressbooks/key/contacts/import'), ('POST', '/addressbooks/import'),
++    ('PUT', '/addressbooks/key/share'), ('GET', '/addressbooks/key/export'),
++    ('GET', '/calendars/key/export'), ('GET', '/public/calendars/token'),
++])
++def test_unsupported_paths_stop_before_constructing_interfaces(method, route, mocker):
++    from app.api.v1.calendar import ApiCalendar
++    from app.api.v1.contact import ApiContact
++    contact = route.startswith('/addressbooks')
++    module = ApiContact if contact else ApiCalendar
++    constructor = mocker.patch.object(module, 'InterfaceApiContactContact' if contact else 'InterfaceApiCalendarCalendar')
++    initialize = module.init_contact_config if contact else module.init_calendar_config
++    app = Flask(__name__)
++    with app.test_request_context('/api/user/v1'+route, method=method, headers={'If-Match': '"one"'}):
++        g.user = SimpleNamespace(uid='mail@example.test', auth_kind='openid')
++        response = app.make_response(initialize())
++        assert response.status_code == 501
++        constructor.assert_not_called()
++
++
++@pytest.mark.parametrize('method,route', [
++    ('GET', '/calendars'), ('GET', '/events/key'), ('GET', '/tasks'),
++    ('GET', '/addressbooks/key/contacts'), ('GET', '/addressbooks/key/lists'),
++    ('POST', '/calendars/key/events'), ('POST', '/calendars/key/tasks'),
++    ('POST', '/addressbooks/key/contacts'), ('PATCH', '/events/key'),
++    ('PATCH', '/tasks/key'), ('DELETE', '/addressbooks/key/contacts/contact'),
++])
++def test_supported_routes_reach_their_adapters(method, route):
++    with Flask(__name__).test_request_context('/api/user/v1'+route, method=method, headers={'If-Match': '"one"'}, json={}):
++        g.user = SimpleNamespace(uid='mail@example.test', auth_kind='openid')
++        dav.enforce_api_capabilities()
++
++
++@pytest.mark.parametrize('body', [{'attendees': [{'email': 'a@example.test'}]}, {'reminders': [{'minutes_before': 10}]}])
++def test_scheduling_and_new_alarms_are_explicitly_rejected(body):
++    with Flask(__name__).test_request_context('/api/user/v1/calendars/key/events', method='POST', json=body):
++        g.user = SimpleNamespace(uid='mail@example.test', auth_kind='openid')
++        with pytest.raises(RequestException) as exc:
++            dav.enforce_api_capabilities()
++        assert exc.value.error.h == 501
++
++
++def test_reading_mail_does_not_process_inbound_scheduling(mocker):
++    from app.interface.mail import InterfaceApiMailMail as module
++    interface = module.InterfaceApiMailMail.__new__(module.InterfaceApiMailMail)
++    interface.user = SimpleNamespace(auth_kind='openid')
++    calendar = mocker.patch.object(module, 'ModuleCalendar')
++    interface._process_inbound_imip({'mail_type': ['event'], 'mail_type_data': [{'ics_content': 'fixture invitation'}]})
++    calendar.assert_not_called()
++
++
++def test_oidc_onboarding_creates_only_preferences(mocker):
++    from app.interface.auth import InterfaceAuthUser as module
++    interface = module.InterfaceAuthUser.__new__(module.InterfaceAuthUser)
++    interface.process = mocker.Mock()
++    interface.module_user_profile = mocker.Mock()
++    interface.module_user_profile.is_user_profile_present.return_value = False
++    interface._module_calendar = mocker.Mock()
++    interface._module_contact = mocker.Mock()
++    mocker.patch.object(module, 'ModuleAdminConfig').return_value.get_one_domain_setting.return_value = {'settings': {}}
++    profile = mocker.patch.object(module, 'ModuleUserProfile').return_value
++    mail = mocker.patch.object(module, 'ModuleMail')
++    user = SimpleNamespace(uid='mail@example.test', domain='example.test', auth_kind='openid')
++    interface._onboard_user_if_needed(user)
++    profile.create_user_profile.assert_called_once_with(user)
++    profile.update_user_folders.assert_not_called()
++    interface._module_calendar.create_personal_calendar.assert_not_called()
++    interface._module_contact.create_personal_addressbook.assert_not_called()
++    mail.assert_not_called()
++
++
++def test_missing_browser_version_rejected_even_for_noop_patch():
++    with Flask(__name__).test_request_context('/api/user/v1/tasks/key', method='PATCH', json={}):
++        g.user = SimpleNamespace(uid='mail@example.test', auth_kind='openid')
++        with pytest.raises(RequestException) as exc:
++            dav.enforce_api_capabilities()
++        assert exc.value.error.h == 428
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_deployment.py
+@@ -0,0 +1,165 @@
++import json
++import os
++import base64
++import shutil
++import socket
++import subprocess
++import tempfile
++import time
++from pathlib import Path
++
++import requests
++
++import pytest
++
++from app.config.settings.DomainSettings import get_all_domain_schemas
++from app.config.settings.SystemSettings import get_all_system_schemas
++from app.config.settings.SogoSchema import check_data_for_sogo_schemas
++
++
++@pytest.fixture
++def deployment():
++    path = os.environ.get('SOGO_TEST_DEPLOYMENT_CONFIG')
++    if not path:
++        pytest.skip('Requires the evaluated, non-secret NixOS SOGo settings')
++    return json.loads(Path(path).read_text())
++
++
++def test_evaluated_deployment_settings_pass_upstream_schemas(deployment):
++    system = check_data_for_sogo_schemas(deployment['systemSettings'], get_all_system_schemas)
++    domain = deployment['domainSettings']
++    assert 'SOGO_D_OPENID_CLIENT_SECRET' not in domain['AUTH_SETTINGS']
++    domain['AUTH_SETTINGS']['SOGO_D_OPENID_CLIENT_SECRET'] = 'isolated-test-placeholder'
++    checked = check_data_for_sogo_schemas(domain, get_all_domain_schemas)
++    assert system['SYSTEM_SETTINGS']['SOGO_S_KNOWN_DOMAIN'] == ['m7.rs']
++    assert checked['AUTH_SETTINGS']['SOGO_D_OPENID_EMAIL'] == 'mail_account'
++    assert checked['USER_SOURCE'] == {}
++    assert checked['MAIL_SETTINGS']['SOGO_D_IMAP_AUTH_MECH'] == 'xoauth2'
++    assert checked['MAIL_SETTINGS']['SOGO_D_SMTP_AUTH_MECH'] == 'xoauth2'
++
++
++def test_native_ui_serves_runtime_configuration_and_login():
++    executable = os.environ.get('SOGO_TEST_NATIVE_UI')
++    if not executable:
++        pytest.skip('Requires the built native UI')
++    with tempfile.TemporaryDirectory(prefix='sogo-ui-') as directory:
++        with socket.socket() as listener:
++            listener.bind(('127.0.0.1', 0))
++            port = listener.getsockname()[1]
++        env = {**os.environ, 'HOSTNAME': '127.0.0.1', 'PORT': str(port), 'REACT_APP_API_BASE_URL': '/api/user/v1', 'SSE_ENABLED': 'false'}
++        with open(Path(directory)/'ui.log', 'wb') as log:
++            process = subprocess.Popen([executable], cwd=directory, env=env, stdout=log, stderr=log)
++            try:
++                for _ in range(100):
++                    assert process.poll() is None, 'Native UI exited during startup'
++                    try:
++                        response = requests.get(f'http://127.0.0.1:{port}/env', timeout=2)
++                        if response.status_code == 200:
++                            break
++                    except requests.ConnectionError:
++                        pass
++                    time.sleep(.1)
++                else:
++                    pytest.fail('Native UI never became ready')
++                assert response.json()['REACT_APP_API_BASE_URL'] == '/api/user/v1'
++                assert response.json()['SSE_ENABLED'] is False
++                login = requests.get(f'http://127.0.0.1:{port}/en/auth/login', timeout=10)
++                assert login.status_code == 200 and 'text/html' in login.headers['Content-Type']
++            finally:
++                process.terminate()
++                process.wait(timeout=15)
++
++
++def test_native_api_start_restart_and_database_restore(deployment):
++    executable = os.environ.get('SOGO_TEST_NATIVE_API')
++    if not executable:
++        pytest.skip('Requires the built native API and isolated PostgreSQL/Redis binaries')
++    for command in ('initdb', 'pg_ctl', 'psql', 'createdb', 'dropdb', 'pg_dump', 'pg_restore', 'redis-server'):
++        assert shutil.which(command), command
++    with tempfile.TemporaryDirectory(prefix='sogo-runtime-') as directory:
++        root = Path(directory)
++        socket_dir = root/'socket'
++        socket_dir.mkdir()
++        pg = root/'postgres'
++        log = open(root/'process.log', 'wb')
++        redis = api = None
++        running_pg = False
++        def run(*args):
++            return subprocess.run(args, check=True, stdout=log, stderr=log)
++        def database(command, *args):
++            return run(command, '-h', str(socket_dir), '-U', 'postgres', *args)
++        try:
++            run('initdb', '-D', str(pg), '-U', 'postgres', '--auth=trust', '--no-locale')
++            run('pg_ctl', '-D', str(pg), '-l', str(root/'postgres.log'), '-o', f"-k {socket_dir} -c listen_addresses=''", '-w', 'start')
++            running_pg = True
++            database('psql', '-d', 'postgres', '-c', 'CREATE ROLE sogo6 LOGIN')
++            database('createdb', '-O', 'sogo6', 'sogo6')
++            redis = subprocess.Popen(['redis-server', '--port', '0', '--unixsocket', str(root/'redis.sock'), '--save', '', '--appendonly', 'no'], stdout=log, stderr=log)
++            for _ in range(100):
++                if (root/'redis.sock').exists():
++                    break
++                assert redis.poll() is None
++                time.sleep(.05)
++            domain = deployment['domainSettings']
++            domain['AUTH_SETTINGS']['SOGO_D_OPENID_CLIENT_SECRET'] = 'isolated-test-placeholder'
++            (root/'system.json').write_text(json.dumps({'settings': deployment['systemSettings']}))
++            (root/'domain.json').write_text(json.dumps({'settings': domain}))
++            with socket.socket() as listener:
++                listener.bind(('127.0.0.1', 0))
++                port = listener.getsockname()[1]
++            env = {**os.environ,
++                'SOGO_P_DB_HOST': str(socket_dir), 'SOGO_P_DB_USER': 'sogo6', 'SOGO_P_DB_PASS': '', 'SOGO_P_DB_NAME': 'sogo6',
++                'SOGO_P_REDIS_URL': f'unix://{root}/redis.sock?db=0',
++                'SOGO_P_VOUCHER_SECRET': 'v'*32,
++                'SOGO_AES_ENC_KEY': base64.b64encode(b'e'*32).decode(),
++                'SOGO_P_PUBLIC_BASE_URL': 'https://mail.m7.rs',
++                'SOGO_OIDC_LOGOUT_URL': 'https://auth.m7.rs/application/o/sogo/end-session/',
++                'SOGO_INIT_SYSTEM_SETTINGS_PATH': str(root/'system.json'),
++                'SOGO_INIT_DOMAIN_SETTINGS_PATH': str(root/'domain.json'),
++                'SOGO_FOUNDRY_AUTHORITATIVE_CONFIG': '1', 'SOGO_LOG_PATH': str(root/'api.log'),
++            }
++            env.pop('PYTHONPATH', None)
++            def start():
++                process = subprocess.Popen([executable, '--bind', f'127.0.0.1:{port}', '--workers', '1', '--access-logfile', '/dev/null', '--no-control-socket'], cwd=root, env=env, stdout=log, stderr=log)
++                try:
++                    for _ in range(200):
++                        assert process.poll() is None, 'Native API exited during startup'
++                        try:
++                            response = requests.get(f'http://127.0.0.1:{port}/api/user/v1/system', headers={'Host': 'mail.m7.rs'}, timeout=1)
++                            if response.status_code == 200:
++                                assert response.json()['error_code'] == 'S000000'
++                                return process
++                        except requests.ConnectionError:
++                            pass
++                        time.sleep(.1)
++                    pytest.fail('Native API never became healthy')
++                except BaseException:
++                    process.terminate()
++                    process.wait(timeout=15)
++                    raise
++            api = start()
++            api.terminate()
++            api.wait(timeout=15)
++            api = start()
++            api.terminate()
++            api.wait(timeout=15)
++            database('pg_dump', '-Fc', '-f', str(root/'backup.dump'), 'sogo6')
++            database('dropdb', 'sogo6')
++            database('createdb', '-O', 'sogo6', 'sogo6')
++            database('pg_restore', '-d', 'sogo6', str(root/'backup.dump'))
++            api = start()
++        finally:
++            if api is not None and api.poll() is None:
++                api.terminate()
++                api.wait(timeout=15)
++            if redis is not None:
++                redis.terminate()
++                redis.wait(timeout=10)
++            if running_pg:
++                run('pg_ctl', '-D', str(pg), '-m', 'immediate', '-w', 'stop')
++            log.close()
++            evidence = os.environ.get('SOGO_TEST_DIAGNOSTIC_DIR')
++            if evidence:
++                Path(evidence).mkdir(parents=True, exist_ok=True)
++                for file in root.glob('*.log'):
++                    shutil.copy2(file, Path(evidence)/file.name)
+--- a/tests/test_module/test_auth/test_foundry_identity.py
++++ b/tests/test_module/test_auth/test_foundry_identity.py
+@@ -18,7 +18,7 @@
+ def identity():
+     return SimpleNamespace(
+         mail="person@example.test", access_token="test-access",
+-        claims={"sub": "subject-1", "mail_account": "person@example.test", "name": "Person"},
++        claims={"sub": "subject-1", "mail_account": "person@example.test", "name": "Person", "foundry_sogo_access": True},
+         oidc={"subject": "subject-1", "issuer": "https://auth.example.test/", "client_id": "sogo"},
+     )
+ 
+@@ -95,6 +95,34 @@
+     assert restored is user
+ 
+ 
++def test_profile_ui_settings_do_not_require_a_directory(user, identity):
++    from app.config.settings.DomainSettings import get_all_domain_schemas
++    from app.interface.user.InterfaceUserProfile import InterfaceUserProfile
++    bind_identity(user, identity)
++    interface = InterfaceUserProfile.__new__(InterfaceUserProfile)
++    interface.user = user
++    interface.user_domain = {schema.subparent: {} for schema in get_all_domain_schemas()}
++    interface.user_domain['USER_MODULE_SETTINGS'] = {'SOGO_D_FOLDER_DISABLE_EXPORT': ['calendar', 'contact']}
++    interface.module_user_profile = SimpleNamespace(list_accounts=lambda _: [], get_user_preferences=lambda _: {})
++    body, status = interface.get_user_profile()
++    assert status == 200
++    assert body['data']['ui']['SOGO_D_FOLDER_DISABLE_EXPORT'] == ['calendar', 'contact']
++    assert body['data']['ui']['US_DB_PWD_POLICY'] is None
++    assert body['data']['ui']['SOGO_D_DAV_COLLECTION_MANAGEMENT'] is False
++    assert body['data']['ui']['SOGO_D_CONTACT_LIST_MANAGEMENT'] is False
++
++
++def test_discovered_calendars_default_to_visible_without_overriding_opt_out(user, mocker):
++    from app.interface.calendar.InterfaceApiCalendarCalendar import InterfaceApiCalendarCalendar
++    interface = InterfaceApiCalendarCalendar.__new__(InterfaceApiCalendarCalendar)
++    interface.user = SimpleNamespace(uid=user.uid, auth_kind=user.auth_kind,
++                                     folders={'CALENDAR': {'OWNER': {'hidden': False, 'selected': True}}})
++    mocker.patch('app.module.calendar.source.CalendarSourceLiveDav.discover', return_value=[
++        SimpleNamespace(calendar=SimpleNamespace(key=key)) for key in ('new', 'hidden', 'selected')
++    ])
++    assert interface._subscribed_calendar_keys() == {'new', 'selected'}
++
++
+ def test_https_host_boundary_and_no_admin_routes():
+     from app import create_app
+     from app.utils import constants
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_runtime.py
+@@ -0,0 +1,98 @@
++from types import SimpleNamespace
++
++import pytest
++import psycopg
++from marshmallow import ValidationError
++
++from app.config import init_config
++from app.manager.db.ClientPostgreSQL import ClientPostgreSQL
++from app.utils.exceptions import AggravatedException
++
++
++@pytest.mark.parametrize('change,allowed', [
++    ({}, True), ({'foundry_sogo_access': False}, False),
++    ({'foundry_sogo_access': None}, False), ({'mail_account': 'another@example.test'}, False),
++    ({'sub': 'another-subject'}, False),
++])
++def test_each_request_rechecks_entitlements_and_pinned_identity(change, allowed, mocker):
++    from app.module.auth.OpenIDProvider import OpenIDProvider
++    provider = OpenIDProvider.__new__(OpenIDProvider)
++    provider.auth_settings = SimpleNamespace(SOGO_D_OPENID_TOKEN_CHECK_INTERVAL=300,
++        SOGO_D_OPENID_CLIENT_NAME='sogo', SOGO_D_OPENID_CLIENT_SECRET='fixture')
++    provider._client = mocker.Mock()
++    provider._client.load_server_metadata.return_value = {
++        'introspection_endpoint': 'https://idp.test/introspect', 'userinfo_endpoint': 'https://idp.test/userinfo',
++    }
++    mocker.patch.object(provider, '_get_token_check', return_value=True)
++    mocker.patch.object(provider, '_set_token_check')
++    introspect = mocker.patch('app.module.auth.OpenIDProvider.requests.post')
++    introspect.return_value.json.return_value = {'active': True}
++    info = mocker.patch('app.module.auth.OpenIDProvider.requests.get')
++    info.return_value.status_code = 200
++    info.return_value.json.return_value = {'sub': 'subject', 'mail_account': 'mail@example.test', 'foundry_sogo_access': True, **change}
++    user = SimpleNamespace(mail='mail@example.test', oidc={'subject': 'subject'})
++    assert provider.check_access_token('fixture-access', expected_user=user) is allowed
++    assert info.call_args.kwargs['allow_redirects'] is False
++    assert introspect.call_args.kwargs['allow_redirects'] is False
++
++
++def test_redis_unix_url_retains_the_authority_separator(mocker):
++    from app.manager.cache.ClientRedis import ClientRedis
++    factory = mocker.patch('app.manager.cache.ClientRedis.Redis.from_url')
++    ClientRedis('unix:///run/redis-sogo6/redis.sock?db=0')
++    url = factory.call_args.args[0]
++    assert url.startswith('unix:///run/redis-sogo6/redis.sock?')
++    assert 'protocol=3' in url and 'db=0' in url
++    assert 'cache_config' not in factory.call_args.kwargs
++
++
++def test_postgres_connection_supports_peer_auth_and_escaped_values():
++    client = ClientPostgreSQL('sogo6', '', '/run/postgresql', 5432, False, 'utf8', 'sogo6')
++    params = psycopg.conninfo.conninfo_to_dict(client.conn_string)
++    assert params['host'] == '/run/postgresql'
++    assert params['user'] == params['dbname'] == 'sogo6'
++    assert params['password'] == ''
++    quoted = ClientPostgreSQL('test user', "test':/ password", 'localhost', 5432, True, 'utf8')
++    params = psycopg.conninfo.conninfo_to_dict(quoted.conn_string)
++    assert params['password'] == "test':/ password"
++    assert params['sslmode'] == 'require'
++
++
++@pytest.fixture
++def configuration(mocker, monkeypatch):
++    monkeypatch.setenv('SOGO_FOUNDRY_AUTHORITATIVE_CONFIG', '1')
++    process = mocker.patch.object(init_config, 'process_config')
++    process.SOGO_INIT_SYSTEM_SETTINGS_PATH = '/run/fixture/system.json'
++    process.SOGO_INIT_DOMAIN_SETTINGS_PATH = '/run/fixture/domain.json'
++    config = mocker.patch.object(init_config, 'ModuleAdminConfig').return_value
++    config.get_system_settings.return_value = {'old': 'system'}
++    config.get_default_domain_settings.return_value = {'old': 'domain'}
++    loader = mocker.patch.object(init_config, '_load_json_file', side_effect=[
++        {'settings': {'new': 'system'}}, {'settings': {'new': 'domain'}},
++    ])
++    return config, loader
++
++
++def test_authoritative_configuration_replaces_existing_settings(configuration):
++    config, _ = configuration
++    assert init_config.check_basic_config()
++    config.update_system_settings.assert_called_once_with({'new': 'system'}, replace=True)
++    config.update_domain_default_settings.assert_called_once_with({'new': 'domain'}, replace=True)
++
++
++def test_invalid_authoritative_configuration_is_not_treated_as_old_valid_config(configuration, mocker):
++    config, _ = configuration
++    config.update_domain_default_settings.side_effect = ValidationError('fixture-sensitive-value')
++    logger = mocker.patch.object(init_config, 'logger')
++    assert not init_config.check_basic_config()
++    assert 'fixture-sensitive-value' not in str(logger.mock_calls)
++
++
++def test_startup_fails_closed_when_authoritative_configuration_cannot_load(mocker, monkeypatch):
++    monkeypatch.setenv('SOGO_FOUNDRY_AUTHORITATIVE_CONFIG', '1')
++    mocker.patch.object(init_config, 'init_infra', return_value=(mocker.Mock(), mocker.Mock()))
++    mocker.patch.object(init_config, 'ClientAgent')
++    mocker.patch.object(init_config, 'agent')
++    mocker.patch.object(init_config, 'check_basic_config', return_value=False)
++    with pytest.raises(AggravatedException):
++        init_config.init_sogo()
+--- /dev/null
++++ b/tests/test_module/test_auth/test_foundry_sogo_blueprint.py
+@@ -0,0 +1,78 @@
++import os
++import sys
++from textwrap import indent
++from types import SimpleNamespace
++
++import pytest
++import yaml
++
++
++class Loader(yaml.SafeLoader):
++    pass
++
++
++def tagged(loader, tag, node):
++    if isinstance(node, yaml.ScalarNode):
++        return loader.construct_scalar(node)
++    return loader.construct_sequence(node)
++
++
++Loader.add_multi_constructor('!', tagged)
++with open(os.environ['SOGO_TEST_BLUEPRINT']) as source:
++    ENTRIES = yaml.load(source, Loader=Loader)['entries']
++
++
++def policy(name, request):
++    expression = next(e['attrs']['expression'] for e in ENTRIES if e.get('id') == name)
++    scope = {'request': request}
++    exec('def run():\n'+indent(expression, '    '), scope)
++    return scope['run']()
++
++
++@pytest.mark.parametrize('path,method,allowed', [
++    ('/application/o/sogo/end-session/', 'GET', True),
++    ('/application/o/sogo/end-session/', 'POST', True),
++    ('/application/o/sogo/end-session/', 'DELETE', False),
++    ('/application/o/sogo/end-session', 'GET', False),
++    ('/application/o/other/end-session/', 'GET', False),
++    ('/application/o/authorize/', 'GET', False),
++])
++def test_logout_exception_is_exact(path, method, allowed):
++    request = SimpleNamespace(http_request=SimpleNamespace(path=path, method=method), context={})
++    assert policy('pkce', request) is allowed
++
++
++@pytest.mark.parametrize('challenge,method,grant,allowed', [
++    ('a'*43, 'S256', 'authorization_code', True),
++    ('a'*43, 'plain', 'authorization_code', False),
++    ('a'*42, 'S256', 'authorization_code', False),
++    ('a'*43, 'S256', 'password', False),
++    (None, 'S256', 'authorization_code', False),
++])
++def test_authorization_requires_s256(challenge, method, grant, allowed):
++    request = SimpleNamespace(http_request=SimpleNamespace(path='/application/o/authorize/', method='GET'), context={
++        'oauth_code_challenge': challenge, 'oauth_code_challenge_method': method, 'oauth_grant_type': grant,
++    })
++    assert policy('pkce', request) is allowed
++
++
++@pytest.mark.parametrize('active,grants,allowed', [(True, {'mail', 'radicale'}, True), (True, {'mail'}, False), (True, {'radicale'}, False), (False, {'mail', 'radicale'}, False)])
++def test_access_requires_both_entitlements(active, grants, allowed, monkeypatch):
++    class Applications(list):
++        def count(self):
++            return len(self)
++    model = SimpleNamespace(objects=SimpleNamespace(filter=lambda **_: Applications(['mail', 'radicale'])))
++    monkeypatch.setitem(sys.modules, 'authentik.core.models', SimpleNamespace(Application=model))
++    user = SimpleNamespace(is_active=active, app_entitlements=lambda app: SimpleNamespace(
++        filter=lambda **_: SimpleNamespace(exists=lambda: app in grants)))
++    request = SimpleNamespace(user=user, http_request=SimpleNamespace(path='/application/o/authorize/', method='GET'))
++    assert policy('access', request) is allowed
++
++
++def test_provider_is_distinct_and_callback_is_exact():
++    provider = next(e['attrs'] for e in ENTRIES if e.get('id') == 'provider')
++    assert provider['client_id'] == 'sogo'
++    assert provider['client_type'] == 'confidential'
++    assert provider['client_secret'] == 'AUTHENTIK_SOGO_CLIENT_SECRET'
++    assert provider['grant_types'] == ['authorization_code', 'refresh_token']
++    assert provider['redirect_uris'] == [{'matching_mode': 'strict', 'url': 'https://mail.m7.rs/api/user/v1/auth/callback/openid/m7.rs', 'redirect_uri_type': 'authorization'}]

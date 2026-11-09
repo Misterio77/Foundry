@@ -140,7 +140,7 @@ in {
       allow ${config.services.headscale.settings.prefixes.v6};
       deny all;
     '';
-    locations."/".return = "404";
+    locations."/" = lib.mkIf (!config.services.sogo6.enable) {return = "404";};
   };
 
   # Autoconfig
