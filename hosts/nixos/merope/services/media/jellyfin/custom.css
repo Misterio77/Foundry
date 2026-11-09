@@ -1,5 +1,11 @@
-#loginPage .loginDisclaimerContainer { display: block; margin-top: .5em; }
-#loginPage .loginDisclaimer { width: 100%; margin: 0; }
+#loginPage .loginDisclaimerContainer {
+  display: block;
+  margin-top: 0.5em;
+}
+#loginPage .loginDisclaimer {
+  width: 100%;
+  margin: 0;
+}
 #loginPage .btnQuick,
 #loginPage .foundry-oidc-login .emby-button {
   display: flex;
@@ -8,19 +14,29 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 3.25em;
-  margin: .25em 0;
-  padding: .9em 1em;
+  margin: 0.25em 0;
+  padding: 0.9em 1em;
   font-size: inherit;
   font-weight: 600;
   line-height: 1.35;
 }
+#loginPage .btnQuick:focus-visible,
+#loginPage .foundry-oidc-login .emby-button:focus-visible {
+  /* Jellyfin suppresses button outlines with !important. */
+  outline: 3px solid currentColor !important;
+  outline-offset: 3px;
+}
 #loginPage .manualLoginForm,
 #loginPage .visualLoginForm,
 #loginPage .btnManual,
-#loginPage .readOnlyContent .btnForgotPassword { display: none; }
+#loginPage .readOnlyContent .btnForgotPassword {
+  display: none;
+}
 
 /* Passwords and avatars are managed by the identity provider. */
 #userProfilePage .passwordSection,
 #userProfilePage #uploadImage,
 #userProfilePage #btnAddImage,
-#userProfilePage #btnDeleteImage { display: none !important; }
+#userProfilePage #btnDeleteImage {
+  display: none !important;
+}
