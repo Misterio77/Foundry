@@ -43,8 +43,9 @@ entries:
     identifiers:
       slug: calibre-web
     attrs:
-      name: Books
+      name: Calibre
       provider: !KeyOf books-provider
+      icon: https://auth.m7.rs/branding/calibre.svg
       meta_launch_url: https://books.m7.rs/
       policy_engine_mode: all
 

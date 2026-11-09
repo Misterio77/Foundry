@@ -66,6 +66,7 @@ entries:
     attrs:
       name: Firefly III
       provider: !KeyOf firefly-provider
+      icon: https://auth.m7.rs/branding/firefly-iii.svg
       meta_launch_url: https://firefly.m7.rs/
       policy_engine_mode: all
   - model: authentik_policies.policybinding

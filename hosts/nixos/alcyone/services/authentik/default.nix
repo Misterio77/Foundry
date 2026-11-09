@@ -11,6 +11,8 @@
       url = "https://raw.githubusercontent.com/homarr-labs/dashboard-icons/59f1e9a4108f4f510f41e9588f078631de1e1405/svg/${name}.svg";
       inherit hash;
     }) {
+    calibre = "sha256-Z8IJiYz04fbsjpG9LRo/XPUCeEHjTvrfw4l6suuOq/g=";
+    firefly-iii = "sha256-oz6NMNYlVSFSpSmu64p3K6Kqi1bQEWE57F0yxfPkC1c=";
     grafana = "sha256-jzKJcHPuk1lKsjOUgu8hyjdnBEBV2oniuvkGbSVZLfc=";
     immich = "sha256-pdSkOJnmP/x+lyRgNPf2PN/cQQqoA8VxPVRSkGAcTYk=";
     jellyfin = "sha256-f1PPCD27MRnsjFrL2AScUDMidhfkYVQPcFkawQkSQwY=";
