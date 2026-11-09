@@ -150,3 +150,11 @@ When verifying config output before deploying:
 - Specialised HM variant: `nixosConfigurations.<host>.config.home-manager.users.<user>.specialisation.<variant>.config.<path>`
 - `nix build <path>.source --no-link --print-out-paths` to get the built file
 - `nix eval <path> --json` to inspect raw attribute values
+
+## Tests
+
+Ad-hoc tests belong in temporary directories, not here. Unless explicitly asked, only add durable test code if it's runnable by an existing test suite. Adding new test cases in a .patch which is then run by the usual package checkPhase is okay, adding tests to first-party code is okay. Adding new integration test harnesses, or manually running ad-hoc tests in postCheck are not.
+
+## LLM-generated docs
+
+Do not add new documentation unless asked. Updating stale docs is okay and should be done as part of the relevant changes. Runbooks and migration notes that concern machine state do not belong in this repository.
