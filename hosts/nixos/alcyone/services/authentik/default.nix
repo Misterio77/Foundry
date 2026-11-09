@@ -81,6 +81,8 @@
     cp ${./seerr.yaml} "$out/seerr.yaml"
     cp ${./mail.yaml} "$out/mail.yaml"
     cp ${./dav.yaml} "$out/dav.yaml"
+    cp ${./firefly.yaml} "$out/firefly.yaml"
+    cp ${./outposts.yaml} "$out/outposts.yaml"
     cp ${./dav-directory.yaml} "$out/dav-directory.yaml"
     cp ${./mail-and-dav.yaml} "$out/mail-and-dav.yaml"
     cp ${./sogo.yaml} "$out/sogo.yaml"

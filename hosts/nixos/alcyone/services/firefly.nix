@@ -1,8 +1,33 @@
 {
   config,
+  lib,
   pkgs,
   ...
-}: {
+}: let
+  browserAuth = ''
+    auth_request /_firefly_auth;
+    auth_request_set $firefly_principal $upstream_http_x_foundry_firefly_principal;
+    auth_request_set $firefly_email $upstream_http_x_foundry_firefly_email;
+    auth_request_set $firefly_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $firefly_cookie always;
+    error_page 401 = @firefly_login;
+  '';
+  fastcgi = ''
+    include ${config.services.nginx.package}/conf/fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME ${config.services.firefly-iii.package}/public/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_param modHeadersAvailable true;
+    fastcgi_pass unix:${config.services.phpfpm.pools.firefly-iii.socket};
+  '';
+  browserFastcgi =
+    browserAuth
+    + fastcgi
+    + ''
+      # CGI variables cannot be supplied by client HTTP headers.
+      fastcgi_param REMOTE_USER $firefly_principal;
+      fastcgi_param REMOTE_EMAIL $firefly_email;
+    '';
+in {
   services.firefly-iii = {
     enable = true;
     package = pkgs.firefly-iii.overrideAttrs (old: {
@@ -15,6 +40,9 @@
     });
     settings = {
       APP_KEY_FILE = config.sops.secrets.firefly-key.path;
+      AUTHENTICATION_GUARD = "remote_user_guard";
+      AUTHENTICATION_GUARD_HEADER = "REMOTE_USER";
+      AUTHENTICATION_GUARD_EMAIL = "REMOTE_EMAIL";
       ENABLE_EXCHANGE_RATES = "true";
       ENABLE_EXTERNAL_RATES = "false";
       SITE_OWNER = "hi@m7.rs";
@@ -45,8 +73,53 @@
       allow ${config.services.headscale.settings.prefixes.v6};
       deny all;
     '';
-    locations."=/relatorio-layla" = {
-      alias = "/srv/files/relatorio-financeiro.html";
+    locations = lib.mkForce {
+      "/" = {
+        tryFiles = "$uri @firefly";
+        extraConfig = browserAuth;
+      };
+      "@firefly".extraConfig = browserFastcgi;
+      "= /index.php".extraConfig = browserFastcgi;
+      "~ \\.php(?:/|$)".return = "404";
+      "^~ /api/".extraConfig =
+        fastcgi
+        + ''
+          # Passport validates PATs (or its own CSRF-protected browser API cookie).
+          fastcgi_param REMOTE_USER "";
+          fastcgi_param REMOTE_EMAIL "";
+        '';
+      "= /_firefly_auth" = {
+        proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/auth/nginx";
+        recommendedProxySettings = false;
+        extraConfig = ''
+          internal;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          proxy_set_header Host firefly.m7.rs;
+          # Do not let reserved outpost paths bypass authentication.
+          proxy_set_header X-Original-URL https://firefly.m7.rs/;
+          proxy_set_header X-Forwarded-Host firefly.m7.rs;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_set_header Authorization "";
+        '';
+      };
+      "^~ /outpost.goauthentik.io/" = {
+        proxyPass = "http://127.0.0.1:9000";
+        recommendedProxySettings = false;
+        extraConfig = ''
+          proxy_set_header Host firefly.m7.rs;
+          proxy_set_header X-Original-URL https://firefly.m7.rs/;
+          proxy_set_header X-Forwarded-Host firefly.m7.rs;
+          proxy_set_header X-Forwarded-Proto https;
+          proxy_set_header X-Forwarded-For $remote_addr;
+          proxy_set_header Authorization "";
+        '';
+      };
+      "@firefly_login".extraConfig = ''
+        add_header Set-Cookie $firefly_cookie always;
+        return 302 /outpost.goauthentik.io/start?rd=https://firefly.m7.rs/;
+      '';
     };
   };
 

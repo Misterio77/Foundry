@@ -96,12 +96,3 @@ entries:
       order: 1
     attrs:
       group: !Find [authentik_core.group, [name, admin]]
-
-  - model: authentik_outposts.outpost
-    identifiers:
-      managed: goauthentik.io/outposts/embedded
-    attrs:
-      providers:
-        - !KeyOf dav-provider
-      config:
-        authentik_host: https://auth.m7.rs/

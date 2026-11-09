@@ -1,0 +1,23 @@
+version: 1
+metadata:
+  name: Foundry - outposts
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - DAV
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - Firefly
+
+  # One blueprint owns the full list; app blueprints must not replace each other.
+  - model: authentik_outposts.outpost
+    identifiers:
+      managed: goauthentik.io/outposts/embedded
+    attrs:
+      providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Radicale]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Firefly]]
+      config:
+        authentik_host: https://auth.m7.rs/

@@ -1,0 +1,95 @@
+version: 1
+metadata:
+  name: Foundry - Firefly
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - identity
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - authorization
+
+  - model: authentik_providers_oauth2.scopemapping
+    id: firefly-identity
+    identifiers:
+      name: foundry-firefly-identity
+    attrs:
+      scope_name: profile
+      description: Firefly authorization and stable account identity
+      expression: |
+        from authentik.core.models import Application
+
+        app = Application.objects.get(slug="firefly")
+        principal = ""
+        email = ""
+        if request.user.is_active and request.user.app_entitlements(app).filter(name="access").exists():
+            principal = request.user.attributes.get("firefly_principal", str(request.user.uuid))
+            email = request.user.email
+        return {
+            "ak_proxy": {
+                "user_attributes": {
+                    "additionalHeaders": {
+                        "X-Foundry-Firefly-Principal": principal,
+                        "X-Foundry-Firefly-Email": email,
+                    },
+                },
+            },
+        }
+
+  - model: authentik_providers_proxy.proxyprovider
+    id: firefly-provider
+    identifiers:
+      name: Firefly
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, foundry-provider-authorization-email-required]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      external_host: https://firefly.m7.rs
+      mode: forward_single
+      intercept_header_auth: false
+      basic_auth_enabled: false
+      access_token_validity: minutes=5
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-entitlements]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/proxy/scope-proxy]]
+        - !KeyOf firefly-identity
+
+  - model: authentik_core.application
+    id: firefly
+    identifiers:
+      slug: firefly
+    attrs:
+      name: Firefly III
+      provider: !KeyOf firefly-provider
+      meta_launch_url: https://firefly.m7.rs/
+      policy_engine_mode: all
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf firefly
+      order: 0
+    attrs:
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, foundry-application-access]]
+      failure_result: false
+
+  - model: authentik_core.applicationentitlement
+    id: access
+    identifiers:
+      app: !KeyOf firefly
+      name: access
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, trusted]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
