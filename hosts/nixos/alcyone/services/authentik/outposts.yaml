@@ -5,6 +5,10 @@ entries:
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
+        name: Foundry - Calibre-Web
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
         name: Foundry - DAV
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
@@ -17,6 +21,7 @@ entries:
       managed: goauthentik.io/outposts/embedded
     attrs:
       providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Calibre-Web]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, Radicale]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, Firefly]]
       config:

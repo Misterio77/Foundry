@@ -4,7 +4,16 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  outpostProxy = ''
+    proxy_ssl_server_name on;
+    proxy_ssl_name auth.m7.rs;
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt;
+    proxy_set_header Host auth.m7.rs;
+    proxy_set_header Authorization "";
+  '';
+in {
   users.users = {
     # Allow calibre-server to write to readarr-managed library
     calibre-server.extraGroups = [config.services.readarr.group];
@@ -22,6 +31,7 @@
 
     calibre-web = {
       enable = true;
+      listen.ip = "127.0.0.1";
       options.calibreLibrary = lib.head config.services.calibre-server.libraries;
     };
 
@@ -29,9 +39,50 @@
       "books.m7.rs" = {
         forceSSL = true;
         enableACME = true;
-        locations."/" = {
-          proxyPass = "http://localhost:${toString config.services.calibre-web.listen.port}";
-          proxyWebsockets = true;
+        locations = {
+          "/" = {
+            proxyPass = "http://127.0.0.1:${toString config.services.calibre-web.listen.port}";
+            recommendedProxySettings = false;
+            extraConfig = ''
+              auth_request /_books_auth;
+              error_page 401 = @books_login;
+              auth_request_set $books_subject $upstream_http_x_foundry_books_subject;
+              auth_request_set $books_cookie $upstream_http_set_cookie;
+              add_header Set-Cookie $books_cookie always;
+              proxy_set_header Host books.m7.rs;
+              proxy_set_header X-Forwarded-Host books.m7.rs;
+              proxy_set_header X-Forwarded-Proto https;
+              proxy_set_header X-Scheme https;
+              proxy_set_header X-Forwarded-For $remote_addr;
+              proxy_set_header X-Foundry-Books-Subject $books_subject;
+              proxy_set_header Authorization "";
+              proxy_set_header X-Script-Name "";
+            '';
+          };
+          "= /_books_auth" = {
+            proxyPass = "https://auth.m7.rs/books-outpost/auth/nginx";
+            recommendedProxySettings = false;
+            extraConfig =
+              outpostProxy
+              + ''
+                internal;
+                proxy_pass_request_body off;
+                proxy_set_header Content-Length "";
+              '';
+          };
+          "^~ /outpost.goauthentik.io/" = {
+            proxyPass = "https://auth.m7.rs/books-outpost/";
+            recommendedProxySettings = false;
+            extraConfig = outpostProxy;
+          };
+          "@books_login".extraConfig = ''
+            add_header Set-Cookie $books_cookie always;
+            return 302 /outpost.goauthentik.io/start?rd=https://books.m7.rs/;
+          '';
+          "= /opds".return = "404";
+          "^~ /opds/".return = "404";
+          "= /kobo".return = "404";
+          "^~ /kobo/".return = "404";
         };
       };
       "calibre.m7.rs" = {
@@ -65,6 +116,7 @@
     };
 
     calibre-web = {
+      environment.FOUNDRY_PROXY_ACCOUNTS = "1";
       bindsTo = ["srv-media.mount"];
       after = ["srv-media.mount"];
       unitConfig.ConditionPathIsMountPoint = "/srv/media";

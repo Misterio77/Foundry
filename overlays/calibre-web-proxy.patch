@@ -1,0 +1,14 @@
+--- a/cps/__init__.py
++++ b/cps/__init__.py
+@@ -141,6 +141,11 @@
+ 
+     ub.password_change(cli_param.user_credentials)
+ 
++    if os.environ.get("FOUNDRY_PROXY_ACCOUNTS") == "1":
++        from . import constants
++        from .foundry_proxy import install
++        install(app, ub, constants)
++
+     if sys.version_info < (3, 0):
+         log.info(
+             '*** Python2 is EOL since end of 2019, this version of Calibre-Web is no longer supporting Python2, '

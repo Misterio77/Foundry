@@ -80,6 +80,7 @@
     cp ${./jellyfin.yaml} "$out/jellyfin.yaml"
     cp ${./seerr.yaml} "$out/seerr.yaml"
     cp ${./mail.yaml} "$out/mail.yaml"
+    cp ${./calibre-web.yaml} "$out/calibre-web.yaml"
     cp ${./dav.yaml} "$out/dav.yaml"
     cp ${./firefly.yaml} "$out/firefly.yaml"
     cp ${./outposts.yaml} "$out/outposts.yaml"
@@ -162,6 +163,19 @@ in {
     forceSSL = true;
     enableACME = true;
     locations."/branding/".alias = "${branding}/";
+    # Merope reaches the embedded outpost over verified HTTPS, not an exposed port.
+    locations."^~ /books-outpost/" = {
+      proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/";
+      recommendedProxySettings = false;
+      extraConfig = ''
+        proxy_set_header Host books.m7.rs;
+        proxy_set_header X-Original-URL https://books.m7.rs/;
+        proxy_set_header X-Forwarded-Host books.m7.rs;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Authorization "";
+      '';
+    };
     locations."= /metrics" = {
       proxyPass = "http://127.0.0.1:9300/metrics";
       extraConfig = ''

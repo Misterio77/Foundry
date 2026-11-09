@@ -39,6 +39,20 @@ in {
     # Maildir flag removal must replace aerc's cached flags, not OR into them.
     aerc = addPatches prev.aerc [./aerc-maildir-replace-flags.patch];
 
+    calibre-web = (addPatches prev.calibre-web [./calibre-web-proxy.patch]).overrideAttrs (old: {
+      prePatch =
+        (old.prePatch or "")
+        + ''
+          cp ${./calibre-web-proxy.py} cps/foundry_proxy.py
+        '';
+      postInstallCheck =
+        (old.postInstallCheck or "")
+        + ''
+          ${final.python3.withPackages (ps: [ps.flask ps.sqlalchemy])}/bin/python ${./calibre-web-proxy-test.py} src/calibreweb/cps
+        '';
+      doInstallCheck = true;
+    });
+
     immich = addPatches prev.immich [./immich-oidc-avatar.patch];
 
     radicale = addPatches prev.radicale [./radicale-login-username.patch ./radicale-share-picker.patch];
