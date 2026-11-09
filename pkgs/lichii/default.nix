@@ -145,6 +145,6 @@ in
       homepage = "https://github.com/zortos293/Lichii";
       license = lib.licenses.gpl3Plus;
       mainProgram = "lichii";
-      platforms = ["x86_64-linux" "aarch64-linux"];
+      platforms = ["x86_64-linux"];
     };
   })
