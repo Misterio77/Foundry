@@ -158,3 +158,7 @@ Ad-hoc tests belong in temporary directories, not here. Unless explicitly asked,
 ## LLM-generated docs
 
 Do not add new documentation unless asked. Updating stale docs is okay and should be done as part of the relevant changes. Runbooks and migration notes that concern machine state do not belong in this repository.
+
+## Patching
+
+Prefer patch files over standalone files that are `cp`'ed with nix. Patches preserve rationale and are the most elegant solution.
