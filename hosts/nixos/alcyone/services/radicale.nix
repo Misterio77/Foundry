@@ -4,51 +4,28 @@
   pkgs,
   ...
 }: let
-  socket = "/run/radicale-http.sock";
-  python = pkgs.python3.withPackages (ps: [
-    ps.gunicorn
-    (ps.toPythonModule config.services.radicale.package)
-  ]);
-  settingsFormat = pkgs.formats.ini {
-    listToValue = lib.concatMapStringsSep ", " (lib.generators.mkValueStringDefault {});
-  };
-  settingsFile = settingsFormat.generate "radicale.conf" config.services.radicale.settings;
+  socket = config.services.radicale.unixSocket.path;
 in {
   sops.secrets.authentik-radicale-directory-token = {
     sopsFile = ../secrets.yaml;
     restartUnits = ["radicale.service"];
   };
-  systemd.sockets.radicale = {
-    wantedBy = ["sockets.target"];
-    socketConfig = {
-      ListenStream = socket;
-      SocketUser = "root";
-      SocketGroup = config.services.nginx.group;
-      SocketMode = "0660";
-      RemoveOnStop = true;
-    };
-  };
-  systemd.services.radicale = {
-    requires = ["radicale.socket"];
-    after = ["radicale.socket"];
-    environment.RADICALE_CONFIG = settingsFile;
-    serviceConfig = {
-      # Inherit the root-owned socket without granting nginx access to calendar files.
-      ExecStart = lib.mkForce "${python}/bin/gunicorn --bind unix:${socket} --workers 1 --threads 8 --timeout 60 --forwarder-headers= --no-control-socket radicale:application";
-      # The module otherwise assumes localhost-only egress when server.hosts is absent.
-      IPAddressAllow = lib.mkForce [];
-      IPAddressDeny = lib.mkForce [];
-      Sockets = ["radicale.socket"];
-      LoadCredential = [
-        "authentik-directory-token:${config.sops.secrets.authentik-radicale-directory-token.path}"
-      ];
-    };
+  systemd.services.radicale.serviceConfig = {
+    # The sharing directory needs Authentik, beyond the upstream module's localhost-only egress.
+    IPAddressAllow = lib.mkForce [];
+    IPAddressDeny = lib.mkForce [];
+    LoadCredential = [
+      "authentik-directory-token:${config.sops.secrets.authentik-radicale-directory-token.path}"
+    ];
   };
 
   services = {
     radicale = {
       enable = true;
-      package = pkgs.radicale;
+      unixSocket = {
+        enable = true;
+        group = config.services.nginx.group;
+      };
       settings = {
         auth.type = "http_x_remote_user";
         rights.type = "owner_only";
