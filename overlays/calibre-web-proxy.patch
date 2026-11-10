@@ -14,7 +14,7 @@
              '*** Python2 is EOL since end of 2019, this version of Calibre-Web is no longer supporting Python2, '
 --- /dev/null
 +++ b/cps/foundry_proxy.py
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,98 @@
 +"""Opt-in, proxy-only identities for Foundry's browser deployment."""
 +
 +from uuid import UUID
@@ -74,18 +74,21 @@
 +        return user
 +
 +
-+def sync_profile(session, user, username, email):
++def sync_account(session, user, constants, headers):
++    role = user.role & ~constants.ROLE_ADMIN
++    if headers.get("X-Foundry-Calibre-Web-Admin") == "1":
++        role |= constants.ROLE_ADMIN
 +    # These are labels only: the UUID mapping remains the sole account lookup.
-+    username, email = unquote(username), unquote(email)
-+    if not username or not email:
-+        return
-+    if len(username) > 64 or len(email) > 120 or any(c in username + email for c in "\r\n\x00"):
-+        raise ValueError("Invalid proxy profile")
-+    if (user.name, user.email) == (username, email):
-+        return
-+    user.name, user.email = username, email
++    username = unquote(headers.get("X-Foundry-Calibre-Web-Username", ""))
++    email = unquote(headers.get("X-Foundry-Calibre-Web-Email", ""))
++    if username and email:
++        if len(username) > 64 or len(email) > 120 or any(c in username + email for c in "\r\n\x00"):
++            raise ValueError("Invalid proxy profile")
++        user.name, user.email = username, email
++    user.role = role
 +    try:
-+        session.commit()
++        if session.is_modified(user):
++            session.commit()
 +    except IntegrityError:
 +        session.rollback()
 +        raise ValueError("Proxy profile collides with an existing local account")
@@ -105,24 +108,14 @@
 +        subject = request.headers.get("X-Foundry-Calibre-Web-Subject", "")
 +        try:
 +            user = provision(ub.session, ub.User, constants, subject)
-+            sync_profile(
-+                ub.session, user,
-+                request.headers.get("X-Foundry-Calibre-Web-Username", ""),
-+                request.headers.get("X-Foundry-Calibre-Web-Email", ""),
-+            )
++            sync_account(ub.session, user, constants, request.headers)
 +        except (ValueError, AttributeError):
 +            abort(403)
-+        role = user.role & ~constants.ROLE_ADMIN
-+        if request.headers.get("X-Foundry-Calibre-Web-Admin") == "1":
-+            role |= constants.ROLE_ADMIN
-+        if user.role != role:
-+            user.role = role
-+            ub.session.commit()
 +        g.flask_httpauth_user = user
 +        g._login_user = user
 --- /dev/null
 +++ b/tests/test_foundry_proxy.py
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,220 @@
 +import ast
 +import importlib.util
 +import pathlib
@@ -290,6 +283,21 @@
 +        self.assertEqual(self.profile_request("Gabri%C3%A9l", "new%40example.org").json, response.json)
 +        self.assertEqual((user.name, user.email), ("Gabriél", "new@example.org"))
 +        self.assertEqual(self.session.query(User).count(), 1)
++
++    def test_profile_collision_rolls_back_admin_grant(self):
++        user = self.session.get(User, self.get().json["id"])
++        original = (user.name, user.email, user.role)
++        self.session.add(User(name="taken", email="taken@example.org"))
++        self.session.commit()
++        response = self.client.get("/", headers={
++            "X-Foundry-Calibre-Web-Subject": self.subject,
++            "X-Foundry-Calibre-Web-Username": "taken",
++            "X-Foundry-Calibre-Web-Email": "new@example.org",
++            "X-Foundry-Calibre-Web-Admin": "1",
++        })
++        self.assertEqual(response.status_code, 403)
++        self.session.refresh(user)
++        self.assertEqual((user.name, user.email, user.role), original)
 +
 +    def test_profile_collision_never_links_accounts(self):
 +        for username, email in [("admin", "new@example.org"), ("gabs", "admin@example.org")]:
