@@ -96,3 +96,9 @@ entries:
       order: 1
     attrs:
       group: !Find [authentik_core.group, [name, admin]]
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf access
+      order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, user]]
