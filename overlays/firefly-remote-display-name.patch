@@ -36,18 +36,16 @@
      }
 --- a/app/User.php
 +++ b/app/User.php
-@@ -85,6 +85,20 @@
+@@ -85,6 +85,18 @@
      protected $hidden   = ['password', 'remember_token'];
      protected $table    = 'users';
  
 +    public function getRemoteDisplayNameAttribute(): string
 +    {
 +        if ('remote_user_guard' === config('auth.defaults.guard')) {
-+            foreach (['remote_guard_display_name', 'remote_guard_alt_email'] as $key) {
-+                $value = Preferences::getForUser($this, $key)?->data;
-+                if (is_string($value) && '' !== trim($value)) {
-+                    return $value;
-+                }
++            $value = Preferences::getForUser($this, 'remote_guard_display_name')?->data;
++            if (is_string($value) && '' !== trim($value)) {
++                return $value;
 +            }
 +        }
 +

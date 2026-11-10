@@ -26,8 +26,8 @@ Remote-user provisioning does not require enabling public registration.
 
 Browser authentication also syncs the Authentik username into the
 `remote_guard_display_name` preference through a URL-encoded `REMOTE_DISPLAY_NAME`
-CGI variable. Both UI account labels use it, falling back to the contact email and
-then the stable identifier. This never changes the account lookup or PAT ownership;
+CGI variable. Both UI account labels use it, falling back to the stable identifier
+until a username has synced. This never changes the account lookup or PAT ownership;
 API requests do not update the preference.
 
 ## API clients
