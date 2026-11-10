@@ -1,9 +1,10 @@
 # Gablogin: a consistent user-facing authentication experience
 
-Direction: users connect through Gablogin where supported, or create an app
-password in Gablogin as the compatibility path. Service-specific mechanisms may
-remain underneath. The goal is a consistent surface for users, not a requirement
-that every service accept every credential type.
+Direction: two preferred paths, one shared fallback. Users connect through an
+integrated Gablogin login/device-approval flow, or authorize helper-managed OAuth
+(such as oama) for tools and unattended use. App passwords created in Gablogin are
+the fallback when neither fits. Service-specific mechanisms may remain underneath;
+a consistent surface does not require every service to accept every credential type.
 
 Implementation status: retain Firefly's existing browser SSO and native API
 credentials as a known exception. The shared OAuth client is limited to Mail/DAV;
@@ -43,10 +44,10 @@ nor obliges us to implement a universal authentication layer.
 ## The clarified user-facing contract
 
 > Users should not need to learn a new credential-management procedure for each
-> service. Prefer connecting through Gablogin; use a centrally created app password
-> when the client cannot do browser authorization.
+> service. Prefer integrated Gablogin login or helper-managed OAuth; use a centrally
+> created app password when neither path fits.
 
-### Preferred path: connect with Gablogin
+### Preferred path: integrated login or device approval
 
 The user follows the client's login/device-approval path, authenticates through
 Gablogin, and approves the connection where required. The client can then use
@@ -59,14 +60,39 @@ issued by Jellyfin. Native OIDC browser/mobile integrations also fit; they shoul
 not be replaced solely to make their internal credentials look like Mail/DAV's.
 
 “Connect with Gablogin” describes the experience, not a mandate for one literal
-button or a particular OAuth grant everywhere. Device approval, native OIDC, and
-oama-assisted browser authorization can provide that experience in different ways.
+button or a particular OAuth grant everywhere. Device approval and native OIDC
+can provide that experience while retaining application-managed sessions/tokens.
 
-### Compatibility path: create an app password in Gablogin
+### Preferred path: OAuth through a helper such as oama
 
-Where browser authorization is unavailable, the user creates a dedicated app
-password centrally and supplies it with their Authentik username using the
-integration's supported transport. The account password is not the fallback.
+This is a first-class surface for CLI tools, scripts, and unattended jobs that can
+consume OAuth access tokens. The user initially authorizes requested service
+scopes through Gablogin in a browser. Thereafter the helper stores the grant,
+retrieves access tokens for consumers, and manages renewal. Consumers need not
+implement a browser callback or refresh-token lifecycle themselves.
+
+Browser authorization and non-interactive use are not opposites. The browser is
+used to approve the connection; subsequent requests and refreshes can run without
+user interaction. Compared with a static app password, a scoped grant can narrow
+service access and use short-lived access tokens without repeated credential
+copying. The refresh credential still needs secure storage and lifecycle controls.
+
+Oama does not provide completely headless bootstrap. Expired/revoked grants or
+changed scope requirements may need renewed interactive authorization. Credential
+storage must be available to the unattended process; token-refresh coordination
+and failure/reconnect behaviour need testing. Machine-to-machine OAuth grants are
+a separate design, not something enabled by calling a token helper from a cron job.
+
+This path complements integrated login. A client without its own OAuth login UI
+may still consume a token command supplied by oama. Conversely, a fixed native-PAT
+field does not necessarily accept Authentik access tokens. Both the consumer and
+the target service must support the credential contract.
+
+### Shared fallback: create an app password in Gablogin
+
+When neither integrated login nor helper-managed OAuth fits, the user creates a
+dedicated app password centrally and supplies it with their Authentik username
+using the integration's supported transport. The account password is not the fallback.
 App passwords are a deliberate compatibility interface for clients we do not
 control, not merely a temporary feature to eliminate from all legacy clients.
 
@@ -75,9 +101,13 @@ be assumed to accept an app password; Basic authentication, custom headers, or a
 adapter must be evaluated against the actual client and server. Never silently
 reinterpret arbitrary bearer strings as global app passwords.
 
-A service/client only needs the paths relevant to its use. A working browser
-approval flow does not create a requirement to add app-password login beside it.
-Likewise, an app-password integration does not require adding OAuth to a client
+App passwords are the fallback for both preferred paths: interactive clients and
+non-interactive consumers. They are not only an alternative to browser login, nor
+the default just because a program runs unattended.
+
+A service/client only needs the paths relevant to its use. A working integrated
+login or helper-managed OAuth path does not require app-password support beside
+it. Likewise, an app-password integration does not require adding OAuth to a client
 that cannot use it.
 
 ### What is and is not being centralized
@@ -85,7 +115,7 @@ that cannot use it.
 | Concern | Intended direction | Not implied |
 | --- | --- | --- |
 | Interactive identity | Gablogin login, MFA and application admission | Identical backend user databases |
-| Connecting a client | Browser connection/approval, or centrally created app password | Every service accepts every token type |
+| Connecting a client | Integrated login/device approval, helper-managed OAuth, or the shared app-password fallback | Every service accepts every token type |
 | Credentials visible to users | Avoid application-specific PAT-generation procedures | Every internal session/device token is issued by Authentik |
 | Client lifecycle | Understandable expiry, reconnect and disconnect behaviour | A unified device UI or instant revocation already exists |
 | Resource identity | Correct account/data with centrally managed identity mappings | Every backend uses the same username or principal format |
@@ -98,7 +128,7 @@ behaviour still need explicit decisions and tests.
 
 Service scopes narrow a token's authority; they do not grant entitlements. Global
 app passwords are not service-scoped because their labels name a device or app.
-The two paths therefore offer consistent onboarding, not identical security
+The preferred paths and fallback offer consistent onboarding, not identical security
 properties. Dedicated per-device passwords enable selective credential removal,
 but do not alone terminate sessions or connections established with them.
 
@@ -226,8 +256,8 @@ with consistent identity and lifecycle guarantees across protocols.
   but is not currently a demonstrated reduction in Foundry's overall complexity.
 
 E increases implementation/maintenance complexity and is not necessary merely to
-provide the two user-facing paths. The clarified goal permits native session and
-device credentials behind central approval. Universal token acceptance would need
+provide the preferred paths and their shared fallback. The goal permits native
+session and device credentials behind central approval. Universal token acceptance would need
 an additional justification, rather than following automatically from a desire
 for a consistent surface.
 
@@ -281,13 +311,16 @@ was too strong.
 A successful token exchange is necessary for an OAuth integration, not sufficient
 proof of a usable connection flow. For a selected service/client pair, establish:
 
-1. **Connect:** where the user starts, how browser return/device approval works,
-   or exactly where the centrally created app password is entered. No hidden step
+1. **Connect:** where the user starts, how browser return/device approval or helper
+   authorization works, how tools retrieve tokens, or where the centrally created
+   app password is entered. No hidden step
    should require generating an application PAT unless it is a declared exception.
 2. **Use:** real reads/writes against the right user's resources, not just an
    authenticated version/about endpoint. Include native/mobile behaviour where used.
 3. **Renew/reconnect:** expiry, restart, refresh rotation, revoked credentials, and
    understandable recovery without exposing raw token-management details to users.
+   For helper-managed OAuth, test unattended credential-store access, concurrent
+   consumers, and the point where a fresh interactive authorization becomes necessary.
 4. **Disconnect:** what removing that credential/connection actually stops, within
    what bound, and what remains active. Test independent devices and sessions.
 5. **Authorize:** denied access, disabled accounts, changed entitlements, wrong
@@ -307,8 +340,8 @@ remaining questions concern how far to implement that goal and at what cost:
 
 - Which actual client workflow should be improved after Mail/DAV/SOGo acceptance?
   What specific user action or credential-management detour would disappear?
-- Does that client already support browser authorization or app-password transport,
-  or would supporting it require a fork? What upstream path exists?
+- Does that client support integrated login, helper-supplied OAuth tokens, or
+  app-password transport? Would supporting it require a fork or an upstream change?
 - What credential breadth and expiry are acceptable for the global app-password
   fallback, given that it is not equivalent to a service-scoped OAuth grant?
 - Where should users inspect/disconnect connections, and which current controls

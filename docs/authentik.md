@@ -21,19 +21,28 @@ The goal is a consistent experience for people connecting to services, not
 identical authentication machinery inside every service:
 
 > Users should not need to learn each application's credential-management
-> procedure. Connect through Gablogin where supported; otherwise create an app
-> password in Gablogin and supply it to the client.
+> procedure. Use integrated Gablogin login or helper-managed OAuth; when neither
+> fits, create an app password in Gablogin and supply it to the client.
 
-Two paths make up that experience:
+There are two preferred paths and one shared fallback:
 
-- **Preferred: connect with Gablogin.** Sign in or approve the device in a browser.
-  The application can issue its own session/device token afterward; the user does
-  not need to find a token-generation page or copy an application-specific PAT.
-- **Compatibility path: a Gablogin app password.** For clients without browser
-  authorization, create a dedicated credential centrally and enter the Authentik
-  username and app password where the integration supports them. Never substitute
-  the account password. This is a deliberate fallback, not a requirement to add
-  password authentication to clients that already have a good browser flow.
+- **Integrated login/device approval.** Sign in or approve the device through
+  Gablogin in a browser. The client manages its session or native tokens afterward;
+  the user need not generate and copy an application-specific PAT.
+- **OAuth through tooling such as oama.** Authorize the requested scopes through
+  Gablogin in a browser, then let a helper supply access tokens and manage refresh
+  for CLI tools, scripts, and unattended jobs. This is a first-class interface for
+  non-interactive use, not merely a workaround for a missing login button.
+- **App-password fallback for either path.** When neither integrated login nor
+  helper-managed OAuth fits, create a dedicated credential centrally and enter
+  the Authentik username and app password through the supported transport. Never
+  substitute the account password. Clients do not need to implement all three.
+
+Both preferred paths can involve a browser during initial authorization; their
+ongoing use differs. Oama supports unattended operation after interactive consent,
+not completely headless bootstrap. Refresh-grant expiry or revocation can require
+reauthorization. Machine-to-machine OAuth is a separate grant/design, not implied
+by using an OAuth token from a script.
 
 This is the intended surface, not a claim of universal support today. A client
 and service must both support the selected path. An ordinary API-key field does
@@ -101,7 +110,8 @@ not the same thing as a script using an independent API key.
 | Calibre-Web browser | Sign in through the outpost | Fits for browser use; OPDS/Kobo are disabled, not implemented fallbacks |
 | Firefly browser | Sign in through the outpost | Fits for browser use |
 | Waterfly | Obtain a Firefly PAT and configure it in the client | Known exception, deliberately unchanged for now |
-| Mail/DAV clients | Browser authorization through a capable client/tool, or Gablogin app password | Both intended paths are configured; full end-to-end acceptance remains pending |
+| Mail/DAV CLI tools and unattended jobs | Authorize through oama, then retrieve/refresh access tokens through the helper | First-class helper-managed OAuth path; full end-to-end acceptance remains pending |
+| Mail/DAV clients without usable OAuth | Configure a dedicated Gablogin app password | Shared fallback; not a service-scoped OAuth grant |
 | Radicale browser and SOGo | Sign in through Gablogin | Fits the browser pattern; SOGo delegates backend credentials internally |
 
 Judge specific client workflows, not just whole applications. For example, an
@@ -313,7 +323,7 @@ constraints, not reasons to require every service to implement every mechanism.
 Keep existing native OIDC and Jellyfin's device flow, the scoped Mail/DAV client,
 and Firefly's current browser/API split. Further implementation is not approved
 by this assessment. See [the design direction and alternatives](todo/gablogin-api-auth.md)
-for the preferred/fallback model, unresolved lifecycle questions, and acceptance
+for the two preferred paths and shared fallback, lifecycle questions, and acceptance
 criteria.
 
 ## Source map

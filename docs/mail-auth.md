@@ -1,8 +1,9 @@
 # Mail, DAV, and SOGo: authentication boundaries
 
 These are the existing central-credential integrations and the first concrete
-examples of the intended user-facing pattern: browser authorization where the
-client supports it, or an app password created in Gablogin as the fallback.
+examples of the intended user-facing pattern: integrated Gablogin login,
+helper-managed OAuth for tools and unattended use, and a centrally created app
+password as the fallback when neither preferred path fits.
 They are not a completed universal API layer. See [the service inventory](authentik.md)
 and [the user-facing contract](todo/gablogin-api-auth.md) for the broader direction.
 
@@ -28,14 +29,26 @@ for external IMAP/SMTP clients.
 
 ## The client-facing experience
 
-For an OAuth-capable client or helper such as oama, the user authorizes the
-connection through Gablogin in a browser. The shared CLI client requests the
-needed Mail/DAV scopes and handles renewal through its refresh grant. The user
-should not have to copy raw access or refresh tokens between applications.
-This is configured for our personal clients; arbitrary mail/DAV clients do not
-acquire OAuth support just because the server supports it.
+Helper-managed OAuth is a first-class interface here. The user authorizes the
+needed Mail/DAV scopes through Gablogin in a browser; afterward oama supplies
+access tokens and handles renewal through the refresh grant. Mbsync, msmtp, and
+vdirsyncer consume tokens from the helper without an interactive login on each
+sync/send. The user should not have to copy raw access or refresh tokens between
+applications. This is the preferred pattern for compatible CLI tools and
+unattended jobs acting on a user's behalf.
 
-For clients without that browser flow, the intended fallback is an Authentik
+Initial authorization remains interactive. Refresh expiry/revocation or a change
+in requested authority can require another browser authorization; this is not
+machine-to-machine OAuth or headless bootstrap. The helper's credential storage
+must also be accessible to the unattended process. Actual unattended operation,
+including keyring/GPG access and concurrent renewal, remains an acceptance concern.
+
+A client may instead integrate browser login and token/session management itself,
+as SOGo does. The choice is about the interface the client can use, not whether
+initial authorization involves a browser. Neither backend OAuth support nor the
+presence of oama makes an arbitrary client able to consume bearer tokens.
+
+When neither integrated login nor helper-managed OAuth fits, the fallback is an Authentik
 username and a dedicated Gablogin app password. The server address, protocol,
 and client-specific fields still differ; the place to create the credential and
 the distinction from the account password should not. Mailbox/storage principals
@@ -58,8 +71,10 @@ The fallback has real limits:
   different objects with different lifecycle controls.
 
 SOGo keeps its own browser login and delegates tokens to mail and DAV internally.
-Users should not need separate app passwords for each SOGo module. This is a good
-example of distinct backend mechanisms supporting one coherent user experience.
+Users should not need separate app passwords for each SOGo module. SOGo and oama
+illustrate the two preferred paths: an integrated client and an OAuth helper for
+other consumers. App passwords are the compatibility fallback for both, not just
+an alternative to interactive browser login.
 
 ## Entitlements and resource identities
 
