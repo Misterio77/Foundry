@@ -1,0 +1,112 @@
+--- a/app/module/auth/PilotDavAccess.py
++++ b/app/module/auth/PilotDavAccess.py
+@@ -16,6 +16,7 @@
+ D = '{DAV:}'
+ C = '{urn:ietf:params:xml:ns:caldav}'
+ A = '{urn:ietf:params:xml:ns:carddav}'
++APPLE = '{http://apple.com/ns/ical/}'
+ DENIED = E('S999403', 'DAV operation not permitted', HTTPStatus.FORBIDDEN)
+ CONFLICT = E('S999409', 'DAV resource changed; reload before retrying', HTTPStatus.CONFLICT)
+ UNAVAILABLE = E('S999502', 'DAV request failed', HTTPStatus.BAD_GATEWAY)
+@@ -33,6 +34,7 @@
+     kind: str
+     components: frozenset[str]
+     writable: bool
++    color: str | None = None
+ 
+ 
+ def active(uid):
+@@ -97,7 +99,7 @@
+ 
+ def _propfind(url, depth, properties):
+     body = ('<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
+-            'xmlns:a="urn:ietf:params:xml:ns:carddav"><d:prop>'+properties+'</d:prop></d:propfind>')
++            'xmlns:a="urn:ietf:params:xml:ns:carddav" xmlns:i="http://apple.com/ns/ical/"><d:prop>'+properties+'</d:prop></d:propfind>')
+     response = request('PROPFIND', url, headers={'Depth': str(depth), 'Content-Type': 'application/xml'}, data=body)
+     try:
+         return ET.fromstring(response.content)
+@@ -128,7 +130,7 @@
+         raise RequestException(error=UNAVAILABLE)
+     found = {}
+     for home in sorted(homes):
+-        tree = _propfind(home, 1, '<d:resourcetype/><d:displayname/><d:current-user-privilege-set/><c:supported-calendar-component-set/>')
++        tree = _propfind(home, 1, '<d:resourcetype/><d:displayname/><d:current-user-privilege-set/><c:supported-calendar-component-set/><i:calendar-color/>')
+         for item in tree.findall(D+'response'):
+             props = _properties(item)
+             types = props.get(D+'resourcetype')
+@@ -147,7 +149,11 @@
+             component_set = props.get(C+'supported-calendar-component-set')
+             components = frozenset(x.get('name') for x in component_set) if component_set is not None else frozenset({'VEVENT', 'VTODO'})
+             name = props.get(D+'displayname')
+-            found[path(url)] = Collection(url, name.text if name is not None and name.text else relative[:-1], kind, components, writable)
++            color_prop = props.get(APPLE+'calendar-color')
++            color = (color_prop.text or '').strip() if color_prop is not None else ''
++            # CalDAV colors may include alpha; SOGo's calendar model expects RGB.
++            color = color[:7] if re.fullmatch(r'#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?', color) else None
++            found[path(url)] = Collection(url, name.text if name is not None and name.text else relative[:-1], kind, components, writable, color)
+     g.foundry_dav_collections = tuple(found.values())
+     return g.foundry_dav_collections
+ 
+--- a/app/module/calendar/source/CalendarSourceLiveDav.py
++++ b/app/module/calendar/source/CalendarSourceLiveDav.py
+@@ -37,7 +37,8 @@
+     for collection in collections():
+         if collection.kind != 'calendar':
+             continue
+-        cal = CalCalendar(user_uid=uid, name=collection.name, key=str(uuid5(NAMESPACE_URL, collection.url)),
++        cal = CalCalendar(user_uid=uid, name=collection.name, color=collection.color,
++                          key=str(uuid5(NAMESPACE_URL, collection.url)),
+                           source_type=CalendarSourceType.CALDAV if collection.writable else CalendarSourceType.ICS,
+                           timezone='America/Sao_Paulo', supported_components=sorted(collection.components))
+         if collection.writable:
+--- a/tests/test_module/test_auth/test_foundry_dav.py
++++ b/tests/test_module/test_auth/test_foundry_dav.py
+@@ -32,13 +32,20 @@
+ 
+ def multistatus(href, properties):
+     return ('<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
+-            'xmlns:a="urn:ietf:params:xml:ns:carddav"><d:response><d:href>'+href+
++            'xmlns:a="urn:ietf:params:xml:ns:carddav" xmlns:i="http://apple.com/ns/ical/"><d:response><d:href>'+href+
+             '</d:href><d:propstat><d:prop>'+properties+
+             '</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>').encode()
+ 
+ 
+ @pytest.mark.parametrize('principal', [str(uuid4()), 'hi%40m7.rs'])
+-def test_principal_is_discovered_not_derived_from_mailbox(principal, mocker):
++@pytest.mark.parametrize(('server_color', 'expected_color'), [
++    ('#aB12ef', '#aB12ef'), ('#aB12efFF', '#aB12ef'), (' #12345678 ', '#123456'),
++    (None, None), ('', None), ('blue', None), ('#12345g', None), ('#123', None),
++])
++def test_principal_is_discovered_not_derived_from_mailbox(principal, server_color, expected_color, mocker):
++    from app.module.calendar.source.CalendarSourceLiveDav import discover
++    from app.module.calendar.serializer.CalCalendarSerializerDict import CalCalendarSerializerDict
++    from app.module.calendar.source.CalendarSourceLiveWritable import CalendarSourceLiveMixed
+     home = '/'+principal+'/'
+     answers = [
+         multistatus('/', '<d:current-user-principal><d:href>'+home+'</d:href></d:current-user-principal>'),
+@@ -47,7 +54,8 @@
+         multistatus(home+'mixed/', '<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>'
+                     '<d:displayname>Mixed</d:displayname><d:current-user-privilege-set>'
+                     '<d:privilege><d:write/></d:privilege></d:current-user-privilege-set>'
+-                    '<c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set>'),
++                    '<c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set>'
++                    + ('' if server_color is None else '<i:calendar-color>'+server_color+'</i:calendar-color>')),
+     ]
+     remote = mocker.patch.object(dav, 'request', side_effect=[SimpleNamespace(content=x) for x in answers])
+     with context():
+@@ -55,8 +63,15 @@
+         assert found[0].url == dav.ROOT+principal+'/mixed/'
+         assert found[0].writable
+         assert found[0].components == {'VEVENT', 'VTODO'}
++        assert found[0].color == expected_color
+         assert dav.collections() is found
++        sources = discover(g.user.uid)
++        assert len(sources) == 1
++        assert isinstance(sources[0], CalendarSourceLiveMixed)
++        assert sources[0].calendar.color == expected_color
++        assert CalCalendarSerializerDict().serialize(sources[0].calendar)['color'] == expected_color
+     assert [c.args[1] for c in remote.call_args_list] == [dav.ROOT, dav.ROOT+principal+'/', dav.ROOT+principal+'/']
++    assert '<i:calendar-color/>' in remote.call_args_list[-1].kwargs['data']
+ 
+ 
+ @pytest.mark.parametrize('etag', [None, 'W/"one"', '*', '"one", "two"'])

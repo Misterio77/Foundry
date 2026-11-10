@@ -41,7 +41,7 @@ in
       rev = "v${version}";
       hash = "sha256-sYTMIvmCIPpq95hwsmsX/JLO4nvi++K8HwPLmjFLevA=";
     };
-    patches = [./oidc.patch ./dav.patch ./identity.patch ./production.patch ./dav-production.patch];
+    patches = [./oidc.patch ./dav.patch ./identity.patch ./production.patch ./dav-production.patch ./dav-colors.patch];
     build-system = [python.poetry-core];
     nativeBuildInputs = [makeWrapper];
     pythonRemoveDeps = ["types-smorest" "pytest-mock"];
