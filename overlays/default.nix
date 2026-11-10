@@ -108,7 +108,14 @@ in {
     firefly-iii = prev.firefly-iii.overrideAttrs (old: rec {
       pname = "firefly-iii";
       version = "6.4.22";
-      patches = (old.patches or []) ++ [./firefly-remote-display-name.patch];
+      patches = (old.patches or []) ++ [./firefly-remote-display-name.patch ./firefly-remote-admin.patch ./firefly-remote-admin-tests.patch];
+      nativeCheckInputs = (old.nativeCheckInputs or []) ++ [final.phpunit];
+      doCheck = true;
+      checkPhase = ''
+        runHook preCheck
+        phpunit --no-configuration --do-not-cache-result --bootstrap vendor/autoload.php tests/unit/Support/RemoteAdminTest.php
+        runHook postCheck
+      '';
       src = final.fetchFromGitHub {
         owner = "firefly-iii";
         repo = "firefly-iii";

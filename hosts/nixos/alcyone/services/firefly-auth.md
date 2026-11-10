@@ -30,6 +30,19 @@ CGI variable. Both UI account labels use it, falling back to the stable identifi
 until a username has synced. This never changes the account lookup or PAT ownership;
 API requests do not update the preference.
 
+The `firefly/admin` entitlement grants Firefly's instance-wide `owner` role and is
+assigned to the Authentik `admin` group. Browser authentication synchronizes only
+that role from the trusted `REMOTE_ADMIN` CGI value: exactly `1` grants it; all
+other values, including a missing claim, remove it. First-user owner bootstrap is
+disabled when this integration is configured. Financial-administration membership
+and unrelated roles are unchanged.
+
+Outpost claims may be cached. Role removal takes effect when browser authentication
+processes an updated claim; PAT requests do not trigger synchronization, though
+they use the resulting local role state. Users denied application access cannot
+reach this synchronization step, so immediate offboarding still requires local
+role/token revocation.
+
 ## API clients
 
 Use a distinct Firefly personal access token for each Waterfly installation and

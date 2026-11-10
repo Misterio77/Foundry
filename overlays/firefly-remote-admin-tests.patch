@@ -1,0 +1,138 @@
+--- /dev/null
++++ b/tests/unit/Support/RemoteAdminTest.php
+@@ -0,0 +1,135 @@
++<?php
++
++declare(strict_types=1);
++
++namespace Tests\unit\Support;
++
++use FireflyIII\Support\Authentication\RemoteUserGuard;
++use FireflyIII\User;
++use Illuminate\Auth\EloquentUserProvider;
++use Illuminate\Config\Repository;
++use Illuminate\Database\Capsule\Manager;
++use Illuminate\Foundation\Application;
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\Facade;
++use Illuminate\Support\Facades\Log;
++use PHPUnit\Framework\TestCase;
++
++final class RemoteAdminTest extends TestCase
++{
++    private Application $app;
++    private Manager $database;
++    private User $user;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        Facade::clearResolvedInstances();
++        $this->app = new class(sys_get_temp_dir()) extends Application {
++            public function runningInConsole() { return false; }
++        };
++        Facade::setFacadeApplication($this->app);
++        $this->app->instance('config', new Repository(['auth' => [
++            'guard_header' => 'REMOTE_USER', 'guard_admin' => 'REMOTE_ADMIN',
++            'guard_email' => null, 'guard_display_name' => null,
++        ]]));
++        Log::swap(new class {
++            public function debug(...$args): void {}
++            public function error(...$args): void {}
++        });
++        $this->database = new Manager;
++        $this->database->addConnection(['driver' => 'sqlite', 'database' => ':memory:']);
++        $this->database->bootEloquent();
++        $db = $this->database->getConnection();
++        $db->statement('CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT)');
++        $db->statement('CREATE TABLE roles (id INTEGER PRIMARY KEY, name TEXT)');
++        $db->statement('CREATE TABLE role_user (user_id INTEGER, role_id INTEGER, PRIMARY KEY (user_id, role_id))');
++        $db->table('users')->insert(['id' => 42, 'email' => 'stable-principal']);
++        $db->table('roles')->insert([['id' => 7, 'name' => 'owner'], ['id' => 9, 'name' => 'demo']]);
++        $this->user = User::findOrFail(42);
++        $this->user->roles()->attach(9);
++    }
++
++    protected function tearDown(): void
++    {
++        $this->database->getConnection()->disconnect();
++        User::unsetConnectionResolver();
++        Facade::clearResolvedInstances();
++        Facade::setFacadeApplication(null);
++        Application::setInstance(null);
++        parent::tearDown();
++    }
++
++    private function authenticate(array $server): void
++    {
++        $provider = new class($this->user) extends EloquentUserProvider {
++            public function __construct(private User $fixture) {}
++            public function retrieveById($identifier) {
++                TestCase::assertSame('stable-principal', $identifier);
++                return $this->fixture;
++            }
++        };
++        $this->app->instance('request', Request::create('/', 'GET', [], [], [], $server));
++        (new RemoteUserGuard($provider, $this->app))->authenticate();
++        self::assertSame('stable-principal', $this->user->email);
++        self::assertSame(42, $this->user->id);
++    }
++
++    public function testGrantAndDemotionPreserveOtherRolesAndRefreshCachedRelations(): void
++    {
++        $this->user->load('roles');
++        $this->authenticate(['REMOTE_USER' => 'stable-principal', 'REMOTE_ADMIN' => '1']);
++        self::assertTrue($this->user->roles->contains('name', 'owner'));
++        $this->authenticate(['REMOTE_USER' => 'stable-principal', 'REMOTE_ADMIN' => '1']);
++        self::assertSame(2, $this->user->roles()->count());
++        $this->authenticate(['REMOTE_USER' => 'stable-principal', 'REMOTE_ADMIN' => '0']);
++        self::assertSame(['demo'], $this->user->roles->pluck('name')->all());
++    }
++
++    public function testFirstUserBootstrapIsDisabledOnlyWhenAdminSyncIsConfigured(): void
++    {
++        $db = $this->database->getConnection();
++        foreach (['password TEXT', 'blocked INTEGER', 'blocked_code TEXT', 'user_group_id INTEGER', 'created_at TEXT', 'updated_at TEXT'] as $column) {
++            $db->statement('ALTER TABLE users ADD COLUMN '.$column);
++        }
++        $db->statement('CREATE TABLE user_groups (id INTEGER PRIMARY KEY, title TEXT, created_at TEXT, updated_at TEXT)');
++        $db->statement('CREATE TABLE user_roles (id INTEGER PRIMARY KEY, title TEXT)');
++        $db->statement('CREATE TABLE group_memberships (id INTEGER PRIMARY KEY, user_id INTEGER, user_group_id INTEGER, user_role_id INTEGER, created_at TEXT, updated_at TEXT)');
++        $db->table('user_roles')->insert(['id' => 1, 'title' => 'owner']);
++        $this->app->instance('hash', new \Illuminate\Hashing\HashManager($this->app));
++        $provider = new \FireflyIII\Support\Authentication\RemoteUserProvider;
++        foreach (['REMOTE_ADMIN', null] as $header) {
++            $db->table('role_user')->delete();
++            $db->table('group_memberships')->delete();
++            $db->table('users')->delete();
++            $this->app['config']->set('auth.guard_admin', $header);
++            $created = $provider->retrieveById('first-principal');
++            self::assertSame(null === $header, $created->hasRole('owner'));
++            self::assertSame(1, $db->table('group_memberships')->where('user_id', $created->id)->count());
++        }
++    }
++
++    public function testMissingMalformedAndHttpClaimsNeverGrantOwner(): void
++    {
++        foreach ([null, '', 'true', '01', '1 ', 1, ['1']] as $claim) {
++            $this->user->roles()->syncWithoutDetaching([7]);
++            $this->user->load('roles');
++            $server = ['REMOTE_USER' => 'stable-principal', 'HTTP_REMOTE_ADMIN' => '1'];
++            if (null !== $claim) {
++                $server['REMOTE_ADMIN'] = $claim;
++            }
++            $this->authenticate($server);
++            self::assertSame(['demo'], $this->user->roles->pluck('name')->all());
++        }
++    }
++
++    public function testDisabledIntegrationAndMissingPrincipalDoNotChangeRoles(): void
++    {
++        $this->user->roles()->attach(7);
++        $this->authenticate(['REMOTE_ADMIN' => '0']);
++        self::assertTrue($this->user->hasRole('owner'));
++        $this->app['config']->set('auth.guard_admin', null);
++        $this->authenticate(['REMOTE_USER' => 'stable-principal', 'REMOTE_ADMIN' => '0']);
++        self::assertTrue($this->user->hasRole('owner'));
++    }
++}

@@ -26,10 +26,13 @@ entries:
         principal = ""
         email = ""
         display_name = ""
-        if request.user.is_active and request.user.app_entitlements(app).filter(name="access").exists():
+        admin = "0"
+        entitlements = set(request.user.app_entitlements(app).values_list("name", flat=True))
+        if request.user.is_active and "access" in entitlements:
             principal = request.user.attributes.get("firefly_principal", str(request.user.uuid))
             email = request.user.email
             display_name = quote(request.user.username, safe="")
+            admin = "1" if "admin" in entitlements else "0"
         return {
             "ak_proxy": {
                 "user_attributes": {
@@ -37,6 +40,7 @@ entries:
                         "X-Foundry-Firefly-Principal": principal,
                         "X-Foundry-Firefly-Email": email,
                         "X-Foundry-Firefly-Display-Name": display_name,
+                        "X-Foundry-Firefly-Admin": admin,
                     },
                 },
             },
@@ -121,5 +125,17 @@ entries:
     identifiers:
       target: !KeyOf access
       order: 1
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf firefly
+      name: admin
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
     attrs:
       group: !Find [authentik_core.group, [name, admin]]

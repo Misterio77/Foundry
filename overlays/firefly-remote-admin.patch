@@ -1,0 +1,52 @@
+--- a/config/auth.php
++++ b/config/auth.php
+@@ -43,6 +43,7 @@
+     'guard_header'     => envNonEmpty('AUTHENTICATION_GUARD_HEADER', 'REMOTE_USER'),
+     'guard_email'      => envNonEmpty('AUTHENTICATION_GUARD_EMAIL'),
+     'guard_display_name' => envNonEmpty('AUTHENTICATION_GUARD_DISPLAY_NAME'),
++    'guard_admin'      => envNonEmpty('AUTHENTICATION_GUARD_ADMIN'),
+ 
+     /*
+     |--------------------------------------------------------------------------
+--- a/app/Support/Authentication/RemoteUserProvider.php
++++ b/app/Support/Authentication/RemoteUserProvider.php
+@@ -72,8 +72,8 @@
+         if (null === $user) {
+             Log::debug(sprintf('User with email "%s" not found. Will be created.', $identifier));
+             $user = User::create(['blocked'      => false, 'blocked_code' => null, 'email'        => $identifier, 'password'     => bcrypt(Str::random(64))]);
+-            // if this is the first user, give them admin as well.
+-            if (1 === User::count()) {
++            // An authoritative proxy must not grant ownership merely for arriving first.
++            if (null === config('auth.guard_admin') && 1 === User::count()) {
+                 $roleObject = Role::where('name', 'owner')->first();
+                 $user->roles()->attach($roleObject);
+             }
+--- a/app/Support/Authentication/RemoteUserGuard.php
++++ b/app/Support/Authentication/RemoteUserGuard.php
+@@ -26,6 +26,7 @@
+ namespace FireflyIII\Support\Authentication;
+ 
+ use FireflyIII\Exceptions\FireflyException;
++use FireflyIII\Models\Role;
+ use FireflyIII\Support\Facades\Preferences;
+ use FireflyIII\User;
+ use Illuminate\Contracts\Auth\Authenticatable;
+@@ -93,6 +94,18 @@
+         /** @var User $retrievedUser */
+         $retrievedUser = $this->provider->retrieveById($userID);
+ 
++        $adminHeader = config('auth.guard_admin');
++        if (is_string($adminHeader) && '' !== $adminHeader) {
++            $owner = Role::where('name', 'owner')->firstOrFail();
++            // Only an exact CGI value grants ownership; missing or malformed claims demote.
++            if ('1' === request()->server($adminHeader)) {
++                $retrievedUser->roles()->syncWithoutDetaching([$owner->id]);
++            } else {
++                $retrievedUser->roles()->detach($owner->id);
++            }
++            $retrievedUser->unsetRelation('roles');
++        }
++
+         // store email address if present in header and not already set.
+         $header        = config('auth.guard_email');
+ 

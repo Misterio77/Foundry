@@ -9,6 +9,7 @@
     auth_request_set $firefly_principal $upstream_http_x_foundry_firefly_principal;
     auth_request_set $firefly_email $upstream_http_x_foundry_firefly_email;
     auth_request_set $firefly_display_name $upstream_http_x_foundry_firefly_display_name;
+    auth_request_set $firefly_admin $upstream_http_x_foundry_firefly_admin;
     auth_request_set $firefly_cookie $upstream_http_set_cookie;
     add_header Set-Cookie $firefly_cookie always;
     error_page 401 = @firefly_login;
@@ -28,6 +29,7 @@
       fastcgi_param REMOTE_USER $firefly_principal;
       fastcgi_param REMOTE_EMAIL $firefly_email;
       fastcgi_param REMOTE_DISPLAY_NAME $firefly_display_name;
+      fastcgi_param REMOTE_ADMIN $firefly_admin;
     '';
 in {
   services.firefly-iii = {
@@ -46,6 +48,7 @@ in {
       AUTHENTICATION_GUARD_HEADER = "REMOTE_USER";
       AUTHENTICATION_GUARD_EMAIL = "REMOTE_EMAIL";
       AUTHENTICATION_GUARD_DISPLAY_NAME = "REMOTE_DISPLAY_NAME";
+      AUTHENTICATION_GUARD_ADMIN = "REMOTE_ADMIN";
       CUSTOM_LOGOUT_URL = "https://firefly.m7.rs/outpost.goauthentik.io/sign_out";
       ENABLE_EXCHANGE_RATES = "true";
       ENABLE_EXTERNAL_RATES = "false";
@@ -92,6 +95,7 @@ in {
           fastcgi_param REMOTE_USER "";
           fastcgi_param REMOTE_EMAIL "";
           fastcgi_param REMOTE_DISPLAY_NAME "";
+          fastcgi_param REMOTE_ADMIN "";
         '';
       "= /_firefly_auth" = {
         proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/auth/nginx";
