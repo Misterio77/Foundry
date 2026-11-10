@@ -1,256 +1,197 @@
-# Shared Gablogin API authentication
+# Gablogin authentication: directions under evaluation
 
-Status: in progress. Phase 1 (scoped issuance and client configuration) is
-implemented in the repository. Consumer hardening, Firefly API authentication,
-and deployment/live interoperability tests remain pending.
+Status: retain Firefly's existing browser SSO and native API credentials. The shared
+OAuth client is limited to Mail/DAV; the premature Firefly scope has been removed.
+Scoped issuance is implemented and live-tested. No universal validator or Firefly
+API-guard patch has been written. Broader consistency goals remain under evaluation;
+this document replaces the previous phased implementation plan.
 
-## Goal
+The concern driving the reassessment is inconsistency between services and what
+“managed by Gablogin” actually means. Before choosing more machinery, distinguish
+credential-management friction, access-removal behaviour, and maintenance cost.
 
-Give authentik-managed services a common authentication contract:
+See [the service inventory](../authentik.md) and
+[Mail/DAV/SOGo boundaries](../mail-auth.md) for the existing configuration.
 
-- Browser: login at `auth.m7.rs`, through native OIDC or a trusted proxy session.
-- OAuth-capable API clients: authentik-issued access tokens with user-selected
-  service scopes, obtained and refreshed by tools such as oama.
-- Legacy API clients: authentik username and app password.
+## What already exists
 
-All paths converge on the same service entitlement and principal mapping.
-Implement Firefly, mail, and DAV first, then extend the contract service by service.
-Native OIDC browser login alone does not establish API token support.
+At the `5b0316a5` comparison baseline:
 
-Backwards compatibility and preservation of existing sessions are not goals.
-Blueprints remain the source of truth; conflicting authentik objects can be
-reconciled through its API. Do not preserve legacy authentication paths solely
-for migration convenience.
+- Identity, application admission, and most application-role mappings are central.
+- Mail and DAV accept Authentik OAuth tokens and app passwords.
+- Firefly and Calibre-Web use proxy browser identity, but Firefly's API remains
+  native-token based and Calibre-Web's OPDS/Kobo endpoints are disabled.
+- Jellyfin, Immich, Grafana, and Seerr turn OIDC logins into application-owned
+  sessions or device tokens. Independent API/service credentials remain.
+- Several integrations already carry substantial patches, including session
+  revocation and Jellyfin Quick Connect ancestry. “Keep native credentials” does
+  not mean “return to an unpatched baseline.”
 
-## Existing foundation
+`vksqkonk` replaces `mail-and-dav` with `gablogin-cli`: explicit consent, Mail/DAV
+service scopes, strict scope authorization, PKCE, rotating refresh tokens, and
+isolated service identity claims. Firefly's browser mapping remains on `profile`
+and is not attached to the CLI client. Issuance and lifecycle tests passed live;
+oama reauthorization succeeded. Follow-up tests confirmed that Firefly scope
+requests are denied while Mail/DAV issuance and refresh remain functional.
+Complete resource-client acceptance is pending.
 
-- `hosts/nixos/alcyone/services/authentik/gablogin-cli.yaml` defines a shared
-  public OAuth client with service scopes, explicit consent, PKCE, rotating
-  refresh tokens, and a strict loopback callback; it replaces `mail-and-dav`.
-- `home/gabriel/features/productivity/accounts/personal.nix` configures oama's
-  `gablogin` entry for that client.
-- `overlays/oama-refresh-token-rotation.patch` already fixes upstream oama's
-  failure to retain replacement refresh tokens; no new fix is needed for that.
-- Mail and DAV already integrate authentik OAuth and app-password paths.
-- Firefly browser authentication uses the outpost and trusted CGI identity.
-  Its API currently uses Passport, including native personal access tokens.
-- Service-specific principal attributes already support mapping separate
-  authentik actors to the same backend identity.
+This is useful standalone work. It neither makes Firefly accept Authentik tokens
+nor obliges us to implement a universal authentication layer.
 
-See [Gablogin](../authentik.md) and [mail/DAV authentication](../mail-auth.md)
-for the existing design. These are starting points, not evidence that the new
-contract is implemented.
+## Separate the goals
 
-## Authentication and authorization contract
+1. **Central identity:** one account, login, MFA, and application-admission model.
+   Largely present already.
+2. **Central credentials:** clients obtain and revoke credentials in Authentik,
+   rather than each application's API-token UI. Present for Mail/DAV, not universal.
+3. **Predictable revocation:** defined behaviour when a credential, entitlement,
+   account, or login session is revoked. These are different events and lifecycles.
+4. **Consistent integration:** fewer service-specific rules and patches. A uniform
+   user interface does not necessarily reduce the underlying adapter count.
 
-| Method | Credential | Authorization |
-| --- | --- | --- |
-| Browser | Authentik login/session | Current service entitlement |
-| OAuth API | Gablogin access token | Required service scope and current service entitlement |
-| App-password API | Username and authentik app password | Current service entitlement |
+Service scopes narrow a token's authority; they do not grant entitlements. Global
+app passwords are not service-scoped simply because their labels name a device
+or application. Separately issued credentials can still belong to one centrally
+approved identity, as Jellyfin's device-token lineage demonstrates.
 
-Initial service scopes: `firefly`, `mail`, and `dav`. App passwords remain global
-credentials; application entitlements still limit which services accept them.
-Fine-grained scopes such as `firefly:read` are deferred until adapters enforce
-individual API operations.
+## Alternatives
 
-Required boundaries:
+### A. Keep native API credentials behind browser SSO
 
-- Reject disabled accounts, expired/revoked credentials, and missing access.
-- OAuth scope requests can narrow access, never grant new user permissions.
-- Validate the intended issuer/provider and audience/client relationship;
-  sharing an issuer or signing key is not sufficient trust.
-- Reject ID tokens, refresh tokens, and authentik API tokens as service access
-  tokens. Introspection alone must not accidentally admit a refresh token.
-- Invalid explicit credentials never fall back to browser-cookie authentication.
-- API failures return `401` or `403`, not redirects or login HTML.
-- Browser-session API requests retain CSRF protection.
-- Client-supplied headers cannot establish trusted identity; backends cannot
-  bypass the authentication boundary.
-- Keep the authenticated actor distinct from the mapped service principal for
-  audit purposes, particularly when automation shares a user's principal.
-- Define and test a revocation window. Avoid positive authorization caching
-  initially where practical; do not promise immediate revocation without proof.
+Selected for Firefly at present: keep its PATs for Waterfly and automation.
+Preserve Mail/DAV's existing central-credential paths; do not dismantle them to
+make everything equally native.
 
-A shared multi-service access token is an intentional security boundary. Each
-consumer must enforce its own scope. Prefer consuming the bearer token at the
-trusted authentication layer and passing identity downstream, rather than
-exposing a reusable multi-service credential to every backend.
+- Lowest additional implementation cost and closest to the comparison baseline.
+- Compatible with application clients and upstream token semantics.
+- Credential provisioning/revocation remains distributed. Disabling Authentik
+  access does not inherently revoke independent application tokens.
+- Existing custom login/logout integrations still need maintenance.
 
-## Phase 1: shared OAuth client and scopes
+### B. Add a central gate while retaining native API credentials
 
-Replace the `mail-and-dav` client with a public `gablogin-cli` provider/application:
+Put Authentik authentication in front of Firefly's native token validation.
+Clients need two credentials, or the gateway stores/injects backend credentials.
 
-- Authorization code with mandatory S256 PKCE.
-- Explicit consent with readable service-scope descriptions.
-- Refresh tokens with rotation.
-- Existing strict callback: `http://127.0.0.1:8765/callback`.
-- Five-minute access tokens, following the existing convention.
-- No password or client-credentials grants on this interactive client.
+- Can centralize admission without replacing the application's API guard.
+- Retains application-native credentials and their lifecycle.
+- Two client credentials depend on actual client header support; server-side
+  injection instead adds sensitive credential storage and principal-to-token mapping.
+- Still requires a correct central validation path. It is not a shortcut around
+  scope, token-type, cache, or revocation questions.
 
-Add scope authorization that requires at least one service scope and access to
-**every requested service**, replacing the current mail-or-DAV access check.
-Reject unauthorized requests instead of silently implying success.
+This may be useful in particular integrations, but risks combining both systems'
+complexity without removing the credential-management inconsistency.
 
-The authorization policy checks the raw GET `scope` parameter against normalized
-`oauth_scopes`, rejecting omission, unknown scopes, repeated parameters, and
-normalization differences. It requires `openid` and at least one service scope.
-The pinned authorization view exposes both inputs and disables policy-cache reads
-for application admission. This avoids authentik's default-to-all and
-intersection-with-known-scopes behaviour.
+### C. Implement centralized credentials for Firefly only
 
-Update oama to request an explicit set, for example:
+Give Waterfly an Authentik credential and the exchange-rate job a separate
+Authentik service account mapped through `firefly_principal`.
 
-```yaml
-auth_scope: "openid offline_access mail dav firefly"
-```
+- Addresses the immediate browser/API mismatch without promising universal support.
+- Requires trusted API identity integration in Firefly and a validated credential
+  path. App-password-only support could be an initial stopping point; OAuth need
+  not be bundled into the first implementation.
+- If selected, the earlier desired clean break was to disable native PAT issuance
+  and authentication, not just hide the UI. Browser API CSRF protection must remain.
+- Multiple actors sharing a financial principal must not toggle that user's admin
+  role on each request. Audit identity and resource identity need separate treatment.
+- Waterfly's actual installed-client credential transport and real reads/writes
+  must be tested. Custom-header support alone is not acceptance evidence.
 
-Users can remove services and authorize again for narrower grants. Editing the
-configuration does not narrow an existing refresh-token grant. Old grants must
-be revoked when their authority should disappear.
+This bounds the project, but intentionally leaves differences elsewhere.
 
-Keep native browser OIDC clients separate. The shared client serves user-operated
-CLI and non-interactive consumers, not every application's browser login.
+### D. Build a shared HTTP credential boundary
 
-Primary files:
+Consolidate the DAV/outpost pattern for compatible HTTP services, potentially via
+an outpost patch or a separate gateway. Validate credentials centrally and forward
+trusted service identity rather than reusable multi-service tokens.
 
-- `hosts/nixos/alcyone/services/authentik/gablogin-cli.yaml`
-- Service scope mappings and authorization policies under the same directory
-- `home/gabriel/features/productivity/accounts/personal.nix`
+- Reuses validation, credential precedence, caching policy, and audit conventions.
+- Per-service scope, entitlement, principal, and role mappings remain necessary;
+  these are different resource semantics, not necessarily arbitrary inconsistency.
+- Firefly still needs an API identity adapter. Dovecot still needs its protocol path.
+- Adds a critical component or maintained patch. It pays off only if concrete
+  consumers reuse it and it replaces enough existing machinery.
 
-## Phase 2: reusable credential validation
+A shared policy could be global across managed services while rollout is staged.
+That is different from making safe validation an optional per-service mode.
 
-Inspect the pinned authentik/outpost implementation before selecting an adapter.
-Establish whether its existing federation and authentication paths can provide:
+### E. Enforce a universal Gablogin contract
 
-- Shared-client OAuth access-token validation.
-- Required service-scope enforcement.
-- Current service-entitlement checks, not merely claims captured at issuance.
-- App-password validation that does not also admit ordinary account passwords.
-- Trusted identity output with actor, service principal, and allowed roles.
+Require managed services to accept browser SSO, scoped OAuth, and app passwords
+with consistent identity and lifecycle guarantees across protocols.
 
-Prefer extending the existing outpost path. If a patch is necessary, keep
-validation close to authentik rather than introduce another credential database
-or a service holding broadly privileged authentik API credentials.
+- Simplifies the user-facing credential model and potentially access administration.
+- Requires adapters wherever applications or clients expect native credentials.
+- Does not eliminate application sessions, persistent connections, resource ACLs,
+  or service-specific identity mapping; it makes us responsible for reconciling them.
+- Expands upgrade/compatibility tests and the impact of Authentik/gateway failures.
+- Could justify itself as a deliberate platform project or upstream contribution,
+  but is not currently a demonstrated reduction in Foundry's overall complexity.
 
-Expected credential transport:
+The assessment so far is that E increases implementation/maintenance complexity
+while reducing user-facing inconsistency. Its net value remains a user decision,
+not a consequence of the contract looking cleaner on paper.
 
-- OAuth: `Authorization: Bearer <access-token>`.
-- App password: HTTP Basic with authentik username and app password.
-- Waterfly: verify that the installed release supports custom headers and can
-  supply Basic authentication in place of its normal bearer header. Current
-  upstream supports custom headers, but release compatibility and the required
-  API-key form field need an actual client test.
+## Validator ideas, not an implementation commitment
 
-Do not reinterpret arbitrary bearer strings as global app passwords. If Waterfly
-cannot use Basic as expected, settle an explicit transport before implementing
-an alternative.
+Inspection found that the existing outpost trusts active introspection responses,
+uses cached claims, and can create sessions from header authentication. DAV's
+Nginx configuration already prevents cookie fallback and suppresses those cookies
+at its public boundary. Do not count those protections as wholly absent.
 
-Validation output should identify the authenticated actor, target service,
-mapped principal, authentication method, granted scopes, and service roles.
+Two implementation directions were discussed:
 
-## Phase 3: Firefly and automation
+- **Core plus outpost changes:** make core introspection enforce resource-specific
+  scope/access and fresh identity, then change outpost credential/session handling.
+  This has broader maintenance and compatibility implications. Refresh-token
+  introspection itself is legitimate; a resource server accepting it is the concern.
+- **Potential outpost-only validation:** combine existing introspection (active
+  grant and permitted federation) with userinfo (access-token-only validation and
+  fresh mappings), then require the target scope and authoritative identity.
+  This is a hypothesis to prototype and test, not a proven complete solution or
+  proof that current target-service admission policies are automatically rerun.
 
-Patch Firefly's API guard to consume trusted server-side identity from Nginx,
-reusing the existing principal/display-name/admin mapping where appropriate.
+The embedded outpost here is Rust; patching the older Go proxy implementation
+alone would not change the deployed embedded path. No patch for either direction
+has been written. The earlier claim that a core patch was necessarily required
+was too strong.
 
-- Disable native Firefly API-token authentication and issuance, not just its UI.
-- Preserve browser API functionality with CSRF protection.
-- Keep trusted CGI variables inaccessible to client HTTP headers.
-- Ensure credential-bearing API requests cannot fall back to a browser session.
-- Ensure separate authentik actors sharing a Firefly principal do not alternate
-  that backend user's admin role as they make requests. Define service-account
-  role synchronization rather than blindly reuse browser provisioning logic.
+## Concerns that survive every architecture
 
-Replace the exchange-rate job's PAT with an authentik service account:
+- **Token purpose:** access, refresh, ID, Authentik API, and application-native tokens
+  are not interchangeable. Verify intended provider/client relationships and scopes.
+- **Freshness:** issuance-time authorization, token refresh, request validation, and
+  session revocation are separate checks. A five-minute access-token lifetime is
+  not a five-minute bound on every derived session or open connection.
+- **Caching:** define a measured revocation bound. Removing all positive caches
+  increases network/database work; repeated app-password exchanges also mint tokens
+  and generate authentication events. Zero caching is not an adopted requirement.
+- **Credential precedence:** invalid explicit credentials must not authenticate via
+  unrelated browser cookies. Browser API requests still need CSRF protection.
+- **Actor versus principal:** shared backend identities must not erase attribution
+  or produce conflicting role synchronization.
+- **Failure behaviour:** distinguish API 401/403 from browser redirects, fail closed
+  on missing authoritative identity, and protect direct backend access.
+- **Independent credentials:** browser logout does not inherently revoke OAuth
+  grants, app passwords, native API keys, or application backend integration keys.
+- **Evidence:** configured back-channel URLs, passing builds, or successful callbacks
+  do not prove authenticated requests are rejected or independent sessions survive.
 
-- Set `firefly_principal` to the intended existing Firefly identity.
-- Grant Firefly access explicitly without unnecessary group membership.
-- Authenticate using its own app password.
-- Remove the old PAT secret reference; securely provision the replacement
-  credential outside this document.
+## Questions for the next evaluation
 
-Primary files:
+- Which inconsistency is most costly: where credentials are obtained, what access
+  removal means, or how much bespoke code is maintained?
+- Is a centrally approved native device credential acceptable when its ancestry
+  and revocation are tracked, as in Jellyfin?
+- What revocation bound is acceptable for new requests, and what should happen to
+  existing sessions/connections?
+- Which services genuinely need all credential types rather than only the methods
+  their clients use?
+- Which existing patches or special cases would a shared design actually remove?
 
-- `overlays/firefly-*.patch`
-- `overlays/default.nix`
-- `hosts/nixos/alcyone/services/firefly.nix`
-- `hosts/nixos/alcyone/services/authentik/firefly.yaml`
-
-## Phase 4: mail and DAV convergence
-
-Tighten existing integrations rather than rebuild them:
-
-- Mail requires the `mail` grant and mapped mailbox identity. Audit current
-  userinfo-based validation for issuer/client restrictions and current access
-  enforcement.
-- DAV requires `dav` for shared OAuth tokens. Generic `ak_proxy` access must not
-  serve as a cross-service permission.
-- Preserve app-password access only through explicitly configured paths.
-- Keep SOGo's browser integration functional, without automatically extending
-  shared CLI privileges to its existing tokens.
-
-These consumers exercise three distinct integration types: a PHP API, HTTP DAV,
-and IMAP/SMTP. Broader rollout follows only after the common contract works for
-all three.
-
-## Verification and acceptance
-
-Use existing upstream test suites through package patches for durable tests.
-Temporary integration checks must not become a new ad-hoc repository harness.
-Build patched packages natively and evaluate affected Nix configurations.
-
-| Case | Expected |
-| --- | --- |
-| `firefly` token used for Firefly | Allowed |
-| `firefly` token used for mail or DAV | Denied |
-| `mail dav` token used for those services | Allowed |
-| Missing/unknown scope or unauthorized requested service | Defined fail-closed behaviour |
-| Entitlement removed while token remains unexpired | Denied within the defined revocation window |
-| Disabled user or service account | Denied |
-| Revoked or expired app password | Denied |
-| Ordinary account password on app-password-only path | Denied |
-| Wrong-provider token, ID token, refresh token, authentik API token | Denied |
-| Forged identity headers or direct backend bypass | Denied |
-| Invalid explicit credential plus valid browser cookie | Denied |
-| Browser API write without valid CSRF protection | Denied |
-| Native Firefly PAT | Denied |
-| Service account sharing the user's principal | Correct dataset without role mutation |
-| Repeated oama renewal across refresh-token rotation | Works |
-| Narrower reauthorization | New grant contains only requested scopes |
-| Waterfly login, reads, and writes | Work with authentik app password |
-
-Successful `/api/v1/about` authentication is not sufficient Waterfly acceptance.
-Test real read/write operations and browser interaction with the patched guard.
-
-## Completion and scope boundaries
-
-Implement in this order:
-
-1. Shared OAuth client and scope policy.
-2. Reusable credential validation.
-3. Firefly guard and automation account integration.
-4. Mail/DAV scope convergence.
-5. End-to-end acceptance and clean-break cutover.
-
-Blueprints and code must describe the final intended state. Remove obsolete
-providers, grants, and native credentials deliberately; API reconciliation must
-converge to blueprints rather than leave invisible configuration. Operational
-commands, live credentials, and machine-state migration notes do not belong in
-this project document.
-
-Deferred: fine-grained API permissions, automatic OAuth acquisition/refresh in
-Waterfly, and adaptation of the remaining authentik-managed services. Each
-additional service needs an API/protocol audit; browser SSO is not enough.
-
-## References
-
-- [Authentik OAuth provider, scopes, and scope authorization](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)
-- [Authentik authorization scope handling](https://github.com/goauthentik/authentik/blob/main/authentik/providers/oauth2/views/authorize.py)
-- [Authentik token issuance and refresh](https://github.com/goauthentik/authentik/blob/main/authentik/providers/oauth2/views/token.py)
-- [Authentik introspection](https://github.com/goauthentik/authentik/blob/main/authentik/providers/oauth2/views/introspection.py)
-- [oama authorization and renewal](https://github.com/pdobsan/oama/blob/main/lib/OAMa/Authorization.hs)
-- [Waterfly credential handling](https://github.com/dreautall/waterfly-iii/blob/master/lib/auth.dart)
-
-Upstream source references describe investigated behaviour, not necessarily the
-pinned package versions. Confirm against pinned sources during implementation.
+Beyond retaining Firefly as-is and limiting the CLI client to Mail/DAV, no further
+implementation order is selected. Evaluate the existing services against these
+questions before reviving the previous universal rollout plan. Durable tests should
+extend existing upstream/package suites; exploratory checks belong outside the repo.

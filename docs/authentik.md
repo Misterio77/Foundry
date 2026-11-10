@@ -1,367 +1,265 @@
-# Gablogin / Authentik
+# Gablogin: authentication across services
 
-Describes the checked-in configuration, not deployment status. Sources:
-[Authentik](../hosts/nixos/alcyone/services/authentik/),
-[Jellyfin](../hosts/nixos/merope/services/media/jellyfin/),
-[Immich](../hosts/nixos/merope/services/immich.nix),
-[Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),
-[Seerr](../hosts/nixos/merope/services/media/jellyseerr.nix).
+Gablogin centralizes identity and application admission through Authentik, but
+not every application's credentials, sessions, or resource permissions. This is
+an assessment of the checked-in integrations, not a claim that every configured
+path has passed live acceptance.
 
-## Blueprint organization
+The comparison baseline is `5b0316a5` (`main` when this assessment began).
+`vksqkonk` changes shared Mail/DAV OAuth issuance and service scope mappings;
+it leaves Firefly browser authentication and native API credentials unchanged.
+Those changes are described separately below. Neither revision implements a
+universal gateway.
 
-- `identity.yaml`: shared authentication, MFA, profile/email handling and flow labels.
-- `branding.yaml`: Gablogin's brand, artwork URLs and default locale.
-- `authorization.yaml`: access-tier groups and the common entitlement policy.
-- Per-app blueprints: providers, claims, applications and entitlement assignments.
-- `gablogin-cli.yaml`: shared service-scoped OAuth, explicit consent, PKCE and DAV federation.
-- Recovery, sensitive changes and password-guessing protection have their own
-  flow-specific blueprints.
+- [Mail, DAV, and SOGo](mail-auth.md): protocol boundaries and credential lifetimes.
+- [Directions and concerns](todo/gablogin-api-auth.md): alternatives under evaluation,
+  not an approved implementation sequence.
 
-Identity and branding are independent; applying service permissions need not
-reapply the site's brand. Flow labels stay alongside their flow configuration.
+## Shared foundation
 
-## Access
+Authentik owns account authentication, optional MFA, profile information, and
+application entitlements. Accounts with enrolled WebAuthn or TOTP must validate
+MFA. Account-password and enrolled-MFA checks protect the configured sensitive
+change flows; Authentik's separate authenticator-deletion API remains a known
+fresh-authentication gap. Login sessions are configured for 30 days.
 
-- `auth.m7.rs` is public, including the admin UI; authentication, MFA and
-  permissions protect administration, not a separate network ACL. Backend
-  listeners are loopback-only; HTTPS metrics require a dedicated client
-  certificate, not a tailnet source address. See [metrics mTLS](metrics-mtls.md).
-- MFA is optional; accounts with an enrolled WebAuthn **or TOTP** device must
-  validate it. WebAuthn requires user verification but not hardware-key attestation.
-  Sessions persist for 30 days. Branding/default locale is Gablogin/`pt-BR`;
-  saved user preferences can override the locale.
-- Password changes, profile/email settings and authenticator enrollment require
-  the current account password (not an app password), then enrolled MFA if any.
-  A retained browser session alone is insufficient. Adding a missing email during
-  application authorization has the same checks; ordinary authorization with an
-  existing email does not prompt again. These are flow-level checks; Authentik's
-  separate authenticator deletion API does not gain a fresh-authentication check.
-- Password flows deny entry at reputation scores of -5 per username or -20 per
-  client IP. Failed identification/password attempts lower scores; successful
-  logins raise them. Scores expire after 15 minutes and survive flow restarts.
-  Checks run after login identification and before sensitive-change passwords,
-  including direct flow URLs. This is a temporary cooldown, not account
-  deactivation; existing-email app authorization and email recovery remain usable.
-- Email password recovery expires after 15 minutes and allows five attempts per
-  account per 15 minutes. It neither removes MFA nor reactivates disabled users.
-  After email verification, enrolled MFA is checked before prompting for or
-  writing a new password; successful recovery then creates a login session.
-  Email uses `auth@m7.rs` through tailnet-restricted SMTP at `mail.m7.rs:465`.
+Groups grant application entitlements; mappings translate them into downstream
+roles. Authentik administration is separate from application administration.
 
-Groups describe access tiers; application entitlements carry the permissions.
-Each tier is complete on its own, without requiring membership in lower tiers.
-
-| Group | Application entitlements | Authentik administration |
+| Group | Application access | Application administration |
 | --- | --- | --- |
-| `user` | `access` on Grafana, Immich, Jellyfin and Seerr | None |
-| `trusted` | `access` on all six services, including Mail and Radicale | None |
-| `admin` | `access` on all services; `admin` on Grafana, Immich, Jellyfin and Seerr | None |
-| `authentik-admin` | None | Native Authentik superuser |
+| `user` | Grafana, Immich, Jellyfin, Seerr, Calibre-Web | None |
+| `trusted` | Those services plus Mail, Radicale, Firefly | None |
+| `admin` | All of the above | Grafana, Immich, Jellyfin, Seerr, Firefly |
+| `authentik-admin` | No application access implied | Authentik superuser only |
 
-`authorization.yaml` defines the groups and the common access policy. Each
-service blueprint defines its own entitlements and group bindings. Application
-admission checks active status and the application's `access` entitlement;
-role mappings check entitlements rather than group names or user overrides.
-An `admin` entitlement alone does not replace `access`; the `admin` group grants
-both. Authentik superuser status is intentionally independent of app access.
+SOGo requires both Mail and Radicale access rather than a separate entitlement.
+Individual entitlement assignments can supplement groups. An `admin` entitlement
+alone does not substitute for application `access`.
 
-The application mappings translate `admin` into Jellyfin's `jellyfin-admins`,
-Immich's `admin`, Grafana's `GrafanaAdmin` (server administration), and Seerr's
-`ADMIN`. Ordinary access maps to `jellyfin-users`, `user`, `Viewer`, and `REQUEST`,
-respectively. These are downstream claims, not Authentik RBAC roles.
+Identity and resource ownership are distinct. Mail requires `mail_principal`;
+DAV and Firefly use `dav_principal` and `firefly_principal`, falling back to the
+Authentik UUID. Assigning the same principal to multiple actors intentionally
+shares a backend identity. That does not automatically preserve distinct audit
+actors or make shared-user role synchronization safe.
 
-Memberships are live identity data, not blueprint-managed users: `gabriel` belongs
-to `trusted`; `akadmin` belongs to `admin` and `authentik-admin`; other human users
-belong to `user`. Service identities are managed separately. App-role changes
-take effect according to each application's login/session behavior, not instantly
-when an entitlement changes.
+## Three authentication models
 
-Mail, Radicale and Firefly each have their own `access` entitlement and resource
-principal. The shared CLI client requires access to every explicitly requested
-service scope. Token issuance is configured; shared API validation and Firefly's
-API guard are still pending in the [project plan](todo/gablogin-api-auth.md).
-See [mail authentication](mail-auth.md). Blueprints describe final state; one-time
-cleanup of superseded database objects belongs in an API migration, not deletion
-entries retained in the blueprints.
+| Model | Flow | Who owns subsequent authentication? |
+| --- | --- | --- |
+| Native OIDC | Gablogin login, then application session/token issuance | Application |
+| Proxy identity | Nginx asks the outpost, then forwards trusted identity | Outpost plus application-specific integration |
+| Protocol integration | Dovecot validates client credentials through Authentik | Dovecot and the established IMAP/SMTP connection |
 
-## Application behavior
+An application accepting OIDC login does not necessarily accept Authentik bearer
+tokens on its API. An API request authenticated by an application session is also
+not the same thing as a script using an independent API key.
 
-Avatars use the self-hosted Robohash service at
-`https://avatars.m7.rs/%(username)s.png` in Gablogin and the OIDC `picture` claim.
-nginx fixes generation to kittens (`set4`), 200×200 pixels, disables remote
-Gravatar lookups and caches successful images. Usernames select the image; there
-is no editable avatar-seed field. Authentik caches avatar lookups by resolved URL;
-local initials remain its outage fallback, but aren't shared over OIDC.
+## Service inventory
 
-Immich replaces the profile image on each OAuth login, including existing images,
-and deletes the old file after a successful replacement. A failed fetch or decode
-leaves the old image intact. Jellyfin and Seerr also refresh existing users'
-avatars from the picture claim, retaining the old image if it's absent. Grafana's
-OIDC-picture patch stores a valid HTTPS picture URL on login and otherwise falls
-back to its existing Gravatar/default-image behavior. Picture changes reach these
-applications on the next OAuth login, not immediately in existing sessions.
+### Jellyfin — OIDC login and native device credentials
 
-**Jellyfin:** admits either role, manages all-library access and admin status,
-allows audio transcoding and disables video transcoding for everyone. New
-accounts can be created; automatic username migration and email linking are off.
-Existing subject-to-user bindings remain authoritative. The startup guard
-rejects local authentication providers and missing/conflicting identity maps.
-Gablogin pictures sync on OAuth login, replacing existing Jellyfin profile images;
-missing pictures leave the existing image alone.
+At `media.m7.rs`, the patched OIDC plugin handles browser login; local password
+authentication is blocked by the startup guard. Native clients use Quick Connect
+approval through Gablogin and receive Jellyfin tokens, not Authentik access tokens.
 
-The web client uses same-tab Gablogin, hides password controls, and returns to
-login on authenticated 401s. Explicit logout clears local state first. Browser
-logins marked by the OIDC callback then open Authentik's application logout page;
-Quick Connect logins (and browser logins predating that marker) finish locally.
-A marker is bound to the bearer hash, so a later Quick Connect login does not
-inherit an earlier OIDC login's logout behavior. Native clients use Quick Connect:
-`https://media.m7.rs/connect`, optionally `?user_code=012345`. QR codes carry only
-the public six-digit code; approval remains explicit and the tab can then close.
-The approval form validates six ASCII digits, decodes API error strings, and offers
-a new OIDC sign-in when its authorization expires or is revoked.
+- Stable OIDC subject bindings select users; automatic email linking and username
+  migration are disabled.
+- `access` and `admin` map to Jellyfin roles at login. Both have all-library access;
+  audio transcoding is enabled and video transcoding disabled.
+- Our patches persist token ancestry from the originating OIDC login through
+  Quick Connect descendants. Delivered back-channel logout revokes that family,
+  not independent logins. Untracked old devices do not gain this guarantee.
+- Independent application API keys remain, including Seerr's Jellyfin credential.
 
-The patched plugin records each Jellyfin token's root OIDC identity, including
-Quick Connect approvals made from the native menu or `/connect`. Devices approved
-by a Quick Connect device inherit the same root. A delivered session-scoped
-back-channel logout revokes that root and its descendants, not independent
-logins. Token hashes, identity metadata and logout markers are persisted in
-`plugins/configurations/Jellyfin.Plugin.OIDC.SessionLineage.json` (mode `0600`);
-raw bearer tokens are not stored. Session inactivity does not remove lineage;
-cleanup verifies that the token itself is gone. Failed deletions retain their
-records and return an error so Authentik can retry, including partial failures.
+This is already a substantial integration: plugin/web patches, account guards,
+profile synchronization, and persistent session lineage. Central device approval
+and revocation have been added without replacing native client tokens.
 
-Logout markers cover authorizations started before the logout, not a permanent
-ban on the OIDC session ID: Authentik can reuse that ID after application-only
-logout. A fresh OIDC flow can sign in again, but old tokens, Quick Connect
-approvals and in-flight pre-logout flows stay revoked. Retries retain the original
-cutoff; a distinct later logout revokes the new authorization too. Existing
-lineage files remain compatible and must not be cleared to recover from a 401.
+### Immich — native OIDC and application-owned sessions
 
-For the initial lineage rollout, revoke pre-existing Jellyfin devices explicitly
-and sign in again with OIDC before approving new devices. Old approval ancestry
-cannot be reconstructed; untracked sessions cannot approve more devices. There
-is no longer a restart fallback that logs out the entire account. A missing
-lineage match logs a migration warning instead. Corrupt state stops startup;
-failed writes reject the login/approval rather than issuing an untracked token.
-The tracking cap rejects new logins rather than evicting live revocation data.
-Verify the three-session revocation case, a chained approval, an independent
-OIDC login, app-only logout/relogin with the same Gablogin session, a Jellyfin
-restart and an aged Authentik session after deployment.
+At `photos.m7.rs`, browser and mobile clients use native OIDC. Password login is
+disabled; automatic OAuth launch and registration are enabled.
 
-**Immich:** OAuth-only, auto-launch and auto-registration enabled. Existing
-accounts can link by matching email on first OAuth login: verify the intended
-email/identity before admission. Admin status syncs from `immich_role`; quota
-syncs from the user's `immich_quota` attribute (GiB, default 8; -1 unlimited).
-Browser/mobile access is public with native shared links; the separate public-share
-proxy has been removed.
+- Initial linking can use matching email, unlike integrations that require an
+  existing subject binding or explicit account linking.
+- Role and quota claims synchronize through OAuth login. The default quota is
+  8 GiB; the configured user attribute can override it.
+- Native API keys and shared links remain separate application mechanisms; there
+  is no shared Authentik-bearer API gateway.
+- Authentik is configured to send back-channel logout to Immich's native endpoint.
+  This does not establish API-key revocation or continuous entitlement enforcement.
+- Our avatar patch refreshes the profile image on OAuth login.
 
-**Grafana:** OAuth-only with strict role mapping and no email-based linking.
-The `admin` entitlement grants server administration; ordinary access is Viewer.
-Basic/local login and anonymous viewing are disabled.
-Generic OAuth back-channel logout is enabled with the explicit issuer
-`https://auth.m7.rs/application/o/grafana/`, its HTTPS `jwks/` endpoint and signed
-ID-token validation. Authentik sends signed events to
-`https://dash.m7.rs/login/generic_oauth/backchannel-logout`. OAuth refresh is
-disabled and `offline_access` is not requested: local sessions do not depend on
-access-token expiry or IdP availability. Grafana's own maximum/inactive session
-lifetimes still apply. User-initiated logout retains Authentik's Grafana
-end-session redirect.
+### Grafana — native OIDC with patched session revocation
 
-Verified issuer/client/subject, optional `sid` and ID-token issuance time are
-bound to each new local session. Delivered `sid` events revoke matching sessions
-(and match `sub` too when supplied); subject-only events revoke all that subject's
-sessions for this client. Monotonic database cutoffs are checked on session
-creation and authenticated session lookups. Repeated/out-of-order delivery cannot
-undo revocation; cookie rotation and OAuth-token updates do not replace the
-original binding. Old ID tokens cannot establish usable sessions after logout.
-A fresh login with an ID-token `iat` later than the logout can succeed even with
-a reused `sid`; same-second login/logout requires retrying in the next second.
-Already-running requests, WebSockets and rendered pages are not terminated.
-Service accounts/API keys are not covered by browser-session logout. Signing keys
-are fetched only from the configured HTTPS URL, cached for an hour and refreshed
-on verification failure with five-second backoff. Invalid events return 400;
-key-fetch/storage failures return 503. Successful delivery means the cutoff was
-persisted, not that an already-running request was interrupted.
+At `dash.m7.rs`, OAuth is the only interactive login method. Basic/local login,
+anonymous viewing, and insecure email-based account linking are disabled.
 
-State remains intentionally ephemeral; dashboards, data sources and alert rules
-are provisioned. Ordinary service restarts retain the SQLite database, session
-bindings and logout markers. A host reboot/reset that discards Grafana's data
-loses **both** sessions and markers: old cookies no longer authenticate, but old
-in-flight OIDC callbacks are no longer protected by the lost cutoffs. Restoring
-old session data without its markers can resurrect access. Do not truncate only
-the marker table or persist only one half. A coordinated full reset is acceptable
-because this instance's state is disposable; stop/drain authentication first so
-old callbacks cannot cross the reset boundary. No new persistence is introduced
-here.
+- `access` maps to Viewer; `admin` maps to Grafana server administrator.
+- Grafana owns browser sessions. OAuth refresh is disabled and `offline_access`
+  is not requested; access-token expiry does not terminate the local session.
+- Our back-channel patch binds sessions to verified OIDC identity and persists
+  revocation cutoffs. Delivered logout affects correlated browser sessions, not
+  independent service-account tokens or already-running requests/WebSockets.
+- Native service-account/API credentials remain separate.
+- Additional customization synchronizes the OIDC picture claim.
 
-### Grafana logout rollout
+Existing browser sessions intentionally do not depend on checking Authentik on
+every request. Grafana's state is ephemeral across host resets: session state and
+revocation markers must not be treated as independently restorable data.
 
-1. Temporarily block Grafana browser traffic, stop Grafana and discard its
-   disposable state. Drain existing OAuth requests and reject old callback URLs
-   across the reset boundary. This clears all pre-rollout sessions, which lack
-   verified logout bindings; a service restart alone would not clear them.
-2. Apply the integration while browser admission remains closed: patched
-   Authentik runtime/Python package and migrations (PRs 26310 and 26565), patched
-   Grafana with the enabled client settings, then the provider's back-channel
-   Blueprint settings. On this shared host a single maintenance switch is fine:
-   wait for all three to be ready before reopening. Ensure Authentik can reach the
-   callback, which must reject unsigned requests. No new secret is needed.
-3. Reopen Grafana and sign in afresh. Declarative dashboards, data sources and
-   alerts are recreated. Fresh OAuth logins populate both Grafana's bindings and
-   Authentik's RP-login records; do not rely on pre-upgrade IdP records being
-   reconstructed.
+### Seerr — patched OIDC and centrally supplied permissions
 
-Production acceptance still requires authenticated-request checks, not just
-callback status:
+At `requests.m7.rs`, the package uses an experimental upstream OIDC implementation
+plus local patches. Password, media-server, and Quick Connect login are disabled.
 
-- In separate browser sessions, verify Viewer/GrafanaAdmin mapping, denied admission
-  without the access entitlement, avatar update/fallback and Grafana's logout redirect. End
-  one Authentik session: its next authenticated Grafana API request must fail
-  while an independent session still works. Repeat after the one-minute access
-  token expires and ordinary Grafana/Authentik restarts; also test an abandoned
-  unrelated Authentik flow before app logout.
-- Verify fresh login after logout (including reused `sid`), duplicate and
-  subject-only events, signing-key rotation/delivery retries, a callback racing
-  logout, and IdP outage with an existing Grafana session. Test the reboot/reset
-  boundary with authentication drained; there is no revocation continuity across
-  database loss. Check administrative session termination, deactivation and group
-  removal separately rather than assuming they emit equivalent logout events.
+- OIDC account linking is explicit, not automatic merely because emails match.
+- Authentik emits `REQUEST` or `ADMIN`. Permissions are replaced on login,
+  including for the owner; local permission-edit endpoints are disabled.
+- Provider logout and persistent back-channel revocation are patched in. Role
+  changes are not continuously synchronized into existing sessions.
+- Native API credentials remain. Seerr also holds separate Jellyfin, Sonarr, and
+  Radarr keys for its backend integrations.
 
-Package tests use a disposable loopback IdP and SQLite database, not live
-Authentik or browsers. Configured callbacks and successful callback responses are
-not production acceptance; the authenticated-request and independent-session
-checks above remain required.
+The maintained surface includes declarative provisioning, permission mapping,
+profile synchronization, and logout. This is not an unmodified native integration.
 
-**Seerr:** experimental native OIDC pinned to
-[PR #2715](https://github.com/seerr-team/seerr/pull/2715), revision `2e523125`.
-Only users with Seerr's `access` entitlement may authenticate. A local patch
-replaces permissions from `seerr_permissions` on each OIDC login (and account
-linking), including for the owner account. The `admin` entitlement emits `[ADMIN]`;
-ordinary `access` emits `[REQUEST]`. Per-user permission attributes do not bypass
-these entitlements.
+### Calibre-Web — browser-only proxy identity
 
-The mapping uses Seerr's uppercase
-[permission names](https://github.com/seerr-team/seerr/blob/2e523125e8e7262af44309c70db20fe2d7ca28a3/server/lib/permissions.ts).
-`[]` grants no permissions; missing/malformed claims and unknown names reject
-login rather than preserving stale grants. Request quotas are unchanged. Local
-permission-edit endpoints are disabled; password, media-server and Quick Connect
-login are disabled. Permissions refresh on login, not continuously; revoke
-existing Seerr sessions/API keys separately when immediate removal is needed.
+At `books.m7.rs`, Nginx authenticates requests through the outpost. Our application
+patch trusts the forwarded UUID identity, not local passwords or an independent
+browser session. Nginx strips Authorization and overwrites identity headers.
 
-Seerr's logout button clears its local session, then opens Authentik's provider
-logout choices. Authentik is configured to send signed back-channel logout
-requests to `/api/v1/auth/oidc/backchannel/authentik`. Seerr persists revocation
-markers and checks them on API requests and OIDC callbacks, correlating the
-verified issuer/client/subject and optional session ID. Existing sessions without
-this metadata need a fresh login (or explicit session clearing during rollout).
-Provider logout delivery uses Authentik's recorded application logins rather than
-requiring an unexpired access token; test both fresh and aged sessions. Email
-remains required.
+- Authentik UUID maps to a local account; mutable username/email do not select it.
+- Authentik controls admission. New users receive viewer/download roles; existing
+  local roles are preserved. There is no Authentik admin-role mapping.
+- OPDS and Kobo endpoints are explicitly disabled. App-password and OAuth API
+  access have not been implemented here.
+- Logout delegates to the outpost.
 
-### Initial Seerr provisioning and migration
+The separate Calibre content server at `calibre.m7.rs` is tailnet-restricted and
+uses its own authentication. It is not the Calibre-Web/Gablogin integration.
 
-These steps apply to fresh installs or clients predating the OIDC/logout patches,
-not as a checklist of work still outstanding on every deployment.
+### Firefly — proxy browser login, native API authentication
 
-1. Generate a client secret locally (for example, `openssl rand -hex 32`). Add
-   the **same** `authentik-seerr-client-secret` value using `sops` to both
-   `hosts/nixos/alcyone/secrets.yaml` and `hosts/nixos/merope/secrets.yaml`.
-   Do not deploy until both encrypted files contain the key.
-2. Before switching the client to OIDC-only, existing users must link Gablogin
-   under **Profile → Settings → Linked Accounts** using their old login method.
-   Matching emails are deliberately not auto-linked. Alternatively, start fresh
-   and reconfigure Seerr's media-server/Sonarr/Radarr connections; Seerr state is
-   disposable, and requester history is retained by Sonarr/Radarr tags.
-3. Build through CI or natively on Merope (`aarch64-linux`). For initial setup,
-   deploy Alcyone's provider before Merope's client. For the back-channel logout
-   upgrade, deploy the patched client before enabling Alcyone's callback URI.
-   Seerr reads its operator-owned declarative configuration; the database remains
-   persistent. Back it up before the logout patch adds its revocation table.
-   Existing sessions need a fresh login to acquire logout correlation metadata.
-4. Verify admin/user permissions, an explicit override, demotion, rejected local
-   permission edits, and rejection without shared group membership. Login is at
-   `https://requests.m7.rs/login`.
+At tailnet-restricted `firefly.m7.rs`, the outpost authenticates browser requests.
+Nginx passes trusted CGI variables to the remote-user guard; client HTTP headers
+cannot supply those variables.
 
-## Revocation
+- `firefly_principal` or the UUID selects the financial identity. The identity
+  mapping supplies display information and an admin flag; our integration
+  synchronizes Firefly's owner role from that flag.
+- `/api/` deliberately bypasses outpost authentication and clears the trusted
+  browser identity variables. Passport accepts native PATs or its CSRF-protected
+  browser API cookie.
+- External clients such as Waterfly need Firefly-native credentials under this
+  design. The PTAX exchange-rate job uses a SOPS-managed Firefly PAT.
+- Browser logout goes through the outpost; PATs have an independent lifecycle.
 
-Role changes apply on OAuth login; removing group membership is not immediate
-application-session revocation. Disable application-local access and revoke its
-sessions/API keys when immediate removal matters.
+This explicit browser/API split motivated the central-credential proposal. The
+current decision is to retain it: the shared CLI client does not offer a `firefly`
+scope, and Firefly's browser identity mapping remains attached to `profile`.
 
-Back-channel logout is configured for Jellyfin, Immich, Seerr and Grafana, but is
-not a blanket revocation guarantee. With the pinned Authentik and application
-patches:
+### Radicale — proxy identity for browsers and DAV clients
 
-- Authentik PR 26310 records application logins independently of access-token
-  expiry, allowing session-deletion notifications after tokens expire or are
-  cleaned up. Migration backfills login records from retained access/refresh
-  tokens; it cannot reconstruct records whose tokens are already gone. Verify
-  aged sessions after upgrading rather than assuming migration coverage. PR 26565
-  prevents an unrelated unfinished flow from swallowing a subsequent app logout.
-  Delivery/retries and each administrative revocation path still need live checks.
-- Jellyfin persists token-to-OIDC lineage and cascades delivered logout to Quick
-  Connect descendants, preserving independent logins across restarts. Pre-lineage
-  devices require explicit revocation and a fresh login; see the rollout above.
-- Seerr's correlation and revocation markers survive restarts, but only sessions
-  created after the back-channel patch carry the required identity metadata.
-- Grafana rejects correlated browser sessions after delivered logout, including
-  after ordinary service restarts. Pre-rollout sessions require explicit clearing;
-  ephemeral database loss also loses cutoffs. Group changes alone are not a
-  continuous role sync or a guaranteed logout event; see its staged rollout above.
+At tailnet-restricted `dav.m7.rs`, the outpost accepts browser sessions, OAuth
+bearer tokens, and Basic username/app-password credentials. Nginx passes a trusted
+principal to Radicale and strips incoming credentials before forwarding.
 
-Test fresh and aged logins, restart, Quick Connect and two independent sessions
-when changing this behavior. A successful callback alone does not prove that
-an authenticated API request is rejected or another device is unaffected.
+- Explicit credentials take precedence over cookies. Nginx suppresses header-auth
+  session cookies and protects cookie-authenticated writes with Origin checks.
+- Authentik controls admission; Radicale enforces collection ownership and native
+  mapped sharing. Token/link sharing is disabled.
+- A separate read-only Authentik API account supports the sharing UI's directory.
+- Outpost caching and stored claims mean per-request `auth_request` is not the
+  same as per-request fresh entitlement evaluation.
 
-## Recovery
+This is the existing integration closest to a shared HTTP credential gateway.
+See [the protocol assessment](mail-auth.md) for its validation limitations.
 
-Keep SSH/SOPS access, mailbox access and recovery material independent of the
-IdP. Runtime secrets come from SOPS; never put them in Nix/store files or docs.
+### Mail — direct Dovecot integration
 
-- **Authentik:** restore the PostgreSQL dump, `/var/lib/private/authentik` and
-  original effective `authentik-key` into a matching version with services
-  stopped. Dumps are under `/var/backup/postgresql`; both paths persist under
-  `/persist` and enter [Borg backups](backups.md). Preserve the exact single-line
-  key independently: changing it or normalizing it to a different value is not
-  a formatting fix. Nix rollback does not undo DB migrations or Blueprint changes.
-- **Jellyfin:** restore `data/jellyfin.db` and
-  `plugins/configurations/Jellyfin.Plugin.OIDC.UserProviderMap.json` and
-  `plugins/configurations/Jellyfin.Plugin.OIDC.SessionLineage.json` together
-  under `/var/lib/jellyfin`. Migration backups were placed under
-  `/persist/var/backup/jellyfin-oidc/`. No local-password administrator remains.
-  Local recovery requires deliberately relaxing the startup guard and changing
-  the intended account's authentication provider while stopped; Nix rollback
-  alone cannot undo account migration. Avoid restoring a whole old DB just to
-  change one account's login method.
-- **Immich:** temporarily set `passwordLogin.enabled = true` and
-  `oauth.autoLaunch = false` under `services.immich.settings`, then redeploy.
-  Do not delete users or the database to reset authentication.
-- **Grafana:** recover through SSH and declarative provisioning, not a retained
-  local password. Its state is disposable: a coordinated full reset is acceptable
-  with Grafana stopped and authentication drained, but never restore old sessions
-  without their revocation markers.
-- After rotating the SMTP password, restart Dovecot as well as Authentik; the
-  mail password declaration has no Dovecot restart hook.
+IMAP and SMTP submission accept Authentik OAuth access tokens or username/app
+passwords. Dovecot validates OAuth through userinfo; app passwords use a separate
+password-grant provider. Personal mailbox passwords are locked.
 
-## Remaining work
+The mail mapping checks active status, Mail access, and the explicit mailbox
+principal. Authentik does not provision mailboxes or delivery aliases: Nix does.
+Service SMTP senders retain independent local credentials. Authentication checks
+do not terminate already-established IMAP connections.
 
-- Verify recovery-email delivery/reset, restored MFA browser login and recovery
-  using independently stored key material. Check that failed/abandoned recovery
-  MFA leaves the old password unchanged, and that password/profile changes and
-  authenticator setup require fresh credentials (including direct flow URLs).
-  Test both enrolled and unenrolled accounts. The isolated restore result is
-  recorded in [backups](backups.md), not proof of these paths.
-- Exercise current roles/demotions, native/mobile sign-in, logout and IdP outage;
-  review capacity under sustained load. Audit Jellyfin plugin subject-validation,
-  provider-scoping and logout limitations before widening use.
-- Complete and record the [mail/DAV live acceptance checks](mail-auth.md#live-acceptance):
-  IMAP/SMTP, DAV read/write, refresh/revocation, existing connections and delivery
-  during IdP failure. OAuth is implemented and mail/DAV intentionally share one
-  grant. Browser-session deletion does not revoke refresh tokens; app-password
-  labels do not impose per-application scopes. Verify unattended oama/GPG behavior
-  without breaking the other accounts.
-- Track the authenticator-deletion API's missing fresh-authentication check
-  ([upstream issue 6798](https://github.com/goauthentik/authentik/issues/6798));
-  the sensitive-change flows do not close that separate API path.
-- Choose phone notifications for new authorizations, MFA/recovery and admin
-  changes. No phone-push transport or custom event rules are declared.
+### SOGo — delegated client of Mail and DAV
+
+The web interface at `mail.m7.rs` uses its own confidential OIDC client with PKCE
+and refresh tokens. Admission requires both Mail and Radicale access. SOGo uses
+the user's OAuth access token for IMAP/SMTP and DAV, rather than storing a personal
+mailbox password. Our package carries OIDC/backend integration patches.
+
+Logout uses Authentik's end-session endpoint; this is not the same patched
+back-channel session model as Grafana or Seerr. SOGo is a client spanning two
+resource services, not a third interchangeable API-authentication gateway.
+
+## What the scoped-client change does
+
+The baseline's `mail-and-dav` public client admitted users with either Mail or DAV
+access. It used implicit consent, S256 PKCE, a strict loopback callback, five-minute
+access tokens, and thirty-day refresh tokens. Mail had a dedicated scope, but DAV
+identity was attached to `profile`, alongside generic proxy mappings.
+
+`vksqkonk` replaces it with `gablogin-cli`:
+
+- Explicit consent and dedicated `mail` and `dav` scopes.
+- Required `openid` plus at least one service scope, with access to every requested
+  service checked during authorization.
+- Mandatory S256 PKCE, authorization-code/refresh grants only, the same callback
+  and lifetimes, and refresh rotation on every renewal.
+- Service-isolated identity mappings instead of generic profile/proxy claims on
+  the shared client. Native browser clients remain separate.
+
+Live issuance tests covered login/consent, scope and claim isolation, PKCE,
+refresh rotation/replay, narrowing, revocation, and negative authorization cases.
+Oama was reauthorized successfully. After removing the premature Firefly scope,
+live checks confirmed Mail/DAV issuance and refresh, exact claims, and denial of
+Firefly authorization requests. No existing Firefly-bearing shared-client grants
+needed revocation. Full mail/DAV/SOGo client acceptance remains incomplete. No
+proposed validator or Firefly API-guard patch has been implemented.
+
+## Inconsistencies and concerns
+
+1. **Credentials:** users obtain them in Authentik for Mail/DAV, but in applications
+   for most other APIs. Application backend integrations also retain their keys.
+2. **Sessions:** applications, outpost sessions, OAuth grants, app passwords, and
+   persistent protocol connections have different lifecycles.
+3. **Authorization:** roles generally synchronize at login. Group removal is not
+   token revocation, and an outpost request is not necessarily a fresh policy check.
+4. **Identity:** initial email linking, stable subjects/UUIDs, and explicit resource
+   principals coexist. Shared principals need an explicit actor/audit model.
+5. **Logout:** configured callbacks are not proof of delivery or equivalent account-
+   disable, group-removal, and credential-revocation behaviour. API keys generally
+   sit outside browser logout.
+6. **Maintenance:** the baseline already includes considerable custom code. Compare
+   new designs against the code they would replace, not an imaginary patch-free
+   baseline. A universal interface can still conceal many protocol-specific adapters.
+
+Authentik itself also carries fixes for tracking relying-party logins beyond token
+expiry and for logout after unrelated unfinished flows. These improve event
+handling; they do not create universal revocation guarantees.
+
+The open question is which inconsistency matters most: credential management,
+predictable access removal, or bespoke implementation cost. No decision to replace
+all native API authentication has been made. See [the alternatives](todo/gablogin-api-auth.md).
+
+## Source map
+
+- [Authentik blueprints and service](../hosts/nixos/alcyone/services/authentik/)
+- [Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),
+  [Firefly](../hosts/nixos/alcyone/services/firefly.nix),
+  [Mail](../hosts/nixos/alcyone/services/mail.nix),
+  [Radicale](../hosts/nixos/alcyone/services/radicale.nix),
+  [SOGo](../hosts/nixos/alcyone/services/sogo6.nix)
+- [Immich](../hosts/nixos/merope/services/immich.nix),
+  [Jellyfin](../hosts/nixos/merope/services/media/jellyfin/),
+  [Seerr](../hosts/nixos/merope/services/media/jellyseerr.nix),
+  [Calibre-Web](../hosts/nixos/merope/services/media/calibre-web.nix)
+- [Overlays](../overlays/), [custom packages](../pkgs/), [backup assessment](backups.md)

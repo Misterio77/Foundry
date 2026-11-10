@@ -1,305 +1,190 @@
-# Mail and DAV authentication
+# Mail, DAV, and SOGo: authentication boundaries
 
-Mail stays on simple-nixos-mailserver (Postfix/Dovecot); calendars and contacts
-stay on Radicale. Both share one Gablogin OAuth authorization, but have separate
-application entitlements and resource identities. Both also accept Authentik app
-passwords for clients without configurable OAuth support.
+These are the existing central-credential integrations, not a completed universal
+Gablogin API layer. See [the service inventory](authentik.md) for the fleet and
+[the alternatives](todo/gablogin-api-auth.md) for decisions still under evaluation.
 
-IMAP 993, SMTP submission 465 and DAV are restricted to the tailnet. Public SMTP
-25 does not offer authentication. Radicale's collection-management UI uses Gablogin
-browser SSO on the same tailnet-only DAV hostname.
+The comparison baseline is `5b0316a5`; current checked-in scope names include the
+`vksqkonk` scoped-client change. Configuration, upstream-code inspection, isolated
+tests, and live client acceptance are different kinds of evidence.
 
-## Configuration boundaries
+## Who authenticates what?
 
-- `authentik/authorization.yaml`: groups and the common application-access policy.
-- `authentik/mail.yaml`: Mail's `access` entitlement, mailbox claims and the
-  app-password provider.
-- `authentik/dav.yaml`: Radicale's `access` entitlement, principal claims and the
-  embedded proxy outpost.
-- `authentik/gablogin-cli.yaml`: shared scoped OAuth client, consent, PKCE and federation.
-- `services/mail.nix`: mailbox provisioning, aliases, delivery and Dovecot auth.
-- `services/radicale.nix`: trusted-header authentication, storage and network ACLs.
-- `home/gabriel/features/productivity/accounts/personal.nix`: Oama and clients.
+| Consumer | Credential | Validation and identity |
+| --- | --- | --- |
+| IMAP/SMTP OAuth client | Authentik access token | Dovecot calls userinfo; `mail_account` selects mailbox |
+| IMAP/SMTP legacy client | Authentik username + app password | Separate `mail-app-passwords` password-grant provider; username checked, mailbox mapped |
+| DAV OAuth client | Authentik access token | Outpost introspection/federation; trusted principal forwarded by Nginx |
+| DAV legacy client | Basic username + app password | Outpost client-credentials exchange; trusted principal forwarded |
+| DAV browser | Outpost session cookie | Outpost session; trusted principal forwarded |
+| SOGo browser | SOGo OIDC login/session | Separate confidential client; user token delegated to mail and DAV |
+| Application SMTP sender | Dedicated local SMTP credential | Existing mail-server account, outside personal Gablogin authentication |
 
-These are static blueprints; mailbox declarations do not generate Authentik users
-or attributes. See [Gablogin authorization](authentik.md#access) for all apps.
+IMAP 993, submission 465, and DAV are tailnet-restricted. Public SMTP 25 does not
+offer authentication. SOGo is the web frontend at `mail.m7.rs`, not the validator
+for external IMAP/SMTP clients.
 
-## Entitlements and principals
+## Entitlements and resource identities
 
-Mail (`mail`) and Radicale (`radicale`) each own an `access` entitlement. Both
-`trusted` and `admin` receive both entitlements; `user` and `authentik-admin` do not.
-There is no mail/DAV administration role. Entitlements may also be assigned
-individually, including mail-only or DAV-only access.
+Mail and Radicale each own an `access` entitlement. `trusted` and `admin` receive
+both; individual grants can permit only one. There is no Mail/DAV admin role.
+SOGo admission requires both services.
 
-The shared `gablogin-cli` application requires an active user, S256 PKCE, and
-`access` to every requested service (`mail`, `dav`, or `firefly`). Requests must
-explicitly include `openid` and at least one service scope; omitted, unknown,
-repeated scope parameters and silently normalized scope sets are rejected.
-`offline_access` enables renewal. Its public client permits authorization-code
-and refresh-token grants, with five-minute access tokens, thirty-day refresh
-tokens and rotation on every renewal. Explicit consent displays the requested
-services. Its callback is `http://127.0.0.1:8765/callback`.
+- **Mail:** `mail_principal` must be a nonblank canonical mailbox address. Missing
+  principals emit no mail identity. Username and editable profile email do not
+  select the mailbox. Nix must separately declare the mailbox and delivery aliases.
+- **DAV:** `dav_principal` overrides the immutable Authentik UUID. It selects storage
+  identity, ownership, and share recipients. Username is a separate display/login
+  field, not an authorization identifier.
+- **Shared principals:** mapping multiple actors to the same resource intentionally
+  shares access. Changes affect existing storage URLs, shares, and identity mapping;
+  they are not merely display-name edits.
 
-This is the issuance phase of the [shared API project](todo/gablogin-api-auth.md),
-not completion of consumer hardening. Firefly does not yet accept these tokens;
-DAV's refresh-token rejection and continuous authorization remain pending.
+Principals and proxy identity attributes must remain administrator-controlled.
+Application access does not provision resources automatically.
 
-Resource identities are administrator-managed user attributes:
+## Shared OAuth and the scoped-client change
 
-```yaml
-mail_principal: hi@m7.rs
-dav_principal: hi@m7.rs
-```
+At the baseline, `mail-and-dav` admitted an active user with access to either
+service. Mail used `urn:ietf:params:oauth:scope:mail`; DAV identity came through
+`profile` and proxy mappings. There was no explicit service-consent screen.
 
-- `mail_principal` is the canonical mailbox address. It is required: absent or
-  blank principals emit no mail identity claims. Neither username nor editable
-  profile email selects a mailbox. The mailbox must also exist in Nix.
-- `dav_principal` overrides the storage identity. Without an override, Radicale
-  uses the immutable Authentik user UUID. Gabriel's override preserves the
-  existing `hi@m7.rs` collections.
+The checked-in replacement, `gablogin-cli`, requires explicit `openid` plus one
+or both service scopes, `mail` and `dav`. Authorization requires access to every
+requested service and explicit consent. Unknown/omitted scopes, repeated scope
+parameters, and normalization differences are rejected rather than silently
+broadening or narrowing the request.
 
-Do not expose these attributes, or proxy `additionalHeaders`, in self-service
-prompts. Assigning the same principal to two users intentionally shares the same
-resource; ordinary users should have distinct principals.
+It is a public client with mandatory S256 PKCE, authorization-code and refresh
+grants only, and the strict callback `http://127.0.0.1:8765/callback`. Access tokens
+last five minutes; refresh tokens last thirty days and rotate on renewal.
+`offline_access` requests renewal capability. The configured oama entry requests
+`openid offline_access mail dav`; service mappings isolate the resulting claims.
 
-## Mail authentication and provisioning
+Authorization requests containing `firefly` are denied. During refresh, the pinned
+provider can silently discard unsupported scopes rather than return an error;
+live tests confirmed that adding `firefly` did not grant it or emit its identity.
 
-The `mail` scope emits `mail_account` from the
-principal and `mail_username` from the Authentik username, only for active users
-with Mail's `access` entitlement and a configured principal.
+Changing configured scopes does not narrow an existing refresh grant. Narrower
+access requires reauthorization and revocation of grants whose authority should
+end. The existing oama patch retains replacement refresh tokens; personal clients
+serialize token retrieval to avoid refresh-rotation races.
 
-OAuth-capable clients supply a bearer token. Dovecot validates it online through
-Authentik's userinfo endpoint, checks `mail_account`, and selects that mailbox.
-There is no locally distributed JWT key or confidential introspection credential.
+SOGo retains its own confidential OIDC client, five-minute access tokens and
+one-day refresh tokens. Its current scopes include `openid profile mail dav
+ak_proxy offline_access`; it is not switched to the shared CLI client.
 
-Other clients supply their Authentik username and **app password**, not their
-account password. Dovecot exchanges those credentials through the separate
-`mail-app-passwords` password-grant client, checks `mail_username`, then selects
-`mail_account`. This provider is attached to the Mail application and uses the
-same entitlement and identity mapping as the shared client.
+Firefly is deliberately excluded: the client offers no `firefly` scope or Firefly
+identity mapping. Firefly retains its proxy browser login and native API tokens.
+Scoped Mail/DAV issuance stands alone without the broader gateway proposal.
 
-To provision another user's inbox:
+## Mail validation
 
-1. Add a canonical account to `mailserver.accounts` in `services/mail.nix`, with
-   `hashedPassword = "!"` and any delivery aliases. Deploy the mail configuration.
-2. Set the user's `mail_principal` to that exact canonical address in Authentik.
-3. Grant Mail's `access` entitlement, usually through `trusted` or `admin`.
-4. Configure OAuth using the canonical address, or app-password authentication
-   using the Authentik username.
+Dovecot forces online userinfo validation. The mail mapping emits `mail_account`
+and `mail_username` only when the user is active, has Mail access, and has a valid
+mail principal. Userinfo evaluates mappings afresh rather than simply returning
+all identity claims captured at token issuance.
 
-Aliases belong to Postfix/Nix, not Authentik. The existing domain catch-alls still
-route unmatched addresses to `hi@m7.rs`; explicit recipients can have separate
-mailboxes. Service senders retain their independent local SMTP credentials.
-Granting an entitlement does not provision an inbox or change delivery routing.
+App passwords use the separate Mail provider, not a password grant on the shared
+CLI client. Personal local mailbox passwords are locked. App-password labels do
+not scope credentials to a particular service; the user's entitlements and each
+consumer's validation determine access. A per-device credential limits the impact
+of revoking that credential, but not inherently the services it can authenticate.
 
-## DAV authentication
+The pinned userinfo path rejects refresh and ID tokens. This does not replace an
+audit of allowed issuing clients/providers and required service scopes. A valid
+signature or common issuer alone is not a sufficient resource authorization rule.
 
-nginx authenticates each DAV request through Authentik's embedded proxy outpost.
-The outpost accepts username/app-password Basic authentication and bearer tokens;
-`jwt_federation_providers` permits tokens from the shared OAuth client.
+Existing authenticated IMAP connections are a separate boundary: fresh online
+authentication checks do not continuously reauthenticate them.
 
-The custom `dav` scope mapping emits `X-Foundry-DAV-Principal` only for active users
-with Radicale's `access` entitlement, otherwise an empty principal. This mapping
-is an authorization boundary: native federated bearer authentication does not
-recheck the Radicale application's admission policy. It runs after `ak_proxy`
-and overrides headers supplied by user/group attributes.
+## DAV validation and browser sessions
 
-nginx takes the principal only from the outpost response, passes it as
-`X-Remote-User` to loopback-only Radicale, and strips Authorization and cookies.
-Radicale uses `owner_only` rights. Client-supplied identity headers cannot select
-a different user's collections, and an empty principal cannot access them.
+Nginx authenticates DAV requests through the embedded outpost. Federation permits
+shared-client and SOGo tokens. The DAV mapping supplies the authoritative principal;
+Nginx overwrites client identity headers and forwards `X-Remote-User` to loopback-
+only Radicale, stripping Authorization and cookies.
 
-Explicit Authorization credentials take precedence over browser cookies: nginx
-removes cookies before header authentication and suppresses session-cookie issuance.
-Invalid Basic/Bearer credentials therefore receive 401 even alongside a valid
-browser cookie. Without an Authorization header, an outpost browser session may
-authenticate the request.
+The existing Nginx configuration already provides these protections:
 
-Only unauthenticated HTML GET/HEAD navigation redirects to Gablogin. DAV methods
-and non-HTML requests receive Basic/Bearer challenges. Clients discover their own
-principal from `https://dav.m7.rs/` rather than hardcoding storage URLs.
+- Explicit Authorization removes browser cookies from the outpost request, so
+  invalid explicit credentials cannot fall back to a valid browser session.
+- Header-auth responses do not expose newly minted outpost session cookies.
+- DAV authentication failures use 401/challenges instead of browser login HTML;
+  only unauthenticated browser navigation redirects to Gablogin.
+- Cookie-authenticated writes require the exact DAV Origin. Explicit credential
+  requests authenticate independently of cookies.
 
-## Browser collection management
+These are existing compensations for outpost behaviour, not entirely missing
+features that require a new global validator.
 
-The **Radicale** dashboard tile opens `https://dav.m7.rs/.web/`. Its built-in UI
-manages calendars/address books and imports/exports; SOGo remains the richer
-Mail/DAV frontend. `prefer_browser_login` allows the UI's initial discovery request
-to use its outpost cookie without another credential prompt.
+### Remaining validation concerns
 
-The existing embedded outpost handles login at `/outpost.goauthentik.io/`; no new
-OAuth client, custom session service or public network exposure is introduced.
-Current DAV entitlements, UUID/principal overrides and SOGo/shared-client federation
-remain unchanged. Private collections retain `owner_only` rights; native mapped
-shares provide explicit access through aliases in the recipient's own DAV home.
+The pinned outpost caches successful Authorization headers for roughly 60 seconds.
+Its bearer path trusts active introspection results; core introspection also
+supports refresh tokens and can return claims captured at issuance. Federated
+bearer authentication does not itself rerun the target application's admission
+policy. Consequently:
 
-Browser sessions are independent credentials. Revoking an app password or OAuth
-grant does not end an independently established browser session, and browser logout
-does not revoke independent client grants. Authentik's native outpost back-channel
-logout invalidates matching proxy sessions. Treat entitlement, account-status and
-principal changes as requiring explicit session termination rather than assuming
-continuous authorization re-evaluation.
+- Renaming a scope is not proof that the consumer enforces the intended scope.
+- Current entitlement/principal changes are not guaranteed to appear immediately.
+- The cache interval is not a universal end-to-end revocation bound: browser
+  sessions, token claims, and protocol connections have their own lifetimes.
+- A resource server must distinguish access tokens from other active token types.
+  Supporting refresh-token introspection in core is not intrinsically a defect;
+  accepting that response as resource authorization is the relevant concern.
 
-The original integration (`1f4ddbf0`, later removed in `8da12022`) had live multi-user,
-credential-precedence and cookie-replay/logout checks. That historical evidence is
-not a substitute for acceptance of this restoration.
+Our embedded outpost runs the Rust implementation. The source tree also contains
+older Go proxy code; a patch to that code alone would not harden this path.
 
-## Usernames and Apple configuration profiles
+## Sharing and directory integration
 
-The web heading displays the Gablogin **username**, while DAV principal URLs,
-collection ownership and sharing continue to use the UUID/`dav_principal` identity.
-Collection titles are unchanged. The Authentik mapping emits a separate percent-encoded
-`X-Foundry-DAV-Username` header; nginx takes it only from the authentication response
-and overwrites any client-supplied value before forwarding. The Radicale patch uses
-it solely for presentation/profile login fields with trusted-proxy authentication.
-It never changes the authenticated principal or authorizes a request.
+Radicale retains `owner_only` rights with native Share by Map enabled. Owners can
+grant read-only or read/write access; token/link sharing is disabled. Recipients
+accept/show mapped shares in their own homes. This is application resource
+permission management, not another Authentik entitlement.
 
-The web UI's **Mobileconfig** download configures CalDAV and CardDAV with that
-username, `dav.m7.rs`, HTTPS port 443, and `/` for principal discovery. Profile
-identifiers remain based on the stable DAV principal. No password or OAuth token is
-embedded: use a dedicated Authentik app password when the device asks for credentials.
-The device still needs tailnet access; the profile does not configure VPN access.
-Actual Apple-device installation remains an acceptance check.
+A server-side adapter supports username-to-principal lookup for the sharing UI.
+Its separate `svc-radicale-directory` Authentik account can read users and user
+application visibility. Although only username/principal pairs reach the browser,
+its API permissions can read broader user records, so the credential stays
+server-side. Directory policy caching can delay access changes; directory lookup
+is not the DAV request-authentication boundary.
 
-After deploying the new username mapping, use a fresh Radicale SSO session if the
-heading still shows the principal. Missing username claims fall back to the principal,
-so an older session can still generate a profile with an unsuitable login name.
+Mobileconfig generation uses the Authentik username for login and embeds no
+password or token. It does not provide VPN access or turn an app password into a
+service-scoped credential. Sharing metadata and collection data belong together
+for persistence and recovery.
 
-## Sharing calendars and address books
+## Evidence and remaining acceptance
 
-Radicale 3.9.0 provides native **Share by Map** management in its web UI. Mapped
-sharing and user-created mappings are enabled; token/link sharing remains disabled.
-No shared credentials or broader rights file are needed. New API shares default to
-read-only; owners can deliberately grant read/write in the UI.
+The scoped issuance work passed live authorization, consent, claim isolation,
+PKCE, refresh rotation/replay, narrowing, revocation, and negative authorization
+tests. Oama was reauthorized successfully. This is not full mail/DAV/SOGo client
+acceptance or proof of the proposed consumer-hardening contract.
 
-1. On an owned collection, open **Share**, then **New Share by Map**. Search/select
-   the recipient's exact Gablogin username in **Share User**. The picker resolves it
-   to their existing UUID/`dav_principal`; it does not change storage identities.
-   Unknown names and partial matches cannot be submitted. Existing shares retain
-   their immutable principal when edited.
-2. Choose permissions and leave the share enabled and not hidden. **Share Href** is
-   a single collection-name component (the generated value is fine), not a full URL:
-   it becomes `/<recipient-principal>/<share-href>/`.
-3. The recipient opens Radicale and enables/shows the incoming share using its
-   controls. Individual-recipient shares start disabled and hidden on their side.
-4. Once accepted and shown, the alias is returned by normal depth-one home discovery.
-   Refresh/reconnect clients as needed. This matches SOGo's existing direct-child
-   discovery model; live SOGo UI acceptance is still required, not established by
-   protocol tests alone.
+Outstanding evaluation should cover:
 
-Sharing grants access to the existing collection, not a copy. Owners can change
-permissions, disable or delete the mapping. Read/write recipients can change/delete
-items; deleting a share through the sharing UI does not delete the owner's collection.
-Recipients cannot elevate permissions or re-share another owner's private collection.
-The picker is advisory, not a new authorization mechanism: the native sharing API
-still takes principals and enforces its own permissions. Principal changes require
-reviewing existing shares as well as client configuration.
+- Actual IMAP sync, SMTP submission, CalDAV/CardDAV reads and writes, and SOGo
+  mail/calendar/contact operations, including renewal.
+- OAuth and app passwords; inactive users, removed entitlements, missing
+  principals, separate users/resources, and expired/revoked credentials.
+- Wrong-service/provider tokens and refresh/ID tokens at the resource endpoint,
+  not merely at userinfo or the authorization endpoint.
+- Invalid explicit credentials alongside valid cookies, forged identity headers,
+  browser CSRF protection, and absence of usable cookies from header auth.
+- Browser logout versus OAuth-grant/app-password revocation, independent sessions,
+  established IMAP connections, and actual cache/expiry boundaries.
+- Sharing and Apple client behaviour through the real authentication boundary,
+  rather than relying only on isolated Radicale/proxy tests.
 
-The same-origin `GET /.sharing-users` endpoint is tailnet-only and authenticated by
-the existing DAV outpost. nginx strips credentials and overwrites identity headers
-before forwarding to Radicale. Its server-side adapter uses Authentik's supported
-`core/users/` and `core/applications/?slug=radicale&for_user=<pk>` APIs. The latter
-evaluates the application's access policy for the target user, including the native
-entitlement/group rules; the adapter does not reimplement those rules. Authentik's
-policy-result cache can delay visibility of access changes by up to five minutes.
+No decision has been made to replace these integrations or mandate zero caching.
+A predictable, measured revocation bound is an option under discussion.
 
-The adapter checks the caller's active status, allowed application and
-username/principal pairing, then lists active human accounts allowed to access
-Radicale. Service accounts, invalid principals and duplicate/ambiguous principals
-are omitted. Only username/principal pairs reach the browser, including the caller
-for self-targeted calendar conversions. DAV users can therefore discover one
-another's usernames and principals (some legacy principals are email-shaped); no
-additional profile fields are exposed. “Shared by” resolves through the same
-directory, with the principal retained in the tooltip. Failed or missing lookups
-fall back to principal labels without blocking collection or share controls.
+## Sources
 
-Results are not HTTP-cached or stored in browser persistence. The picker reloads on
-each dialog opening, cancels outstanding lookups when closed, and refuses creation
-if lookup fails; it never silently interprets an unknown name as a principal. A stale
-SSO session lacking the username claim needs a fresh login. Directories larger than
-500 active human accounts fail closed rather than presenting a partial list.
-
-The `svc-radicale-directory` service account has only `authentik_core.view_user` and
-`authentik_core.view_user_applications`, granted by the `radicale-directory-reader`
-role. These allow reading full user API records and application visibility, not
-just the two fields exposed by the adapter; the token must remain server-only.
-The account has no superuser, impersonation or user-management grant. Its API token
-is `authentik-radicale-directory-token` in alcyone's existing `secrets.yaml`, supplied
-to Radicale through systemd `LoadCredential`. The DAV-directory blueprint reconciles
-the account, role and token, with the key supplied through Authentik's SOPS-rendered
-environment. Rotate it by replacing that SOPS value and redeploying both services.
-No additional daemon or private Authentik endpoint/patch is needed.
-
-Share metadata uses Radicale's `files` backend under
-`/var/lib/radicale/collections/collection-db/files`, inside the existing persistent
-and Borg-backed DAV tree. Restore share metadata and collection data together.
-Rolling configuration back to disabled sharing hides mappings but does not erase
-that persisted metadata.
-
-Cookie-authenticated requests other than GET/HEAD/OPTIONS require the exact Origin
-`https://dav.m7.rs`; missing, null and cross-origin values are denied. This protects
-the form-capable sharing API from cross-site writes. Explicit Authorization requests
-still use their own credentials independently of cookies and do not require Origin.
-
-Isolated tests against the packaged Radicale verified recipient acceptance/home
-listing, read-only/read-write access, unrelated-user and escalation denial, disabled
-token sharing, immediate mapping revocation, restart persistence, and owner-data
-preservation after share deletion. An actual nginx fixture checked the evaluated
-origin maps. These are not production SSO or browser-UI acceptance results.
-
-## Client setup and credential lifetime
-
-Authorize the shared client once:
-
-```sh
-oama authorize gablogin hi@m7.rs --nohint
-```
-
-The configured scopes are `openid offline_access mail dav`. DAV-only clients can
-omit `mail`, and mail-only clients can omit `dav`. The shared client does not offer
-`profile` or `ak_proxy`; service mappings emit only their authoritative identity
-fields, without arbitrary user/group proxy attributes. Requesting a scope does
-not grant its underlying entitlement.
-
-Changing oama's scopes requires reauthorization; refreshing preserves the original
-grant. Revoke old grants when removing their authority. Existing `mail-and-dav`
-grants are not migrated or preserved.
-
-Mbsync uses XOAUTH2, msmtp uses OAUTHBEARER, and vdirsyncer obtains bearer tokens
-through its token command. All personal-account clients serialize `oama access`
-with `$XDG_RUNTIME_DIR/oama-personal.lock` to avoid rotating-refresh-token races.
-Vdirsyncer refetches the token and retries once after HTTP 401. Keep collections
-and local sync state when changing credentials.
-
-For app-password clients, use an individual credential per device and explicitly
-choose its expiry. The `trusted` and `admin` groups permit user-created tokens up
-to 365 days; this is a group-wide ceiling, not a service-scoped credential grant.
-It does not extend existing credentials.
-
-The outpost caches successful Authorization headers for 60 seconds, so revoked
-credentials may work for approximately one cache interval. Its native
-introspection also accepts refresh tokens; clients must send only access tokens.
-Dovecot's online validation rejects expired/revoked access tokens, refresh tokens
-and ID tokens, but revocation does not terminate an authenticated IMAP connection.
-
-Entitlement/group removal is not token revocation. Refresh grants do not rerun
-application admission, and already-issued tokens can retain claims. Revoke access
-and refresh tokens, or app passwords, when removing a client's access; terminate
-established service sessions separately if immediate removal is needed.
-
-## Acceptance checks
-
-After deployment, verify actual IMAP sync, SMTP submission, and CalDAV/CardDAV
-read/write. Check separate users/mailboxes and DAV collections, mail-only and
-DAV-only entitlements, no entitlement, inactive users, and missing mail principals.
-Exercise OAuth and app passwords, refresh, incorrect/revoked credentials,
-principal-header spoofing, and cookie-only requests. For browser SSO, verify dashboard
-launch without a second login, collection creation, cross-user isolation, invalid
-header rejection despite valid cookies, and no session cookies from header auth.
-Replay captured cookies after logout and administrative session termination while
-checking independent browser sessions and client grants remain usable. Use disposable
-collections only. Confirm public SMTP lacks AUTH and submission/IMAP/DAV remain
-tailnet-restricted.
-
-Local expression checks and Nix builds do not establish protocol or live
-acceptance. Temporary tests belong outside the repository until there is a
-shared Authentik test harness.
+[Mail](../hosts/nixos/alcyone/services/mail.nix),
+[Radicale](../hosts/nixos/alcyone/services/radicale.nix),
+[SOGo](../hosts/nixos/alcyone/services/sogo6.nix),
+[Authentik blueprints](../hosts/nixos/alcyone/services/authentik/),
+[personal client configuration](../home/gabriel/features/productivity/accounts/personal.nix).
