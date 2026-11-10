@@ -73,8 +73,8 @@ roles. Authentik administration is separate from application administration.
 
 | Group | Application access | Application administration |
 | --- | --- | --- |
-| `user` | Grafana, Immich, Jellyfin, Seerr, Calibre-Web | None |
-| `trusted` | Those services plus Mail, Radicale, Firefly | None |
+| `user` | Grafana, Immich, Jellyfin, Seerr, Calibre-Web, Firefly | None |
+| `trusted` | Those services plus Mail, Radicale | None |
 | `admin` | All of the above | Grafana, Immich, Jellyfin, Seerr, Firefly |
 | `authentik-admin` | No application access implied | Authentik superuser only |
 
@@ -211,9 +211,15 @@ uses its own authentication. It is not the Calibre-Web/Gablogin integration.
 
 ### Firefly — proxy browser login, native API authentication
 
-At tailnet-restricted `firefly.m7.rs`, the outpost authenticates browser requests.
-Nginx passes trusted CGI variables to the remote-user guard; client HTTP headers
-cannot supply those variables.
+At public `firefly.m7.rs`, the outpost authenticates browser requests. Nginx passes
+trusted CGI variables to the remote-user guard; client HTTP headers cannot supply
+those variables. The `user`, `trusted`, and `admin` tiers all receive application
+access; only the `admin` tier receives the admin entitlement.
+
+Public reachability does not permit anonymous financial-data access. Browser
+requests still require Gablogin, and API requests still require Passport
+credentials. Native PATs are now usable without tailnet membership; their
+independent lifetime and revocation remain unchanged.
 
 - `firefly_principal` or the UUID selects the financial identity. The identity
   mapping supplies display information and an admin flag; our integration
