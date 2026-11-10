@@ -1,4 +1,8 @@
-{config, ...}: let
+{
+  config,
+  pkgs,
+  ...
+}: let
   port = "5232";
 in {
   sops.secrets.authentik-radicale-directory-token = {
@@ -41,6 +45,7 @@ in {
         };
       };
     };
+    nginx.additionalModules = [pkgs.nginxModules.moreheaders];
     nginx.appendHttpConfig = ''
       map $http_authorization $dav_request_cookie {
         default "";
@@ -59,6 +64,11 @@ in {
       map "$dav_cookie_write_allowed:$http_authorization:$http_cookie" $dav_reject_cookie_write {
         default 0;
         ~^0::.+$ 1;
+      }
+      # This marker only changes the challenge, never authentication or CSRF checks.
+      map "$http_x_radicale_web:$dav_browser_navigation" $dav_challenge {
+        default 'Basic realm="Gablogin DAV", Bearer realm="Gablogin DAV"';
+        ~^(1:|.*:1$) "";
       }
       map "$request_method:$http_accept" $dav_browser_navigation {
         default 0;
@@ -104,6 +114,7 @@ in {
                 return 405;
               }
               auth_request /_dav_auth;
+              error_page 401 = @dav_unauthorized;
               auth_request_set $dav_directory_principal $upstream_http_x_foundry_dav_principal;
               auth_request_set $dav_directory_username $upstream_http_x_foundry_dav_username;
               auth_request_set $dav_directory_cookie $dav_outpost_cookie;
@@ -157,6 +168,8 @@ in {
             '';
           };
           "@dav_unauthorized".extraConfig = ''
+            # auth_request copies the outpost challenge even through error_page.
+            more_set_headers 'WWW-Authenticate: $dav_challenge';
             add_header Set-Cookie $dav_set_cookie always;
             if ($http_authorization != "") {
               return 401;
@@ -164,8 +177,6 @@ in {
             if ($dav_browser_navigation) {
               return 302 /outpost.goauthentik.io/start?rd=https://dav.m7.rs/.web/;
             }
-            add_header WWW-Authenticate 'Basic realm="Gablogin DAV"' always;
-            add_header WWW-Authenticate 'Bearer realm="Gablogin DAV"' always;
             return 401;
           '';
         };

@@ -1,0 +1,60 @@
+--- a/radicale/web/internal_data/js/api/common.js
++++ b/radicale/web/internal_data/js/api/common.js
+@@ -21,6 +21,21 @@
+  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
++function renew_browser_session(status) {
++    if (status === 401) {
++        window.location.replace('/outpost.goauthentik.io/start?rd=' +
++            encodeURIComponent(window.location.origin + '/.web/'));
++    }
++}
++
++export async function browser_fetch(url, options = {}) {
++    const headers = new Headers(options.headers);
++    headers.set('X-Radicale-Web', '1');
++    const response = await fetch(url, { ...options, headers });
++    renew_browser_session(response.status);
++    return response;
++}
++
+ /**
+  * @param {XMLHttpRequest} request
+  * @returns {string}
+@@ -54,6 +69,8 @@
+ export function create_request(method, url, user, password) {
+     let request = new XMLHttpRequest();
+     request.open(method, url, true);
++    request.setRequestHeader('X-Radicale-Web', '1');
++    request.addEventListener('load', () => renew_browser_session(request.status));
+     let auth = get_auth_header(user, password);
+     if (auth !== null) {
+         request.setRequestHeader('Authorization', auth);
+--- a/radicale/web/internal_data/js/scenes/LoginScene.js
++++ b/radicale/web/internal_data/js/scenes/LoginScene.js
+@@ -20,6 +20,7 @@
+  */
+ 
+ import { get_principal } from "../api/api.js";
++import { browser_fetch } from "../api/common.js";
+ import { PREFER_BROWSER_LOGIN } from "../config.js";
+ import { ROOT_PATH, SERVER } from "../constants.js";
+ import { Collection } from "../models/collection.js";
+@@ -165,7 +166,7 @@
+ 
+         // Probe for existing authentication (e.g. X-Remote-User)
+         // Use fetch with credentials: 'omit' to avoid browser login prompt on 401
+-        fetch(SERVER + ROOT_PATH, {
++        browser_fetch(SERVER + ROOT_PATH, {
+             method: 'PROPFIND',
+             headers: { 'Depth': '0' },
+             credentials: PREFER_BROWSER_LOGIN ? 'include' : 'omit'
+--- a/radicale/web/internal_data/js/scenes/CollectionsScene.js
++++ b/radicale/web/internal_data/js/scenes/CollectionsScene.js
+@@ -23,1 +23,1 @@
+-import { create_request, get_auth_header } from "../api/common.js";
++import { browser_fetch, create_request, get_auth_header } from "../api/common.js";
+@@ -517,1 +517,1 @@
+-        fetch(url, { headers: headers }).then((response) => {
++        browser_fetch(url, { headers: headers }).then((response) => {

@@ -50,7 +50,7 @@ in {
 
     immich = addPatches prev.immich [./immich-oidc-avatar.patch];
 
-    radicale = addPatches prev.radicale [./radicale-login-username.patch ./radicale-share-picker.patch];
+    radicale = addPatches prev.radicale [./radicale-login-username.patch ./radicale-share-picker.patch ./radicale-browser-login.patch];
 
     grafana = assert final.lib.versions.majorMinor prev.grafana.version == "13.3";
       prev.grafana.overrideAttrs (old: {
