@@ -47,6 +47,8 @@ in {
             extraConfig = ''
               auth_request /_calibre-web_auth;
               error_page 401 = @calibre-web_login;
+              # A location-level error_page disables all server-level inheritance.
+              error_page 502 503 504 /__nginx_unavailable.html;
               auth_request_set $calibre_web_subject $upstream_http_x_foundry_calibre_web_subject;
               auth_request_set $calibre_web_username $upstream_http_x_foundry_calibre_web_username;
               auth_request_set $calibre_web_email $upstream_http_x_foundry_calibre_web_email;
