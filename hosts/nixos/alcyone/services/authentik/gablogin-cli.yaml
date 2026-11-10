@@ -1,0 +1,106 @@
+version: 1
+metadata:
+  name: Foundry - Gablogin CLI
+entries:
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - Mail
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - DAV
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: client
+    identifiers:
+      name: Gablogin CLI
+    attrs:
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: public
+      client_id: gablogin-cli
+      issuer_mode: per_provider
+      jwt_federation_providers:
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Radicale]]
+      grant_types:
+        - authorization_code
+        - refresh_token
+      redirect_uris:
+        - matching_mode: strict
+          url: http://127.0.0.1:8765/callback
+          redirect_uri_type: authorization
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      access_token_validity: minutes=5
+      refresh_token_validity: days=30
+      refresh_token_threshold: seconds=0
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+        # Service mappings emit only authoritative identity, not arbitrary proxy attributes.
+        - !Find [authentik_providers_oauth2.scopemapping, [name, foundry-mail-identity]]
+        - !Find [authentik_providers_oauth2.scopemapping, [name, foundry-dav-identity]]
+
+  - model: authentik_policies_expression.expressionpolicy
+    id: authorization
+    identifiers:
+      name: foundry-gablogin-cli-authorization
+    attrs:
+      expression: |
+        from re import fullmatch
+        from authentik.core.models import Application
+
+        http = request.http_request
+        if not request.user.is_active or http is None:
+            return False
+        if http.method != "GET" or http.path != "/application/o/authorize/":
+            return False
+        if http.GET.get("client_id") != "gablogin-cli":
+            return False
+        if request.context.get("oauth_grant_type") != "authorization_code":
+            return False
+        challenge = request.context.get("oauth_code_challenge", "")
+        if (
+            request.context.get("oauth_code_challenge_method") != "S256"
+            or not isinstance(challenge, str)
+            or fullmatch(r"[A-Za-z0-9_-]{43}", challenge) is None
+        ):
+            return False
+
+        # Normalized oauth_scopes silently defaults/filters; validate the raw request too.
+        raw_scopes = http.GET.getlist("scope")
+        if len(raw_scopes) != 1:
+            return False
+        scopes = set(raw_scopes[0].split())
+        services = {"mail": "mail", "dav": "radicale"}
+        requested = scopes.intersection(services)
+        if not requested or "openid" not in scopes:
+            return False
+        if not scopes.issubset(set(services) | {"openid", "offline_access"}):
+            return False
+        if scopes != set(request.context.get("oauth_scopes", [])):
+            return False
+
+        apps = Application.objects.filter(slug__in=[services[scope] for scope in requested])
+        return apps.count() == len(requested) and all(
+            request.user.app_entitlements(app).filter(name="access").exists()
+            for app in apps
+        )
+
+  - model: authentik_core.application
+    id: client-application
+    identifiers:
+      slug: gablogin-cli
+    attrs:
+      name: Gablogin CLI
+      provider: !KeyOf client
+      meta_launch_url: blank://blank
+      policy_engine_mode: all
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf client-application
+      order: 0
+    attrs:
+      policy: !KeyOf authorization
+      failure_result: false

@@ -15,13 +15,13 @@
   accessTokenCommand = ''${flock} "$XDG_RUNTIME_DIR/oama-personal.lock" ${oama} access ${address}'';
 in {
   programs.oama.settings.services.gablogin = {
-    client_id = "mail-and-dav";
+    client_id = "gablogin-cli";
     auth_endpoint = "https://auth.m7.rs/application/o/authorize/";
     auth_http_method = "GET";
     token_endpoint = "https://auth.m7.rs/application/o/token/";
     token_params_mode = "RequestBodyForm";
     redirect_uri = "http://127.0.0.1:8765/callback";
-    auth_scope = "openid profile offline_access urn:ietf:params:oauth:scope:mail ak_proxy";
+    auth_scope = "openid offline_access mail dav";
   };
 
   accounts = {

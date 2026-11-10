@@ -17,8 +17,8 @@ entries:
       name: foundry-dav-identity
     attrs:
       # Evaluated after ak_proxy, overriding any additionalHeaders attribute.
-      scope_name: profile
-      description: DAV authorization and storage identity
+      scope_name: dav
+      description: Read and manage calendars and contacts
       expression: |
         from urllib.parse import quote
         from authentik.core.models import Application

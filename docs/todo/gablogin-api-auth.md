@@ -1,6 +1,8 @@
 # Shared Gablogin API authentication
 
-Status: proposed project; implementation and live interoperability tests are pending.
+Status: in progress. Phase 1 (scoped issuance and client configuration) is
+implemented in the repository. Consumer hardening, Firefly API authentication,
+and deployment/live interoperability tests remain pending.
 
 ## Goal
 
@@ -22,8 +24,9 @@ for migration convenience.
 
 ## Existing foundation
 
-- `hosts/nixos/alcyone/services/authentik/mail-and-dav.yaml` defines a shared
-  public OAuth client with PKCE, refresh tokens, and a strict loopback callback.
+- `hosts/nixos/alcyone/services/authentik/gablogin-cli.yaml` defines a shared
+  public OAuth client with service scopes, explicit consent, PKCE, rotating
+  refresh tokens, and a strict loopback callback; it replaces `mail-and-dav`.
 - `home/gabriel/features/productivity/accounts/personal.nix` configures oama's
   `gablogin` entry for that client.
 - `overlays/oama-refresh-token-rotation.patch` already fixes upstream oama's
@@ -89,12 +92,12 @@ Add scope authorization that requires at least one service scope and access to
 **every requested service**, replacing the current mail-or-DAV access check.
 Reject unauthorized requests instead of silently implying success.
 
-Handle omitted scopes explicitly. Authentik defaults an omitted scope list to
-all configured scopes before some policy checks. Verify where raw request data
-is available and enforce explicit scope selection there; `oauth_scopes` alone
-may not distinguish omission from an explicit request for everything. Also
-verify unknown-scope handling so a misspelled scope cannot produce misleading
-consent or authorization results.
+The authorization policy checks the raw GET `scope` parameter against normalized
+`oauth_scopes`, rejecting omission, unknown scopes, repeated parameters, and
+normalization differences. It requires `openid` and at least one service scope.
+The pinned authorization view exposes both inputs and disables policy-cache reads
+for application admission. This avoids authentik's default-to-all and
+intersection-with-known-scopes behaviour.
 
 Update oama to request an explicit set, for example:
 
@@ -111,7 +114,7 @@ CLI and non-interactive consumers, not every application's browser login.
 
 Primary files:
 
-- `hosts/nixos/alcyone/services/authentik/mail-and-dav.yaml`
+- `hosts/nixos/alcyone/services/authentik/gablogin-cli.yaml`
 - Service scope mappings and authorization policies under the same directory
 - `home/gabriel/features/productivity/accounts/personal.nix`
 

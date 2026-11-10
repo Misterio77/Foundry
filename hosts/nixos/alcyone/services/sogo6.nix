@@ -32,7 +32,7 @@ in {
         SOGO_D_AUTH_TYPE = "openid";
         SOGO_D_OPENID_CONFIG_URL = "https://auth.m7.rs/application/o/sogo/.well-known/openid-configuration";
         SOGO_D_OPENID_CLIENT_NAME = "sogo";
-        SOGO_D_OPENID_SCOPE = "openid profile urn:ietf:params:oauth:scope:mail ak_proxy offline_access";
+        SOGO_D_OPENID_SCOPE = "openid profile mail dav ak_proxy offline_access";
         SOGO_D_OPENID_EMAIL = "mail_account";
         SOGO_D_OPENID_ALLOW_REDIRECT = [cfg.publicUrl];
         SOGO_D_OPENID_REFRESH_ENABLE = true;

@@ -13,7 +13,7 @@ Describes the checked-in configuration, not deployment status. Sources:
 - `branding.yaml`: Gablogin's brand, artwork URLs and default locale.
 - `authorization.yaml`: access-tier groups and the common entitlement policy.
 - Per-app blueprints: providers, claims, applications and entitlement assignments.
-- `mail-and-dav.yaml`: the shared OAuth client, PKCE and DAV federation.
+- `gablogin-cli.yaml`: shared service-scoped OAuth, explicit consent, PKCE and DAV federation.
 - Recovery, sensitive changes and password-guessing protection have their own
   flow-specific blueprints.
 
@@ -76,9 +76,11 @@ belong to `user`. Service identities are managed separately. App-role changes
 take effect according to each application's login/session behavior, not instantly
 when an entitlement changes.
 
-Mail and Radicale each have their own `access` entitlement and resource principal,
-while the shared OAuth client admits access to either service. See
-[mail authentication](mail-auth.md). Blueprints describe final state; one-time
+Mail, Radicale and Firefly each have their own `access` entitlement and resource
+principal. The shared CLI client requires access to every explicitly requested
+service scope. Token issuance is configured; shared API validation and Firefly's
+API guard are still pending in the [project plan](todo/gablogin-api-auth.md).
+See [mail authentication](mail-auth.md). Blueprints describe final state; one-time
 cleanup of superseded database objects belongs in an API migration, not deletion
 entries retained in the blueprints.
 

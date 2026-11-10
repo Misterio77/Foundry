@@ -51,7 +51,8 @@ logging is suppressed to avoid recording OAuth callback codes.
 
 The static Authentik blueprint creates a separate confidential `sogo` client with
 strict callback, S256 and an exact application-only logout exception. It requires
-both Mail and DAV access. The existing `mail-and-dav` client/grants are untouched.
+both Mail and DAV access, requesting the `mail` and `dav` service scopes.
+Its browser client is separate from the shared `gablogin-cli` client.
 The operator-supplied SOPS secret is shared through runtime credentials/environment,
 not copied from the pilot or embedded in the store.
 

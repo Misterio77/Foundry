@@ -16,7 +16,7 @@ browser SSO on the same tailnet-only DAV hostname.
   app-password provider.
 - `authentik/dav.yaml`: Radicale's `access` entitlement, principal claims and the
   embedded proxy outpost.
-- `authentik/mail-and-dav.yaml`: shared OAuth client, PKCE policy and federation.
+- `authentik/gablogin-cli.yaml`: shared scoped OAuth client, consent, PKCE and federation.
 - `services/mail.nix`: mailbox provisioning, aliases, delivery and Dovecot auth.
 - `services/radicale.nix`: trusted-header authentication, storage and network ACLs.
 - `home/gabriel/features/productivity/accounts/personal.nix`: Oama and clients.
@@ -31,11 +31,18 @@ Mail (`mail`) and Radicale (`radicale`) each own an `access` entitlement. Both
 There is no mail/DAV administration role. Entitlements may also be assigned
 individually, including mail-only or DAV-only access.
 
-The shared `mail-and-dav` application checks whether the active user has either
-service's `access` entitlement, and separately requires S256 PKCE. Its public
-client permits authorization-code and refresh-token grants, with five-minute
-access tokens and thirty-day refresh tokens. Its callback is
-`http://127.0.0.1:8765/callback`.
+The shared `gablogin-cli` application requires an active user, S256 PKCE, and
+`access` to every requested service (`mail`, `dav`, or `firefly`). Requests must
+explicitly include `openid` and at least one service scope; omitted, unknown,
+repeated scope parameters and silently normalized scope sets are rejected.
+`offline_access` enables renewal. Its public client permits authorization-code
+and refresh-token grants, with five-minute access tokens, thirty-day refresh
+tokens and rotation on every renewal. Explicit consent displays the requested
+services. Its callback is `http://127.0.0.1:8765/callback`.
+
+This is the issuance phase of the [shared API project](todo/gablogin-api-auth.md),
+not completion of consumer hardening. Firefly does not yet accept these tokens;
+DAV's refresh-token rejection and continuous authorization remain pending.
 
 Resource identities are administrator-managed user attributes:
 
@@ -57,7 +64,7 @@ resource; ordinary users should have distinct principals.
 
 ## Mail authentication and provisioning
 
-The mail scope (`urn:ietf:params:oauth:scope:mail`) emits `mail_account` from the
+The `mail` scope emits `mail_account` from the
 principal and `mail_username` from the Authentik username, only for active users
 with Mail's `access` entitlement and a configured principal.
 
@@ -91,7 +98,7 @@ nginx authenticates each DAV request through Authentik's embedded proxy outpost.
 The outpost accepts username/app-password Basic authentication and bearer tokens;
 `jwt_federation_providers` permits tokens from the shared OAuth client.
 
-The custom profile mapping emits `X-Foundry-DAV-Principal` only for active users
+The custom `dav` scope mapping emits `X-Foundry-DAV-Principal` only for active users
 with Radicale's `access` entitlement, otherwise an empty principal. This mapping
 is an authorization boundary: native federated bearer authentication does not
 recheck the Radicale application's admission policy. It runs after `ak_proxy`
@@ -247,10 +254,15 @@ Authorize the shared client once:
 oama authorize gablogin hi@m7.rs --nohint
 ```
 
-The configured scopes are
-`openid profile offline_access urn:ietf:params:oauth:scope:mail ak_proxy`.
-DAV-only clients can omit the mail scope. Requesting a scope does not grant its
-underlying entitlement.
+The configured scopes are `openid offline_access mail dav`. DAV-only clients can
+omit `mail`, and mail-only clients can omit `dav`. The shared client does not offer
+`profile` or `ak_proxy`; service mappings emit only their authoritative identity
+fields, without arbitrary user/group proxy attributes. Requesting a scope does
+not grant its underlying entitlement.
+
+Changing oama's scopes requires reauthorization; refreshing preserves the original
+grant. Revoke old grants when removing their authority. Existing `mail-and-dav`
+grants are not migrated or preserved.
 
 Mbsync uses XOAUTH2, msmtp uses OAUTHBEARER, and vdirsyncer obtains bearer tokens
 through its token command. All personal-account clients serialize `oama access`

@@ -8,7 +8,7 @@
   oauth2Settings = {
     introspection_mode = "auth";
     introspection_url = "https://auth.m7.rs/application/o/userinfo/";
-    openid_configuration_url = "https://auth.m7.rs/application/o/mail-and-dav/.well-known/openid-configuration";
+    openid_configuration_url = "https://auth.m7.rs/application/o/gablogin-cli/.well-known/openid-configuration";
     # Authentik emits the administrator-assigned principal only with mail access.
     username_attribute = "mail_account";
     force_introspection = true;
@@ -102,7 +102,7 @@ in {
           client_id = "mail-app-passwords";
           # Dovecot requires a nonempty secret even for public clients; Authentik ignores it.
           client_secret = "unused";
-          scope = ["openid" "urn:ietf:params:oauth:scope:mail"];
+          scope = ["openid" "mail"];
           username_attribute = "mail_username";
         };
     };

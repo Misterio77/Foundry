@@ -16,7 +16,7 @@ entries:
     identifiers:
       name: foundry-mail-identity
     attrs:
-      scope_name: urn:ietf:params:oauth:scope:mail
+      scope_name: mail
       description: Read and send mail
       expression: |
         from authentik.core.models import Application
