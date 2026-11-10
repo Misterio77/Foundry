@@ -9,6 +9,7 @@
     proxy_ssl_server_name on;
     proxy_ssl_name auth.m7.rs;
     proxy_ssl_verify on;
+    proxy_ssl_verify_depth 4;
     proxy_ssl_trusted_certificate ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt;
     proxy_set_header Host auth.m7.rs;
     proxy_set_header Authorization "";
