@@ -15,6 +15,42 @@ universal gateway.
 - [Directions and concerns](todo/gablogin-api-auth.md): alternatives under evaluation,
   not an approved implementation sequence.
 
+## Intended user-facing contract
+
+The goal is a consistent experience for people connecting to services, not
+identical authentication machinery inside every service:
+
+> Users should not need to learn each application's credential-management
+> procedure. Connect through Gablogin where supported; otherwise create an app
+> password in Gablogin and supply it to the client.
+
+Two paths make up that experience:
+
+- **Preferred: connect with Gablogin.** Sign in or approve the device in a browser.
+  The application can issue its own session/device token afterward; the user does
+  not need to find a token-generation page or copy an application-specific PAT.
+- **Compatibility path: a Gablogin app password.** For clients without browser
+  authorization, create a dedicated credential centrally and enter the Authentik
+  username and app password where the integration supports them. Never substitute
+  the account password. This is a deliberate fallback, not a requirement to add
+  password authentication to clients that already have a good browser flow.
+
+This is the intended surface, not a claim of universal support today. A client
+and service must both support the selected path. An ordinary API-key field does
+not necessarily accept an app password, and backend OAuth support cannot add a
+browser login flow to a client that lacks one.
+
+Native OIDC, Quick Connect, proxy identity, and protocol adapters can coexist
+behind this surface. Distinguish native credentials created automatically after
+Gablogin approval from native credentials the user must manually generate. The
+former are compatible with the vision; the latter are user-facing exceptions.
+
+This does not promise a unified device-management screen, identical revocation
+latency, or automatic revocation of every credential on browser logout. Those
+lifecycle guarantees need their own decisions and evidence. Operator-managed
+backend keys and service accounts are a separate integration concern; their
+existence alone does not break the interactive connection experience.
+
 ## Shared foundation
 
 Authentik owns account authentication, optional MFA, profile information, and
@@ -54,6 +90,28 @@ actors or make shared-user role synchronization safe.
 An application accepting OIDC login does not necessarily accept Authentik bearer
 tokens on its API. An API request authenticated by an application session is also
 not the same thing as a script using an independent API key.
+
+## How the current user experience fits
+
+| Surface | What the user does | Assessment against the intended contract |
+| --- | --- | --- |
+| Jellyfin browser/native clients | Gablogin login or Quick Connect approval | Fits without replacing Jellyfin-issued device tokens |
+| Immich browser/mobile | Native OIDC login through Gablogin | Fits for those clients; manual API-key workflows remain separate |
+| Grafana and Seerr browsers | Sign in through Gablogin | Fits for browser use; does not imply central API credentials |
+| Calibre-Web browser | Sign in through the outpost | Fits for browser use; OPDS/Kobo are disabled, not implemented fallbacks |
+| Firefly browser | Sign in through the outpost | Fits for browser use |
+| Waterfly | Obtain a Firefly PAT and configure it in the client | Known exception, deliberately unchanged for now |
+| Mail/DAV clients | Browser authorization through a capable client/tool, or Gablogin app password | Both intended paths are configured; full end-to-end acceptance remains pending |
+| Radicale browser and SOGo | Sign in through Gablogin | Fits the browser pattern; SOGo delegates backend credentials internally |
+
+Judge specific client workflows, not just whole applications. For example, an
+Immich mobile login and an automation script asking for an Immich API key expose
+different credential experiences even though both use the same service. Likewise,
+oama's browser authorization is not a built-in OAuth button in every mail client.
+
+The next proposed work is to finish acceptance of the existing Mail/DAV/SOGo
+paths, not to replace working native OIDC/device flows. Firefly remains an explicit
+exception; closing it later would be a focused integration decision.
 
 ## Service inventory
 
@@ -246,9 +304,17 @@ Authentik itself also carries fixes for tracking relying-party logins beyond tok
 expiry and for logout after unrelated unfinished flows. These improve event
 handling; they do not create universal revocation guarantees.
 
-The open question is which inconsistency matters most: credential management,
-predictable access removal, or bespoke implementation cost. No decision to replace
-all native API authentication has been made. See [the alternatives](todo/gablogin-api-auth.md).
+The clarified priority is the user-facing connection and credential-management
+experience. Different internal token types are not themselves a problem; asking
+users to discover another application's PAT-management procedure is the relevant
+break in that experience. Predictable access removal and maintenance cost remain
+constraints, not reasons to require every service to implement every mechanism.
+
+Keep existing native OIDC and Jellyfin's device flow, the scoped Mail/DAV client,
+and Firefly's current browser/API split. Further implementation is not approved
+by this assessment. See [the design direction and alternatives](todo/gablogin-api-auth.md)
+for the preferred/fallback model, unresolved lifecycle questions, and acceptance
+criteria.
 
 ## Source map
 

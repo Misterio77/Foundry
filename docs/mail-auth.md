@@ -1,8 +1,10 @@
 # Mail, DAV, and SOGo: authentication boundaries
 
-These are the existing central-credential integrations, not a completed universal
-Gablogin API layer. See [the service inventory](authentik.md) for the fleet and
-[the alternatives](todo/gablogin-api-auth.md) for decisions still under evaluation.
+These are the existing central-credential integrations and the first concrete
+examples of the intended user-facing pattern: browser authorization where the
+client supports it, or an app password created in Gablogin as the fallback.
+They are not a completed universal API layer. See [the service inventory](authentik.md)
+and [the user-facing contract](todo/gablogin-api-auth.md) for the broader direction.
 
 The comparison baseline is `5b0316a5`; current checked-in scope names include the
 `vksqkonk` scoped-client change. Configuration, upstream-code inspection, isolated
@@ -23,6 +25,41 @@ tests, and live client acceptance are different kinds of evidence.
 IMAP 993, submission 465, and DAV are tailnet-restricted. Public SMTP 25 does not
 offer authentication. SOGo is the web frontend at `mail.m7.rs`, not the validator
 for external IMAP/SMTP clients.
+
+## The client-facing experience
+
+For an OAuth-capable client or helper such as oama, the user authorizes the
+connection through Gablogin in a browser. The shared CLI client requests the
+needed Mail/DAV scopes and handles renewal through its refresh grant. The user
+should not have to copy raw access or refresh tokens between applications.
+This is configured for our personal clients; arbitrary mail/DAV clients do not
+acquire OAuth support just because the server supports it.
+
+For clients without that browser flow, the intended fallback is an Authentik
+username and a dedicated Gablogin app password. The server address, protocol,
+and client-specific fields still differ; the place to create the credential and
+the distinction from the account password should not. Mailbox/storage principals
+remain administrator-managed backend identities, not extra credentials the user
+must create.
+
+The fallback has real limits:
+
+- App passwords are global credentials constrained by account entitlements and
+  consumer validation, not service-scoped OAuth grants. A device/service label
+  does not enforce that scope or give the same least-privilege boundary.
+- A dedicated credential per client/device makes selective credential revocation
+  possible, but does not automatically terminate a browser session or an already
+  authenticated IMAP connection. Cache and session behaviour still need measurement.
+- Use a newly created app password rather than reusing one across devices. Removing
+  it should not require replacing credentials on unrelated devices; testing must
+  distinguish this from signing out the whole account.
+- Central creation is not proof of a complete central connected-device interface.
+  OAuth grants, app passwords, browser sessions, and service connections remain
+  different objects with different lifecycle controls.
+
+SOGo keeps its own browser login and delegates tokens to mail and DAV internally.
+Users should not need separate app passwords for each SOGo module. This is a good
+example of distinct backend mechanisms supporting one coherent user experience.
 
 ## Entitlements and resource identities
 
@@ -163,7 +200,14 @@ PKCE, refresh rotation/replay, narrowing, revocation, and negative authorization
 tests. Oama was reauthorized successfully. This is not full mail/DAV/SOGo client
 acceptance or proof of the proposed consumer-hardening contract.
 
-Outstanding evaluation should cover:
+Complete the existing client paths before extending this model to more services.
+Acceptance needs to cover the user's connection experience as well as the token
+endpoint. In particular, verify browser consent/return to the client, first use,
+unattended renewal, expiry/reconnect prompts, app-password setup without an account
+password, and revocation of one device credential without disrupting unrelated
+credentials. Avoid claiming these experiences from issuance tests alone.
+
+Outstanding protocol and security evaluation should cover:
 
 - Actual IMAP sync, SMTP submission, CalDAV/CardDAV reads and writes, and SOGo
   mail/calendar/contact operations, including renewal.
@@ -178,8 +222,10 @@ Outstanding evaluation should cover:
 - Sharing and Apple client behaviour through the real authentication boundary,
   rather than relying only on isolated Radicale/proxy tests.
 
-No decision has been made to replace these integrations or mandate zero caching.
-A predictable, measured revocation bound is an option under discussion.
+Keep these integrations and the Mail/DAV-only shared client. There is no new
+requirement for every client to support both methods, no selected universal
+validator, and no mandate for zero caching. Define and measure lifecycle behaviour
+without treating consistent setup instructions as a promise of instant revocation.
 
 ## Sources
 

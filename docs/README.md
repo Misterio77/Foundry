@@ -1,10 +1,10 @@
 # Operations and proposals
 
-- [Authentik / Gablogin](authentik.md): service-by-service authentication assessment, shared foundations and inconsistencies.
-- [Mail, DAV and SOGo](mail-auth.md): credential paths, validation boundaries and outstanding acceptance.
+- [Authentik / Gablogin](authentik.md): intended user experience, per-service assessment and known exceptions.
+- [Mail, DAV and SOGo](mail-auth.md): browser authorization and app-password paths, validation boundaries and client acceptance.
 - [Metrics client certificates](metrics-mtls.md): mTLS access, provisioning and rotation.
 - [Backups](backups.md): declared coverage, restore evidence and gaps.
-- [Gablogin directions](todo/gablogin-api-auth.md): alternatives, trade-offs and open questions; the universal rollout plan is under reassessment.
+- [Gablogin user-facing contract](todo/gablogin-api-auth.md): preferred browser connection, app-password fallback, implementation trade-offs and unresolved lifecycle decisions.
 - [Immich egress](todo/immich-egress.md): proposed lateral-movement containment.
 - [Atelier publishing](todo/atelier-publishing.md): unimplemented artifact boundary.
 

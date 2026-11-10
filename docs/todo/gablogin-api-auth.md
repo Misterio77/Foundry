@@ -1,14 +1,16 @@
-# Gablogin authentication: directions under evaluation
+# Gablogin: a consistent user-facing authentication experience
 
-Status: retain Firefly's existing browser SSO and native API credentials. The shared
-OAuth client is limited to Mail/DAV; the premature Firefly scope has been removed.
-Scoped issuance is implemented and live-tested. No universal validator or Firefly
-API-guard patch has been written. Broader consistency goals remain under evaluation;
-this document replaces the previous phased implementation plan.
+Direction: users connect through Gablogin where supported, or create an app
+password in Gablogin as the compatibility path. Service-specific mechanisms may
+remain underneath. The goal is a consistent surface for users, not a requirement
+that every service accept every credential type.
 
-The concern driving the reassessment is inconsistency between services and what
-“managed by Gablogin” actually means. Before choosing more machinery, distinguish
-credential-management friction, access-removal behaviour, and maintenance cost.
+Implementation status: retain Firefly's existing browser SSO and native API
+credentials as a known exception. The shared OAuth client is limited to Mail/DAV;
+scoped issuance is implemented and live-tested, with full client acceptance still
+pending. No universal validator, Firefly API-guard patch, or Waterfly OAuth patch
+has been implemented. This document supersedes the earlier phased universal rollout
+plan; the alternatives below are design context, not an execution queue.
 
 See [the service inventory](../authentik.md) and
 [Mail/DAV/SOGo boundaries](../mail-auth.md) for the existing configuration.
@@ -38,23 +40,114 @@ Complete resource-client acceptance is pending.
 This is useful standalone work. It neither makes Firefly accept Authentik tokens
 nor obliges us to implement a universal authentication layer.
 
-## Separate the goals
+## The clarified user-facing contract
 
-1. **Central identity:** one account, login, MFA, and application-admission model.
-   Largely present already.
-2. **Central credentials:** clients obtain and revoke credentials in Authentik,
-   rather than each application's API-token UI. Present for Mail/DAV, not universal.
-3. **Predictable revocation:** defined behaviour when a credential, entitlement,
-   account, or login session is revoked. These are different events and lifecycles.
-4. **Consistent integration:** fewer service-specific rules and patches. A uniform
-   user interface does not necessarily reduce the underlying adapter count.
+> Users should not need to learn a new credential-management procedure for each
+> service. Prefer connecting through Gablogin; use a centrally created app password
+> when the client cannot do browser authorization.
+
+### Preferred path: connect with Gablogin
+
+The user follows the client's login/device-approval path, authenticates through
+Gablogin, and approves the connection where required. The client can then use
+OAuth tokens, an application session, or a native device token internally.
+
+What matters is that users do not need to discover an application-specific PAT
+page, manually generate another credential, and copy it into their client.
+Jellyfin's Quick Connect flow fits this model even though the resulting token is
+issued by Jellyfin. Native OIDC browser/mobile integrations also fit; they should
+not be replaced solely to make their internal credentials look like Mail/DAV's.
+
+“Connect with Gablogin” describes the experience, not a mandate for one literal
+button or a particular OAuth grant everywhere. Device approval, native OIDC, and
+oama-assisted browser authorization can provide that experience in different ways.
+
+### Compatibility path: create an app password in Gablogin
+
+Where browser authorization is unavailable, the user creates a dedicated app
+password centrally and supplies it with their Authentik username using the
+integration's supported transport. The account password is not the fallback.
+App passwords are a deliberate compatibility interface for clients we do not
+control, not merely a temporary feature to eliminate from all legacy clients.
+
+This requires real support at both ends. An arbitrary bearer/API-key field cannot
+be assumed to accept an app password; Basic authentication, custom headers, or an
+adapter must be evaluated against the actual client and server. Never silently
+reinterpret arbitrary bearer strings as global app passwords.
+
+A service/client only needs the paths relevant to its use. A working browser
+approval flow does not create a requirement to add app-password login beside it.
+Likewise, an app-password integration does not require adding OAuth to a client
+that cannot use it.
+
+### What is and is not being centralized
+
+| Concern | Intended direction | Not implied |
+| --- | --- | --- |
+| Interactive identity | Gablogin login, MFA and application admission | Identical backend user databases |
+| Connecting a client | Browser connection/approval, or centrally created app password | Every service accepts every token type |
+| Credentials visible to users | Avoid application-specific PAT-generation procedures | Every internal session/device token is issued by Authentik |
+| Client lifecycle | Understandable expiry, reconnect and disconnect behaviour | A unified device UI or instant revocation already exists |
+| Resource identity | Correct account/data with centrally managed identity mappings | Every backend uses the same username or principal format |
+| Automation/backend connections | Explicit credentials and accountable owners | Every operator-managed key must be replaced to satisfy the interactive UX |
+
+Central credential creation, central device management, and central revocation
+are related but distinct goals. No unified connected-device dashboard is being
+promised by this change. Revocation bounds, logout scope, and existing connection
+behaviour still need explicit decisions and tests.
 
 Service scopes narrow a token's authority; they do not grant entitlements. Global
-app passwords are not service-scoped simply because their labels name a device
-or application. Separately issued credentials can still belong to one centrally
-approved identity, as Jellyfin's device-token lineage demonstrates.
+app passwords are not service-scoped because their labels name a device or app.
+The two paths therefore offer consistent onboarding, not identical security
+properties. Dedicated per-device passwords enable selective credential removal,
+but do not alone terminate sessions or connections established with them.
 
-## Alternatives
+## Current decisions and non-goals
+
+- Keep the scoped Mail/DAV CLI client and finish existing client acceptance.
+- Keep native OIDC integrations and Jellyfin's device approval flow. Native tokens
+  created behind those flows are not a violation of the intended experience.
+- Leave Firefly unchanged for now. Its PAT workflow is a known user-facing
+  exception, not proof that all other integrations must be replaced.
+- Do not restore a Firefly scope before a consumer actually accepts it.
+- Do not build a universal gateway, patch Authentik, or fork a client merely to
+  make backend authentication uniform. A specific user-facing gap must justify
+  the maintained code and its security boundary.
+- Do not treat server-to-server keys, every resource ACL, or every active protocol
+  connection as automatically included in a client-onboarding improvement.
+
+These are scope boundaries, not claims that the remaining differences are harmless.
+For example, native API credentials may outlive an Authentik login, and shared
+principals may complicate attribution. Record and assess those consequences rather
+than presenting consistent setup as a universal lifecycle guarantee.
+
+## Firefly and Waterfly: a concrete gap, not the whole architecture
+
+Firefly browser login already fits the vision. Waterfly setup does not: users must
+find Firefly's PAT settings and copy a Firefly-issued credential into the client.
+The current decision is to tolerate that exception, not to call it implemented SSO.
+
+A preferred browser connection flow would require client support as well as server
+support. Waterfly would need appropriate OAuth authorization, callback handling,
+and credential storage/renewal. Configuring Authentik or changing Firefly alone
+cannot provide that UI. A maintained client fork would be a separate cost.
+
+The app-password fallback might avoid a Waterfly fork if its installed release
+can send the required username/password or custom Authorization header. That
+compatibility is unverified. It would still require Firefly to accept trusted API
+identity and a validated Authentik credential path. Neither change is approved
+here; a generic claim that Waterfly supports custom headers is insufficient.
+
+The PTAX job is a separate automation consumer, currently using a Firefly PAT.
+Moving it to a service account could be useful, but is not automatically required
+by improving Waterfly's user experience. If revisited, retain distinct actor
+identity and avoid mutating a shared financial user's admin role per request.
+
+## Earlier architecture alternatives, viewed through this contract
+
+These alternatives describe implementation choices, not competing user visions.
+Prefer the smallest change that closes a real user-facing gap. In particular,
+option E is stronger than the clarified requirement and is not its definition.
 
 ### A. Keep native API credentials behind browser SSO
 
@@ -99,7 +192,9 @@ Authentik service account mapped through `firefly_principal`.
 - Waterfly's actual installed-client credential transport and real reads/writes
   must be tested. Custom-header support alone is not acceptance evidence.
 
-This bounds the project, but intentionally leaves differences elsewhere.
+This bounds the project and could close Waterfly's manual-PAT gap through the
+app-password fallback. Differences elsewhere need evaluation by user workflow,
+not elimination merely because the backend credential types differ.
 
 ### D. Build a shared HTTP credential boundary
 
@@ -130,9 +225,11 @@ with consistent identity and lifecycle guarantees across protocols.
 - Could justify itself as a deliberate platform project or upstream contribution,
   but is not currently a demonstrated reduction in Foundry's overall complexity.
 
-The assessment so far is that E increases implementation/maintenance complexity
-while reducing user-facing inconsistency. Its net value remains a user decision,
-not a consequence of the contract looking cleaner on paper.
+E increases implementation/maintenance complexity and is not necessary merely to
+provide the two user-facing paths. The clarified goal permits native session and
+device credentials behind central approval. Universal token acceptance would need
+an additional justification, rather than following automatically from a desire
+for a consistent surface.
 
 ## Validator ideas, not an implementation commitment
 
@@ -179,19 +276,49 @@ was too strong.
 - **Evidence:** configured back-channel URLs, passing builds, or successful callbacks
   do not prove authenticated requests are rejected or independent sessions survive.
 
-## Questions for the next evaluation
+## Acceptance: evaluate the user workflow and the security boundary
 
-- Which inconsistency is most costly: where credentials are obtained, what access
-  removal means, or how much bespoke code is maintained?
-- Is a centrally approved native device credential acceptable when its ancestry
-  and revocation are tracked, as in Jellyfin?
-- What revocation bound is acceptable for new requests, and what should happen to
-  existing sessions/connections?
-- Which services genuinely need all credential types rather than only the methods
-  their clients use?
-- Which existing patches or special cases would a shared design actually remove?
+A successful token exchange is necessary for an OAuth integration, not sufficient
+proof of a usable connection flow. For a selected service/client pair, establish:
 
-Beyond retaining Firefly as-is and limiting the CLI client to Mail/DAV, no further
-implementation order is selected. Evaluate the existing services against these
-questions before reviving the previous universal rollout plan. Durable tests should
-extend existing upstream/package suites; exploratory checks belong outside the repo.
+1. **Connect:** where the user starts, how browser return/device approval works,
+   or exactly where the centrally created app password is entered. No hidden step
+   should require generating an application PAT unless it is a declared exception.
+2. **Use:** real reads/writes against the right user's resources, not just an
+   authenticated version/about endpoint. Include native/mobile behaviour where used.
+3. **Renew/reconnect:** expiry, restart, refresh rotation, revoked credentials, and
+   understandable recovery without exposing raw token-management details to users.
+4. **Disconnect:** what removing that credential/connection actually stops, within
+   what bound, and what remains active. Test independent devices and sessions.
+5. **Authorize:** denied access, disabled accounts, changed entitlements, wrong
+   token purpose/provider/scope, forged identity, and explicit credentials alongside
+   cookies. Consistent UX must not weaken service boundaries or browser CSRF checks.
+6. **Maintain:** client-version constraints, upstream support, patches required,
+   outage behaviour, and the existing special cases the change would actually remove.
+
+Do not imply that logout, device disconnection, app-password deletion, OAuth-grant
+revocation, and account disable are interchangeable operations. A consistent surface
+needs honest descriptions of those effects, not a misleading single label.
+
+## Remaining decisions and next evaluation
+
+The user-facing goal and acceptance of internal native tokens are settled. The
+remaining questions concern how far to implement that goal and at what cost:
+
+- Which actual client workflow should be improved after Mail/DAV/SOGo acceptance?
+  What specific user action or credential-management detour would disappear?
+- Does that client already support browser authorization or app-password transport,
+  or would supporting it require a fork? What upstream path exists?
+- What credential breadth and expiry are acceptable for the global app-password
+  fallback, given that it is not equivalent to a service-scoped OAuth grant?
+- Where should users inspect/disconnect connections, and which current controls
+  suffice before considering any new central interface?
+- What revocation bound is acceptable for new requests versus existing sessions
+  and connections? What must remain independent when one device is disconnected?
+- Can a shared adapter replace concrete duplicated code, or would it add another
+  layer without removing existing application integrations?
+
+The immediate follow-up proposed is acceptance of the existing Mail/DAV/SOGo
+clients. No new authentication implementation or universal rollout is selected.
+Durable tests should extend existing upstream/package suites; exploratory checks
+belong outside the repo.
