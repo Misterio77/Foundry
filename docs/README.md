@@ -4,6 +4,7 @@
 - [Mail and DAV authentication](mail-auth.md): shared OAuth, DAV app passwords and live acceptance.
 - [Metrics client certificates](metrics-mtls.md): mTLS access, provisioning and rotation.
 - [Backups](backups.md): declared coverage, restore evidence and gaps.
+- [Shared Gablogin API authentication](todo/gablogin-api-auth.md): proposed service-scoped OAuth and app-password authentication across services.
 - [Immich egress](todo/immich-egress.md): proposed lateral-movement containment.
 - [Atelier publishing](todo/atelier-publishing.md): unimplemented artifact boundary.
 
