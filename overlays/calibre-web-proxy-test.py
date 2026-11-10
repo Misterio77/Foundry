@@ -51,6 +51,7 @@ class ProxyTests(unittest.TestCase):
             self.assertIs(g._login_user, g.flask_httpauth_user)
             return {"id": g._login_user.id, "role": g._login_user.role}
 
+        self.app.add_url_rule("/logout", endpoint="web.logout", view_func=lambda: "local logout")
         self.client = self.app.test_client()
         self.subject = str(uuid4())
 
@@ -110,6 +111,54 @@ class ProxyTests(unittest.TestCase):
         user.role = constants.ROLE_VIEWER
         self.session.commit()
         self.assertEqual(self.get().json, {"id": user_id, "role": constants.ROLE_VIEWER})
+
+    def profile_request(self, username="gabs", email="hi%40example.org", **kwargs):
+        return self.client.get("/", headers={
+            "X-Foundry-Calibre-Web-Subject": self.subject,
+            "X-Foundry-Calibre-Web-Username": username,
+            "X-Foundry-Calibre-Web-Email": email,
+        }, **kwargs)
+
+    def test_profile_sync_preserves_identity_and_permissions(self):
+        user_id = self.get().json["id"]
+        user = self.session.get(User, user_id)
+        user.role = constants.ROLE_VIEWER
+        self.session.commit()
+        response = self.profile_request()
+        self.assertEqual(response.json, {"id": user_id, "role": constants.ROLE_VIEWER})
+        self.assertEqual((user.name, user.email), ("gabs", "hi@example.org"))
+        self.assertEqual(self.profile_request("Gabri%C3%A9l", "new%40example.org").json, response.json)
+        self.assertEqual((user.name, user.email), ("Gabriél", "new@example.org"))
+        self.assertEqual(self.session.query(User).count(), 1)
+
+    def test_profile_collision_never_links_accounts(self):
+        for username, email in [("admin", "new@example.org"), ("gabs", "admin@example.org")]:
+            with self.subTest(username=username, email=email):
+                existing = User(name="admin", email="admin@example.org", role=constants.ROLE_ADMIN)
+                self.session.add(existing)
+                self.session.commit()
+                self.assertEqual(self.profile_request(username, email).status_code, 403)
+                self.assertEqual((existing.name, existing.email, existing.role),
+                                 ("admin", "admin@example.org", constants.ROLE_ADMIN))
+                self.session.delete(existing)
+                self.session.commit()
+        self.assertEqual(self.profile_request().status_code, 200)
+
+    def test_invalid_and_untrusted_profiles(self):
+        for username in ("x" * 65, "bad%0Aname", "bad%00name"):
+            self.assertEqual(self.profile_request(username).status_code, 403)
+        self.assertEqual(self.profile_request(email="x" * 121).status_code, 403)
+        self.assertEqual(self.profile_request(environ_overrides={"REMOTE_ADDR": "192.0.2.1"}).status_code, 403)
+
+    def test_logout_delegates_to_authentik_and_clears_session(self):
+        with self.client.session_transaction() as session:
+            session["_user_id"] = "1"
+        response = self.client.get("/logout")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/outpost.goauthentik.io/sign_out")
+        with self.client.session_transaction() as session:
+            self.assertNotIn("_user_id", session)
+        self.assertEqual(self.client.get("/logout", environ_overrides={"REMOTE_ADDR": "192.0.2.1"}).status_code, 403)
 
     def test_deleted_account_fails_closed(self):
         user_id = self.get().json["id"]

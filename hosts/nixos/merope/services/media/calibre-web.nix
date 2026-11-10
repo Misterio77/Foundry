@@ -48,6 +48,8 @@ in {
               auth_request /_calibre-web_auth;
               error_page 401 = @calibre-web_login;
               auth_request_set $calibre_web_subject $upstream_http_x_foundry_calibre_web_subject;
+              auth_request_set $calibre_web_username $upstream_http_x_foundry_calibre_web_username;
+              auth_request_set $calibre_web_email $upstream_http_x_foundry_calibre_web_email;
               auth_request_set $calibre_web_cookie $upstream_http_set_cookie;
               add_header Set-Cookie $calibre_web_cookie always;
               proxy_set_header Host books.m7.rs;
@@ -56,6 +58,8 @@ in {
               proxy_set_header X-Scheme https;
               proxy_set_header X-Forwarded-For $remote_addr;
               proxy_set_header X-Foundry-Calibre-Web-Subject $calibre_web_subject;
+              proxy_set_header X-Foundry-Calibre-Web-Username $calibre_web_username;
+              proxy_set_header X-Foundry-Calibre-Web-Email $calibre_web_email;
               proxy_set_header Authorization "";
               proxy_set_header X-Script-Name "";
             '';

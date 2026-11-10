@@ -10,11 +10,15 @@ entries:
       scope_name: profile
       description: Immutable Calibre-Web account identity
       expression: |
+        from urllib.parse import quote
+
         return {
             "ak_proxy": {
                 "user_attributes": {
                     "additionalHeaders": {
                         "X-Foundry-Calibre-Web-Subject": str(request.user.uuid) if request.user.is_active else "",
+                        "X-Foundry-Calibre-Web-Username": quote(request.user.username, safe="") if request.user.is_active else "",
+                        "X-Foundry-Calibre-Web-Email": quote(request.user.email, safe="") if request.user.is_active else "",
                     },
                 },
             },
