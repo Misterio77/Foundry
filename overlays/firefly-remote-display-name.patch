@@ -1,0 +1,81 @@
+--- a/config/auth.php
++++ b/config/auth.php
+@@ -42,6 +42,7 @@
+     ],
+     'guard_header'     => envNonEmpty('AUTHENTICATION_GUARD_HEADER', 'REMOTE_USER'),
+     'guard_email'      => envNonEmpty('AUTHENTICATION_GUARD_EMAIL'),
++    'guard_display_name' => envNonEmpty('AUTHENTICATION_GUARD_DISPLAY_NAME'),
+ 
+     /*
+     |--------------------------------------------------------------------------
+--- a/app/Support/Authentication/RemoteUserGuard.php
++++ b/app/Support/Authentication/RemoteUserGuard.php
+@@ -109,6 +109,23 @@
+             }
+         }
+ 
++        // CGI-only and URL-encoded: display labels never participate in account lookup.
++        $displayHeader = config('auth.guard_display_name');
++        if (is_string($displayHeader) && '' !== $displayHeader) {
++            $encoded = request()->server($displayHeader);
++            if (is_string($encoded)) {
++                $displayName = rawurldecode($encoded);
++                if ('' !== trim($displayName) && strlen($displayName) <= 255
++                    && 1 === preg_match('//u', $displayName)
++                    && 0 === preg_match('/[\x00-\x1f\x7f]/', $displayName)) {
++                    $preference = Preferences::getForUser($retrievedUser, 'remote_guard_display_name');
++                    if (null === $preference || $displayName !== $preference->data) {
++                        Preferences::setForUser($retrievedUser, 'remote_guard_display_name', $displayName);
++                    }
++                }
++            }
++        }
++
+         Log::debug(sprintf('Result of getting user from provider: %s', $retrievedUser->email));
+         $this->user    = $retrievedUser;
+     }
+--- a/app/User.php
++++ b/app/User.php
+@@ -85,6 +85,20 @@
+     protected $hidden   = ['password', 'remember_token'];
+     protected $table    = 'users';
+ 
++    public function getRemoteDisplayNameAttribute(): string
++    {
++        if ('remote_user_guard' === config('auth.defaults.guard')) {
++            foreach (['remote_guard_display_name', 'remote_guard_alt_email'] as $key) {
++                $value = Preferences::getForUser($this, $key)?->data;
++                if (is_string($value) && '' !== trim($value)) {
++                    return $value;
++                }
++            }
++        }
++
++        return $this->email;
++    }
++
+     /**
+      * @throws NotFoundHttpException
+      */
+--- a/resources/views/layout/default.twig
++++ b/resources/views/layout/default.twig
+@@ -138,7 +138,7 @@
+ 
+                     <li class="dropdown user user-menu">
+                     <span style="cursor:default;color:#fff;padding: 15px;display: block;line-height: 20px;">
+-                        <span class="hidden-xs">{{ Auth.user.email }}</span>
++                        <span class="hidden-xs">{{ Auth.user.remote_display_name }}</span>
+                     </span>
+                     </li>
+                     <li id="sidebar-toggle">
+--- a/resources/views/v2/partials/layout/topbar.blade.php
++++ b/resources/views/v2/partials/layout/topbar.blade.php
+@@ -34,7 +34,7 @@
+         <i class="fa-solid fa-user"></i>
+     </a>
+     <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
+-        <span class="dropdown-item dropdown-header">{{ auth()->user()->email }}</span>
++        <span class="dropdown-item dropdown-header">{{ auth()->user()->remote_display_name }}</span>
+         <div class="dropdown-divider"></div>
+         <a href="{{ route('profile.index') }}" class="dropdown-item">
+             <em class="fa-regular fa-user me-2"></em>

@@ -108,6 +108,7 @@ in {
     firefly-iii = prev.firefly-iii.overrideAttrs (old: rec {
       pname = "firefly-iii";
       version = "6.4.22";
+      patches = (old.patches or []) ++ [./firefly-remote-display-name.patch];
       src = final.fetchFromGitHub {
         owner = "firefly-iii";
         repo = "firefly-iii";

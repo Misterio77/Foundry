@@ -24,6 +24,12 @@ stores this identifier in its `email` column; the separate `REMOTE_EMAIL` value
 supplies the contact email. Do not change a principal once it owns financial data.
 Remote-user provisioning does not require enabling public registration.
 
+Browser authentication also syncs the Authentik username into the
+`remote_guard_display_name` preference through a URL-encoded `REMOTE_DISPLAY_NAME`
+CGI variable. Both UI account labels use it, falling back to the contact email and
+then the stable identifier. This never changes the account lookup or PAT ownership;
+API requests do not update the preference.
+
 ## API clients
 
 Use a distinct Firefly personal access token for each Waterfly installation and
