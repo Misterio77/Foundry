@@ -11,7 +11,11 @@ entries:
       description: Immutable Calibre-Web account identity
       expression: |
         from urllib.parse import quote
+        from authentik.core.models import Application
 
+        app = Application.objects.get(slug="calibre-web")
+        entitlements = set(request.user.app_entitlements(app).values_list("name", flat=True))
+        admin = request.user.is_active and {"access", "admin"} <= entitlements
         return {
             "ak_proxy": {
                 "user_attributes": {
@@ -19,6 +23,7 @@ entries:
                         "X-Foundry-Calibre-Web-Subject": str(request.user.uuid) if request.user.is_active else "",
                         "X-Foundry-Calibre-Web-Username": quote(request.user.username, safe="") if request.user.is_active else "",
                         "X-Foundry-Calibre-Web-Email": quote(request.user.email, safe="") if request.user.is_active else "",
+                        "X-Foundry-Calibre-Web-Admin": "1" if admin else "0",
                     },
                 },
             },
@@ -86,6 +91,18 @@ entries:
     identifiers:
       target: !KeyOf access
       order: 2
+    attrs:
+      group: !Find [authentik_core.group, [name, admin]]
+
+  - model: authentik_core.applicationentitlement
+    id: admin
+    identifiers:
+      app: !KeyOf calibre-web
+      name: admin
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf admin
+      order: 0
     attrs:
       group: !Find [authentik_core.group, [name, admin]]
 
