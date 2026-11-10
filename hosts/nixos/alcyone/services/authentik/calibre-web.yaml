@@ -100,9 +100,3 @@ entries:
           [name, foundry-application-access],
         ]
       failure_result: false
-
-  # Rebind before deleting the old policy so its cascade cannot remove the binding.
-  - model: authentik_policies_expression.expressionpolicy
-    identifiers:
-      name: foundry-calibre-web-access
-    state: absent
