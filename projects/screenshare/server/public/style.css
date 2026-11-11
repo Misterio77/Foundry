@@ -84,14 +84,51 @@ select {
   max-width: 100%;
   min-width: 0;
 }
-#audio-help {
+#audio-help,
+#input-permission,
+#audio-setup {
   flex-basis: 100%;
 }
+#audio-help:empty {
+  display: none;
+}
 #audio-help,
+#input-permission,
 #link-note,
 #count {
   color: #aaa;
   font-size: 12px;
+}
+#audio-setup {
+  font-size: 13px;
+}
+summary {
+  cursor: pointer;
+  width: fit-content;
+  color: #bbb;
+}
+#audio-setup ol {
+  margin: 12px 0 0;
+  padding-left: 24px;
+  max-width: 720px;
+  line-height: 1.6;
+}
+#audio-setup li + li {
+  margin-top: 8px;
+}
+.command-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+code {
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  background: #171717;
+  padding: 6px 8px;
+  border: 1px solid #383838;
 }
 .stage {
   position: relative;

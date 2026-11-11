@@ -397,7 +397,8 @@ test("viewers joining during replacement receive the new capture too", async () 
 
 async function selectAudio(app, source) {
   app.element("audio-source").value = source;
-  await app.element("audio-source").onchange();
+  app.element("audio-source").onchange();
+  await app.element("apply-audio").onclick();
 }
 
 test("audio input can change live without replacing video, room, or peers", async () => {
@@ -535,4 +536,82 @@ test("input discovery while live does not stop the outgoing audio", async () => 
   assert.equal(app.element("audio-source").value, "virtual");
   assert.equal(app.element("audio-source").disabled, false);
   app.element("stop").onclick();
+});
+
+test("selecting a live audio source only stages it until Apply is clicked", async () => {
+  const app = setup();
+  await ready(app);
+  const peer = addPeer(app);
+  app.element("audio-source").value = "virtual";
+  app.element("audio-source").onchange();
+  assert.equal(app.calls.input.length, 0);
+  assert.equal(peer.senders.audio.track, app.screenAudio);
+  assert.equal(app.element("apply-audio").hidden, false);
+  assert.equal(app.element("apply-audio").textContent, "Apply audio");
+  await app.element("apply-audio").onclick();
+  assert.equal(peer.senders.audio.track, app.inputAudio);
+  assert.equal(app.element("apply-audio").hidden, true);
+  app.element("stop").onclick();
+});
+
+test("screen-audio selection explains the picker before requesting capture", async () => {
+  const app = setup();
+  app.element("audio-source").value = "none";
+  await ready(app);
+  app.element("audio-source").value = "screen";
+  app.element("audio-source").onchange();
+  assert.equal(app.calls.display.length, 1);
+  assert.equal(app.element("apply-audio").textContent, "Choose screen…");
+  assert.match(
+    app.element("audio-help").textContent,
+    /Opens the screen picker/,
+  );
+  app.element("audio-source").value = "none";
+  app.element("audio-source").onchange();
+  assert.equal(app.element("apply-audio").hidden, true);
+  assert.equal(app.element("audio-help").textContent, "");
+  app.element("stop").onclick();
+});
+
+test("changing screens does not apply or mislabel a pending audio selection", async () => {
+  const app = setup();
+  app.element("audio-source").value = "virtual";
+  app.element("audio-source").selectedOptions = [
+    { textContent: "Original input" },
+  ];
+  await ready(app);
+  const peer = addPeer(app);
+  app.element("audio-source").value = "other";
+  app.element("audio-source").selectedOptions = [
+    { textContent: "Pending input" },
+  ];
+  app.element("audio-source").onchange();
+  app.devices.getDisplayMedia = async () => media(track("video"));
+  await app.element("change-screen").onclick();
+  assert.equal(peer.senders.audio.track, app.inputAudio);
+  assert.equal(app.element("audio-source").value, "other");
+  assert.equal(app.element("apply-audio").hidden, false);
+  assert.match(app.element("audio").textContent, /Original input/);
+  assert.doesNotMatch(app.element("audio").textContent, /Pending input/);
+  app.element("stop").onclick();
+});
+
+test("helper command has clipboard feedback and a manual-copy fallback", async () => {
+  const app = setup();
+  const command = "nix run git://m7.rs/Foundry#share-audio";
+  app.element("helper-command").textContent = command;
+  let copied;
+  app.context.navigator.clipboard = {
+    async writeText(value) {
+      copied = value;
+    },
+  };
+  await app.element("copy-command").onclick();
+  assert.equal(copied, command);
+  assert.equal(app.element("status").textContent, "Helper command copied.");
+  app.context.navigator.clipboard.writeText = async () => {
+    throw new Error("Denied");
+  };
+  await app.element("copy-command").onclick();
+  assert.match(app.element("status").textContent, /copy the command manually/);
 });

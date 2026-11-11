@@ -22,19 +22,37 @@
       <section id="audio-settings" aria-label="Audio capture">
         <label for="audio-source">Audio</label>
         <select id="audio-source" aria-describedby="audio-help">
-          <option value="screen">From screen capture, if available</option>
+          <option value="screen">Screen audio (if available)</option>
           <option value="none">No audio</option>
         </select>
-        <button id="load-inputs">List audio inputs</button>
-        <span id="audio-help">
-          For application audio on Linux with Nix, run
-          <code>nix run git://m7.rs/Foundry#share-audio</code>, pick the app,
-          then list audio inputs here and select its Screenshare audio input.
-          Keep the command running while sharing. You can change audio inputs
-          while live; changes apply immediately. Switching back to screen audio
-          reopens the screen picker. Listing inputs briefly opens your default
-          microphone for permission; it is not shared.
-        </span>
+        <button id="load-inputs" aria-describedby="input-permission">
+          Find inputs
+        </button>
+        <button id="apply-audio" hidden>Apply audio</button>
+        <span id="audio-help" role="status"></span>
+        <span id="input-permission"
+          >Finding inputs briefly opens your default mic; it isn’t shared.</span
+        >
+        <details id="audio-setup">
+          <summary>Share game audio on Linux</summary>
+          <ol>
+            <li>
+              Run the helper with Nix:
+              <div class="command-row">
+                <code id="helper-command"
+                  >nix run git://m7.rs/Foundry#share-audio</code
+                >
+                <button id="copy-command">Copy command</button>
+              </div>
+            </li>
+            <li>Pick the game in the terminal. Leave the helper running.</li>
+            <li>
+              Click <strong>Find inputs</strong> above and choose
+              <strong>Screenshare audio (your app)</strong>. If you’re already
+              sharing, click <strong>Apply audio</strong>.
+            </li>
+          </ol>
+        </details>
       </section>
       <section id="invite" hidden aria-label="Invite a viewer">
         <label for="link">Viewer link</label>

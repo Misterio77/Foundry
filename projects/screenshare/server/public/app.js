@@ -10,6 +10,7 @@ let generation = 0;
 let busy = false;
 let inputRequest = 0;
 let audioSource = "screen";
+let audioLabel = "Screen audio";
 const audioConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
@@ -32,7 +33,7 @@ async function loadInputs() {
     if (request !== inputRequest) return;
     const selected = $("audio-source").value;
     const options = [
-      new Option("From screen capture, if available", "screen"),
+      new Option("Screen audio (if available)", "screen"),
       new Option("No audio", "none"),
     ];
     for (const device of devices) {
@@ -51,6 +52,8 @@ async function loadInputs() {
       );
     $("audio-source").replaceChildren(...options);
     $("audio-source").value = selected;
+    $("load-inputs").textContent = "Refresh inputs";
+    $("input-permission").hidden = true;
     status(
       options.length > 2
         ? "Select the virtual input carrying your application audio."
@@ -66,6 +69,21 @@ async function loadInputs() {
   }
 }
 
+function updateAudioControls() {
+  const selected = $("audio-source").value;
+  const pending = Boolean(socket && stream && selected !== audioSource);
+  $("apply-audio").hidden = !pending;
+  $("apply-audio").disabled = busy;
+  $("apply-audio").textContent =
+    selected === "screen" ? "Choose screen…" : "Apply audio";
+  $("audio-help").textContent = pending
+    ? selected === "screen"
+      ? "Opens the screen picker. Your current share stays live until you confirm."
+      : selected === "none"
+        ? "Turns off stream audio. Video keeps running."
+        : "Changes audio only. Your video and invite link stay the same."
+    : "";
+}
 function setBusy(value) {
   busy = value;
   for (const id of [
@@ -76,6 +94,7 @@ function setBusy(value) {
     "load-inputs",
   ])
     $(id).disabled = value;
+  updateAudioControls();
 }
 function status(message) {
   $("status").textContent = message;
@@ -109,6 +128,7 @@ function reset(message) {
   $("start").hidden = watching;
   $("watch").hidden = !watching;
   $("audio").textContent = "";
+  updateAudioControls();
   updateCount();
   status(message);
 }
@@ -175,7 +195,7 @@ function prepareCapture(media, source) {
 }
 function previewCapture() {
   const source = audioSource;
-  const sourceLabel = $("audio-source").selectedOptions[0].textContent;
+  const sourceLabel = audioLabel;
   $("audio").textContent = stream
     .getAudioTracks()
     .some((track) => track.readyState === "live")
@@ -205,6 +225,10 @@ async function changeCapture(kind, source = audioSource) {
   const label = kind === "screen" ? "Screen" : "Audio";
   const current = generation;
   const previous = stream;
+  const nextAudioLabel =
+    kind === "audio"
+      ? $("audio-source").selectedOptions[0].textContent
+      : audioLabel;
   let replacement;
   try {
     if (kind === "screen" || source === "screen") {
@@ -251,6 +275,7 @@ async function changeCapture(kind, source = audioSource) {
       throw new Error("The new capture ended before switching completed.");
     stream = replacement;
     audioSource = source;
+    audioLabel = nextAudioLabel;
     pendingStream = undefined;
     stopMedia(previous, stream);
     previewCapture();
@@ -274,7 +299,7 @@ async function changeCapture(kind, source = audioSource) {
     if (replacement !== stream) stopMedia(replacement, stream);
     if (current === generation) {
       pendingStream = undefined;
-      $("audio-source").value = audioSource;
+      if (kind === "audio") $("audio-source").value = audioSource;
       setBusy(false);
     }
   }
@@ -436,6 +461,7 @@ async function start() {
       const source = $("audio-source").value;
       audioSource = source;
       const sourceLabel = $("audio-source").selectedOptions[0].textContent;
+      audioLabel = sourceLabel;
       status("Choose a screen or window to share.");
       const captured = await captureScreen(source);
       if (current !== generation) {
@@ -470,9 +496,20 @@ async function start() {
   }
 }
 $("change-screen").onclick = () => changeCapture("screen");
-$("audio-source").onchange = () => {
+$("audio-source").onchange = updateAudioControls;
+$("apply-audio").onclick = () => {
   if ($("audio-source").value !== audioSource)
     return changeCapture("audio", $("audio-source").value);
+};
+$("copy-command").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($("helper-command").textContent);
+    status("Helper command copied.");
+  } catch {
+    status(
+      "Couldn’t access the clipboard. Select and copy the command manually.",
+    );
+  }
 };
 $("load-inputs").onclick = loadInputs;
 $("start").onclick = start;
