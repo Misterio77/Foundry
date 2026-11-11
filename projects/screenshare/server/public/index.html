@@ -25,11 +25,13 @@
           <option value="none">No audio</option>
         </select>
         <button id="load-inputs">List audio inputs</button>
-        <span id="audio-help"
-          >For application audio, select a PipeWire virtual input. Listing
-          inputs briefly opens your default microphone for permission; it is not
-          shared.</span
-        >
+        <span id="audio-help">
+          For application audio on Linux with Nix, run
+          <code>nix run git://m7.rs/Foundry#share-audio</code>, pick the app,
+          then list audio inputs here and select its Screenshare audio input.
+          Keep the command running while sharing. Listing inputs briefly opens
+          your default microphone for permission; it is not shared.
+        </span>
       </section>
       <section id="invite" hidden aria-label="Invite a viewer">
         <label for="link">Viewer link</label>
