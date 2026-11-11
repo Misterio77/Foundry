@@ -1,0 +1,23 @@
+{
+  "name": "@screenshare/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "screenshare-server": "server.js"
+  },
+  "files": [
+    "server.js",
+    "public"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ws": "8.22.2"
+  }
+}

@@ -1,0 +1,140 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #dedede;
+  background: #202020;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 0 16px;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+}
+h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 7px 11px;
+}
+button {
+  background: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover {
+  background: #414141;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+:focus-visible {
+  outline: 2px solid #a9c7ed;
+  outline-offset: 3px;
+}
+#invite,
+#audio-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 0 12px;
+}
+input {
+  flex: 1;
+  min-width: 160px;
+  background: #171717;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+select {
+  background: #171717;
+  max-width: 100%;
+  min-width: 0;
+}
+#audio-help {
+  flex-basis: 100%;
+}
+#audio-help,
+#link-note,
+#count {
+  color: #aaa;
+  font-size: 12px;
+}
+.stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 1;
+  min-height: 240px;
+  background: #111;
+  border: 1px solid #383838;
+}
+#placeholder {
+  color: #999;
+}
+video {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+#play {
+  position: absolute;
+}
+.status-bar {
+  padding: 10px 0;
+  color: #b5b5b5;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.status-bar p {
+  margin: 0;
+}
+#audio:empty {
+  display: none;
+}
+@media (max-width: 600px) {
+  main {
+    padding: 0 10px;
+  }
+  #invite label {
+    width: 100%;
+  }
+  #link-note {
+    width: 100%;
+  }
+  .actions {
+    gap: 8px;
+  }
+}

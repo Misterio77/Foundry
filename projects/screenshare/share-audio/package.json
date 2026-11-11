@@ -1,0 +1,19 @@
+{
+  "name": "@screenshare/share-audio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "share-audio": "share-audio.js"
+  },
+  "files": [
+    "share-audio.js"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node share-audio.js",
+    "test": "node --test"
+  }
+}

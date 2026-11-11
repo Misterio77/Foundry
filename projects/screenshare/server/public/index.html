@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Screenshare</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Screenshare</h1>
+        <div class="actions">
+          <span id="count"></span>
+          <button id="start">Share screen</button>
+          <button id="watch" hidden>Watch stream</button>
+          <button id="stop" hidden>Stop sharing</button>
+        </div>
+      </header>
+      <section id="audio-settings" aria-label="Audio capture">
+        <label for="audio-source">Audio</label>
+        <select id="audio-source" aria-describedby="audio-help">
+          <option value="screen">From screen capture, if available</option>
+          <option value="none">No audio</option>
+        </select>
+        <button id="load-inputs">List audio inputs</button>
+        <span id="audio-help"
+          >For application audio, select a PipeWire virtual input. Listing
+          inputs briefly opens your default microphone for permission; it is not
+          shared.</span
+        >
+      </section>
+      <section id="invite" hidden aria-label="Invite a viewer">
+        <label for="link">Viewer link</label>
+        <input id="link" readonly aria-describedby="link-note" />
+        <button id="copy">Copy link</button>
+        <span id="link-note">Anyone with the link can watch.</span>
+      </section>
+      <section class="stage" aria-label="Screen stream">
+        <p id="placeholder">No screen shared</p>
+        <video id="video" autoplay playsinline controls hidden></video>
+        <button id="play" hidden>Play with sound</button>
+      </section>
+      <div class="status-bar">
+        <p id="status" role="status" aria-live="polite">
+          Select a screen or window to share.
+        </p>
+        <p id="audio" role="status"></p>
+      </div>
+    </main>
+  </body>
+</html>
