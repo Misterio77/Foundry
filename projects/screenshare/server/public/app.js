@@ -9,6 +9,7 @@ let iceServers = [];
 let generation = 0;
 let busy = false;
 let inputRequest = 0;
+let audioSource = "screen";
 const audioConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
@@ -16,13 +17,11 @@ const audioConstraints = {
 };
 
 async function loadInputs() {
-  if (busy || socket) return;
+  if (busy || watching) return;
   if (!navigator.mediaDevices?.getUserMedia)
     return status("Audio inputs need HTTPS and browser microphone support.");
   const request = ++inputRequest;
-  busy = true;
-  $("start").disabled = true;
-  $("load-inputs").disabled = true;
+  setBusy(true);
   try {
     const permission = await navigator.mediaDevices.getUserMedia({
       audio: audioConstraints,
@@ -62,13 +61,22 @@ async function loadInputs() {
       status(`Couldn’t list audio inputs: ${error.message}`);
   } finally {
     if (request === inputRequest) {
-      busy = false;
-      $("start").disabled = false;
-      $("load-inputs").disabled = false;
+      setBusy(false);
     }
   }
 }
 
+function setBusy(value) {
+  busy = value;
+  for (const id of [
+    "start",
+    "watch",
+    "change-screen",
+    "audio-source",
+    "load-inputs",
+  ])
+    $(id).disabled = value;
+}
 function status(message) {
   $("status").textContent = message;
 }
@@ -81,7 +89,7 @@ function updateCount() {
 function reset(message) {
   generation++;
   inputRequest++;
-  busy = false;
+  setBusy(false);
   const oldSocket = socket;
   socket = undefined;
   oldSocket?.close();
@@ -98,14 +106,9 @@ function reset(message) {
   $("invite").hidden = true;
   $("stop").hidden = true;
   $("change-screen").hidden = true;
-  $("change-screen").disabled = false;
   $("start").hidden = watching;
   $("watch").hidden = !watching;
-  $("start").disabled = false;
-  $("watch").disabled = false;
   $("audio").textContent = "";
-  $("audio-source").disabled = false;
-  $("load-inputs").disabled = false;
   updateCount();
   status(message);
 }
@@ -134,8 +137,16 @@ function stopMedia(media, keep) {
     if (!retained.includes(track)) track.stop();
   }
 }
-function captureScreen() {
-  const source = $("audio-source").value;
+function captureInput(source) {
+  return navigator.mediaDevices.getUserMedia({
+    audio: {
+      ...audioConstraints,
+      deviceId: { exact: source },
+      channelCount: { ideal: 2 },
+    },
+  });
+}
+function captureScreen(source) {
   return navigator.mediaDevices.getDisplayMedia({
     video: {
       width: { ideal: 1920 },
@@ -146,15 +157,16 @@ function captureScreen() {
     systemAudio: source === "screen" ? "include" : "exclude",
   });
 }
-function prepareCapture(media) {
+function prepareCapture(media, source) {
   const video = media.getVideoTracks()[0];
   if (!video || video.readyState !== "live")
     throw new Error("No live video track was provided.");
   video.contentHint = "motion";
   video.onended = () => {
-    if (stream === media) reset("Screen sharing stopped.");
+    if (stream?.getVideoTracks().includes(video))
+      reset("Screen sharing stopped.");
   };
-  if ($("audio-source").value !== "screen") {
+  if (source !== "screen") {
     for (const track of media.getAudioTracks()) {
       track.stop();
       media.removeTrack(track);
@@ -162,7 +174,7 @@ function prepareCapture(media) {
   }
 }
 function previewCapture() {
-  const source = $("audio-source").value;
+  const source = audioSource;
   const sourceLabel = $("audio-source").selectedOptions[0].textContent;
   $("audio").textContent = stream
     .getAudioTracks()
@@ -170,11 +182,12 @@ function previewCapture() {
     ? `${source === "screen" ? "Screen audio" : sourceLabel}. Preview muted.`
     : source === "none"
       ? "Audio disabled."
-      : "No audio available. Choose an audio-enabled screen or restart sharing with a separate audio input.";
+      : "No audio available. Change screen or select a separate audio input.";
   for (const track of stream.getAudioTracks())
     track.onended = () => {
-      $("audio").textContent =
-        "Audio capture stopped. Restart sharing to restore sound.";
+      if (stream?.getAudioTracks().includes(track))
+        $("audio").textContent =
+          "Audio capture stopped. Select another input to restore sound.";
     };
   showVideo(stream, true);
 }
@@ -186,24 +199,40 @@ async function replaceTracks(peer, media) {
   const failure = results.find((result) => result.status === "rejected");
   if (failure && peer.pc.signalingState !== "closed") throw failure.reason;
 }
-async function changeScreen() {
+async function changeCapture(kind, source = audioSource) {
   if (busy || watching || !socket || !stream) return;
-  busy = true;
-  $("change-screen").disabled = true;
+  setBusy(true);
+  const label = kind === "screen" ? "Screen" : "Audio";
   const current = generation;
   const previous = stream;
   let replacement;
   try {
-    status(
-      "Choose a new screen or window. The current share stays live until you select one.",
-    );
-    replacement = await captureScreen();
+    if (kind === "screen" || source === "screen") {
+      status(
+        "Choose a new screen or window. The current share stays live until you select one.",
+      );
+      replacement = await captureScreen(source);
+    } else {
+      replacement = new MediaStream(previous.getVideoTracks());
+    }
     if (current !== generation) return;
     pendingStream = replacement;
-    prepareCapture(replacement);
-    if (!["screen", "none"].includes($("audio-source").value)) {
-      for (const track of previous.getAudioTracks())
-        replacement.addTrack(track);
+    prepareCapture(replacement, source);
+    if (!["screen", "none"].includes(source)) {
+      if (kind === "screen") {
+        for (const track of previous.getAudioTracks())
+          replacement.addTrack(track);
+      } else {
+        status("Opening the selected audio input…");
+        const input = await captureInput(source);
+        if (current !== generation) {
+          stopMedia(input);
+          return;
+        }
+        for (const track of input.getAudioTracks()) replacement.addTrack(track);
+        if (!input.getAudioTracks().length)
+          throw new Error("The selected input supplied no audio track.");
+      }
     }
     // Viewers joining while replaceTrack awaits must also receive the new capture.
     const updated = new Set();
@@ -221,10 +250,11 @@ async function changeScreen() {
     if (replacement.getVideoTracks()[0].readyState !== "live")
       throw new Error("The new capture ended before switching completed.");
     stream = replacement;
+    audioSource = source;
     pendingStream = undefined;
     stopMedia(previous, stream);
     previewCapture();
-    status("Screen changed. The invite link is unchanged.");
+    status(`${label} changed. The invite link is unchanged.`);
   } catch (error) {
     if (current !== generation) return;
     const rollback = replacement
@@ -237,15 +267,15 @@ async function changeScreen() {
       rollback.some((result) => result.status === "rejected")
         ? "Couldn’t restore every viewer’s stream. Affected viewers may need to reconnect."
         : error.name === "NotAllowedError"
-          ? "Screen change cancelled. The original share is still live."
-          : `Couldn’t change screen: ${error.message}. The original share is still live.`,
+          ? `${label} change cancelled. The original share is still live.`
+          : `Couldn’t change ${kind}: ${error.message}. The original share is still live.`,
     );
   } finally {
     if (replacement !== stream) stopMedia(replacement, stream);
     if (current === generation) {
       pendingStream = undefined;
-      busy = false;
-      $("change-screen").disabled = false;
+      $("audio-source").value = audioSource;
+      setBusy(false);
     }
   }
 }
@@ -303,7 +333,7 @@ async function handleMessage(msg, current) {
   if (msg.type === "ended") return reset("The sharer stopped sharing.");
   if (msg.type === "created" || msg.type === "joined") {
     iceServers = msg.iceServers;
-    busy = false;
+    setBusy(false);
     $("stop").hidden = false;
     $("start").hidden = true;
     $("watch").hidden = true;
@@ -398,33 +428,25 @@ async function start() {
     return status("Screen sharing needs HTTPS (or localhost for testing).");
   if (!watching && !navigator.mediaDevices?.getDisplayMedia)
     return status("This browser doesn’t support screen capture.");
-  busy = true;
+  setBusy(true);
   const current = ++generation;
-  $(watching ? "watch" : "start").disabled = true;
-  $("audio-source").disabled = true;
-  $("load-inputs").disabled = true;
   $("stop").hidden = false;
   try {
     if (!watching) {
       const source = $("audio-source").value;
+      audioSource = source;
       const sourceLabel = $("audio-source").selectedOptions[0].textContent;
       status("Choose a screen or window to share.");
-      const captured = await captureScreen();
+      const captured = await captureScreen(source);
       if (current !== generation) {
         captured.getTracks().forEach((track) => track.stop());
         return;
       }
       stream = captured;
-      prepareCapture(stream);
+      prepareCapture(stream, source);
       if (source !== "screen" && source !== "none") {
         status(`Opening audio input: ${sourceLabel}…`);
-        const input = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            ...audioConstraints,
-            deviceId: { exact: source },
-            channelCount: { ideal: 2 },
-          },
-        });
+        const input = await captureInput(source);
         if (current !== generation) {
           input.getTracks().forEach((track) => track.stop());
           return;
@@ -447,7 +469,11 @@ async function start() {
       );
   }
 }
-$("change-screen").onclick = changeScreen;
+$("change-screen").onclick = () => changeCapture("screen");
+$("audio-source").onchange = () => {
+  if ($("audio-source").value !== audioSource)
+    return changeCapture("audio", $("audio-source").value);
+};
 $("load-inputs").onclick = loadInputs;
 $("start").onclick = start;
 $("watch").onclick = start;

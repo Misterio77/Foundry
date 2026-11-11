@@ -91,6 +91,11 @@ function setup() {
     }
   }
   const context = vm.createContext({
+    MediaStream: class {
+      constructor(tracks = []) {
+        return media(...tracks);
+      }
+    },
     RTCPeerConnection: Peer,
     document: { getElementById: element },
     navigator: { mediaDevices: devices },
@@ -387,5 +392,147 @@ test("viewers joining during replacement receive the new capture too", async () 
   await changing;
   assert.equal(first.senders.video.track, nextVideo);
   assert.equal(second.senders.video.track, nextVideo);
+  app.element("stop").onclick();
+});
+
+async function selectAudio(app, source) {
+  app.element("audio-source").value = source;
+  await app.element("audio-source").onchange();
+}
+
+test("audio input can change live without replacing video, room, or peers", async () => {
+  const app = setup();
+  app.element("audio-source").value = "virtual";
+  await ready(app);
+  assert.equal(app.element("audio-source").disabled, false);
+  const peer = addPeer(app);
+  const originalLink = app.element("link").value;
+  const newAudio = track("audio");
+  let requested;
+  app.devices.getUserMedia = async (options) => {
+    requested = options;
+    return media(newAudio);
+  };
+  await selectAudio(app, "second-input");
+  assert.equal(requested.audio.deviceId.exact, "second-input");
+  assert.equal(requested.audio.echoCancellation, false);
+  assert.equal(requested.audio.noiseSuppression, false);
+  assert.equal(requested.audio.autoGainControl, false);
+  assert.equal(peer.senders.video.track, app.video);
+  assert.equal(peer.senders.audio.track, newAudio);
+  assert.equal(app.video.readyState, "live");
+  assert.equal(app.inputAudio.readyState, "ended");
+  assert.equal(app.calls.display.length, 1);
+  assert.equal(app.calls.sockets.length, 1);
+  assert.equal(app.calls.peers.length, 1);
+  assert.equal(app.element("link").value, originalLink);
+  app.video.onended();
+  assert.equal(app.element("invite").hidden, true);
+  assert.equal(newAudio.readyState, "ended");
+});
+
+test("audio can be disabled and re-enabled without another screen picker", async () => {
+  const app = setup();
+  await ready(app);
+  const peer = addPeer(app);
+  await selectAudio(app, "none");
+  assert.equal(peer.senders.audio.track, null);
+  assert.equal(app.screenAudio.readyState, "ended");
+  assert.equal(app.video.readyState, "live");
+  await selectAudio(app, "virtual");
+  assert.equal(peer.senders.audio.track, app.inputAudio);
+  assert.equal(app.calls.display.length, 1);
+  assert.equal(app.calls.input.length, 1);
+  app.element("stop").onclick();
+});
+
+test("audio permission failure restores the selected source and leaves capture live", async () => {
+  const app = setup();
+  await ready(app);
+  const peer = addPeer(app);
+  app.devices.getUserMedia = async () => {
+    throw new Error("Device unavailable");
+  };
+  await selectAudio(app, "missing");
+  assert.equal(app.element("audio-source").value, "screen");
+  assert.equal(peer.senders.audio.track, app.screenAudio);
+  assert.equal(app.video.readyState, "live");
+  assert.equal(app.screenAudio.readyState, "live");
+  assert.match(app.element("status").textContent, /Device unavailable/);
+  app.element("stop").onclick();
+});
+
+test("audio replacement failure rolls back peers and stops only the rejected input", async () => {
+  const app = setup();
+  await ready(app);
+  const first = addPeer(app, "first");
+  const second = addPeer(app, "second");
+  second.senders.audio.replaceTrack = async function (next) {
+    if (next === app.inputAudio) throw new Error("Audio codec limits");
+    this.track = next;
+  };
+  await selectAudio(app, "virtual");
+  for (const peer of [first, second]) {
+    assert.equal(peer.senders.audio.track, app.screenAudio);
+    assert.equal(peer.senders.video.track, app.video);
+  }
+  assert.equal(app.inputAudio.readyState, "ended");
+  assert.equal(app.video.readyState, "live");
+  assert.equal(app.element("audio-source").value, "screen");
+  app.element("stop").onclick();
+});
+
+test("stopping during a live audio permission request disposes of late tracks", async () => {
+  const app = setup();
+  await ready(app);
+  const entered = deferred();
+  const selected = deferred();
+  app.devices.getUserMedia = () => {
+    entered.resolve();
+    return selected.promise;
+  };
+  const changing = selectAudio(app, "virtual");
+  await entered.promise;
+  app.element("stop").onclick();
+  selected.resolve(media(app.inputAudio));
+  await changing;
+  assert.equal(app.inputAudio.readyState, "ended");
+  assert.equal(app.video.readyState, "ended");
+  assert.equal(app.element("invite").hidden, true);
+});
+
+test("switching back to screen audio prompts for a new capture and keeps the room", async () => {
+  const app = setup();
+  app.element("audio-source").value = "virtual";
+  await ready(app);
+  const peer = addPeer(app);
+  const nextVideo = track("video");
+  const nextAudio = track("audio");
+  app.devices.getDisplayMedia = async (options) => {
+    assert.equal(options.systemAudio, "include");
+    return media(nextVideo, nextAudio);
+  };
+  await selectAudio(app, "screen");
+  assert.equal(peer.senders.video.track, nextVideo);
+  assert.equal(peer.senders.audio.track, nextAudio);
+  assert.equal(app.inputAudio.readyState, "ended");
+  assert.equal(app.video.readyState, "ended");
+  assert.equal(app.calls.sockets.length, 1);
+  app.element("stop").onclick();
+});
+
+test("input discovery while live does not stop the outgoing audio", async () => {
+  const app = setup();
+  app.element("audio-source").value = "virtual";
+  await ready(app);
+  const peer = addPeer(app);
+  const probe = track("audio");
+  app.devices.getUserMedia = async () => media(probe);
+  await app.element("load-inputs").onclick();
+  assert.equal(probe.readyState, "ended");
+  assert.equal(peer.senders.audio.track, app.inputAudio);
+  assert.equal(app.inputAudio.readyState, "live");
+  assert.equal(app.element("audio-source").value, "virtual");
+  assert.equal(app.element("audio-source").disabled, false);
   app.element("stop").onclick();
 });
