@@ -20,6 +20,14 @@ export function label(node) {
     `${p["application.name"] ?? p["node.name"] ?? "Unknown app"} · ${p["media.name"] ?? "audio"} [${p["application.process.binary"] ?? "unknown process"}]`,
   );
 }
+export function applicationKey(node) {
+  const identity = [
+    "application.id",
+    "application.process.binary",
+    "application.name",
+  ].flatMap((key) => (props(node)[key] ? [[key, props(node)[key]]] : []));
+  return identity.length ? JSON.stringify(identity) : undefined;
+}
 export function selectNode(nodes, query) {
   const matches = nodes.filter((node) =>
     /^\d+$/.test(query)
@@ -35,10 +43,14 @@ export function selectNode(nodes, query) {
             .includes(query.toLowerCase()),
         ),
   );
-  if (matches.length !== 1)
+  const identity = matches.length && applicationKey(matches[0]);
+  if (
+    matches.length !== 1 &&
+    !(identity && matches.every((node) => applicationKey(node) === identity))
+  )
     throw new Error(
       matches.length
-        ? `More than one stream matches. Use a node ID:\n${matches.map((node) => `${node.id}\t${label(node)}`).join("\n")}`
+        ? `More than one application matches. Use a more specific name or a node ID:\n${matches.map((node) => `${node.id}\t${label(node)}`).join("\n")}`
         : "No matching playback stream. Start audio in the app first; use --list to see streams.",
     );
   return matches[0];
@@ -107,7 +119,7 @@ function pick(nodes) {
       "--prompt=Share audio > ",
       "--delimiter=\t",
       "--with-nth=2..",
-      "--header=Select one playback stream; Esc cancels",
+      "--header=Follow the selected app: all its streams/tabs are shared; Esc cancels",
     ],
     {
       input: nodes.map((node) => `${node.id}\t${label(node)}`).join("\n"),
@@ -123,7 +135,17 @@ function pick(nodes) {
   if (result.status !== 0) throw new Error("Audio picker failed.");
   return nodes.find((node) => String(node.id) === result.stdout.split("\t")[0]);
 }
-export async function share(selected) {
+export async function share(selected, { follow = true } = {}) {
+  const identity = applicationKey(selected);
+  if (follow && !identity)
+    throw new Error(
+      "This stream has no application identity. Use its numeric node ID to share only that stream.",
+    );
+  const app = clean(
+    props(selected)["application.name"] ??
+      props(selected)["application.process.binary"] ??
+      selected.id,
+  );
   const name = `screenshare_${randomUUID().replaceAll("-", "")}`;
   const description = `Screenshare audio (${clean(props(selected)["application.name"] ?? props(selected)["node.name"] ?? selected.id)})`;
   let stopping = false;
@@ -159,15 +181,23 @@ export async function share(selected) {
     childError = error;
   });
   const exited = new Promise((resolve) => child.once("close", resolve));
-  let ready = false;
+  let announced = false;
+  let connected;
+  let everConnected = false;
   let deadline = Date.now() + 5000;
+  const failures = new Map();
   try {
     while (!stopping) {
       if (childError) throw childError;
       if (child.exitCode !== null || child.signalCode !== null)
         throw new Error("PipeWire loopback exited unexpectedly.");
       const graph = dump();
-      if (!sameNode(graph, selected)) {
+      const sources = follow
+        ? playbackNodes(graph).filter(
+            (node) => applicationKey(node) === identity,
+          )
+        : [sameNode(graph, selected)].filter(Boolean);
+      if (!follow && !sources.length) {
         console.log("Selected playback stream ended. Stopping audio sharing.");
         break;
       }
@@ -176,31 +206,68 @@ export async function share(selected) {
           object.type === "PipeWire:Interface:Node" &&
           props(object)["node.name"] === `${name}_capture`,
       );
-      const pairs = capture ? routes(graph, selected, capture) : [];
-      if (pairs.length) {
-        for (const [output, input] of pairs) {
-          const linked = graph.some(
-            (object) =>
-              object.type === "PipeWire:Interface:Link" &&
-              object.info["output-port-id"] === output &&
-              object.info["input-port-id"] === input &&
-              object.info.state !== "error",
-          );
-          if (!linked)
-            execFileSync("pw-link", ["--wait", String(output), String(input)], {
-              timeout: 5000,
-              stdio: ["ignore", "ignore", "pipe"],
-            });
+      if (!capture) {
+        if (Date.now() > deadline)
+          throw new Error("The virtual input did not become available.");
+        await sleep(500);
+        continue;
+      }
+      deadline = Date.now() + 5000;
+      if (!announced) {
+        console.log(
+          `${follow ? `Following ${app}: all of this application's streams/tabs are shared.` : `Sharing only: ${label(selected)}`}\nIn the website, list audio inputs and select: ${description}\nExisting speaker connections are unchanged. Ctrl+C stops sharing.`,
+        );
+        announced = true;
+      }
+      const serials = new Set(
+        sources.map((source) => props(source)["object.serial"]),
+      );
+      for (const serial of failures.keys())
+        if (!serials.has(serial)) failures.delete(serial);
+      let attached = 0;
+      for (const source of sources) {
+        const serial = props(source)["object.serial"];
+        const pairs = routes(graph, source, capture);
+        if (!pairs.length) {
+          failures.delete(serial);
+          continue;
         }
-        deadline = Date.now() + 5000;
-        if (!ready) {
+        try {
+          for (const [output, input] of pairs) {
+            const linked = graph.some(
+              (object) =>
+                object.type === "PipeWire:Interface:Link" &&
+                object.info["output-port-id"] === output &&
+                object.info["input-port-id"] === input &&
+                object.info.state !== "error",
+            );
+            if (!linked)
+              execFileSync(
+                "pw-link",
+                ["--wait", String(output), String(input)],
+                {
+                  timeout: 5000,
+                  stdio: ["ignore", "ignore", "pipe"],
+                },
+              );
+          }
+          failures.delete(serial);
+          attached++;
+        } catch (error) {
+          // Streams can vanish between the graph snapshot and pw-link. Retry a fresh graph.
+          if (!failures.has(serial)) failures.set(serial, Date.now());
+          if (Date.now() - failures.get(serial) >= 5000) throw error;
+        }
+      }
+      if (Boolean(attached) !== connected) {
+        if (attached) {
           console.log(
-            `Sharing: ${label(selected)}\nIn the website, list audio inputs and select: ${description}\nExisting speaker connections are unchanged. Ctrl+C stops sharing.`,
+            `${everConnected ? "Reconnected" : "Sharing"}: ${app} audio.`,
           );
-          ready = true;
-        }
-      } else if (Date.now() > deadline)
-        throw new Error("Audio ports did not become available.");
+          everConnected = true;
+        } else console.log(`Waiting for ${app} audio…`);
+        connected = Boolean(attached);
+      }
       await sleep(500);
     }
   } finally {
@@ -214,9 +281,10 @@ export async function share(selected) {
   }
 }
 async function main(args) {
+  if (args[0] === "--") args = args.slice(1);
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
-      "Usage: share-audio.js [--list | APP_OR_NODE_ID]\n\nNo argument opens an fzf picker. Name matches must identify one playback stream.\nSupports mono/stereo; keeps speaker connections. Ctrl+C removes the virtual input.\nIf the app recreates its playback stream, run this command again.\nRequires Node.js, pw-dump, pw-link, pw-loopback, and fzf for the picker.",
+      "Usage: share-audio.js [--list | APP_OR_NODE_ID]\n\nNo argument opens an fzf picker. Names/picker follow one application: ALL its streams/tabs are shared.\nThe virtual input stays alive between tracks and reconnects automatically.\nNumeric node IDs share only that exact stream and stop when it ends.\nStart audio in the app before selecting it. Supports mono/stereo; keeps speaker connections.\nCtrl+C removes the virtual input.\nRequires Node.js, pw-dump, pw-link, pw-loopback, and fzf for the picker.",
     );
     return;
   }
@@ -232,7 +300,7 @@ async function main(args) {
       "No playback streams found. Start audio in the game first.",
     );
   const selected = args.length ? selectNode(nodes, args[0]) : pick(nodes);
-  if (selected) await share(selected);
+  if (selected) await share(selected, { follow: !/^\d+$/.test(args[0] ?? "") });
 }
 if (
   process.argv[1] &&
