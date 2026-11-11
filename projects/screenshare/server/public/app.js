@@ -3,6 +3,7 @@ const token = location.hash.slice(1);
 const watching = Boolean(token);
 const peers = new Map();
 let stream;
+let pendingStream;
 let socket;
 let iceServers = [];
 let generation = 0;
@@ -86,14 +87,18 @@ function reset(message) {
   oldSocket?.close();
   for (const { pc } of peers.values()) pc.close();
   peers.clear();
-  stream?.getTracks().forEach((track) => track.stop());
+  stopMedia(stream);
+  stopMedia(pendingStream);
   stream = undefined;
+  pendingStream = undefined;
   $("video").srcObject = null;
   $("video").hidden = true;
   $("placeholder").hidden = false;
   $("play").hidden = true;
   $("invite").hidden = true;
   $("stop").hidden = true;
+  $("change-screen").hidden = true;
+  $("change-screen").disabled = false;
   $("start").hidden = watching;
   $("watch").hidden = !watching;
   $("start").disabled = false;
@@ -122,6 +127,127 @@ function showVideo(media, muted) {
   $("video").hidden = false;
   $("placeholder").hidden = true;
   void play();
+}
+function stopMedia(media, keep) {
+  const retained = keep?.getTracks() ?? [];
+  for (const track of media?.getTracks() ?? []) {
+    if (!retained.includes(track)) track.stop();
+  }
+}
+function captureScreen() {
+  const source = $("audio-source").value;
+  return navigator.mediaDevices.getDisplayMedia({
+    video: {
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30, max: 60 },
+    },
+    audio: source === "screen" ? audioConstraints : false,
+    systemAudio: source === "screen" ? "include" : "exclude",
+  });
+}
+function prepareCapture(media) {
+  const video = media.getVideoTracks()[0];
+  if (!video || video.readyState !== "live")
+    throw new Error("No live video track was provided.");
+  video.contentHint = "motion";
+  video.onended = () => {
+    if (stream === media) reset("Screen sharing stopped.");
+  };
+  if ($("audio-source").value !== "screen") {
+    for (const track of media.getAudioTracks()) {
+      track.stop();
+      media.removeTrack(track);
+    }
+  }
+}
+function previewCapture() {
+  const source = $("audio-source").value;
+  const sourceLabel = $("audio-source").selectedOptions[0].textContent;
+  $("audio").textContent = stream
+    .getAudioTracks()
+    .some((track) => track.readyState === "live")
+    ? `${source === "screen" ? "Screen audio" : sourceLabel}. Preview muted.`
+    : source === "none"
+      ? "Audio disabled."
+      : "No audio available. Choose an audio-enabled screen or restart sharing with a separate audio input.";
+  for (const track of stream.getAudioTracks())
+    track.onended = () => {
+      $("audio").textContent =
+        "Audio capture stopped. Restart sharing to restore sound.";
+    };
+  showVideo(stream, true);
+}
+async function replaceTracks(peer, media) {
+  const results = await Promise.allSettled([
+    peer.senders.video.replaceTrack(media.getVideoTracks()[0]),
+    peer.senders.audio.replaceTrack(media.getAudioTracks()[0] ?? null),
+  ]);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure && peer.pc.signalingState !== "closed") throw failure.reason;
+}
+async function changeScreen() {
+  if (busy || watching || !socket || !stream) return;
+  busy = true;
+  $("change-screen").disabled = true;
+  const current = generation;
+  const previous = stream;
+  let replacement;
+  try {
+    status(
+      "Choose a new screen or window. The current share stays live until you select one.",
+    );
+    replacement = await captureScreen();
+    if (current !== generation) return;
+    pendingStream = replacement;
+    prepareCapture(replacement);
+    if (!["screen", "none"].includes($("audio-source").value)) {
+      for (const track of previous.getAudioTracks())
+        replacement.addTrack(track);
+    }
+    // Viewers joining while replaceTrack awaits must also receive the new capture.
+    const updated = new Set();
+    while (current === generation) {
+      const batch = [...peers.values()].filter((peer) => !updated.has(peer));
+      if (!batch.length) break;
+      const results = await Promise.allSettled(
+        batch.map((peer) => replaceTracks(peer, replacement)),
+      );
+      if (current !== generation) return;
+      const failure = results.find((result) => result.status === "rejected");
+      if (failure) throw failure.reason;
+      for (const peer of batch) updated.add(peer);
+    }
+    if (replacement.getVideoTracks()[0].readyState !== "live")
+      throw new Error("The new capture ended before switching completed.");
+    stream = replacement;
+    pendingStream = undefined;
+    stopMedia(previous, stream);
+    previewCapture();
+    status("Screen changed. The invite link is unchanged.");
+  } catch (error) {
+    if (current !== generation) return;
+    const rollback = replacement
+      ? await Promise.allSettled(
+          [...peers.values()].map((peer) => replaceTracks(peer, previous)),
+        )
+      : [];
+    if (current !== generation) return;
+    status(
+      rollback.some((result) => result.status === "rejected")
+        ? "Couldn’t restore every viewer’s stream. Affected viewers may need to reconnect."
+        : error.name === "NotAllowedError"
+          ? "Screen change cancelled. The original share is still live."
+          : `Couldn’t change screen: ${error.message}. The original share is still live.`,
+    );
+  } finally {
+    if (replacement !== stream) stopMedia(replacement, stream);
+    if (current === generation) {
+      pendingStream = undefined;
+      busy = false;
+      $("change-screen").disabled = false;
+    }
+  }
 }
 function makePeer(id) {
   const pc = new RTCPeerConnection({ iceServers });
@@ -154,11 +280,21 @@ function makePeer(id) {
       received.addTrack(track);
       showVideo(received, false);
       $("audio").textContent = received.getAudioTracks().length
-        ? "Stream audio available. Use the player’s volume control."
+        ? "Use the player’s volume control for stream audio."
         : "Waiting for audio; the sharer may be sending video only.";
     };
   } else {
-    for (const track of stream.getTracks()) pc.addTrack(track, stream);
+    const audio = stream.getAudioTracks()[0];
+    peer.senders = {
+      video: pc.addTrack(stream.getVideoTracks()[0], stream),
+      // Reserve audio even for a silent capture so a later switch needs no renegotiation.
+      audio: audio
+        ? pc.addTrack(audio, stream)
+        : pc.addTransceiver("audio", {
+            direction: "sendonly",
+            streams: [stream],
+          }).sender,
+    };
   }
   return peer;
 }
@@ -174,6 +310,7 @@ async function handleMessage(msg, current) {
     if (msg.type === "created") {
       $("link").value = `${location.origin}/#${msg.token}`;
       $("invite").hidden = false;
+      $("change-screen").hidden = false;
       status("Sharing. Keep this tab open.");
       updateCount();
     } else status("Connecting to the sharer…");
@@ -272,29 +409,13 @@ async function start() {
       const source = $("audio-source").value;
       const sourceLabel = $("audio-source").selectedOptions[0].textContent;
       status("Choose a screen or window to share.");
-      const captured = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30, max: 60 },
-        },
-        audio: source === "screen" ? audioConstraints : false,
-        systemAudio: source === "screen" ? "include" : "exclude",
-      });
+      const captured = await captureScreen();
       if (current !== generation) {
         captured.getTracks().forEach((track) => track.stop());
         return;
       }
       stream = captured;
-      stream.getVideoTracks()[0].contentHint = "motion";
-      stream.getVideoTracks()[0].onended = () =>
-        reset("Screen sharing stopped.");
-      if (source !== "screen") {
-        for (const track of stream.getAudioTracks()) {
-          track.stop();
-          stream.removeTrack(track);
-        }
-      }
+      prepareCapture(stream);
       if (source !== "screen" && source !== "none") {
         status(`Opening audio input: ${sourceLabel}…`);
         const input = await navigator.mediaDevices.getUserMedia({
@@ -312,17 +433,7 @@ async function start() {
         if (!input.getAudioTracks().length)
           throw new Error("The selected input supplied no audio track.");
       }
-      $("audio").textContent = stream.getAudioTracks().length
-        ? `${source === "screen" ? "Screen audio" : sourceLabel}. Preview muted.`
-        : source === "none"
-          ? "Audio disabled."
-          : "No screen audio available. Stop sharing and select a separate audio input to include sound.";
-      for (const track of stream.getAudioTracks())
-        track.onended = () => {
-          $("audio").textContent =
-            "Audio capture stopped. Restart sharing to restore sound.";
-        };
-      showVideo(stream, true);
+      previewCapture();
     }
     status("Connecting…");
     $("stop").hidden = false;
@@ -336,6 +447,7 @@ async function start() {
       );
   }
 }
+$("change-screen").onclick = changeScreen;
 $("load-inputs").onclick = loadInputs;
 $("start").onclick = start;
 $("watch").onclick = start;
