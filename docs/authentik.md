@@ -183,8 +183,9 @@ At `requests.m7.rs`, the package uses an experimental upstream OIDC implementati
 plus local patches. Password, media-server, and Quick Connect login are disabled.
 
 - OIDC account linking is explicit, not automatic merely because emails match.
-- Authentik emits `REQUEST` or `ADMIN`. Permissions are replaced on login,
-  including for the owner; local permission-edit endpoints are disabled.
+- Authentik emits `REQUEST` and `AUTO_APPROVE` for regular users, or `ADMIN` for
+  admins. Permissions are replaced on login, including for the owner; local
+  permission-edit endpoints are disabled.
 - Provider logout and persistent back-channel revocation are patched in. Role
   changes are not continuously synchronized into existing sessions.
 - Native API credentials remain. Seerr also holds separate Jellyfin, Sonarr, and

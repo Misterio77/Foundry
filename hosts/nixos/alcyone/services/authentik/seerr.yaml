@@ -41,7 +41,7 @@ entries:
       description: Seerr permissions managed by Gablogin
       expression: |
         entitlements = set(request.user.app_entitlements(provider.application).values_list("name", flat=True))
-        permissions = ["ADMIN"] if "admin" in entitlements else ["REQUEST"] if "access" in entitlements else []
+        permissions = ["ADMIN"] if "admin" in entitlements else ["REQUEST", "AUTO_APPROVE"] if "access" in entitlements else []
         return {"seerr_permissions": permissions}
 
   - model: authentik_providers_oauth2.oauth2provider
