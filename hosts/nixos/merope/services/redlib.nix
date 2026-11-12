@@ -16,6 +16,7 @@ in {
   services.redlib = {
     enable = true;
     address = "127.0.0.1";
+    port = 8084;
   };
 
   services.nginx.virtualHosts."redlib.m7.rs" = {
