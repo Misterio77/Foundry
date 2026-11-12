@@ -38,6 +38,7 @@ entries:
     attrs:
       name: Redlib
       provider: !KeyOf redlib-provider
+      icon: https://auth.m7.rs/branding/redlib.svg
       meta_launch_url: https://redlib.m7.rs/
       policy_engine_mode: all
 
