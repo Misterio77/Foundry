@@ -37,6 +37,8 @@ in {
       };
       "1091500" = {
         name = "Cyberpunk 2077";
+        # Cyber Engine Tweaks (version) + RED4ext (winmm): Non-Canon Romances Enhanced,
+        # Native Settings UI and ArchiveXL.
         dllOverrides = {
           version = "n,b";
           winmm = "n,b";

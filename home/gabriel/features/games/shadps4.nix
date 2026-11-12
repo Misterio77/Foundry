@@ -5,6 +5,8 @@
 }: {
   home.packages = [pkgs.shadps4];
 
+  # Local mods: 21:9 UI, Elden Ring-style Xbox prompts.
+  # Enabled patches: 60 FPS++, 2560x1080 (21:9), Disable Facegen.
   programs.steam.config.nonSteamApps."Bloodborne" = {
     id = 3621450659;
     target = pkgs.shadps4;
