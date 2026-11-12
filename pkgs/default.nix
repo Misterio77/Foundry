@@ -19,6 +19,7 @@ in {
   hax = pkgs.callPackage ./hax {};
   lichii = pkgs.callPackage ./lichii {};
   runelite-hd = pkgs.callPackage ./runelite-hd {};
+  sekiro-fps-unlock-and-more-native = pkgs.callPackage ./sekiro-fps-unlock-and-more-native {};
   materia-theme = pkgs.callPackage ./materia-theme {};
   hyprbars = pkgs.callPackage ./hyprbars {};
   runescape = pkgs.callPackage ./runescape {

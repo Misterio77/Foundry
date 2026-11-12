@@ -1,23 +1,8 @@
 {
   pkgs,
-  lib,
-  config,
   inputs,
   ...
-}: let
-  monitor = lib.findFirst (m: m.primary && m.enabled) null config.monitors;
-  gamescope = lib.escapeShellArgs (
-    [(lib.getExe pkgs.gamescope)]
-    ++ lib.optionals (monitor != null) [
-      "-W"
-      (toString monitor.width)
-      "-H"
-      (toString monitor.height)
-    ]
-    ++ ["--"]
-  );
-  steamHome = "${config.xdg.dataHome}/Steam";
-in {
+}: {
   imports = [inputs.steam-config-nix.homeModules.default];
 
   home.packages = [
@@ -88,11 +73,8 @@ in {
         name = "Sekiro";
         compatTool = "proton_10";
         allowDownloadsWhileRunning = "always";
-        dllOverrides.dinput8 = "n,b";
-        # The existing setup runs only the FPS helper under Gamescope, not the game.
-        preHook = ''
-          ${gamescope} ${lib.escapeShellArg "${steamHome}/steamapps/common/Sekiro/sekirofpsunlock"} 30 ${lib.optionalString (monitor != null) "set-resolution ${toString monitor.width} ${toString monitor.width} ${toString monitor.height}"} &
-        '';
+        dllOverrides.d3dcompiler_43 = "n,b";
+        files.game.place."d3dcompiler_43.dll".source = "${pkgs.sekiro-fps-unlock-and-more-native}/d3dcompiler_43.dll";
       };
       "835960" = {
         name = "The Talos Principle 2";
