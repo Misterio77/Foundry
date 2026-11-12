@@ -7,5 +7,6 @@
     ./backups-repo.nix
     ./media
     ./immich.nix
+    ./redlib.nix
   ];
 }

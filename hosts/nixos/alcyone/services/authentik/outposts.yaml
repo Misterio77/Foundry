@@ -15,6 +15,11 @@ entries:
       identifiers:
         name: Foundry - Firefly
 
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Foundry - Redlib
+
   # One blueprint owns the full list; app blueprints must not replace each other.
   - model: authentik_outposts.outpost
     identifiers:
@@ -24,5 +29,6 @@ entries:
         - !Find [authentik_providers_proxy.proxyprovider, [name, Calibre-Web]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, Radicale]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, Firefly]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, Redlib]]
       config:
         authentik_host: https://auth.m7.rs/

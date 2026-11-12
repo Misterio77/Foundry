@@ -83,6 +83,7 @@
     cp ${./seerr.yaml} "$out/seerr.yaml"
     cp ${./mail.yaml} "$out/mail.yaml"
     cp ${./calibre-web.yaml} "$out/calibre-web.yaml"
+    cp ${./redlib.yaml} "$out/redlib.yaml"
     cp ${./dav.yaml} "$out/dav.yaml"
     cp ${./firefly.yaml} "$out/firefly.yaml"
     cp ${./outposts.yaml} "$out/outposts.yaml"
@@ -173,6 +174,18 @@ in {
         proxy_set_header Host books.m7.rs;
         proxy_set_header X-Original-URL https://books.m7.rs/;
         proxy_set_header X-Forwarded-Host books.m7.rs;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Authorization "";
+      '';
+    };
+    locations."^~ /redlib-outpost/" = {
+      proxyPass = "http://127.0.0.1:9000/outpost.goauthentik.io/";
+      recommendedProxySettings = false;
+      extraConfig = ''
+        proxy_set_header Host redlib.m7.rs;
+        proxy_set_header X-Original-URL https://redlib.m7.rs/;
+        proxy_set_header X-Forwarded-Host redlib.m7.rs;
         proxy_set_header X-Forwarded-Proto https;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Authorization "";
