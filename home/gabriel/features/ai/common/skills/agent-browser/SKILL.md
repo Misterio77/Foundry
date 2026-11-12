@@ -24,6 +24,32 @@ agent-browser skills get core --full      # include full command reference and t
 
 The CLI serves skill content that always matches the installed version, so instructions never go stale. The content in this stub cannot change between releases, which is why it just points at `skills get core`.
 
+## Manual login / CAPTCHA
+
+If CAPTCHA loops, launch Chromium directly and let the user solve it before
+attaching via CDP. Use an unused local debugging port and a disposable profile,
+never the user's normal profile.
+
+```bash
+profile=$(mktemp -d /tmp/agent-browser-manual.XXXXXX)
+nohup env TMPDIR=/tmp chromium --user-data-dir="$profile" \
+  --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
+  --no-first-run --no-default-browser-check "https://example.com/login" \
+  >"$profile/chromium.log" 2>&1 </dev/null &
+disown
+```
+
+`TMPDIR=/tmp` avoids profile-socket failures when an ephemeral shell exits.
+Confirm startup with `curl -fsS http://127.0.0.1:9222/json/version`; inspect
+`$profile/chromium.log` if it fails. After the user solves the CAPTCHA:
+
+```bash
+agent-browser --session manual-login --cdp 9222 --pin-tab snapshot -i
+```
+
+Afterward, close the dedicated Chromium and remove its temporary profile.
+Closing the attached agent-browser session may not terminate Chromium.
+
 ## Specialized skills
 
 Load a specialized skill when the task falls outside browser web pages:
