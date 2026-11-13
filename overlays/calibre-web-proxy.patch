@@ -14,7 +14,7 @@
              '*** Python2 is EOL since end of 2019, this version of Calibre-Web is no longer supporting Python2, '
 --- /dev/null
 +++ b/cps/foundry_proxy.py
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,100 @@
 +"""Opt-in, proxy-only identities for Foundry's browser deployment."""
 +
 +from uuid import UUID
@@ -81,10 +81,12 @@
 +    # These are labels only: the UUID mapping remains the sole account lookup.
 +    username = unquote(headers.get("X-Foundry-Calibre-Web-Username", ""))
 +    email = unquote(headers.get("X-Foundry-Calibre-Web-Email", ""))
-+    if username and email:
-+        if len(username) > 64 or len(email) > 120 or any(c in username + email for c in "\r\n\x00"):
-+            raise ValueError("Invalid proxy profile")
-+        user.name, user.email = username, email
++    if len(username) > 64 or len(email) > 120 or any(c in username + email for c in "\r\n\x00"):
++        raise ValueError("Invalid proxy profile")
++    if username:
++        user.name = username
++    if email:
++        user.email = email
 +    user.role = role
 +    try:
 +        if session.is_modified(user):
@@ -115,7 +117,7 @@
 +        g._login_user = user
 --- /dev/null
 +++ b/tests/test_foundry_proxy.py
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,244 @@
 +import ast
 +import importlib.util
 +import pathlib
@@ -283,6 +285,30 @@
 +        self.assertEqual(self.profile_request("Gabri%C3%A9l", "new%40example.org").json, response.json)
 +        self.assertEqual((user.name, user.email), ("Gabriél", "new@example.org"))
 +        self.assertEqual(self.session.query(User).count(), 1)
++
++    def test_partial_profiles_preserve_identity_and_other_fields(self):
++        response = self.profile_request(email="")
++        self.assertEqual(response.status_code, 200)
++        user = self.session.get(User, response.json["id"])
++        placeholder_email = self.subject.replace("-", "") + "@authentik.invalid"
++        self.assertEqual((user.name, user.email), ("gabs", placeholder_email))
++        self.assertEqual(self.profile_request(username="", email="new%40example.org").json,
++                         response.json)
++        self.assertEqual((user.name, user.email), ("gabs", "new@example.org"))
++        self.assertEqual(self.get().json, response.json)
++        self.assertEqual((user.name, user.email), ("gabs", "new@example.org"))
++        self.assertEqual(self.session.query(User).count(), 1)
++
++    def test_invalid_partial_profiles_are_rejected(self):
++        for username, email in [("x" * 65, ""), ("bad%0Aname", ""),
++                                ("bad%00name", ""), ("", "x" * 121),
++                                ("", "bad%0Aemail"), ("", "bad%00email")]:
++            with self.subTest(username=username, email=email):
++                self.assertEqual(self.profile_request(username, email).status_code, 403)
++        user = self.session.query(User).one()
++        self.assertEqual(user.name, "ak-" + self.subject.replace("-", ""))
++        self.assertEqual(user.email,
++                         self.subject.replace("-", "") + "@authentik.invalid")
 +
 +    def test_profile_collision_rolls_back_admin_grant(self):
 +        user = self.session.get(User, self.get().json["id"])
