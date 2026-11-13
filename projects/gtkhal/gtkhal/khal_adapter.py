@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from collections import OrderedDict
 from pathlib import Path
 
 from khal.cli_utils import build_collection
@@ -15,6 +16,7 @@ class KhalRepository:
     def __init__(self, config_path: Path | None = None) -> None:
         self._config = get_config(str(config_path) if config_path else None)
         self._collection = build_collection(self._config, selection=None)
+        self._events_by_day: OrderedDict[dt.date, tuple[Event, ...]] = OrderedDict()
 
     @property
     def calendars(self) -> tuple[Calendar, ...]:
@@ -46,20 +48,48 @@ class KhalRepository:
         days: tuple[dt.date, ...],
         visible: set[str] | None = None,
     ) -> dict[dt.date, tuple[Event, ...]]:
-        self._collection.update_db()
+        self._sync()
+        result = {}
+        for day in days:
+            if day not in self._events_by_day:
+                self._events_by_day[day] = tuple(
+                    sorted(
+                        (
+                            self._to_event(event)
+                            for event in self._collection.get_events_on(day)
+                        ),
+                        key=self._sort_key,
+                    )
+                )
+            self._events_by_day.move_to_end(day)
+            result[day] = tuple(
+                event
+                for event in self._events_by_day[day]
+                if visible is None or event.calendar in visible
+            )
+            if len(self._events_by_day) > 128:
+                self._events_by_day.popitem(last=False)
+        return result
+
+    def colors_for_days(
+        self,
+        days: tuple[dt.date, ...],
+        visible: set[str] | None = None,
+    ) -> dict[dt.date, tuple[str | None, ...]]:
+        self._sync()
         return {
             day: tuple(
-                sorted(
-                    (
-                        self._to_event(event)
-                        for event in self._collection.get_events_on(day)
-                        if visible is None or event.calendar in visible
-                    ),
-                    key=self._sort_key,
-                )
+                self._config["calendars"][name].get("color") or None
+                for name in sorted(self._collection.get_calendars_on(day))
+                if visible is None or name in visible
             )
             for day in days
         }
+
+    def _sync(self) -> None:
+        if self._collection.needs_update():
+            self._events_by_day.clear()
+            self._collection.update_db()
 
     @staticmethod
     def _to_event(event) -> Event:

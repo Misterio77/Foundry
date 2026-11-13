@@ -1,0 +1,84 @@
+Cache parsed event components by their complete ICS content, so recurring
+instances don't reparse the same record. Copies keep edits isolated from the
+cache and other instances; changed content naturally gets a fresh entry.
+
+diff --git a/khal/khalendar/event.py b/khal/khalendar/event.py
+--- a/khal/khalendar/event.py
++++ b/khal/khalendar/event.py
+@@ -24,8 +24,10 @@ helper functions."""
+ 
+ import datetime as dt
+ import logging
+ import os
+ from collections.abc import Callable
++from copy import deepcopy
++from functools import lru_cache
+ from typing import Any
+ 
+ import icalendar
+@@ -47,6 +49,12 @@ from khal.utils import generate_random_uid, is_aware, to_naive_utc, to_unix_time
+ logger = logging.getLogger("khal")
+ 
+ 
++@lru_cache(maxsize=128)
++def _parsed_events(ics: str) -> list[icalendar.Event]:
++    calendar = cal_from_ics(ics)
++    return [item for item in calendar.walk() if item.name == "VEVENT"]
++
++
+ class Event:
+     """base Event class for representing a *recurring instance* of an Event
+ 
+@@ -167,9 +175,7 @@ class Event:
+ 
+     @classmethod
+     def fromString(cls, ics: str, ref=None, **kwargs) -> "Event":
+-        calendar_collection = cal_from_ics(ics)
+-        events = [item for item in calendar_collection.walk() if item.name == "VEVENT"]
+-        return cls.fromVEvents(events, ref, **kwargs)
++        return cls.fromVEvents(deepcopy(_parsed_events(ics)), ref, **kwargs)
+ 
+     def __lt__(self, other: "Event") -> bool:
+         start = self.start_local
+
+diff --git a/tests/khalendar/test_cached_events.py b/tests/khalendar/test_cached_events.py
+new file mode 100644
+--- /dev/null
++++ b/tests/khalendar/test_cached_events.py
+@@ -0,0 +1,36 @@
++import pytz
++
++from khal.khalendar.event import Event, _parsed_events
++
++
++ICS = "\r\n".join([
++    "BEGIN:VCALENDAR",
++    "VERSION:2.0",
++    "BEGIN:VEVENT",
++    "UID:cached-event",
++    "DTSTART:20260101T100000Z",
++    "DTEND:20260101T110000Z",
++    "SUMMARY:Original",
++    "END:VEVENT",
++    "END:VCALENDAR",
++])
++
++
++def test_cached_components_are_isolated_and_keyed_by_content():
++    _parsed_events.cache_clear()
++    locale = {"local_timezone": pytz.UTC, "default_timezone": pytz.UTC}
++    first = Event.fromString(ICS, locale=locale)
++    second = Event.fromString(ICS, locale=locale)
++    first.update_summary("Edited")
++    assert second.summary == "Original"
++    assert Event.fromString(ICS, locale=locale).summary == "Original"
++    changed = ICS.replace("SUMMARY:Original", "SUMMARY:Remote edit")
++    assert Event.fromString(changed, locale=locale).summary == "Remote edit"
++    assert _parsed_events.cache_info().hits == 2
++
++
++def test_parsed_event_cache_is_bounded():
++    _parsed_events.cache_clear()
++    for number in range(150):
++        _parsed_events(ICS.replace("cached-event", f"event-{number}"))
++    assert _parsed_events.cache_info().currsize == 128

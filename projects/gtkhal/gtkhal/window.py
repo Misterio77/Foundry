@@ -319,16 +319,12 @@ class GtkhalWindow(Adw.ApplicationWindow):
             return
         days = self._calendar.visible_days
         try:
-            events_by_day = self._repository.events_for_days(days, self._visible_calendars)
+            colors_by_day = self._repository.colors_for_days(days, self._visible_calendars)
         except Exception as error:  # khal exposes several backend-specific errors
             self._show_toast(str(error))
             return
         self._calendar.set_event_colors(
-            {
-                day: tuple(event.color for event in events_by_day[day])
-                for day in days
-                if events_by_day[day]
-            }
+            {day: colors for day, colors in colors_by_day.items() if colors}
         )
 
     def _refresh(self) -> None:

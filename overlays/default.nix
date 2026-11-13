@@ -36,6 +36,8 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    khal = addPatches prev.khal [./khal-cache-parsed-events.patch];
+
     # Maildir flag removal must replace aerc's cached flags, not OR into them.
     aerc = addPatches prev.aerc [./aerc-maildir-replace-flags.patch];
 
