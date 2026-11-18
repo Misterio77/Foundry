@@ -36,6 +36,16 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    # Remove once nixpkgs includes the nginx2root fixes (1.30.7+).
+    nginxStable = prev.nginxStable.overrideAttrs (_: rec {
+      version = "1.30.7";
+      nginxVersion = version;
+      src = final.fetchurl {
+        url = "https://nginx.org/download/nginx-${version}.tar.gz";
+        hash = "sha256-JWW1yDcFDpWPcPsPc8SOK8pFQq00n9NW9G+wxyYQvG4=";
+      };
+    });
+
     khal = addPatches prev.khal [./khal-cache-parsed-events.patch];
 
     # Maildir flag removal must replace aerc's cached flags, not OR into them.

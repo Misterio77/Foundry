@@ -4,11 +4,13 @@
     install esp6 ${pkgs.coreutils}/bin/false
     install rxrpc ${pkgs.coreutils}/bin/false
     install algif_aead ${pkgs.coreutils}/bin/false
+    install sctp ${pkgs.coreutils}/bin/false
   '';
   boot.blacklistedKernelModules = [
     "esp4"
     "esp6"
     "rxrpc"
     "algif_aead"
+    "sctp"
   ];
 }
