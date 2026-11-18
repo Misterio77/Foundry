@@ -1,4 +1,4 @@
-# Mail, DAV, and SOGo: authentication boundaries
+# Mail and DAV: authentication boundaries
 
 These are the existing central-credential integrations and the first concrete
 examples of the intended user-facing pattern: integrated Gablogin login,
@@ -20,12 +20,11 @@ tests, and live client acceptance are different kinds of evidence.
 | DAV OAuth client | Authentik access token | Outpost introspection/federation; trusted principal forwarded by Nginx |
 | DAV legacy client | Basic username + app password | Outpost client-credentials exchange; trusted principal forwarded |
 | DAV browser | Outpost session cookie | Outpost session; trusted principal forwarded |
-| SOGo browser | SOGo OIDC login/session | Separate confidential client; user token delegated to mail and DAV |
 | Application SMTP sender | Dedicated local SMTP credential | Existing mail-server account, outside personal Gablogin authentication |
 
 IMAP 993, submission 465, and DAV are tailnet-restricted. Public SMTP 25 does not
-offer authentication. SOGo is the web frontend at `mail.m7.rs`, not the validator
-for external IMAP/SMTP clients.
+offer authentication. There is no configured webmail frontend at `mail.m7.rs`;
+its certificate remains available for IMAP/SMTP.
 
 ## The client-facing experience
 
@@ -43,8 +42,8 @@ machine-to-machine OAuth or headless bootstrap. The helper's credential storage
 must also be accessible to the unattended process. Actual unattended operation,
 including keyring/GPG access and concurrent renewal, remains an acceptance concern.
 
-A client may instead integrate browser login and token/session management itself,
-as SOGo does. The choice is about the interface the client can use, not whether
+A client may instead integrate browser login and token/session management itself.
+The choice is about the interface the client can use, not whether
 initial authorization involves a browser. Neither backend OAuth support nor the
 presence of oama makes an arbitrary client able to consume bearer tokens.
 
@@ -70,17 +69,10 @@ The fallback has real limits:
   OAuth grants, app passwords, browser sessions, and service connections remain
   different objects with different lifecycle controls.
 
-SOGo keeps its own browser login and delegates tokens to mail and DAV internally.
-Users should not need separate app passwords for each SOGo module. SOGo and oama
-illustrate the two preferred paths: an integrated client and an OAuth helper for
-other consumers. App passwords are the compatibility fallback for both, not just
-an alternative to interactive browser login.
-
 ## Entitlements and resource identities
 
 Mail and Radicale each own an `access` entitlement. `trusted` and `admin` receive
 both; individual grants can permit only one. There is no Mail/DAV admin role.
-SOGo admission requires both services.
 
 - **Mail:** `mail_principal` must be a nonblank canonical mailbox address. Missing
   principals emit no mail identity. Username and editable profile email do not
@@ -122,10 +114,6 @@ access requires reauthorization and revocation of grants whose authority should
 end. The existing oama patch retains replacement refresh tokens; personal clients
 serialize token retrieval to avoid refresh-rotation races.
 
-SOGo retains its own confidential OIDC client, five-minute access tokens and
-one-day refresh tokens. Its current scopes include `openid profile mail dav
-ak_proxy offline_access`; it is not switched to the shared CLI client.
-
 Firefly is deliberately excluded: the client offers no `firefly` scope or Firefly
 identity mapping. Firefly retains its proxy browser login and native API tokens.
 Scoped Mail/DAV issuance stands alone without the broader gateway proposal.
@@ -153,7 +141,7 @@ authentication checks do not continuously reauthenticate them.
 ## DAV validation and browser sessions
 
 Nginx authenticates DAV requests through the embedded outpost. Federation permits
-shared-client and SOGo tokens. The DAV mapping supplies the authoritative principal;
+shared-client tokens. The DAV mapping supplies the authoritative principal;
 Nginx overwrites client identity headers and forwards `X-Remote-User` to loopback-
 only Radicale, stripping Authorization and cookies.
 
@@ -212,7 +200,7 @@ for persistence and recovery.
 
 The scoped issuance work passed live authorization, consent, claim isolation,
 PKCE, refresh rotation/replay, narrowing, revocation, and negative authorization
-tests. Oama was reauthorized successfully. This is not full mail/DAV/SOGo client
+tests. Oama was reauthorized successfully. This is not full mail/DAV client
 acceptance or proof of the proposed consumer-hardening contract.
 
 Complete the existing client paths before extending this model to more services.
@@ -224,8 +212,8 @@ credentials. Avoid claiming these experiences from issuance tests alone.
 
 Outstanding protocol and security evaluation should cover:
 
-- Actual IMAP sync, SMTP submission, CalDAV/CardDAV reads and writes, and SOGo
-  mail/calendar/contact operations, including renewal.
+- Actual IMAP sync, SMTP submission, and CalDAV/CardDAV reads and writes,
+  including renewal.
 - OAuth and app passwords; inactive users, removed entitlements, missing
   principals, separate users/resources, and expired/revoked credentials.
 - Wrong-service/provider tokens and refresh/ID tokens at the resource endpoint,
@@ -246,6 +234,5 @@ without treating consistent setup instructions as a promise of instant revocatio
 
 [Mail](../hosts/nixos/alcyone/services/mail.nix),
 [Radicale](../hosts/nixos/alcyone/services/radicale.nix),
-[SOGo](../hosts/nixos/alcyone/services/sogo6.nix),
 [Authentik blueprints](../hosts/nixos/alcyone/services/authentik/),
 [personal client configuration](../home/gabriel/features/productivity/accounts/personal.nix).

@@ -14,7 +14,7 @@ has been implemented. This document supersedes the earlier phased universal roll
 plan; the alternatives below are design context, not an execution queue.
 
 See [the service inventory](../authentik.md) and
-[Mail/DAV/SOGo boundaries](../mail-auth.md) for the existing configuration.
+[Mail/DAV boundaries](../mail-auth.md) for the existing configuration.
 
 ## What already exists
 
@@ -338,7 +338,7 @@ needs honest descriptions of those effects, not a misleading single label.
 The user-facing goal and acceptance of internal native tokens are settled. The
 remaining questions concern how far to implement that goal and at what cost:
 
-- Which actual client workflow should be improved after Mail/DAV/SOGo acceptance?
+- Which actual client workflow should be improved after Mail/DAV acceptance?
   What specific user action or credential-management detour would disappear?
 - Does that client support integrated login, helper-supplied OAuth tokens, or
   app-password transport? Would supporting it require a fork or an upstream change?
@@ -351,7 +351,7 @@ remaining questions concern how far to implement that goal and at what cost:
 - Can a shared adapter replace concrete duplicated code, or would it add another
   layer without removing existing application integrations?
 
-The immediate follow-up proposed is acceptance of the existing Mail/DAV/SOGo
+The immediate follow-up proposed is acceptance of the existing Mail/DAV
 clients. No new authentication implementation or universal rollout is selected.
 Durable tests should extend existing upstream/package suites; exploratory checks
 belong outside the repo.

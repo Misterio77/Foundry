@@ -20,14 +20,6 @@
     redlib = "sha256-Axnk5qshQfEP96k2I/jS/91+6vgwyZHnTV3l2xTMTFQ=";
     seerr = "sha256-sS5d/WQdlhz7aDYNoz/iiHO5Xqm2TCMjPVuHo3y/pMQ=";
   };
-  icons =
-    homarrIcons
-    // {
-      sogo = pkgs.fetchurl {
-        url = "https://raw.githubusercontent.com/Alinto/sogo/ff2819278518d09fe3e3a8eed013fa0ddd3a022c/UI/WebServerResources/img/sogo-compact.svg";
-        hash = "sha256-l9dzTMqv6TrE89YVTTf5C2BWadvRKUcdhAcpOgWDDqg=";
-      };
-    };
   branding = pkgs.linkFarm "authentik-branding" (
     map (name: {
       inherit name;
@@ -37,7 +29,7 @@
       name = "${name}.svg";
       inherit path;
     })
-    icons
+    homarrIcons
   );
   # Blueprint retrieval rejects symlinks resolving outside blueprints_dir.
   blueprints = pkgs.runCommand "authentik-blueprints" {} ''
@@ -90,7 +82,6 @@
     cp ${./outposts.yaml} "$out/outposts.yaml"
     cp ${./dav-directory.yaml} "$out/dav-directory.yaml"
     cp ${./gablogin-cli.yaml} "$out/gablogin-cli.yaml"
-    cp ${./sogo.yaml} "$out/sogo.yaml"
   '';
 in {
   imports = [inputs.authentik-nix.nixosModules.default];
@@ -98,7 +89,6 @@ in {
   sops.secrets = {
     authentik-jellyfin-client-secret.sopsFile = ../../secrets.yaml;
     authentik-seerr-client-secret.sopsFile = ../../secrets.yaml;
-    authentik-sogo-client-secret.sopsFile = ../../secrets.yaml;
     authentik-key.sopsFile = ../../secrets.yaml;
     authentik-immich-client-secret.sopsFile = ../../secrets.yaml;
     authentik-mail-password.sopsFile = ../../secrets.yaml;
@@ -116,7 +106,6 @@ in {
       AUTHENTIK_EMAIL__PASSWORD=${config.sops.placeholder.authentik-mail-password}
       AUTHENTIK_JELLYFIN_CLIENT_SECRET=${config.sops.placeholder.authentik-jellyfin-client-secret}
       AUTHENTIK_SEERR_CLIENT_SECRET=${config.sops.placeholder.authentik-seerr-client-secret}
-      AUTHENTIK_SOGO_CLIENT_SECRET=${config.sops.placeholder.authentik-sogo-client-secret}
       AUTHENTIK_RADICALE_DIRECTORY_TOKEN=${config.sops.placeholder.authentik-radicale-directory-token}
     '';
     restartUnits = ["authentik-migrate.service" "authentik-worker.service" "authentik.service"];

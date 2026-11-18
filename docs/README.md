@@ -1,7 +1,7 @@
 # Operations and proposals
 
 - [Authentik / Gablogin](authentik.md): intended user experience, per-service assessment and known exceptions.
-- [Mail, DAV and SOGo](mail-auth.md): integrated login, oama-managed OAuth and the app-password fallback; validation and client acceptance.
+- [Mail and DAV](mail-auth.md): integrated login, oama-managed OAuth and the app-password fallback; validation and client acceptance.
 - [Metrics client certificates](metrics-mtls.md): mTLS access, provisioning and rotation.
 - [Backups](backups.md): declared coverage, restore evidence and gaps.
 - [Gablogin user-facing contract](todo/gablogin-api-auth.md): two preferred paths—integrated login and helper-managed OAuth—with a shared app-password fallback; trade-offs and lifecycle decisions.

@@ -23,12 +23,14 @@ Move to **taygeta**:
 
 ## Removal
 
-- [ ] Retire SOGo6 API/UI, dedicated Redis, nginx application routes, dedicated
-  Authentik integration/grants and secret injection. Preserve mail/DAV services,
-  shared identity mappings/scopes and `gablogin-cli`.
-- [ ] Retain a recoverable SOGo database + encryption/voucher-key backup before
-  removing persistence. Decide separately whether to delete its state and retire
-  its package/module/patch code; update affected documentation.
+- [x] Remove SOGo6 API/UI, dedicated Redis, nginx application routes, Authentik
+  blueprint/secret injection and package/module/patch code from configuration.
+  Preserve mail/DAV services, shared identity mappings/scopes and `gablogin-cli`.
+- [ ] Retire live SOGo Authentik objects and revoke its grants at deployment;
+  removing the blueprint does not delete existing objects.
+- [x] Remove SOGo persistence, database/user and backup declarations; no ongoing
+  retention is required. Live state deletion and encrypted-secret cleanup remain
+  separate decisions.
 - [ ] Confirm whether `git://` is used; remove git-daemon and public TCP 9418 if not.
 
 ## Migration order

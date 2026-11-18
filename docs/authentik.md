@@ -11,7 +11,7 @@ it leaves Firefly browser authentication and native API credentials unchanged.
 Those changes are described separately below. Neither revision implements a
 universal gateway.
 
-- [Mail, DAV, and SOGo](mail-auth.md): protocol boundaries and credential lifetimes.
+- [Mail and DAV](mail-auth.md): protocol boundaries and credential lifetimes.
 - [Directions and concerns](todo/gablogin-api-auth.md): alternatives under evaluation,
   not an approved implementation sequence.
 
@@ -78,7 +78,6 @@ roles. Authentik administration is separate from application administration.
 | `admin` | All of the above | Grafana, Immich, Jellyfin, Seerr, Firefly |
 | `authentik-admin` | No application access implied | Authentik superuser only |
 
-SOGo requires both Mail and Radicale access rather than a separate entitlement.
 Individual entitlement assignments can supplement groups. An `admin` entitlement
 alone does not substitute for application `access`.
 
@@ -112,14 +111,14 @@ not the same thing as a script using an independent API key.
 | Waterfly | Obtain a Firefly PAT and configure it in the client | Known exception, deliberately unchanged for now |
 | Mail/DAV CLI tools and unattended jobs | Authorize through oama, then retrieve/refresh access tokens through the helper | First-class helper-managed OAuth path; full end-to-end acceptance remains pending |
 | Mail/DAV clients without usable OAuth | Configure a dedicated Gablogin app password | Shared fallback; not a service-scoped OAuth grant |
-| Radicale browser and SOGo | Sign in through Gablogin | Fits the browser pattern; SOGo delegates backend credentials internally |
+| Radicale browser | Sign in through Gablogin | Fits the browser pattern |
 
 Judge specific client workflows, not just whole applications. For example, an
 Immich mobile login and an automation script asking for an Immich API key expose
 different credential experiences even though both use the same service. Likewise,
 oama's browser authorization is not a built-in OAuth button in every mail client.
 
-The next proposed work is to finish acceptance of the existing Mail/DAV/SOGo
+The next proposed work is to finish acceptance of the existing Mail/DAV
 paths, not to replace working native OIDC/device flows. Firefly remains an explicit
 exception; closing it later would be a focused integration decision.
 
@@ -264,17 +263,6 @@ principal. Authentik does not provision mailboxes or delivery aliases: Nix does.
 Service SMTP senders retain independent local credentials. Authentication checks
 do not terminate already-established IMAP connections.
 
-### SOGo — delegated client of Mail and DAV
-
-The web interface at `mail.m7.rs` uses its own confidential OIDC client with PKCE
-and refresh tokens. Admission requires both Mail and Radicale access. SOGo uses
-the user's OAuth access token for IMAP/SMTP and DAV, rather than storing a personal
-mailbox password. Our package carries OIDC/backend integration patches.
-
-Logout uses Authentik's end-session endpoint; this is not the same patched
-back-channel session model as Grafana or Seerr. SOGo is a client spanning two
-resource services, not a third interchangeable API-authentication gateway.
-
 ## What the scoped-client change does
 
 The baseline's `mail-and-dav` public client admitted users with either Mail or DAV
@@ -297,7 +285,7 @@ refresh rotation/replay, narrowing, revocation, and negative authorization cases
 Oama was reauthorized successfully. After removing the premature Firefly scope,
 live checks confirmed Mail/DAV issuance and refresh, exact claims, and denial of
 Firefly authorization requests. No existing Firefly-bearing shared-client grants
-needed revocation. Full mail/DAV/SOGo client acceptance remains incomplete. No
+needed revocation. Full mail/DAV client acceptance remains incomplete. No
 proposed validator or Firefly API-guard patch has been implemented.
 
 ## Inconsistencies and concerns
@@ -339,8 +327,7 @@ criteria.
 - [Grafana](../hosts/nixos/alcyone/services/grafana/default.nix),
   [Firefly](../hosts/nixos/alcyone/services/firefly.nix),
   [Mail](../hosts/nixos/alcyone/services/mail.nix),
-  [Radicale](../hosts/nixos/alcyone/services/radicale.nix),
-  [SOGo](../hosts/nixos/alcyone/services/sogo6.nix)
+  [Radicale](../hosts/nixos/alcyone/services/radicale.nix)
 - [Immich](../hosts/nixos/merope/services/immich.nix),
   [Jellyfin](../hosts/nixos/merope/services/media/jellyfin/),
   [Seerr](../hosts/nixos/merope/services/media/jellyseerr.nix),
