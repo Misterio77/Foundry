@@ -22,6 +22,7 @@ in {
 
       # Preserve the colorscheme rather than deriving accents from album art.
       auto_color = false;
+      theme = "Colorscheme";
 
       keymap.shift-enter = "QueueAppend";
 

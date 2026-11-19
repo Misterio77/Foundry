@@ -246,6 +246,8 @@ in {
       })
     ];
 
+    jellyfin-tui = addPatches prev.jellyfin-tui [./jellyfin-tui-managed-theme.patch];
+
     # Avoid refreshing the entire movie library when the real-time monitor sees
     # a new sidecar file in an existing movie directory.
     # https://github.com/jellyfin/jellyfin/pull/16228

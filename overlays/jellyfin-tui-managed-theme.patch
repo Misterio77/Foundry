@@ -1,0 +1,164 @@
+Config theme overrides saved preferences; compare contents to reload Nix symlink switches.
+
+--- a/src/tui.rs
++++ b/src/tui.rs
+@@ -2391,11 +2391,15 @@
+         let builtin_themes = Theme::builtin_themes();
+         let user_themes = Theme::from_config(config);
+ 
+-        // find by name or default to first builtin
++        let theme_name = config
++            .get("theme")
++            .and_then(|v| v.as_str())
++            .unwrap_or(&preferences.theme);
++        // Config selection takes precedence over the per-server preference.
+         let mut theme = user_themes
+             .iter()
+             .chain(builtin_themes.iter())
+-            .find(|t| t.name == preferences.theme)
++            .find(|t| t.name == theme_name)
+             .cloned()
+             .unwrap_or_else(|| builtin_themes[0].clone());
+ 
+--- a/src/themes/theme.rs
++++ b/src/themes/theme.rs
+@@ -2,7 +2,7 @@
+ use serde::{Deserialize, Serialize};
+ use std::path::PathBuf;
+ use std::str::FromStr;
+-use std::time::{Duration, SystemTime};
++use std::time::Duration;
+ 
+ // A color that can either be a fixed color, "auto" (use primary color), or "tinted" (base color
+ // blended slightly towards primary_color by the theme's tint_strength)
+@@ -1202,16 +1202,18 @@
+ pub struct ConfigWatcher {
+     pub path: PathBuf,
+     pub last_check: std::time::Instant,
+-    pub last_mtime: Option<SystemTime>,
++    last_contents: Option<Vec<u8>>,
+     pub interval: Duration,
+ }
+ 
+ impl ConfigWatcher {
+     pub fn new(path: impl Into<PathBuf>, interval: Duration) -> Self {
+-        Self {
+-            path: path.into(),
++        let path = path.into();
++        let last_contents = std::fs::read(&path).ok();
++        Self {
++            path,
+             last_check: std::time::Instant::now(),
+-            last_mtime: None,
++            last_contents,
+             interval,
+         }
+     }
+@@ -1222,28 +1224,86 @@
+         }
+         self.last_check = std::time::Instant::now();
+ 
+-        let metadata = match std::fs::metadata(&self.path) {
+-            Ok(m) => m,
++        // Nix replaces config symlinks with targets sharing the same mtime.
++        let contents = match std::fs::read(&self.path) {
++            Ok(contents) => contents,
+             Err(_) => return false,
+         };
+-
+-        let modified = match metadata.modified() {
+-            Ok(t) => t,
+-            Err(_) => return false,
+-        };
+-
+-        // if first time just store and skip
+-        match self.last_mtime {
+-            None => {
+-                self.last_mtime = Some(modified);
+-                false
+-            }
+-            Some(old) if old == modified => false,
+-            _ => {
+-                // file changed
+-                self.last_mtime = Some(modified);
+-                true
+-            }
+-        }
++        if self.last_contents.as_ref() == Some(&contents) {
++            return false;
++        }
++        self.last_contents = Some(contents);
++        true
+     }
+ }
++
++#[cfg(test)]
++mod config_watcher_tests {
++    use super::*;
++    use std::fs;
++    use std::sync::atomic::{AtomicUsize, Ordering};
++
++    struct TestDir(PathBuf);
++
++    impl TestDir {
++        fn new() -> Self {
++            static NEXT: AtomicUsize = AtomicUsize::new(0);
++            let path = std::env::temp_dir().join(format!(
++                "jellyfin-theme-{}-{}",
++                std::process::id(),
++                NEXT.fetch_add(1, Ordering::Relaxed)
++            ));
++            fs::create_dir(&path).unwrap();
++            Self(path)
++        }
++    }
++
++    impl Drop for TestDir {
++        fn drop(&mut self) {
++            fs::remove_dir_all(&self.0).unwrap();
++        }
++    }
++
++    #[test]
++    fn detects_edits_before_first_poll_and_preserves_state_when_missing() {
++        let dir = TestDir::new();
++        let path = dir.0.join("config.yaml");
++        fs::write(&path, "theme: Dark").unwrap();
++        let mut watcher = ConfigWatcher::new(&path, Duration::ZERO);
++        assert!(!watcher.poll());
++        fs::write(&path, "theme: Light").unwrap();
++        assert!(watcher.poll());
++        assert!(!watcher.poll());
++        fs::remove_file(&path).unwrap();
++        assert!(!watcher.poll());
++        fs::write(&path, "theme: Light").unwrap();
++        assert!(!watcher.poll());
++        fs::write(&path, "theme: Dark").unwrap();
++        assert!(watcher.poll());
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn detects_symlink_switch_with_identical_mtimes() {
++        use std::os::unix::fs::symlink;
++
++        let dir = TestDir::new();
++        let dark = dir.0.join("dark.yaml");
++        let light = dir.0.join("light.yaml");
++        let path = dir.0.join("config.yaml");
++        for (file, contents) in [(&dark, "theme: Dark"), (&light, "theme: Light")] {
++            fs::write(file, contents).unwrap();
++            fs::File::options().write(true).open(file).unwrap()
++                .set_times(fs::FileTimes::new().set_modified(std::time::UNIX_EPOCH))
++                .unwrap();
++        }
++        symlink(&dark, &path).unwrap();
++        let mut watcher = ConfigWatcher::new(&path, Duration::ZERO);
++        assert!(!watcher.poll());
++        let replacement = dir.0.join("replacement");
++        symlink(&light, &replacement).unwrap();
++        fs::rename(&replacement, &path).unwrap();
++        assert!(watcher.poll());
++        assert!(!watcher.poll());
++    }
++}
