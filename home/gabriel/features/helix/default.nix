@@ -18,6 +18,7 @@ in {
       keys.normal.space.V = ":lsp-workspace-command todomd.changeView";
       editor = {
         soft-wrap.enable = true;
+        lsp.display-inlay-hints = true;
         color-modes = true;
         line-number = "relative";
         bufferline = "multiple";
