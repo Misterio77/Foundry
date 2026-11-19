@@ -161,6 +161,9 @@ in {
   };
   "ui.text" = c.on_surface;
   "ui.text.focus" = c.on_surface;
+  "ui.virtual.inlay-hint" = {
+    fg = c.on_surface_variant;
+  };
   "ui.virtual.indent-guide" = {
     fg = c.inverse_on_surface;
   };

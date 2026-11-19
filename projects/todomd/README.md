@@ -267,7 +267,7 @@ not implement `window/showMessageRequest` cycle to the next view. The buffer
 must match its last accepted canonical text.
 
 Optional LSP inlay hints annotate due/start headings and inline `+`/`-` markers
-with friendly labels such as `tonight`, `tomorrow morning`, or `last friday`.
+with friendly labels such as `(tonight)`, `(tomorrow morning)`, or `(last friday)`.
 The actual Markdown stays absolute; hints do not change deadlines or saved
 text. Supporting clients receive periodic refresh requests so labels can roll
 over at midnight. In Helix, enable them with:

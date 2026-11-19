@@ -202,7 +202,7 @@ them.
 
 Canonical Markdown remains absolute. The LSP supplies optional inlay hints after
 start/due grouping headings and inline `+`/`-` markers, using the same date
-formatter for both. Hints are presentation only: they are not saved, copied as
+formatter for both, with labels wrapped in parentheses. Hints are presentation only: they are not saved, copied as
 Markdown, parsed, or used for reconciliation. Editors control their visibility
 and highlighting.
 

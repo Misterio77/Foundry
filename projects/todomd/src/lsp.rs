@@ -1047,7 +1047,7 @@ fn date_inlay_hints(
             }
             hints.push(InlayHint {
                 position,
-                label: InlayHintLabel::String(date.friendly(context)),
+                label: InlayHintLabel::String(format!("({})", date.friendly(context))),
                 kind: None,
                 text_edits: None,
                 tooltip: None,
@@ -1160,12 +1160,12 @@ mod tests {
         assert_eq!(
             labels,
             [
-                "tomorrow night",
-                "today",
-                "today",
-                "tomorrow morning",
-                "yesterday",
-                "friday"
+                "(tomorrow night)",
+                "(today)",
+                "(today)",
+                "(tomorrow morning)",
+                "(yesterday)",
+                "(friday)"
             ]
         );
         let marker = "- [ ] @\"😀 list\" +2026-09-07";
