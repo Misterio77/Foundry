@@ -1171,6 +1171,18 @@ mod tests {
         let marker = "- [ ] @\"😀 list\" +2026-09-07";
         let position = Position::new(4, marker.encode_utf16().count() as u32);
         assert_eq!(hints[2].position, position);
+        let quoted_marker = format!("{marker} -\"2026-09-08 09:00");
+        assert_eq!(
+            hints[3].position,
+            Position::new(4, quoted_marker.encode_utf16().count() as u32)
+        );
+        let quoted_start = "- [ ] +\"2026-09-07 09:00\" Task";
+        let start_hints = date_inlay_hints(quoted_start, &view, full_range(quoted_start), &context);
+        assert_eq!(start_hints.len(), 1);
+        assert_eq!(
+            start_hints[0].position,
+            Position::new(0, "- [ ] +\"2026-09-07 09:00".encode_utf16().count() as u32)
+        );
         assert!(
             hints
                 .iter()

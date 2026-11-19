@@ -202,8 +202,9 @@ them.
 
 Canonical Markdown remains absolute. The LSP supplies optional inlay hints after
 start/due grouping headings and inline `+`/`-` markers, using the same date
-formatter for both, with labels wrapped in parentheses. Hints are presentation only: they are not saved, copied as
-Markdown, parsed, or used for reconciliation. Editors control their visibility
+formatter for both, with labels wrapped in parentheses. Quoted markers place
+hints inside the closing quote. Hints are presentation only: they are not saved,
+copied as Markdown, parsed, or used for reconciliation. Editors control their visibility
 and highlighting.
 
 Labels use yesterday/today/tomorrow, nearby weekdays (with `last` for past

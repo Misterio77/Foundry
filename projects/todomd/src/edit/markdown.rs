@@ -568,7 +568,8 @@ fn split_fields_with_dates<'a>(
         let (value, rest) = take_marker_value(&remainder[1..], "date")?;
         let value = dates::parse_markdown_at(&value, date_context)
             .with_context(|| format!("invalid {name} marker"))?;
-        date_field(length - rest.len(), &value);
+        let closing_quote = usize::from(remainder[1..].starts_with('"'));
+        date_field(length - rest.len() - closing_quote, &value);
         *slot = Some(value);
         remainder = marker_remainder(rest, &format!("{name} marker"))?;
     }
