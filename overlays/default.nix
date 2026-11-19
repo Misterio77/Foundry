@@ -36,6 +36,13 @@ in {
 
   # Modifies existing packages
   modifications = final: prev: {
+    # Remove once nixpkgs includes the CVE-2026-126714 fix (8.5.13+).
+    php85 = assert final.lib.versionOlder prev.php85.version "8.5.13";
+      prev.php85.buildEnv {
+        version = "8.5.13";
+        hash = "sha256-R9UMNgFnhKSnHwGc17+inDHkvg3iLT+gYJWygKYpni8=";
+      };
+
     # Remove once nixpkgs includes the nginx2root fixes (1.30.7+).
     nginxStable = assert final.lib.versionOlder prev.nginxStable.version "1.30.7";
       prev.nginxStable.overrideAttrs (_: rec {
