@@ -5,7 +5,7 @@ use chrono::{
     DateTime, NaiveDate, NaiveDateTime, NaiveTime, Timelike, Utc,
     offset::{LocalResult, TimeZone},
 };
-use chrono_english::{Dialect, parse_date_string};
+use chrono_english::{Dialect, Interval, parse_date_string, parse_duration};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +36,55 @@ impl DateValue {
         match self {
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
             Self::DateTime(date_time) => date_time.local().format("%Y-%m-%d %H:%M").to_string(),
+        }
+    }
+
+    pub fn friendly(&self, context: &DateContext) -> String {
+        let (date, time) = match self {
+            Self::Date(date) => (*date, None),
+            Self::DateTime(value) => {
+                let local = value.instant.with_timezone(&context.timezone);
+                (local.date_naive(), Some(local.time()))
+            }
+        };
+        let today = context.now.date_naive();
+        let days = (date - today).num_days();
+        let day = match days {
+            -1 => "yesterday".to_owned(),
+            0 => "today".to_owned(),
+            1 => "tomorrow".to_owned(),
+            -6..=-2 => format!("last {}", date.format("%A")).to_lowercase(),
+            2..=6 => date.format("%A").to_string().to_lowercase(),
+            _ => {
+                use chrono::Datelike;
+                let format = if date.year() == today.year() {
+                    "%a %-d %b"
+                } else {
+                    "%a %-d %b %Y"
+                };
+                date.format(format).to_string().to_lowercase()
+            }
+        };
+        let Some(time) = time else {
+            return day;
+        };
+        let part = if time.minute() == 0 && time.second() == 0 {
+            match time.hour() {
+                0 => Some("midnight"),
+                9 => Some("morning"),
+                12 => Some("noon"),
+                15 => Some("afternoon"),
+                18 => Some("evening"),
+                20 => Some("night"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        match part {
+            Some("night") if days == 0 => "tonight".to_owned(),
+            Some(part) => format!("{day} {part}"),
+            None => format!("{day} {}", time.format("%H:%M")),
         }
     }
 
@@ -201,6 +250,11 @@ pub fn parse_markdown_at(input: &str, context: &DateContext) -> Result<DateValue
         }
     }
 
+    let lower = input.trim().to_lowercase();
+    let input = lower
+        .strip_prefix("in ")
+        .filter(|rest| parse_duration(rest).is_ok())
+        .unwrap_or(&lower);
     let midnight = context
         .timezone
         .from_local_datetime(&context.now.date_naive().and_time(NaiveTime::MIN))
@@ -239,6 +293,7 @@ fn part_of_day(input: &str) -> Option<(String, NaiveTime)> {
         ("noon", 12),
         ("afternoon", 15),
         ("evening", 18),
+        ("night", 20),
         ("tonight", 20),
         ("midnight", 0),
     ] {
@@ -254,7 +309,8 @@ fn part_of_day(input: &str) -> Option<(String, NaiveTime)> {
 
 fn has_explicit_time(input: &str) -> bool {
     let lower = input.to_lowercase();
-    lower.contains(':')
+    matches!(parse_duration(&lower), Ok(Interval::Seconds(_)))
+        || lower.contains(':')
         || lower.split_whitespace().any(|word| {
             word.strip_suffix("am")
                 .or_else(|| word.strip_suffix("pm"))
@@ -401,6 +457,78 @@ mod tests {
                 .canonical(),
             "2026-09-07 20:00"
         );
+    }
+
+    #[test]
+    fn parses_common_relative_dates_and_dayparts() {
+        for (input, expected) in [
+            ("tomorrow night", "2026-09-08 20:00"),
+            ("friday night", "2026-09-11 20:00"),
+            ("yesterday", "2026-09-06"),
+            ("next friday", "2026-09-18"),
+            ("last friday", "2026-09-04"),
+            ("1 week ago", "2026-08-31"),
+            ("in 2 days", "2026-09-09"),
+            ("in 2 hours", "2026-09-07 14:30"),
+            ("3 hours ago", "2026-09-07 09:30"),
+            ("in 30 minutes", "2026-09-07 13:00"),
+            ("tomorrow afternoon", "2026-09-08 15:00"),
+            ("tomorrow evening", "2026-09-08 18:00"),
+            ("tomorrow noon", "2026-09-08 12:00"),
+            ("tomorrow midnight", "2026-09-08 00:00"),
+            ("next friday morning", "2026-09-18 09:00"),
+            ("last friday night", "2026-09-04 20:00"),
+            ("1 week ago afternoon", "2026-08-31 15:00"),
+        ] {
+            assert_eq!(
+                parse_markdown_at(input, &context()).unwrap().canonical(),
+                expected,
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn friendly_dates_preserve_precision_and_use_local_calendar_days() {
+        for (input, expected) in [
+            ("2026-09-06", "yesterday"),
+            ("2026-09-07", "today"),
+            ("2026-09-08", "tomorrow"),
+            ("2026-09-11", "friday"),
+            ("2026-09-04", "last friday"),
+            ("2026-09-14", "mon 14 sep"),
+            ("2027-01-01", "fri 1 jan 2027"),
+            ("2026-09-07 20:00", "tonight"),
+            ("2026-09-08 20:00", "tomorrow night"),
+            ("2026-09-08 09:00", "tomorrow morning"),
+            ("2026-09-08 12:00", "tomorrow noon"),
+            ("2026-09-08 15:00", "tomorrow afternoon"),
+            ("2026-09-08 18:00", "tomorrow evening"),
+            ("2026-09-08 00:00", "tomorrow midnight"),
+            ("2026-09-08 09:30", "tomorrow 09:30"),
+        ] {
+            assert_eq!(
+                parse_markdown_at(input, &context())
+                    .unwrap()
+                    .friendly(&context()),
+                expected,
+                "{input}"
+            );
+        }
+        let before = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            Utc.with_ymd_and_hms(2026, 9, 8, 2, 59, 0).unwrap(),
+        )
+        .unwrap();
+        let after = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            Utc.with_ymd_and_hms(2026, 9, 8, 3, 0, 0).unwrap(),
+        )
+        .unwrap();
+        let date = parse_markdown_at("2026-09-08", &before).unwrap();
+        assert_eq!(date.friendly(&before), "tomorrow");
+        assert_eq!(date.friendly(&after), "today");
+        assert_eq!(date.canonical(), "2026-09-08");
     }
 
     #[test]

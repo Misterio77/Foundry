@@ -661,6 +661,10 @@ fn lsp_applies_saves_and_loads_source_changes() {
     assert_eq!(initialize["id"], 1);
     assert_eq!(initialize["result"]["capabilities"]["colorProvider"], true);
     assert_eq!(
+        initialize["result"]["capabilities"]["inlayHintProvider"],
+        true
+    );
+    assert_eq!(
         initialize["result"]["capabilities"]["executeCommandProvider"]["commands"],
         json!(["todomd.changeView"])
     );
@@ -696,6 +700,36 @@ fn lsp_applies_saves_and_loads_source_changes() {
     assert!((color["green"].as_f64().unwrap() - 0.4).abs() < 1e-6);
     assert!((color["blue"].as_f64().unwrap() - 0.6).abs() < 1e-6);
     assert_eq!(color["alpha"], 1.0);
+
+    peer.send(json!({
+        "jsonrpc": "2.0", "id": 200, "method": "textDocument/inlayHint",
+        "params": {
+            "textDocument": {"uri": uri},
+            "range": {"start": {"line": 0, "character": 0}, "end": {"line": 100, "character": 0}}
+        }
+    }));
+    let hints = read_response(&mut peer, 200);
+    let hints = hints["result"].as_array().unwrap();
+    assert!(!hints.is_empty());
+    for hint in hints {
+        assert!(hint["label"].is_string());
+        assert_eq!(hint["paddingLeft"], true);
+        assert!(hint.get("textEdits").is_none());
+        let line = rendered
+            .markdown
+            .lines()
+            .nth(hint["position"]["line"].as_u64().unwrap() as usize)
+            .unwrap();
+        let prefix = line
+            .encode_utf16()
+            .take(hint["position"]["character"].as_u64().unwrap() as usize)
+            .collect::<Vec<_>>();
+        assert!(
+            String::from_utf16(&prefix)
+                .unwrap()
+                .ends_with("-2026-09-10")
+        );
+    }
 
     peer.send(json!({
         "jsonrpc": "2.0",

@@ -198,10 +198,15 @@ Indentation writes `RELATED-TO;RELTYPE=PARENT`. Descendants cannot carry
 render as roots, while cycles abort loading.
 
 Dates accept `YYYY-MM-DD`, local datetimes, ISO/RFC 3339 timestamps, and English
-expressions such as `friday`, `tomorrow morning`, and `tonight`. Datetimes render
-as `"YYYY-MM-DD HH:MM"` in local time. Relative expressions resolve when the
-document is read. A date paired with a datetime is promoted to local midnight;
-due must not precede start.
+expressions such as `friday`, `tomorrow morning`, `tomorrow night`, `yesterday`,
+`1 week ago`, and `in 2 days`. Dayparts are midnight (00:00), morning (09:00),
+noon (12:00), afternoon (15:00), evening (18:00), and night/tonight (20:00).
+`friday` means the upcoming Friday (including today); `next friday` means Friday
+of next week, and `last friday` the preceding Friday. Hour/minute offsets such
+as `in 2 hours` and `30 minutes ago` retain their time.
+Datetimes render as `"YYYY-MM-DD HH:MM"` in local time. Relative expressions
+resolve when the document is read. A date paired with a datetime is promoted to
+local midnight; due must not precede start.
 
 Canonical Markdown hides seconds without rewriting unchanged source precision
 or timezone representation. Fractional seconds are unsupported by RFC 5545
@@ -260,6 +265,17 @@ session remain visible so they can be reopened.
 running hooks. Supporting clients show a picker; clients such as Helix that do
 not implement `window/showMessageRequest` cycle to the next view. The buffer
 must match its last accepted canonical text.
+
+Optional LSP inlay hints annotate due/start headings and inline `+`/`-` markers
+with friendly labels such as `tonight`, `tomorrow morning`, or `last friday`.
+The actual Markdown stays absolute; hints do not change deadlines or saved
+text. Supporting clients receive periodic refresh requests so labels can roll
+over at midnight. In Helix, enable them with:
+
+```toml
+[editor.lsp]
+display-inlay-hints = true
+```
 
 Helix shows an LSP spinner by default. To display progress text too:
 

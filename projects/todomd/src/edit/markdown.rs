@@ -501,10 +501,16 @@ struct ParsedFields<'a> {
     summary: &'a str,
 }
 
-fn split_fields<'a>(
+fn split_fields<'a>(remainder: &'a str, date_context: &DateContext) -> Result<ParsedFields<'a>> {
+    split_fields_with_dates(remainder, date_context, |_, _| {})
+}
+
+fn split_fields_with_dates<'a>(
     mut remainder: &'a str,
     date_context: &DateContext,
+    mut date_field: impl FnMut(usize, &DateValue),
 ) -> Result<ParsedFields<'a>> {
+    let length = remainder.len();
     let mut list = None;
     let mut priority = None;
     let mut categories = None;
@@ -560,10 +566,10 @@ fn split_fields<'a>(
             bail!("task contains more than one {name} marker");
         }
         let (value, rest) = take_marker_value(&remainder[1..], "date")?;
-        *slot = Some(
-            dates::parse_markdown_at(&value, date_context)
-                .with_context(|| format!("invalid {name} marker"))?,
-        );
+        let value = dates::parse_markdown_at(&value, date_context)
+            .with_context(|| format!("invalid {name} marker"))?;
+        date_field(length - rest.len(), &value);
+        *slot = Some(value);
         remainder = marker_remainder(rest, &format!("{name} marker"))?;
     }
 
@@ -575,6 +581,44 @@ fn split_fields<'a>(
         due,
         summary: remainder,
     })
+}
+
+pub(crate) fn date_annotations(
+    line: &str,
+    view: &view::View,
+    context: &DateContext,
+) -> Vec<(usize, DateValue)> {
+    let depth = line.bytes().take_while(|byte| *byte == b'#').count();
+    if depth > 0 {
+        if matches!(
+            view.group_by.get(depth - 1),
+            Some(view::GroupKey::Due | view::GroupKey::Start)
+        ) && let Some(value) = line[depth..].strip_prefix(' ')
+            && let Ok(date) = dates::parse_markdown_at(value, context)
+        {
+            return vec![(line.len(), date)];
+        }
+        return Vec::new();
+    }
+    let task = line.trim_start_matches(' ');
+    let Some(fields) = task
+        .strip_prefix("- [ ] ")
+        .or_else(|| task.strip_prefix("- [x] "))
+    else {
+        return Vec::new();
+    };
+    let offset = line.len() - fields.len();
+    let mut annotations = Vec::new();
+    // Reuse field parsing so quotes, categories, and summaries cannot create
+    // spurious date hints. Incomplete lines do not prevent hints elsewhere.
+    if split_fields_with_dates(fields, context, |end, date| {
+        annotations.push((offset + end, date.clone()));
+    })
+    .is_err()
+    {
+        annotations.clear();
+    }
+    annotations
 }
 
 fn take_categories(input: &str) -> Result<(Vec<String>, &str)> {

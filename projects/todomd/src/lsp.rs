@@ -19,17 +19,18 @@ use tower_lsp::{
         DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
         DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentChangeOperation,
         DocumentChanges, DocumentColorParams, ExecuteCommandOptions, ExecuteCommandParams,
-        InitializeParams, InitializeResult, InitializedParams, MessageActionItem, MessageType,
-        NumberOrString, OneOf, OptionalVersionedTextDocumentIdentifier, Position, ProgressParams,
-        ProgressParamsValue, ProgressToken, Range, ServerCapabilities, ServerInfo,
-        TextDocumentEdit, TextDocumentSyncCapability, TextDocumentSyncKind,
-        TextDocumentSyncOptions, TextEdit, Url, WorkDoneProgress, WorkDoneProgressBegin,
-        WorkDoneProgressCreateParams, WorkDoneProgressEnd, WorkspaceEdit, notification::Progress,
-        request::WorkDoneProgressCreate,
+        InitializeParams, InitializeResult, InitializedParams, InlayHint, InlayHintLabel,
+        InlayHintParams, MessageActionItem, MessageType, NumberOrString, OneOf,
+        OptionalVersionedTextDocumentIdentifier, Position, ProgressParams, ProgressParamsValue,
+        ProgressToken, Range, ServerCapabilities, ServerInfo, TextDocumentEdit,
+        TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, Url,
+        WorkDoneProgress, WorkDoneProgressBegin, WorkDoneProgressCreateParams, WorkDoneProgressEnd,
+        WorkspaceEdit, notification::Progress, request::WorkDoneProgressCreate,
     },
 };
 
 use crate::{
+    dates::DateContext,
     edit::{
         applied_changes_message,
         hooks::Lifecycle,
@@ -66,6 +67,7 @@ struct Backend {
     documents: Documents,
     workspace_edits: Arc<AtomicBool>,
     work_done_progress: Arc<AtomicBool>,
+    inlay_hint_refresh: Arc<AtomicBool>,
 }
 
 impl Backend {
@@ -75,6 +77,7 @@ impl Backend {
             documents: Arc::new(Mutex::new(HashMap::new())),
             workspace_edits: Arc::new(AtomicBool::new(false)),
             work_done_progress: Arc::new(AtomicBool::new(false)),
+            inlay_hint_refresh: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -435,6 +438,16 @@ impl ActiveProgress {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        self.inlay_hint_refresh.store(
+            params
+                .capabilities
+                .workspace
+                .as_ref()
+                .and_then(|workspace| workspace.inlay_hint.as_ref())
+                .and_then(|hints| hints.refresh_support)
+                .unwrap_or(false),
+            Ordering::Relaxed,
+        );
         let workspace_edits = params
             .capabilities
             .workspace
@@ -465,6 +478,7 @@ impl LanguageServer for Backend {
                     },
                 )),
                 color_provider: Some(ColorProviderCapability::Simple(true)),
+                inlay_hint_provider: Some(OneOf::Left(true)),
                 execute_command_provider: Some(ExecuteCommandOptions {
                     commands: vec![CHANGE_VIEW_COMMAND.into()],
                     work_done_progress_options: Default::default(),
@@ -478,9 +492,31 @@ impl LanguageServer for Backend {
         })
     }
 
-    async fn initialized(&self, _: InitializedParams) {}
+    async fn initialized(&self, _: InitializedParams) {
+        if !self.inlay_hint_refresh.load(Ordering::Relaxed) {
+            return;
+        }
+        let documents = Arc::downgrade(&self.documents);
+        let client = self.client.clone();
+        let enabled = Arc::clone(&self.inlay_hint_refresh);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if !enabled.load(Ordering::Relaxed) {
+                    break;
+                }
+                let Some(documents) = documents.upgrade() else {
+                    break;
+                };
+                if !documents.lock().await.is_empty() {
+                    let _ = client.inlay_hint_refresh().await;
+                }
+            }
+        });
+    }
 
     async fn shutdown(&self) -> LspResult<()> {
+        self.inlay_hint_refresh.store(false, Ordering::Relaxed);
         Ok(())
     }
 
@@ -546,6 +582,21 @@ impl LanguageServer for Backend {
             }
         }
         self.reconcile(&uri, Trigger::Save).await;
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
+        let Some(document) = self.document(&params.text_document.uri).await else {
+            return Ok(None);
+        };
+        let context = DateContext::local_now()
+            .map_err(|error| tower_lsp::jsonrpc::Error::invalid_params(error.to_string()))?;
+        let document = document.lock().await;
+        Ok(Some(date_inlay_hints(
+            &document.text,
+            &document.view,
+            params.range,
+            &context,
+        )))
     }
 
     async fn document_color(
@@ -937,6 +988,7 @@ fn source_watcher(
                         documents,
                         workspace_edits,
                         work_done_progress,
+                        inlay_hint_refresh: Arc::new(AtomicBool::new(false)),
                     };
                     backend.reconcile(&uri, Trigger::Source).await;
                 });
@@ -974,6 +1026,38 @@ fn is_content_event(kind: &EventKind) -> bool {
         kind,
         EventKind::Any | EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
     )
+}
+
+fn date_inlay_hints(
+    text: &str,
+    view: &View,
+    range: Range,
+    context: &DateContext,
+) -> Vec<InlayHint> {
+    let mut hints = Vec::new();
+    for (line_number, line) in text.lines().enumerate() {
+        let line_number = line_number as u32;
+        if line_number < range.start.line || line_number > range.end.line {
+            continue;
+        }
+        for (end, date) in markdown::date_annotations(line, view, context) {
+            let position = Position::new(line_number, line[..end].encode_utf16().count() as u32);
+            if position < range.start || position > range.end {
+                continue;
+            }
+            hints.push(InlayHint {
+                position,
+                label: InlayHintLabel::String(date.friendly(context)),
+                kind: None,
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(true),
+                padding_right: Some(false),
+                data: None,
+            });
+        }
+    }
+    hints
 }
 
 fn document_colors(
@@ -1050,6 +1134,59 @@ fn utf16_len(value: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn date_hints_follow_grouping_fields_and_utf16_ranges() {
+        use crate::view::GroupKey;
+        use chrono::TimeZone;
+        let context = DateContext::in_timezone(
+            "America/Sao_Paulo",
+            chrono::Utc.with_ymd_and_hms(2026, 9, 7, 15, 0, 0).unwrap(),
+        )
+        .unwrap();
+        let view = View {
+            group_by: vec![GroupKey::List, GroupKey::Due, GroupKey::Start],
+            ..View::default()
+        };
+        let text = "# 2026-09-07\n## 2026-09-08 20:00\n### 2026-09-07\n#### 2026-09-09\n- [ ] @\"😀 list\" +2026-09-07 -\"2026-09-08 09:00\" Task\n  - [x] [\"-2026-09-08\"] -2026-09-06 Child\n- [ ] Summary -2026-09-08\n- [ ] \"-2026-09-08\"\n- [ ] -\"broken date\" Bad\n## No due date\n- [ ] -2026-09-11 Task";
+        let hints = date_inlay_hints(text, &view, full_range(text), &context);
+        let labels: Vec<_> = hints
+            .iter()
+            .map(|hint| match &hint.label {
+                InlayHintLabel::String(label) => label.as_str(),
+                _ => panic!("expected plain labels"),
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "tomorrow night",
+                "today",
+                "today",
+                "tomorrow morning",
+                "yesterday",
+                "friday"
+            ]
+        );
+        let marker = "- [ ] @\"😀 list\" +2026-09-07";
+        let position = Position::new(4, marker.encode_utf16().count() as u32);
+        assert_eq!(hints[2].position, position);
+        assert!(
+            hints
+                .iter()
+                .all(|hint| hint.text_edits.is_none() && hint.padding_left == Some(true))
+        );
+        let restricted = date_inlay_hints(text, &view, Range::new(position, position), &context);
+        assert_eq!(restricted.len(), 1);
+        assert_eq!(restricted[0].position, position);
+        let ungrouped = View {
+            group_by: Vec::new(),
+            ..View::default()
+        };
+        assert!(
+            date_inlay_hints("# 2026-09-07", &ungrouped, full_range(text), &context).is_empty()
+        );
+    }
 
     #[test]
     fn diagnostics_use_reported_line_and_utf16_columns() {

@@ -198,6 +198,30 @@ promoted to local midnight before writing. Changed pairs must satisfy start ≤
 due. Fractional seconds are rejected because RFC 5545 DATE-TIME cannot represent
 them.
 
+### Friendly date inlay hints
+
+Canonical Markdown remains absolute. The LSP supplies optional inlay hints after
+start/due grouping headings and inline `+`/`-` markers, using the same date
+formatter for both. Hints are presentation only: they are not saved, copied as
+Markdown, parsed, or used for reconciliation. Editors control their visibility
+and highlighting.
+
+Labels use yesterday/today/tomorrow, nearby weekdays (with `last` for past
+weekdays), and weekday/month/day farther away, including the year outside the
+current year. Exact daypart times receive names (morning 09:00, noon 12:00,
+afternoon 15:00, evening 18:00, night 20:00, midnight 00:00); other times retain
+HH:MM. Date-only values never acquire a time. Today at 20:00 reads `tonight`.
+Natural-language input remains available and normalizes on save; `night` and
+`tonight` both denote 20:00.
+
+Hints follow the current buffer and active grouping, not stale task state.
+Only actual date fields are annotated, never date-shaped summaries, lists, or
+categories. Malformed fields are skipped without failing the request. Positions
+and requested ranges use LSP UTF-16 coordinates. Each request uses one local
+clock snapshot; clients supporting inlay-hint refresh are asked to refresh
+periodically so an idle buffer can cross midnight without becoming dirty.
+Clients without refresh support get current labels on their next request.
+
 ## Reconciliation
 
 Manual `session apply` and LSP saves use the same reconciliation and transaction
