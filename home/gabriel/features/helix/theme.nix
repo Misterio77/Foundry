@@ -43,6 +43,14 @@ in {
   "info" = c.blue;
   "keyword" = c.magenta;
   "label" = c.magenta;
+  "label.todomd.list" = c.magenta;
+  "string.special.todomd.start" = c.cyan;
+  "constant.numeric.todomd.due" = c.orange;
+  "attribute.todomd.priority.low" = c.yellow;
+  "attribute.todomd.priority.medium" = c.orange;
+  "attribute.todomd.priority.high" = c.red;
+  "type.todomd.categories" = c.blue;
+  "comment.todomd.identity" = c.on_surface_variant;
   "markup.bold" = {
     fg = c.yellow;
     modifiers = ["bold"];

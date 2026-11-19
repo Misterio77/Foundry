@@ -1,0 +1,19 @@
+{
+  "grammars": [
+    {
+      "name": "todomd",
+      "camelcase": "Todomd",
+      "scope": "text.todomd",
+      "path": ".",
+      "file-types": ["todomd"],
+      "highlights": "queries/highlights.scm"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "BSD-2-Clause",
+    "description": "Tree-sitter grammar for todomd's editable task Markdown",
+    "authors": [{"name": "Gabriel Fontes"}],
+    "links": {"repository": "https://github.com/misterio77/Foundry"}
+  }
+}

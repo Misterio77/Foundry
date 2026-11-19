@@ -255,6 +255,19 @@ name = "markdown"
 language-servers = ["marksman", "todomd"]
 ```
 
+The optional grammar in `tree-sitter/` adds field-level syntax highlighting.
+The Foundry Helix configuration installs its compiled parser and queries, and
+selects the `todomd` language for `session-*/tasks.md` files (or `.todomd` files).
+Use `:set-language todomd` to select it manually. It retains the `markdown` LSP
+language ID; task files are still Markdown, and ordinary `.md` files keep their
+usual highlighting.
+
+The theme can independently style `label.todomd.list`,
+`string.special.todomd.start`, `constant.numeric.todomd.due`,
+`attribute.todomd.priority.{low,medium,high}`, `type.todomd.categories`, and
+`comment.todomd.identity`. These are fixed field colors, not per-list colors.
+Headings retain heading styling; friendly date hints remain separate inlay hints.
+
 Each valid save applies its semantic transaction and replaces the buffer with
 canonical Markdown. Invalid buffers receive line diagnostics. Source-side ICS
 changes refresh a clean buffer; simultaneous Markdown and ICS changes produce a

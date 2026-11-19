@@ -39,6 +39,18 @@ in {
           formatter.command = "alejandra";
         }
         {
+          name = "todomd";
+          scope = "text.todomd";
+          language-id = "markdown";
+          file-types = ["todomd" {glob = "**/session-*/tasks.md";}];
+          roots = [".todomd-session"];
+          language-servers = ["todomd"];
+          indent = {
+            tab-width = 2;
+            unit = "  ";
+          };
+        }
+        {
           name = "markdown";
           language-servers = ["marksman" "todomd"];
         }
@@ -65,6 +77,8 @@ in {
     };
     themes."nix-${hash}" = import ./theme.nix {inherit colorscheme;};
   };
+  xdg.configFile."helix/runtime/grammars/todomd.so".source = "${pkgs.tree-sitter-todomd}/lib/todomd.so";
+  xdg.configFile."helix/runtime/queries/todomd".source = "${pkgs.tree-sitter-todomd}/queries";
   xdg.configFile."helix/config.toml".onChange = ''
     ${pkgs.procps}/bin/pkill -u $USER -USR1 hx || true
   '';

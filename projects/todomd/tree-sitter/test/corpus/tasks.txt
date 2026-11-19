@@ -1,0 +1,58 @@
+==================
+Headings, dates, priorities, categories, and nested tasks
+==================
+# No due date
+
+## Postgrad
+- [ ] @Postgrad -"2026-11-20 09:00" +2026-11-19 !!! [Research, "Quick Win"] Write paper <!--t35-->
+  - [x] !! Child <!--t36-->
+- [ ] ! Plain task
+
+---
+
+(document
+  (heading (heading_marker) (heading_text))
+  (heading (heading_marker) (heading_text))
+  (task
+    (bullet) (unchecked)
+    (list) (due) (start) (priority_high)
+    (categories (category) (category))
+    (summary (word) (word) (word)))
+  (task (bullet) (checked) (priority_medium) (summary (word) (word)))
+  (task (bullet) (unchecked) (priority_low) (summary (word) (word))))
+
+==================
+Quoted values and field-shaped prose
+==================
+- [ ] @"Pós ""graduação"" 😀" +"tomorrow morning" -"friday night" ["A, B", "C ""D"""] Write @Home -2026-11-20 +tomorrow !!! [text] <!--t1-->
+- [ ] "-2026-11-20 is a summary" <!--t2-->
+- [ ] "Quoted ""summary"""
+- [ ] A <!--t3--> is not an identity <!--t4-->
+- [ ] Task <!--ordinary comment-->
+
+---
+
+(document
+  (task
+    (bullet) (unchecked)
+    (list) (start) (due)
+    (categories (category) (category))
+    (summary (word) (word) (word) (word) (word) (word) (word)))
+  (task (bullet) (unchecked) (quoted_summary) (identity))
+  (task (bullet) (unchecked) (quoted_summary))
+  (task (bullet) (unchecked) (summary (word) (word) (word) (word) (word) (word) (word)))
+  (task (bullet) (unchecked) (summary (word) (word) (word))))
+
+==================
+Field ordering and completed tasks
+==================
+- [x] [Work] !! -tomorrow @Personal +today Finish it <!--t9-->
+- [ ] No fields here
+
+---
+
+(document
+  (task (bullet) (checked)
+    (categories (category)) (priority_medium) (due) (list) (start)
+    (summary (word) (word) (word)))
+  (task (bullet) (unchecked) (summary (word) (word) (word))))

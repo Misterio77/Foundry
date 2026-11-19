@@ -223,6 +223,23 @@ clock snapshot; clients supporting inlay-hint refresh are asked to refresh
 periodically so an idle buffer can cross midnight without becoming dirty.
 Clients without refresh support get current labels on their next request.
 
+### Syntax highlighting
+
+The `tree-sitter/` grammar provides optional field-level highlighting for task
+documents without changing their Markdown representation. It distinguishes list,
+start, due, priority, category, checkbox, heading, and trailing identity syntax.
+Once a summary starts, field-shaped text is ordinary prose. Quoted values use
+todomd's doubled-quote escaping, not Markdown or shell escaping.
+
+This is a presentation grammar, not a second validator: the Rust parser remains
+authoritative for valid dates, selected lists, grouping semantics, and edits.
+Headings have generic heading styling because their meaning depends on the
+session's active view. Field colors are theme scopes, not dynamic per-list RGB
+values. Helix uses a separate `todomd` language for session task files so regular
+Markdown highlighting is unaffected; its LSP language ID remains `markdown`.
+The parser is generated during the Nix build, which runs Tree-sitter's corpus
+and highlighting tests, rather than committing generated C sources.
+
 ## Reconciliation
 
 Manual `session apply` and LSP saves use the same reconciliation and transaction

@@ -1,0 +1,28 @@
+- [ ] @Postgrad Task
+<!--  ^^^^^^^^ label.todomd.list -->
+- [ ] +"tomorrow morning" Task
+<!--  ^^^^^^^^^^^^^^^^^^^ string.special.todomd.start -->
+- [ ] -"friday night" Task
+<!--  ^^^^^^^^^^^^^^^ constant.numeric.todomd.due -->
+- [ ] ! Task
+<!--  ^ attribute.todomd.priority.low -->
+- [ ] !! Task
+<!--  ^^ attribute.todomd.priority.medium -->
+- [ ] !!! Task
+<!--  ^^^ attribute.todomd.priority.high -->
+- [ ] [Research, "Quick Win"] Task
+<!--  ^^^^^^^^^^^^^^^^^^^^^^^ type.todomd.categories -->
+- [ ] Task <!--t35-->
+<!--       ^^^^^^^^^^ comment.todomd.identity -->
+- [ ] "Quoted summary" <!--t36-->
+<!--                   ^^^^^^^^^^ comment.todomd.identity -->
+- [ ] Task -2026-11-20 @Personal +tomorrow !!! [text]
+<!--       ^ markup.normal -->
+<!--                   ^ markup.normal -->
+<!--                             ^ markup.normal -->
+<!--                                       ^ markup.normal -->
+<!--                                           ^ markup.normal -->
+- [ ] Task <!--t1--> is prose
+<!--       ^ markup.normal -->
+- [ ] Task <!--t1-->suffix
+<!--       ^ markup.normal -->

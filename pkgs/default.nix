@@ -29,6 +29,7 @@ in {
   runelite-query = pkgs.callPackage ../projects/runelite-query {};
   gtkhal = pkgs.callPackage ../projects/gtkhal {};
   todomd = pkgs.callPackage ../projects/todomd {};
+  tree-sitter-todomd = pkgs.callPackage ../projects/todomd/tree-sitter {};
   screenshare-server = pkgs.callPackage ../projects/screenshare/server {};
   share-audio = pkgs.callPackage ../projects/screenshare/share-audio {};
 
