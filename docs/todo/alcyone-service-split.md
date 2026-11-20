@@ -45,43 +45,54 @@ Implementation targets:
 
 ### Authenticated source and independent authorization
 
-- [ ] Confirm the exported HTTPS Git URL on Alcyone; the existing dumb-HTTP route
-  expects a `.git` repository name.
-- [ ] Use HTTPS with certificate verification for host-side source retrieval and
+- [x] Confirm the exported HTTPS Git URL on Alcyone:
+  `https://git.m7.rs/Foundry.git`; the dumb-HTTP route requires `.git`.
+- [x] Use HTTPS with certificate verification for host-side source retrieval and
   Nixbot repository polling. Do not introduce new SSH credentials.
-- [ ] Fetch the configured branch into a root-owned verification repository and
-  record its fetched tip as the authoritative snapshot for the upgrade attempt.
-- [ ] Validate the CI candidate revision and output-path fields.
-- [ ] Require the candidate revision to be an ancestor of, or equal to, that
+- [x] Fetch the configured branch into a locked, reusable root-owned verification
+  repository and record its fetched tip as the authoritative snapshot for the
+  upgrade attempt.
+- [x] Validate the CI candidate revision and output-path fields.
+- [x] Require the candidate revision to be an ancestor of, or equal to, that
   fetched branch tip. Do not trust CI's branch label as proof of membership.
-- [ ] Verify the candidate commit's SSH signature against an allowed-signers file
-  installed by the host configuration, derived from the trusted public key.
-  Never obtain the trust root from CI or the candidate tree.
-- [ ] Only after authorization succeeds, apply the existing freshness policy,
+- [x] Verify the candidate commit's OpenPGP signature against the public `.asc`
+  files configured through `system.nixbotAutoUpgrade.signingKeys`, using an
+  isolated keyring. Never obtain the trust root from CI or the candidate tree.
+  Nixbot uses the same verifier; expired and revoked signatures are rejected.
+- [x] Only after authorization succeeds, apply the existing freshness policy,
   retrieve the output and activate it.
-- [ ] Fail closed on transport errors, missing history, malformed responses,
+- [x] Fail closed on transport errors, missing history, malformed responses,
   signature failures or branch mismatch; leave the running system/profile alone.
-- [ ] Log the candidate revision, fetched branch tip, verification outcome and
+- [x] Log the candidate revision, fetched branch tip, verification outcome and
   selected output path.
 
+Explicit manual overrides are `IGNORE_SIGNATURE=true` and
+`IGNORE_TIMESTAMP=true`. Each logs a warning and bypasses only its named check;
+branch membership is still required. Neither is enabled by the upgrade service.
+
 An ancestor is acceptable so the latest successful build can deploy while a newer
-branch tip is still building. Commit timestamps remain a freshness heuristic, not
-cryptographic anti-rollback protection. Retain the native Git daemon unless a
-separate consumer audit justifies retiring it.
+branch tip is still building. Candidates need not descend from the installed
+revision. Commit timestamps remain a freshness heuristic, not cryptographic
+anti-rollback protection. Retain the native Git daemon unless a separate consumer
+audit justifies retiring it.
 
 ### Verification cases
 
 Use temporary repositories for ad-hoc checks; do not introduce a standalone test
 harness without an existing suite to run it.
 
-- [ ] Accept a correctly signed candidate on the intended branch.
-- [ ] Reject a signed candidate reachable only from another branch.
-- [ ] Reject unsigned candidates and signatures from unauthorized keys.
-- [ ] Reject fabricated or missing revisions.
-- [ ] Accept an authorized ancestor behind the fetched tip when it passes the
+- [x] Accept a correctly signed candidate on the intended branch.
+- [x] Reject a signed candidate reachable only from another branch.
+- [x] Reject unsigned candidates and signatures from unauthorized keys.
+- [x] Reject fabricated or missing revisions.
+- [x] Accept an authorized ancestor behind the fetched tip when it passes the
   installed system's freshness check.
-- [ ] Confirm fetch/authorization failures cannot change profiles or activate an
+- [x] Confirm fetch/authorization failures cannot change profiles or activate an
   output.
+
+Ad-hoc checks used temporary Git repositories and signing keys, with local fetch
+fixtures and mocked CI, Nix and activation commands. Production deployment is a
+separate operator action.
 
 ## 2. Prepare Taygeta
 

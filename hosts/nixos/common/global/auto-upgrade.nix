@@ -9,7 +9,8 @@
     instance = "https://ci.m7.rs";
     project = "pull_based/m7/Foundry";
     branch = "main";
-    source = "git://m7.rs/Foundry?ref=main";
+    source = "https://git.m7.rs/Foundry.git";
+    signingKeys = [../../../../home/gabriel/pgp.asc];
     job = "ciJobs.hosts.${config.networking.hostName}";
   };
   # Disable timer if flake is dirty

@@ -124,7 +124,7 @@ Update website from f6c09b0b to 70386bb7 (2 commits, docs-only):
 - Deploy to this host: use nixos-rebuild: `nixos-rebuild switch --flake .`
 - Deploy to another host: use deploy.sh: `./deploy.sh {host}`
 
-- Production, uses CI/CD: Nixbot at `ci.m7.rs` polls self-hosted Git and builds `ciJobs`; CI verifies commit signatures in a required post-build step, and hosts trust its API to select their latest successful output and auto-upgrade without evaluating their configurations locally (see `modules/nixos/nixbot-auto-upgrade.nix`). No need to deploy manually after the initial migration, unless quickly iterating locally.
+- Production, uses CI/CD: Nixbot at `ci.m7.rs` polls self-hosted Git and builds `ciJobs`; CI verifies OpenPGP commit signatures in a required post-build step. Hosts independently verify the API-selected revision against locally pinned signing keys and the fetched HTTPS deployment branch before applying their timestamp gate and activating the CI-provided output, without evaluating their configurations locally. Builders/cache remain trusted for artifact contents (see `modules/nixos/nixbot-auto-upgrade.nix`). No need to deploy manually after the initial migration, unless quickly iterating locally.
 
 ### Post-deploy verification
 

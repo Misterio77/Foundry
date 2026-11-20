@@ -5,11 +5,7 @@
   outputs,
   pkgs,
   ...
-}: let
-  allowedSigners = pkgs.writeText "ci-allowed-signers" ''
-    * namespaces="git" ${lib.trim (builtins.readFile ../../../../home/gabriel/ssh.pub)}
-  '';
-in {
+}: {
   imports = [inputs.nixbot.nixosModules.nixbot];
 
   services.nixbot = {
@@ -25,7 +21,7 @@ in {
     buildTimeout = 12 * 60 * 60;
     buildMaxSilentTime = 60 * 60;
     pullBased.repositories."m7/Foundry" = {
-      url = "git://m7.rs/Foundry";
+      url = "https://git.m7.rs/Foundry.git";
       defaultBranch = "main";
       pollInterval = 60;
     };
@@ -34,15 +30,7 @@ in {
         name = "verify-commit-signature";
         warnOnly = false;
         command = [
-          "${pkgs.git}/bin/git"
-          "-c"
-          "gpg.format=ssh"
-          "-c"
-          "gpg.ssh.program=${pkgs.openssh}/bin/ssh-keygen"
-          "-c"
-          "gpg.ssh.allowedSignersFile=${allowedSigners}"
-          "verify-commit"
-          "--"
+          (lib.getExe config.system.build.verify-commit-signature)
           (inputs.nixbot.lib.interpolate "%(prop:revision)s")
         ];
       }
