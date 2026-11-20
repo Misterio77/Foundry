@@ -26,10 +26,12 @@ in {
         show-cryptographic-signatures = true;
       };
       signing = {
-        backend = "ssh";
-        key = sshPublicKey;
+        backend = "gpg";
+        key = "7088C7421873E0DB97FF17C2245CAB70B4C225E9";
         # Edits/rebases drop signatures; sign explicitly or automatically on push.
         behavior = "drop";
+        backends.gpg.program = "${config.programs.gpg.package}/bin/gpg2";
+        # Keep verifying SSH signatures in existing history.
         backends.ssh = {
           program = "${pkgs.openssh}/bin/ssh-keygen";
           allowed-signers = "${allowedSigners}";
