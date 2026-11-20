@@ -8,8 +8,8 @@
 #   gitignore grammar, including `!` negation, anchored patterns, directory
 #   patterns, and escapes. The two `.overleaf*` files and all `.git`/`.jj`
 #   metadata are always local-only regardless of those rules.
-# - Authentication uses `pass git.overleaf.com` through a temporary Git
-#   credential helper. The password is never embedded in a URL or remote.
+# - Authentication uses the user's Git credential configuration. The password
+#   is never embedded in a URL or remote.
 # - `push` replaces the remote tree with all files allowed by `.overleafignore`,
 #   so local additions, changes, and deletions are mirrored. The subsequent
 #   `git add` also honors the copied project `.gitignore` and the user's global
@@ -119,15 +119,6 @@ generate_manifest() {
   )
 }
 
-# Expanded later by Git's credential-helper shell. It retrieves the password
-# without placing it in a URL, process argument, or log.
-# shellcheck disable=SC2016
-credential_helper='!f() { test "$1" = get && printf "username=git\npassword=%s\n" "$(pass git.overleaf.com)"; }; f'
-credential_args=(
-  -c credential.https://git.overleaf.com.username=git
-  -c credential.https://git.overleaf.com.helper="$credential_helper"
-)
-
 delete_missing_files() {
   local project_copy="$1"
   local remote_manifest="$2"
@@ -167,13 +158,9 @@ filter_unchanged_symlinks() {
   done < "$remote_manifest"
 }
 
-overleaf_git() {
-  git "${credential_args[@]}" "$@"
-}
-
 clone_overleaf() {
   local destination="$1"
-  overleaf_git clone "https://git@git.overleaf.com/$project_id" "$destination"
+  git clone "https://git@git.overleaf.com/$project_id" "$destination"
 }
 
 push_project() {
@@ -200,7 +187,7 @@ push_project() {
   fi
 
   git -C "$overleaf_dir" -c commit.gpgsign=false commit --verbose
-  overleaf_git -C "$overleaf_dir" push
+  git -C "$overleaf_dir" push
 }
 
 pull_project() {

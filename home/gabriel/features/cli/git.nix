@@ -56,6 +56,10 @@ in {
         pushall = "!git remote | xargs -L1 git push --all";
         add-nowhitespace = "!git diff -U0 -w --no-color | git apply --cached --ignore-whitespace --unidiff-zero -";
       };
+      credential."https://git.overleaf.com" = {
+        username = "git";
+        helper = ''!f() { test "$1" = get && printf "username=git\npassword=%s\n" "$(pass git.overleaf.com)"; }; f'';
+      };
       init.defaultBranch = "main";
       gpg.program = "${config.programs.gpg.package}/bin/gpg2";
 

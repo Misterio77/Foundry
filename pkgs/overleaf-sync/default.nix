@@ -6,7 +6,6 @@
   findutils,
   git,
   jujutsu,
-  pass,
   rsync,
 }:
 (writeShellApplication {
@@ -17,7 +16,6 @@
     findutils
     git
     jujutsu
-    pass
     rsync
   ];
   text = builtins.readFile ./overleaf-sync.sh;
