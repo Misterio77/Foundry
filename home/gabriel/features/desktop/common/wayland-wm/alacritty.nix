@@ -20,6 +20,18 @@ in {
           mods = "Control|Shift";
           action = "SpawnNewInstance";
         }
+        {
+          key = "PageUp";
+          mods = "Shift";
+          mode = "~Alt";
+          action = "ScrollHalfPageUp";
+        }
+        {
+          key = "PageDown";
+          mods = "Shift";
+          mode = "~Alt";
+          action = "ScrollHalfPageDown";
+        }
         # Emit CSI-u for modified Enter so tmux can pass it through to Pi.
         {
           key = "Return";
