@@ -22,7 +22,7 @@ in {
     settings = {
       tuiMode = "regular";
       defaultProvider = "openai";
-      defaultModel = "gpt-6.1-sol";
+      defaultModel = "gpt-6.2-sol";
       enabledModels = [
         "openai/gpt-6.2-astra"
         "openai/gpt-6.2-sol"
