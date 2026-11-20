@@ -25,6 +25,8 @@
 #   untouched. If a remote regular file matches the resolved contents of an
 #   existing local symlink, the symlink is preserved. If the contents differ,
 #   the symlink is replaced by the remote regular file.
+# - A pulled change preserves the remote tip's author and author timestamp;
+#   its committer is the local user performing the import.
 # - A pulled change is shown before integration. Confirmation rebases the
 #   invoking working-copy change onto it; declining leaves the import as a
 #   separate jj head. A no-op pull creates no change.
@@ -35,7 +37,7 @@
 set -euo pipefail
 
 usage() {
-  cat <<'EOF'
+  cat << 'EOF'
 Usage: overleaf-sync <push|pull>
 
 Synchronize the project in the current directory with Overleaf. The project
@@ -61,10 +63,10 @@ cleanup_temp() {
 
 cleanup_pull() {
   if [[ -n "$cleanup_workspace_name" ]]; then
-    jj -R "$cleanup_repo_root" workspace forget "$cleanup_workspace_name" >/dev/null 2>&1 || true
+    jj -R "$cleanup_repo_root" workspace forget "$cleanup_workspace_name" > /dev/null 2>&1 || true
   fi
   if [[ -n "$cleanup_change" ]]; then
-    jj -R "$cleanup_repo_root" abandon "$cleanup_change" >/dev/null 2>&1 || true
+    jj -R "$cleanup_repo_root" abandon "$cleanup_change" > /dev/null 2>&1 || true
   fi
   cleanup_temp
 }
@@ -194,7 +196,7 @@ pull_project() {
   local repo_root project_path project_name default_change
   local temp_root workspace_dir workspace_name overleaf_dir
   local remote_matcher local_matcher remote_manifest local_manifest copy_manifest project_copy
-  local imported_change disposable_change confirm
+  local imported_change disposable_change confirm remote_author remote_author_timestamp
 
   repo_root="$(jj root)" || die "pull requires a Jujutsu workspace"
   project_path="$(realpath --relative-to="$repo_root" "$project_root")"
@@ -222,6 +224,8 @@ pull_project() {
   cleanup_change="$(jj -R "$workspace_dir" log --no-graph -r @ -T 'change_id')"
 
   clone_overleaf "$overleaf_dir"
+  remote_author="$(git -C "$overleaf_dir" log -1 --format='%an <%ae>')"
+  remote_author_timestamp="$(git -C "$overleaf_dir" log -1 --format='%aI')"
   generate_manifest "$overleaf_dir" "$remote_matcher" "$remote_manifest"
   generate_manifest "$project_copy" "$local_matcher" "$local_manifest"
   delete_missing_files "$project_copy" "$remote_manifest" "$local_manifest"
@@ -234,7 +238,10 @@ pull_project() {
     return
   fi
 
-  jj -R "$workspace_dir" describe -m "chore($project_name): pull from overleaf"
+  jj -R "$workspace_dir" metaedit \
+    --author "$remote_author" \
+    --author-timestamp "$remote_author_timestamp" \
+    -m "chore($project_name): pull from overleaf"
   imported_change="$(jj -R "$workspace_dir" log --no-graph -r @ -T 'change_id')"
 
   # Leave the imported change as a durable head when the temporary workspace is
