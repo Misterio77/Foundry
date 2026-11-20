@@ -19,11 +19,11 @@ in {
       };
       priority = {
         group_by = ["priority"];
-        sort_by = ["due" "list" "summary"];
+        sort_by = ["completed" "due" "list" "summary"];
       };
       agenda = {
         group_by = ["due"];
-        sort_by = ["priority" "list" "summary"];
+        sort_by = ["completed" "priority" "list" "summary"];
       };
     };
     hooks.after_apply = [systemctl "--user" "start" "vdirsyncer-calendar_personal.service"];
