@@ -1,13 +1,8 @@
 {
   config,
-  lib,
   pkgs,
   ...
 }: let
-  sshPublicKey = lib.trim (builtins.readFile ../../ssh.pub);
-  allowedSigners = pkgs.writeText "jj-allowed-signers" ''
-    ${config.programs.git.settings.user.email} namespaces="git" ${sshPublicKey}
-  '';
   jjw = pkgs.writeShellApplication {
     name = "jjw";
     runtimeInputs = [pkgs.jujutsu];
@@ -31,11 +26,6 @@ in {
         # Edits/rebases drop signatures; sign explicitly or automatically on push.
         behavior = "drop";
         backends.gpg.program = "${config.programs.gpg.package}/bin/gpg2";
-        # Keep verifying SSH signatures in existing history.
-        backends.ssh = {
-          program = "${pkgs.openssh}/bin/ssh-keygen";
-          allowed-signers = "${allowedSigners}";
-        };
       };
       git.sign-on-push = true;
       revsets = {
