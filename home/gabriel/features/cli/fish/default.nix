@@ -10,6 +10,7 @@
   hasEza = hasPackage "eza";
   hasSpecialisationCli = hasPackage "specialisation";
   hasAwsCli = hasPackage "awscli2";
+  hasPi = hasPackage "pi-coding-agent";
 in {
   imports = [
     ./tide.nix
@@ -37,6 +38,8 @@ in {
       # tmux picker), and fully close one. Abbrs so host-completion still works.
       mopen = "ssh -fN";
       mclose = "ssh -O exit";
+
+      ppi = mkIf hasPi "pi -p --model";
     };
     shellAliases = {
       # Clear screen and scrollback
