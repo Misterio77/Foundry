@@ -54,6 +54,36 @@ in {
         };
       });
 
+    hyprland = assert final.lib.versionOlder prev.hyprland.version "0.57.2";
+      (prev.hyprland.override {
+        aquamarine = prev.aquamarine.overrideAttrs (aq: _: {
+          version = "0.16.0";
+          src = final.fetchFromGitHub {
+            owner = "hyprwm";
+            repo = "aquamarine";
+            tag = "v${aq.version}";
+            hash = "sha256-/ccpiTctvwVY8msdVa3Ssj/iKV2LiY2+s72o0bUKFw4=";
+          };
+        });
+      }).overrideAttrs (finalAttrs: old: {
+        version = "0.57.2";
+        src = final.fetchFromGitHub {
+          owner = "hyprwm";
+          repo = "hyprland";
+          tag = "v${finalAttrs.version}";
+          hash = "sha256-kzhNQmKtX7lH69fQTNYZckZgV35ZK3rs25/2W7FGlbQ=";
+        };
+        env =
+          old.env
+          // {
+            GIT_BRANCH = "v${finalAttrs.version}-b";
+            GIT_COMMIT_DATE = "2026-11-09";
+            GIT_COMMIT_HASH = "11cbc6c577b84ffb1edf4df3fc5b6128c3ae6947";
+            GIT_COMMIT_MESSAGE = "VERSION: bump to ${finalAttrs.version}";
+            GIT_TAG = "v${finalAttrs.version}";
+          };
+      });
+
     khal = addPatches prev.khal [./khal-cache-parsed-events.patch];
 
     # Maildir flag removal must replace aerc's cached flags, not OR into them.
