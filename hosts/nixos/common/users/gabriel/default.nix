@@ -42,6 +42,7 @@ in {
       "i2c"
       "libvirtd"
       "minecraft"
+      "openrazer"
       "mysql"
       "wpa_supplicant"
       "plugdev"
