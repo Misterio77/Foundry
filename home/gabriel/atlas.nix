@@ -26,13 +26,13 @@
     {
       profile.outputs = [
         {
-          criteria = "DP-1";
+          criteria = "LG Electronics LG ULTRAWIDE 0x01010101";
           mode = "2560x1080@60Hz";
           position = "0,0";
           scale = 1.0;
         }
         {
-          criteria = "DP-2";
+          criteria = "LG Electronics LG FULL HD 211AZDB4S394";
           mode = "1920x1080@60Hz";
           position = "2560,0";
           scale = 1.0;
