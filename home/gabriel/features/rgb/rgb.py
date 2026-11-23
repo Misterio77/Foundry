@@ -2,19 +2,19 @@ import colorsys
 import sys
 import time
 
-import hid
+import hidraw
 import pyudev
 from dbus import DBusException
 from openrazer.client import DaemonNotFound, DeviceManager
 
 
 def keychron(rgb):
-    devices = hid.enumerate(0x3434, 0x0331)
-    path = next((d['path'] for d in devices if d['interface_number'] == 1), None)
+    devices = hidraw.enumerate(0x3434, 0x0331)
+    path = next((d['path'] for d in devices if (d['usage_page'], d['usage']) == (0xff60, 0x61)), None)
     if path is None:
         raise OSError('VIA interface not ready')
     hue, sat, value = colorsys.rgb_to_hsv(*(x / 255 for x in rgb))
-    keyboard = hid.device()
+    keyboard = hidraw.device()
     keyboard.open_path(path)
     try:
         # VIA RGB matrix channel: select solid, set hue/saturation and brightness; no EEPROM save.
