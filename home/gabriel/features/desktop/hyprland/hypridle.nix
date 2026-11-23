@@ -7,11 +7,11 @@
     enable = true;
     settings = let
       dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
-      isLocked = "pgrep hyprlock";
+      isLocked = "pgrep -x swaylock";
       isDischarging = "grep Discharging /sys/class/power_supply/BAT{0,1}/status -q";
     in {
       general = {
-        lock_cmd = "if ! ${isLocked}; then ${lib.getExe config.programs.hyprlock.package} --grace 5; fi";
+        lock_cmd = "if ! ${isLocked}; then ${lib.getExe' config.programs.swaylock.package "swaylock"} -i ${config.wallpaper} --grace 5 --grace-no-mouse; fi";
         before_sleep_cmd = "loginctl lock-session";
         after_sleep_cmd = dpms "enable";
         inhibit_sleep = 3; # Wait for lock before suspend

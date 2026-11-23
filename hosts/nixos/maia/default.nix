@@ -28,6 +28,7 @@
 
   boot.kernelPackages = pkgs.linuxKernel.packages.linux_xanmod_latest;
 
+  services.fprintd.enable = false;
   powerManagement.powertop.enable = true;
   programs.dconf.enable = true;
 

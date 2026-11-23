@@ -29,14 +29,13 @@
   data = {
     colors = lib.getAttrs ["surface" "primary" "on_primary" "red" "yellow" "green"] config.colorscheme.colors;
     hosts = lib.mapAttrs (_: lib.getAttrs ["primary" "primary_container" "on_primary" "on_primary_container"]) config.colorscheme.hosts;
-    monitors = map (lib.getAttrs ["name" "enabled" "width" "height" "refreshRate" "position" "scale" "workspace"]) config.monitors;
     font = {inherit (config.fontProfiles.regular) name size;};
     commands = {
       handlr = lib.getExe pkgs.handlr-regex;
       grimblast = lib.getExe pkgs.grimblast;
       pactl = lib.getExe' pkgs.pulseaudio "pactl";
       renameWorkspace = toString renameWorkspace;
-      hyprlock = lib.getExe config.programs.hyprlock.package;
+      swaylock = lib.getExe' config.programs.swaylock.package "swaylock";
       wofi =
         if config.programs.wofi.enable
         then lib.getExe config.programs.wofi.package
@@ -71,10 +70,12 @@ in {
   imports = [
     ../common
     ../common/wayland-wm
-    ./hyprlock.nix
+    ./swaylock.nix
     ./hypridle.nix
     ./hyprpaper.nix
   ];
+
+  services.kanshi.enable = true;
 
   home.pointerCursor.hyprcursor.enable = true;
   home.packages = [pkgs.grimblast pkgs.hyprpicker];

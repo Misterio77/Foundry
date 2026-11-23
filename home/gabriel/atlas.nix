@@ -22,23 +22,22 @@
   # Pink-red (0°)
   wallpaper = pkgs.wallpapers.aenami-dawn;
 
-  #  ------   -----   ------
-  # | DP-3 | | DP-1| | DP-2 |
-  #  ------   -----   ------
-  monitors = [
+  services.kanshi.settings = [
     {
-      name = "DP-1";
-      width = 2560;
-      height = 1080;
-      workspace = "1";
-      primary = true;
-    }
-    {
-      name = "DP-2";
-      width = 1920;
-      height = 1080;
-      position = "auto-right";
-      workspace = "2";
+      profile.outputs = [
+        {
+          criteria = "DP-1";
+          mode = "2560x1080@60Hz";
+          position = "0,0";
+          scale = 1.0;
+        }
+        {
+          criteria = "DP-2";
+          mode = "1920x1080@60Hz";
+          position = "2560,0";
+          scale = 1.0;
+        }
+      ];
     }
   ];
 }

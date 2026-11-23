@@ -20,14 +20,15 @@
     gpu.enable = false;
   };
 
-  monitors = [
+  services.kanshi.settings = [
     {
-      name = "eDP-1";
-      width = 1920;
-      height = 1080;
-      workspace = "1";
-      primary = true;
-      scale = 1.25;
+      profile.outputs = [
+        {
+          criteria = "eDP-1";
+          mode = "1920x1080@60Hz";
+          scale = 1.25;
+        }
+      ];
     }
   ];
 

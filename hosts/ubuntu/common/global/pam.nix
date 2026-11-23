@@ -1,5 +1,5 @@
 {pkgs, ...}: let
-  # greetd/hyprlock link nix's linux-pam, which only understands
+  # greetd/swaylock link nix's linux-pam, which only understands
   # `include`/`substack` (not Ubuntu's Debian `@include`) and can only load
   # nix's own modules by absolute path. So we can't chain into Ubuntu's
   # /etc/pam.d/login stack; use self-contained stacks built from nix modules.
@@ -11,10 +11,8 @@
   '';
 in {
   environment.etc = {
-    # Ours (Ubuntu ships no greetd/hyprlock), but a prior System Manager
-    # activation can leave them on disk without recording them in its etc
-    # state, so a re-activation sees them as unmanaged and aborts.
-    # replaceExisting backs the stale file up and relinks instead of erroring.
+    # A prior activation can leave these files on disk but untracked.
+    # replaceExisting backs them up instead of aborting on reactivation.
     "pam.d/greetd" = {
       replaceExisting = true;
       # greetd authenticates as root, so pam_unix reads /etc/shadow directly.
@@ -36,9 +34,9 @@ in {
           session   optional                   ${pkgs.systemd}/lib/security/pam_systemd.so
         '';
     };
-    "pam.d/hyprlock" = {
+    "pam.d/swaylock" = {
       replaceExisting = true;
-      # hyprlock only authenticates (to unlock) and runs unprivileged, so
+      # swaylock only authenticates (to unlock) and runs unprivileged, so
       # pam_unix reaches /etc/shadow via the setuid unix_chkpwd wrapper.
       text = pamAuth;
     };

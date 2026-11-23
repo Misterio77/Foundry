@@ -20,15 +20,15 @@
   # Periwinkle (280°)
   wallpaper = pkgs.wallpapers.deer-lunar-fantasy;
 
-  monitors = [
+  services.kanshi.settings = [
     {
-      name = "eDP-1";
-      width = 2880;
-      height = 1920;
-      workspace = "1";
-      primary = true;
-      refreshRate = 120;
-      scale = 2.0;
+      profile.outputs = [
+        {
+          criteria = "eDP-1";
+          mode = "2880x1920@120Hz";
+          scale = 2.0;
+        }
+      ];
     }
   ];
 }

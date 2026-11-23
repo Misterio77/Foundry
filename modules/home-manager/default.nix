@@ -1,7 +1,6 @@
 {
   fonts = import ./fonts.nix;
   hax = import ./hax.nix;
-  monitors = import ./monitors.nix;
   oama = import ./oama.nix;
   wallpaper = import ./wallpaper.nix;
   xpo = import ./xpo.nix;

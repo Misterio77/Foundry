@@ -101,8 +101,8 @@ for key, mime in pairs({ Return = "x-scheme-handler/terminal", e = "text/plain",
 end
 hl.bind("Print", dsp.exec_cmd(cmd.grimblast .. " --freeze copy area"))
 hl.bind("SHIFT + Print", dsp.exec_cmd(cmd.grimblast .. " --freeze copy output"))
-hl.bind("SUPER + BackSpace", dsp.exec_cmd(cmd.hyprlock))
-hl.bind("SUPER + XF86Calculator", dsp.exec_cmd(cmd.hyprlock))
+hl.bind("SUPER + BackSpace", dsp.exec_cmd(cmd.swaylock .. " -S"))
+hl.bind("SUPER + XF86Calculator", dsp.exec_cmd(cmd.swaylock .. " -S"))
 
 if cmd.makoctl then
   hl.bind("SUPER + w", dsp.exec_cmd(cmd.makoctl .. " dismiss"))

@@ -57,16 +57,3 @@ end
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 3, bezier = "easeout", style = "slide" })
 hl.animation({ leaf = "windowsMove", enabled = true, speed = 3, bezier = "easeoutback" })
 hl.animation({ leaf = "workspaces", enabled = true, speed = 2.5, bezier = "easeoutback", style = "slidefade" })
-
-for _, monitor in ipairs(data.monitors) do
-  hl.monitor({
-    output = monitor.name,
-    disabled = not monitor.enabled,
-    mode = string.format("%dx%d@%s", monitor.width, monitor.height, monitor.refreshRate),
-    position = monitor.position,
-    scale = monitor.scale,
-  })
-  if monitor.enabled and monitor.workspace then
-    hl.workspace_rule({ workspace = tostring(monitor.workspace), monitor = monitor.name })
-  end
-end

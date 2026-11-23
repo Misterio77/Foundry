@@ -61,7 +61,7 @@ signing, as well as for SSH'ing around.
 
 Most relevant user apps daily drivers:
 
-- hyprland + hypridle + hyprlock
+- hyprland + kanshi + hypridle + swaylock-effects
 - waybar
 - helix
 - fish

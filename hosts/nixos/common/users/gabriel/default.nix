@@ -81,8 +81,5 @@ in {
 
   systemd.services.home-manager-gabriel.serviceConfig.ExecStart = lib.mkForce activateHomeForTime;
 
-  security.pam.services = {
-    swaylock = {};
-    hyprlock = {};
-  };
+  security.pam.services.swaylock = {};
 }

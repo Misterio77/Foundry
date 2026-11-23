@@ -16,13 +16,14 @@
       files = [
         "/etc/machine-id"
       ];
-      directories = [
-        "/var/lib/fprint"
-        "/var/lib/systemd"
-        "/var/lib/nixos"
-        "/var/log"
-        "/srv"
-      ];
+      directories =
+        [
+          "/var/lib/systemd"
+          "/var/lib/nixos"
+          "/var/log"
+          "/srv"
+        ]
+        ++ lib.optional config.services.fprintd.enable "/var/lib/fprint";
     };
   };
   # Borrowed snippet from davisschenk/nixos-homelab - thanks!
@@ -37,7 +38,8 @@
     "d /persist/var/lib/private 0700 root root -"
     "e /var/lib/private 0700 root root -"
   ];
-  systemd.services."systemd-tmpfiles-resetup".serviceConfig.RemainAfterExit = lib.mkForce false; programs.fuse.userAllowOther = true;
+  systemd.services."systemd-tmpfiles-resetup".serviceConfig.RemainAfterExit = lib.mkForce false;
+  programs.fuse.userAllowOther = true;
 
   system.activationScripts.persistent-dirs.text = let
     mkHomePersist = user:
