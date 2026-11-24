@@ -27,11 +27,23 @@ def keychron(rgb):
         keyboard.close()
 
 
+# Mouse RGB settings matched by eye against #808080 on the Keychron.
+NAGA_WHEEL_GRAY = (7, 19, 255)
+NAGA_KEYPAD_GRAY = (32, 56, 255)
+
+
+def naga_color(rgb, gray):
+    scaled = [value * gain / 128 for value, gain in zip(rgb, gray, strict=True)]
+    # When blue runs out of headroom, dim all channels to preserve the mix.
+    divisor = max(1, max(scaled) / 255)
+    return tuple(round(channel / divisor) for channel in scaled)
+
+
 def naga(rgb):
     for device in DeviceManager().devices:
         if 'Naga Epic Chroma' in device.name:
-            device.fx.misc.scroll_wheel.static(*rgb)
-            device.fx.misc.backlight.static(*rgb)
+            device.fx.misc.scroll_wheel.static(*naga_color(rgb, NAGA_WHEEL_GRAY))
+            device.fx.misc.backlight.static(*naga_color(rgb, NAGA_KEYPAD_GRAY))
             return
     raise OSError('Naga not registered with OpenRazer yet')
 
