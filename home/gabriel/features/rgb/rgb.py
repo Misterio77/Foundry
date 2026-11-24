@@ -28,8 +28,8 @@ def keychron(rgb):
 
 
 # Mouse RGB settings matched by eye against #808080 on the Keychron.
-NAGA_WHEEL_GRAY = (7, 19, 255)
-NAGA_KEYPAD_GRAY = (32, 56, 255)
+NAGA_WHEEL_GRAY = (6, 19, 255)
+NAGA_KEYPAD_GRAY = (29, 56, 255)
 
 
 def naga_color(rgb, gray):
