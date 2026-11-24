@@ -26,9 +26,9 @@
   };
   hardware.printers.ensurePrinters = [
     {
-      description = "Epson L5590 (USB ESCPR2)";
-      name = "Epson_L5590_USB_ESCPR2";
-      deviceUri = "usb://EPSON/L5590%20Series?serial=584242573036313348&interface=1";
+      description = "Epson L5590 (Network ESCPR2)";
+      name = "Epson_L5590_Network_ESCPR2";
+      deviceUri = "socket://192.168.0.12:9100";
       model = "epson-inkjet-printer-escpr2/Epson-L5590_Series-epson-escpr2-en.ppd";
       ppdOptions = {
         PageSize = "A4";
