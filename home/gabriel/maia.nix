@@ -3,6 +3,7 @@
     ./global
     ./features/desktop/hyprland
     ./features/desktop/wireless
+    ./features/rgb
     ./features/productivity
     ./features/productivity/accounts/personal.nix
     ./features/productivity/accounts/usp.nix
