@@ -8,7 +8,6 @@
     settings = let
       dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
       isLocked = "pgrep -x swaylock";
-      isDischarging = "grep Discharging /sys/class/power_supply/BAT{0,1}/status -q";
     in {
       general = {
         lock_cmd = "if ! ${isLocked}; then ${lib.getExe' config.programs.swaylock.package "swaylock"} -i ${config.wallpaper} --grace 5 --grace-no-mouse; fi";
@@ -56,10 +55,9 @@
           on-resume = dpms "enable";
         }
 
-        # If discharging
         {
           timeout = 900;
-          on-timeout = "if ${isDischarging}; then systemctl suspend; fi";
+          on-timeout = "systemd-analyze condition ConditionACPower=false && systemctl suspend";
         }
       ];
     };
