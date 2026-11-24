@@ -39,10 +39,18 @@ def naga_color(rgb, gray):
     return tuple(round(channel / divisor) for channel in scaled)
 
 
+def naga_wheel_color(rgb):
+    red, green, blue = rgb
+    # The wheel looks warm on mint and cornflower, but matches on violet.
+    if green > red:
+        red *= red / green
+    return naga_color((red, green, blue), NAGA_WHEEL_GRAY)
+
+
 def naga(rgb):
     for device in DeviceManager().devices:
         if 'Naga Epic Chroma' in device.name:
-            device.fx.misc.scroll_wheel.static(*naga_color(rgb, NAGA_WHEEL_GRAY))
+            device.fx.misc.scroll_wheel.static(*naga_wheel_color(rgb))
             device.fx.misc.backlight.static(*naga_color(rgb, NAGA_KEYPAD_GRAY))
             return
     raise OSError('Naga not registered with OpenRazer yet')
