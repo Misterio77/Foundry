@@ -60,6 +60,21 @@
       path = "${postUpdateHook}/bin/post-update";
     }
   ];
+  lfsRelay = pkgs.writeShellApplication {
+    name = "git-lfs-transfer";
+    runtimeInputs = [pkgs.openssh];
+    text = ''
+      [[ $# == 2 ]] || exit 1
+      repo=''${1#/srv/git/}
+      [[ $repo =~ ^[a-zA-Z0-9_-][a-zA-Z0-9._-]*\.git$ && $2 =~ ^(upload|download)$ ]] || exit 1
+      [[ -f /srv/git/$repo/HEAD ]] || exit 1
+      if [[ ! -S ''${SSH_AUTH_SOCK:-} ]]; then
+        echo >&2 "LFS on Merope requires a forwarded SSH agent"
+        exit 1
+      fi
+      exec ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes git-lfs@merope.m7.rs "$repo" "$2"
+    '';
+  };
   gitConfig = pkgs.writeText "gitconfig" ''
     [core]
       hooksPath = ${gitHooks}
@@ -98,7 +113,7 @@ in {
       isSystemUser = true;
       shell = "${pkgs.bash}/bin/bash";
       group = "git";
-      packages = [pkgs.git];
+      packages = [pkgs.git lfsRelay];
       openssh.authorizedKeys.keys = config.users.users.gabriel.openssh.authorizedKeys.keys;
     };
     groups.git = {};
