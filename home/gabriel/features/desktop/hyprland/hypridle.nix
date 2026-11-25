@@ -6,7 +6,7 @@
   services.hypridle = {
     enable = true;
     settings = let
-      dpms = action: "hyprctl dispatch 'hl.dsp.dpms({ action = \"${action}\" })'";
+      dpms = action: "hyprctl eval 'require(\"dpms_guard\").${action}()'";
       isLocked = "pgrep -x swaylock";
     in {
       general = {

@@ -99,6 +99,7 @@ in {
     configType = "lua";
     plugins = [(pkgs.hyprbars.override {hyprland = hyprland.finalPackage;})];
     extraLuaFiles = {
+      dpms_guard = ./dpms_guard.lua;
       settings = ./settings.lua;
       bindings = ./bindings.lua;
       rules = ./rules.lua;
