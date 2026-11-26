@@ -10,7 +10,7 @@
       isLocked = "pgrep -x swaylock";
     in {
       general = {
-        lock_cmd = "if ! ${isLocked}; then ${lib.getExe' config.programs.swaylock.package "swaylock"} -i ${config.wallpaper} --grace 5 --grace-no-mouse; fi";
+        lock_cmd = "if ! ${isLocked}; then ${lib.getExe' config.programs.swaylock.package "swaylock"}; fi";
         before_sleep_cmd = "loginctl lock-session";
         after_sleep_cmd = dpms "enable";
         inhibit_sleep = 3; # Wait for lock before suspend

@@ -7,10 +7,9 @@
 in {
   programs.swaylock = {
     enable = true;
-    package = pkgs.swaylock-effects;
+    package = pkgs.swaylock;
     settings = {
-      effect-blur = "20x3";
-      fade-in = 0.1;
+      image = toString config.wallpaper;
 
       font = config.fontProfiles.regular.name;
       font-size = config.fontProfiles.regular.size + 3;
