@@ -120,6 +120,7 @@ in {
   networking.firewall.allowedTCPPorts = [25];
   networking.firewall.interfaces.tailscale0.allowedTCPPorts = [465 993]; # SMTP, IMAP (both SSL)
 
+  services.postfix.submissionsOptions.line_length_limit = "8192";
   services.postfix.settings.main = {
     # Authentication is only available through the Tailscale-restricted submissions service.
     smtpd_sasl_auth_enable = lib.mkForce false;
