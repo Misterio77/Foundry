@@ -17,7 +17,7 @@
 in {
   imports = [inputs.nixos-mailserver.nixosModules.mailserver];
 
-  mailserver = rec {
+  mailserver = {
     stateVersion = 3;
     enable = true;
     fqdn = "mail.m7.rs";
@@ -26,6 +26,12 @@ in {
       "m7.rs"
       "misterio.me"
       "gsfontes.com"
+      "lumis.cards"
+    ];
+    forwards."@lumis.cards" = [
+      "hi@m7.rs"
+      "me@ore.rs"
+      "offrakki@gmail.com"
     ];
     storage = {
       directoryLayout = "fs";
@@ -41,7 +47,7 @@ in {
       "hi@m7.rs" = {
         # Local passwords stay locked; Authentik handles OAuth and app passwords.
         hashedPassword = "!";
-        aliases = map (d: "@" + d) domains;
+        aliases = ["@m7.rs" "@misterio.me" "@gsfontes.com"];
       };
       "auth@m7.rs" = lib.mkIf config.services.authentik.enable {
         sendOnly = true;
