@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="135" viewBox="0 0 120 135">
+  <title>Lumis set symbol — rare</title>
+  <defs>
+    <linearGradient id="rarity" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#85642a"/>
+      <stop offset="47%" stop-color="#ffe6bb"/>
+      <stop offset="100%" stop-color="#d59f34"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#rarity)" stroke="#14111a" stroke-width="5"
+    stroke-linejoin="round" stroke-linecap="round" paint-order="stroke fill"
+    d="M 55 4
+    C 55 12 67 17 67 27 C 67 36 60 43 55 49
+    C 61 44 70 41 74 31 C 78 41 68 48 61 53
+    C 51 60 53 66 63 72 C 70 77 77 80 82 80
+    C 83 73 87 67 96 63 C 105 59 107 54 102 50
+    C 99 48 95 50 96 55 C 90 52 91 45 97 43
+    C 106 40 114 46 114 54 C 115 66 105 69 98 74
+    C 91 79 88 84 91 93 C 94 103 91 111 88 116
+    C 85 120 90 122 95 118 C 90 128 74 132 61 129
+    C 47 126 36 115 35 103 C 44 114 56 119 67 113
+    C 77 108 80 99 74 91 C 67 83 54 81 47 73
+    C 44 69 42 65 42 62 C 32 61 25 53 17 53
+    C 12 53 8 55 4 58 C 8 51 15 47 22 48
+    C 18 42 19 36 24 30 C 23 42 29 48 36 51
+    C 42 54 46 53 48 49 C 52 41 60 33 60 25
+    C 60 17 52 11 55 4 Z"/>
+</svg>
