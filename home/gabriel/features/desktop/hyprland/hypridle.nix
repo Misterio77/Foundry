@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: {
   services.hypridle = {
@@ -8,6 +9,9 @@
     settings = let
       dpms = action: "hyprctl eval 'require(\"dpms_guard\").${action}()'";
       isLocked = "pgrep -x swaylock";
+      lockWarning = 120;
+      lockGrace = 5;
+      notify = lib.getExe' pkgs.libnotify "notify-send";
     in {
       general = {
         lock_cmd = "if ! ${isLocked}; then ${lib.getExe' config.programs.swaylock.package "swaylock"}; fi";
@@ -35,7 +39,13 @@
           on-timeout = "brightnessctl set 50%- -n 1";
         }
         {
-          timeout = 120;
+          timeout = lockWarning;
+          on-timeout = ''
+            if ! ${isLocked}; then ${notify} --transient --expire-time=${toString (lockGrace * 1000)} --icon=system-lock-screen "Locking in ${toString lockGrace}s" "Move the mouse or press a key to stay unlocked."; fi
+          '';
+        }
+        {
+          timeout = lockWarning + lockGrace;
           on-timeout = "loginctl lock-session";
         }
         {
